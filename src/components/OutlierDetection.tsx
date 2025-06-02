@@ -29,6 +29,11 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
   const [cleanedData, setCleanedData] = useState<SalesData[]>(data);
   const { toast } = useToast();
 
+  // Update cleaned data when original data changes
+  React.useEffect(() => {
+    setCleanedData(data);
+  }, [data]);
+
   const skus = useMemo(() => {
     return Array.from(new Set(data.map(d => d.sku))).sort();
   }, [data]);
@@ -41,7 +46,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
   }, [skus, selectedSKU]);
 
   const outlierData = useMemo((): OutlierDataPoint[] => {
-    if (data.length === 0 || !selectedSKU) return [];
+    if (cleanedData.length === 0 || !selectedSKU) return [];
 
     const skuData = cleanedData.filter(d => d.sku === selectedSKU);
     if (skuData.length < 3) return skuData.map((item, index) => ({
@@ -58,7 +63,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
     const stdDev = Math.sqrt(variance);
 
     return skuData.map((item, index): OutlierDataPoint => {
-      const zScore = Math.abs((item.sales - mean) / stdDev);
+      const zScore = stdDev > 0 ? Math.abs((item.sales - mean) / stdDev) : 0;
       const isOutlier = zScore > threshold[0];
       const key = `${item.sku}-${item.date}`;
       
@@ -265,7 +270,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                 stroke="#94a3b8" 
                 strokeWidth={2}
                 name="Original Data"
-                dot={{ fill: '#94a3b8', strokeWidth: 2, r: 3 }}
+                dot={false}
                 connectNulls={false}
               />
               <Line 
@@ -274,7 +279,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                 stroke="#3b82f6" 
                 strokeWidth={2}
                 name="Cleaned Data"
-                dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+                dot={false}
                 connectNulls={false}
               />
             </LineChart>
@@ -301,16 +306,24 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
           <div className="space-y-3">
             {outliers.map((outlier) => {
               const isEditing = editingOutliers.hasOwnProperty(outlier.key);
+              const badgeVariant = outlier.isOutlier ? "destructive" : "secondary";
+              const badgeColor = outlier.isOutlier ? "text-red-800" : "text-green-800";
+              
               return (
-                <div key={outlier.key} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                <div key={outlier.key} className={`flex items-center justify-between p-3 rounded-lg ${outlier.isOutlier ? 'bg-red-50' : 'bg-green-50'}`}>
                   <div className="flex items-center space-x-4">
                     <div className="text-sm text-slate-600">{outlier.date}</div>
                     <div className="text-sm font-medium">
                       Current: {outlier.sales.toLocaleString()}
                     </div>
-                    <Badge variant="destructive" className="text-xs">
+                    <Badge variant={badgeVariant} className={`text-xs ${badgeColor}`}>
                       Z-Score: {outlier.zScore.toFixed(2)}
                     </Badge>
+                    {!outlier.isOutlier && (
+                      <Badge variant="secondary" className="text-xs text-green-800 bg-green-100">
+                        Clean
+                      </Badge>
+                    )}
                   </div>
                   
                   <div className="flex items-center space-x-2">
