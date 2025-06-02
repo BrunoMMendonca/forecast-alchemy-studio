@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { AlertTriangle, Zap, Edit3, Save, X } from 'lucide-react';
+import { AlertTriangle, Zap, Edit3, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SalesData } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 
@@ -90,15 +90,13 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
     const cleanedSkuData = cleanedData.filter(d => d.sku === selectedSKU)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    return originalSkuData.map((originalItem, index) => {
+    return originalSkuData.map((originalItem) => {
       const cleanedItem = cleanedSkuData.find(c => c.date === originalItem.date);
-      const hasBeenCleaned = cleanedItem && cleanedItem.sales !== originalItem.sales;
       
       return {
         date: originalItem.date,
         originalSales: originalItem.sales,
-        cleanedSales: hasBeenCleaned ? cleanedItem.sales : undefined,
-        index
+        cleanedSales: cleanedItem?.sales || originalItem.sales
       };
     });
   }, [data, cleanedData, selectedSKU]);
@@ -141,6 +139,20 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
     onDataCleaning(cleanedData);
   };
 
+  const handlePrevSKU = () => {
+    const currentIndex = skus.indexOf(selectedSKU);
+    if (currentIndex > 0) {
+      setSelectedSKU(skus[currentIndex - 1]);
+    }
+  };
+
+  const handleNextSKU = () => {
+    const currentIndex = skus.indexOf(selectedSKU);
+    if (currentIndex < skus.length - 1) {
+      setSelectedSKU(skus[currentIndex + 1]);
+    }
+  };
+
   if (data.length === 0) {
     return (
       <div className="text-center py-8 text-slate-500">
@@ -157,16 +169,34 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
           <label className="text-sm font-medium text-slate-700">
             Select SKU:
           </label>
-          <Select value={selectedSKU} onValueChange={setSelectedSKU}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select SKU" />
-            </SelectTrigger>
-            <SelectContent>
-              {skus.map(sku => (
-                <SelectItem key={sku} value={sku}>{sku}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center space-x-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handlePrevSKU}
+              disabled={skus.indexOf(selectedSKU) === 0}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Select value={selectedSKU} onValueChange={setSelectedSKU}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Select SKU" />
+              </SelectTrigger>
+              <SelectContent>
+                {skus.map(sku => (
+                  <SelectItem key={sku} value={sku}>{sku}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleNextSKU}
+              disabled={skus.indexOf(selectedSKU) === skus.length - 1}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -297,78 +327,76 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
         </div>
       </div>
 
-      {/* Outlier Editing Table */}
-      {outliers.length > 0 && (
-        <div className="bg-white rounded-lg p-4 border">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">
-            Edit Outlier Values - {selectedSKU}
-          </h3>
-          <div className="space-y-3">
-            {outliers.map((outlier) => {
-              const isEditing = editingOutliers.hasOwnProperty(outlier.key);
-              const badgeVariant = outlier.isOutlier ? "destructive" : "secondary";
-              const badgeColor = outlier.isOutlier ? "text-red-800" : "text-green-800";
-              
-              return (
-                <div key={outlier.key} className={`flex items-center justify-between p-3 rounded-lg ${outlier.isOutlier ? 'bg-red-50' : 'bg-green-50'}`}>
-                  <div className="flex items-center space-x-4">
-                    <div className="text-sm text-slate-600">{outlier.date}</div>
-                    <div className="text-sm font-medium">
-                      Current: {outlier.sales.toLocaleString()}
-                    </div>
-                    <Badge variant={badgeVariant} className={`text-xs ${badgeColor}`}>
-                      Z-Score: {outlier.zScore.toFixed(2)}
-                    </Badge>
-                    {!outlier.isOutlier && (
-                      <Badge variant="secondary" className="text-xs text-green-800 bg-green-100">
-                        Clean
-                      </Badge>
-                    )}
+      {/* Data Editing Table */}
+      <div className="bg-white rounded-lg p-4 border">
+        <h3 className="text-lg font-semibold text-slate-800 mb-4">
+          Edit Data Values - {selectedSKU}
+        </h3>
+        <div className="space-y-3 max-h-96 overflow-y-auto">
+          {outlierData.map((dataPoint) => {
+            const isEditing = editingOutliers.hasOwnProperty(dataPoint.key);
+            const badgeVariant = dataPoint.isOutlier ? "destructive" : "secondary";
+            const badgeColor = dataPoint.isOutlier ? "text-red-800" : "text-green-800";
+            
+            return (
+              <div key={dataPoint.key} className={`flex items-center justify-between p-3 rounded-lg ${dataPoint.isOutlier ? 'bg-red-50' : 'bg-green-50'}`}>
+                <div className="flex items-center space-x-4">
+                  <div className="text-sm text-slate-600">{dataPoint.date}</div>
+                  <div className="text-sm font-medium">
+                    Current: {dataPoint.sales.toLocaleString()}
                   </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    {isEditing ? (
-                      <>
-                        <Input
-                          type="number"
-                          value={editingOutliers[outlier.key]}
-                          onChange={(e) => setEditingOutliers({
-                            ...editingOutliers,
-                            [outlier.key]: parseFloat(e.target.value) || 0
-                          })}
-                          className="w-32"
-                        />
-                        <Button
-                          size="sm"
-                          onClick={() => handleSaveEdit(outlier.key, editingOutliers[outlier.key])}
-                        >
-                          <Save className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleCancelEdit(outlier.key)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </>
-                    ) : (
+                  <Badge variant={badgeVariant} className={`text-xs ${badgeColor}`}>
+                    Z-Score: {dataPoint.zScore.toFixed(2)}
+                  </Badge>
+                  {!dataPoint.isOutlier && (
+                    <Badge variant="secondary" className="text-xs text-green-800 bg-green-100">
+                      Clean
+                    </Badge>
+                  )}
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  {isEditing ? (
+                    <>
+                      <Input
+                        type="number"
+                        value={editingOutliers[dataPoint.key]}
+                        onChange={(e) => setEditingOutliers({
+                          ...editingOutliers,
+                          [dataPoint.key]: parseFloat(e.target.value) || 0
+                        })}
+                        className="w-32"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => handleSaveEdit(dataPoint.key, editingOutliers[dataPoint.key])}
+                      >
+                        <Save className="h-3 w-3" />
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleEditOutlier(outlier.key, outlier.sales)}
+                        onClick={() => handleCancelEdit(dataPoint.key)}
                       >
-                        <Edit3 className="h-3 w-3 mr-1" />
-                        Edit
+                        <X className="h-3 w-3" />
                       </Button>
-                    )}
-                  </div>
+                    </>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleEditOutlier(dataPoint.key, dataPoint.sales)}
+                    >
+                      <Edit3 className="h-3 w-3 mr-1" />
+                      Edit
+                    </Button>
+                  )}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
-      )}
+      </div>
 
       {/* Actions */}
       <div className="flex items-center justify-between bg-slate-50 rounded-lg p-4">

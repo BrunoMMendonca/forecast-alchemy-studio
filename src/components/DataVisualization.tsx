@@ -10,43 +10,32 @@ interface DataVisualizationProps {
 }
 
 export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) => {
-  const [selectedSKU, setSelectedSKU] = useState<string>('all');
+  const [selectedSKU, setSelectedSKU] = useState<string>('');
 
   const skus = useMemo(() => {
     return Array.from(new Set(data.map(d => d.sku))).sort();
   }, [data]);
 
-  const chartData = useMemo(() => {
-    const filteredData = selectedSKU === 'all' 
-      ? data 
-      : data.filter(d => d.sku === selectedSKU);
-
-    if (selectedSKU === 'all') {
-      // Aggregate data by date
-      const aggregated = filteredData.reduce((acc, curr) => {
-        const existing = acc.find(item => item.date === curr.date);
-        if (existing) {
-          existing.sales += curr.sales;
-        } else {
-          acc.push({ date: curr.date, sales: curr.sales });
-        }
-        return acc;
-      }, [] as { date: string; sales: number }[]);
-      
-      return aggregated.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    } else {
-      return filteredData
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-        .map(d => ({ date: d.date, sales: d.sales }));
+  // Auto-select first SKU when data changes
+  React.useEffect(() => {
+    if (skus.length > 0 && !selectedSKU) {
+      setSelectedSKU(skus[0]);
     }
+  }, [skus, selectedSKU]);
+
+  const chartData = useMemo(() => {
+    if (!selectedSKU) return [];
+    
+    return data
+      .filter(d => d.sku === selectedSKU)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .map(d => ({ date: d.date, sales: d.sales }));
   }, [data, selectedSKU]);
 
   const stats = useMemo(() => {
     if (data.length === 0) return null;
     
-    const filteredData = selectedSKU === 'all' 
-      ? data 
-      : data.filter(d => d.sku === selectedSKU);
+    const filteredData = data.filter(d => d.sku === selectedSKU);
     
     const sales = filteredData.map(d => d.sales);
     const totalSales = sales.reduce((sum, s) => sum + s, 0);
@@ -81,10 +70,9 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) =>
           </label>
           <Select value={selectedSKU} onValueChange={setSelectedSKU}>
             <SelectTrigger className="w-48">
-              <SelectValue />
+              <SelectValue placeholder="Select SKU" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All SKUs (Aggregated)</SelectItem>
               {skus.map(sku => (
                 <SelectItem key={sku} value={sku}>{sku}</SelectItem>
               ))}
@@ -137,7 +125,7 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) =>
       {/* Chart */}
       <div className="bg-white rounded-lg p-4 border">
         <h3 className="text-lg font-semibold text-slate-800 mb-4">
-          Sales Trend - {selectedSKU === 'all' ? 'All SKUs (Aggregated)' : selectedSKU}
+          Sales Trend - {selectedSKU}
         </h3>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
@@ -185,8 +173,8 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) =>
                 dataKey="sales" 
                 stroke="#3b82f6" 
                 strokeWidth={2}
-                dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
-                activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
+                dot={false}
+                connectNulls={false}
               />
             </LineChart>
           </ResponsiveContainer>
