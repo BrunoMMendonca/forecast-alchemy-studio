@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
+import { Input } from '@/components/ui/input';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { AlertTriangle, Zap } from 'lucide-react';
+import { AlertTriangle, Zap, Edit3, Save, X } from 'lucide-react';
 import { SalesData } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 
@@ -15,54 +16,49 @@ interface OutlierDetectionProps {
 }
 
 export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onDataCleaning }) => {
-  const [selectedSKU, setSelectedSKU] = useState<string>('all');
+  const [selectedSKU, setSelectedSKU] = useState<string>('');
   const [threshold, setThreshold] = useState([2.5]);
-  const [detectedOutliers, setDetectedOutliers] = useState<SalesData[]>([]);
+  const [editingOutliers, setEditingOutliers] = useState<{ [key: string]: number }>({});
+  const [cleanedData, setCleanedData] = useState<SalesData[]>(data);
   const { toast } = useToast();
 
   const skus = useMemo(() => {
     return Array.from(new Set(data.map(d => d.sku))).sort();
   }, [data]);
 
-  const outlierData = useMemo(() => {
-    if (data.length === 0) return [];
-
-    const processData = (salesData: SalesData[]) => {
-      if (salesData.length < 3) return salesData;
-
-      const sales = salesData.map(d => d.sales);
-      const mean = sales.reduce((sum, s) => sum + s, 0) / sales.length;
-      const variance = sales.reduce((sum, s) => sum + Math.pow(s - mean, 2), 0) / sales.length;
-      const stdDev = Math.sqrt(variance);
-
-      return salesData.map((item, index) => {
-        const zScore = Math.abs((item.sales - mean) / stdDev);
-        const isOutlier = zScore > threshold[0];
-        
-        return {
-          ...item,
-          isOutlier,
-          zScore,
-          index,
-          date: item.date
-        };
-      });
-    };
-
-    if (selectedSKU === 'all') {
-      // Process each SKU separately
-      const allProcessed: any[] = [];
-      skus.forEach(sku => {
-        const skuData = data.filter(d => d.sku === sku);
-        const processed = processData(skuData);
-        allProcessed.push(...processed);
-      });
-      return allProcessed;
-    } else {
-      const skuData = data.filter(d => d.sku === selectedSKU);
-      return processData(skuData);
+  // Auto-select first SKU when data changes
+  React.useEffect(() => {
+    if (skus.length > 0 && !selectedSKU) {
+      setSelectedSKU(skus[0]);
     }
-  }, [data, selectedSKU, threshold, skus]);
+  }, [skus, selectedSKU]);
+
+  const outlierData = useMemo(() => {
+    if (data.length === 0 || !selectedSKU) return [];
+
+    const skuData = cleanedData.filter(d => d.sku === selectedSKU);
+    if (skuData.length < 3) return skuData;
+
+    const sales = skuData.map(d => d.sales);
+    const mean = sales.reduce((sum, s) => sum + s, 0) / sales.length;
+    const variance = sales.reduce((sum, s) => sum + Math.pow(s - mean, 2), 0) / sales.length;
+    const stdDev = Math.sqrt(variance);
+
+    return skuData.map((item, index) => {
+      const zScore = Math.abs((item.sales - mean) / stdDev);
+      const isOutlier = zScore > threshold[0];
+      const key = `${item.sku}-${item.date}`;
+      
+      return {
+        ...item,
+        isOutlier,
+        zScore,
+        index,
+        date: item.date,
+        key
+      };
+    });
+  }, [cleanedData, selectedSKU, threshold]);
 
   const outliers = useMemo(() => {
     return outlierData.filter(d => d.isOutlier);
@@ -75,41 +71,46 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
       isOutlier: item.isOutlier,
       date: item.date,
       sku: item.sku,
-      zScore: item.zScore
+      zScore: item.zScore,
+      key: item.key
     }));
   }, [outlierData]);
 
-  const handleRemoveOutliers = () => {
-    const cleanedData = data.filter(item => {
-      const outlierItem = outlierData.find(o => 
-        o.date === item.date && 
-        o.sku === item.sku && 
-        o.sales === item.sales
-      );
-      return !outlierItem?.isOutlier;
+  const handleEditOutlier = (key: string, currentValue: number) => {
+    setEditingOutliers({ ...editingOutliers, [key]: currentValue });
+  };
+
+  const handleSaveEdit = (key: string, newValue: number) => {
+    const [sku, date] = key.split('-');
+    const updatedData = cleanedData.map(item => {
+      if (item.sku === sku && item.date === date) {
+        return { ...item, sales: newValue };
+      }
+      return item;
+    });
+    
+    setCleanedData(updatedData);
+    setEditingOutliers(prev => {
+      const updated = { ...prev };
+      delete updated[key];
+      return updated;
     });
 
-    onDataCleaning(cleanedData);
-    setDetectedOutliers(outliers);
-    
     toast({
-      title: "Data Cleaned",
-      description: `Removed ${outliers.length} outliers from the dataset`,
+      title: "Value Updated",
+      description: `Sales value for ${sku} on ${date} has been updated`,
+    });
+  };
+
+  const handleCancelEdit = (key: string) => {
+    setEditingOutliers(prev => {
+      const updated = { ...prev };
+      delete updated[key];
+      return updated;
     });
   };
 
   const handleProceedToForecasting = () => {
-    // If no outliers were removed, just use original data
-    const cleanedData = detectedOutliers.length > 0 ? 
-      data.filter(item => {
-        const outlierItem = outlierData.find(o => 
-          o.date === item.date && 
-          o.sku === item.sku && 
-          o.sales === item.sales
-        );
-        return !outlierItem?.isOutlier;
-      }) : data;
-
     onDataCleaning(cleanedData);
   };
 
@@ -131,10 +132,9 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
           </label>
           <Select value={selectedSKU} onValueChange={setSelectedSKU}>
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder="Select SKU" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All SKUs</SelectItem>
               {skus.map(sku => (
                 <SelectItem key={sku} value={sku}>{sku}</SelectItem>
               ))}
@@ -191,7 +191,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
       {/* Outlier Visualization */}
       <div className="bg-white rounded-lg p-4 border">
         <h3 className="text-lg font-semibold text-slate-800 mb-4">
-          Outlier Detection - {selectedSKU === 'all' ? 'All SKUs' : selectedSKU}
+          Outlier Detection - {selectedSKU}
         </h3>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
@@ -252,6 +252,71 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
         </div>
       </div>
 
+      {/* Outlier Editing Table */}
+      {outliers.length > 0 && (
+        <div className="bg-white rounded-lg p-4 border">
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">
+            Edit Outlier Values - {selectedSKU}
+          </h3>
+          <div className="space-y-3">
+            {outliers.map((outlier) => {
+              const isEditing = editingOutliers.hasOwnProperty(outlier.key);
+              return (
+                <div key={outlier.key} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <div className="text-sm text-slate-600">{outlier.date}</div>
+                    <div className="text-sm font-medium">
+                      Current: {outlier.sales.toLocaleString()}
+                    </div>
+                    <Badge variant="destructive" className="text-xs">
+                      Z-Score: {outlier.zScore.toFixed(2)}
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    {isEditing ? (
+                      <>
+                        <Input
+                          type="number"
+                          value={editingOutliers[outlier.key]}
+                          onChange={(e) => setEditingOutliers({
+                            ...editingOutliers,
+                            [outlier.key]: parseFloat(e.target.value) || 0
+                          })}
+                          className="w-32"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => handleSaveEdit(outlier.key, editingOutliers[outlier.key])}
+                        >
+                          <Save className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleCancelEdit(outlier.key)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEditOutlier(outlier.key, outlier.sales)}
+                      >
+                        <Edit3 className="h-3 w-3 mr-1" />
+                        Edit
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex items-center justify-between bg-slate-50 rounded-lg p-4">
         <div className="flex items-center space-x-2">
@@ -259,29 +324,22 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
             <>
               <AlertTriangle className="h-5 w-5 text-orange-500" />
               <span className="text-slate-700">
-                {outliers.length} outlier{outliers.length !== 1 ? 's' : ''} detected
+                {outliers.length} outlier{outliers.length !== 1 ? 's' : ''} detected for {selectedSKU}
               </span>
               <Badge variant="destructive">{outliers.length}</Badge>
             </>
           ) : (
             <>
               <Zap className="h-5 w-5 text-green-500" />
-              <span className="text-slate-700">No outliers detected</span>
+              <span className="text-slate-700">No outliers detected for {selectedSKU}</span>
               <Badge variant="secondary">Clean</Badge>
             </>
           )}
         </div>
 
-        <div className="flex space-x-3">
-          {outliers.length > 0 && (
-            <Button variant="destructive" onClick={handleRemoveOutliers}>
-              Remove {outliers.length} Outlier{outliers.length !== 1 ? 's' : ''}
-            </Button>
-          )}
-          <Button onClick={handleProceedToForecasting}>
-            Proceed to Forecasting
-          </Button>
-        </div>
+        <Button onClick={handleProceedToForecasting}>
+          Proceed to Forecasting
+        </Button>
       </div>
     </div>
   );

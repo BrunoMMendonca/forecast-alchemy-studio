@@ -86,8 +86,8 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
                   dataKey={result.model}
                   stroke={modelColors[result.model as keyof typeof modelColors]}
                   strokeWidth={2}
-                  dot={{ r: 3 }}
-                  activeDot={{ r: 5 }}
+                  dot={false}
+                  connectNulls={false}
                 />
               ))}
             </LineChart>
