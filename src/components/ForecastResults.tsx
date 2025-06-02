@@ -281,7 +281,7 @@ export const ForecastResults: React.FC<ForecastResultsProps> = ({ results }) => 
               <div className="text-2xl font-bold text-orange-600">
                 {results.filter(r => r.accuracy && r.accuracy > 80).length}
               </div>
-              <div className="text-sm text-slate-600">High Accuracy (>80%)</div>
+              <div className="text-sm text-slate-600">High Accuracy (&gt;80%)</div>
             </div>
           </div>
         </CardContent>
