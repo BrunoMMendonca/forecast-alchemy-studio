@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
-import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { AlertTriangle, Zap, Edit3, Save, X } from 'lucide-react';
 import { SalesData } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -77,16 +77,26 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
   }, [outlierData]);
 
   const chartData = useMemo(() => {
-    return outlierData.map((item, index) => ({
-      x: index,
-      y: item.sales,
-      isOutlier: item.isOutlier,
-      date: item.date,
-      sku: item.sku,
-      zScore: item.zScore,
-      key: item.key
-    }));
-  }, [outlierData]);
+    if (!selectedSKU || data.length === 0) return [];
+
+    const originalSkuData = data.filter(d => d.sku === selectedSKU)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    const cleanedSkuData = cleanedData.filter(d => d.sku === selectedSKU)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    return originalSkuData.map((originalItem, index) => {
+      const cleanedItem = cleanedSkuData.find(c => c.date === originalItem.date);
+      const hasBeenCleaned = cleanedItem && cleanedItem.sales !== originalItem.sales;
+      
+      return {
+        date: originalItem.date,
+        originalSales: originalItem.sales,
+        cleanedSales: hasBeenCleaned ? cleanedItem.sales : undefined,
+        index
+      };
+    });
+  }, [data, cleanedData, selectedSKU]);
 
   const handleEditOutlier = (key: string, currentValue: number) => {
     setEditingOutliers({ ...editingOutliers, [key]: currentValue });
@@ -207,32 +217,39 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
         </h3>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart data={chartData}>
+            <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis 
-                dataKey="x" 
+                dataKey="date" 
                 stroke="#64748b"
                 fontSize={12}
-                name="Data Point"
+                tickFormatter={(value) => {
+                  try {
+                    return new Date(value).toLocaleDateString('en-US', { 
+                      month: 'short', 
+                      day: 'numeric' 
+                    });
+                  } catch {
+                    return value;
+                  }
+                }}
               />
               <YAxis 
-                dataKey="y" 
                 stroke="#64748b"
                 fontSize={12}
-                name="Sales"
                 tickFormatter={(value) => value.toLocaleString()}
               />
               <Tooltip 
                 formatter={(value: number, name: string) => [
-                  name === 'y' ? value.toLocaleString() : value,
-                  name === 'y' ? 'Sales' : 'Index'
+                  value?.toLocaleString() || 'N/A', 
+                  name === 'originalSales' ? 'Original Sales' : 'Cleaned Sales'
                 ]}
-                labelFormatter={(label, payload) => {
-                  if (payload && payload[0]) {
-                    const data = payload[0].payload;
-                    return `${data.sku} - ${data.date}${data.isOutlier ? ' (OUTLIER)' : ''}`;
+                labelFormatter={(label) => {
+                  try {
+                    return new Date(label).toLocaleDateString();
+                  } catch {
+                    return label;
                   }
-                  return label;
                 }}
                 contentStyle={{
                   backgroundColor: 'white',
@@ -241,25 +258,36 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}
               />
-              <Scatter dataKey="y">
-                {chartData.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={entry.isOutlier ? '#ef4444' : '#3b82f6'} 
-                  />
-                ))}
-              </Scatter>
-            </ScatterChart>
+              <Legend />
+              <Line 
+                type="monotone" 
+                dataKey="originalSales" 
+                stroke="#94a3b8" 
+                strokeWidth={2}
+                name="Original Data"
+                dot={{ fill: '#94a3b8', strokeWidth: 2, r: 3 }}
+                connectNulls={false}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="cleanedSales" 
+                stroke="#3b82f6" 
+                strokeWidth={2}
+                name="Cleaned Data"
+                dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+                connectNulls={false}
+              />
+            </LineChart>
           </ResponsiveContainer>
         </div>
         <div className="flex items-center justify-center space-x-6 mt-4 text-sm">
           <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-            <span>Normal Data Points</span>
+            <div className="w-3 h-3 bg-slate-400 rounded-full"></div>
+            <span>Original Data</span>
           </div>
           <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-            <span>Detected Outliers</span>
+            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+            <span>Cleaned Data</span>
           </div>
         </div>
       </div>
