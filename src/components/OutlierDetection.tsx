@@ -15,6 +15,13 @@ interface OutlierDetectionProps {
   onDataCleaning: (cleanedData: SalesData[]) => void;
 }
 
+interface OutlierDataPoint extends SalesData {
+  isOutlier: boolean;
+  zScore: number;
+  index: number;
+  key: string;
+}
+
 export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onDataCleaning }) => {
   const [selectedSKU, setSelectedSKU] = useState<string>('');
   const [threshold, setThreshold] = useState([2.5]);
@@ -33,18 +40,24 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
     }
   }, [skus, selectedSKU]);
 
-  const outlierData = useMemo(() => {
+  const outlierData = useMemo((): OutlierDataPoint[] => {
     if (data.length === 0 || !selectedSKU) return [];
 
     const skuData = cleanedData.filter(d => d.sku === selectedSKU);
-    if (skuData.length < 3) return skuData;
+    if (skuData.length < 3) return skuData.map((item, index) => ({
+      ...item,
+      isOutlier: false,
+      zScore: 0,
+      index,
+      key: `${item.sku}-${item.date}`
+    }));
 
     const sales = skuData.map(d => d.sales);
     const mean = sales.reduce((sum, s) => sum + s, 0) / sales.length;
     const variance = sales.reduce((sum, s) => sum + Math.pow(s - mean, 2), 0) / sales.length;
     const stdDev = Math.sqrt(variance);
 
-    return skuData.map((item, index) => {
+    return skuData.map((item, index): OutlierDataPoint => {
       const zScore = Math.abs((item.sales - mean) / stdDev);
       const isOutlier = zScore > threshold[0];
       const key = `${item.sku}-${item.date}`;
@@ -54,7 +67,6 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
         isOutlier,
         zScore,
         index,
-        date: item.date,
         key
       };
     });
