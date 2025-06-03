@@ -29,7 +29,7 @@ interface OptimizationSession {
   datasetFingerprint: DatasetFingerprint;
   completedSKUs: Set<string>;
   optimizationComplete: boolean;
-  startedOptimization: boolean; // Track if optimization has been initiated
+  startedOptimization: boolean;
   timestamp: number;
 }
 
@@ -237,13 +237,87 @@ export const useOptimizationCache = () => {
     return `${sorted.length}-${salesValues.substring(0, 50)}-${outlierFlags}-${noteFlags}`.substring(0, 100);
   }, []);
 
-  // NEW: Get stable dataset fingerprint for dependency tracking
+  // Get stable dataset fingerprint for dependency tracking
   const getDatasetFingerprintString = useCallback((data: SalesData[]): string => {
     const fingerprint = generateDatasetFingerprint(data);
     return `${fingerprint.globalHash}:${fingerprint.cleaningHash}`;
   }, [generateDatasetFingerprint]);
 
-  // NEW: Check if optimization has been started for this dataset
+  // PRIORITY 1: Check navigation state - highest priority
+  const isOptimizationCompleteByNavigation = useCallback((data: SalesData[]): boolean => {
+    if (!navigationState) {
+      console.log('Enhanced cache: No navigation state found');
+      return false;
+    }
+    
+    const currentFingerprint = getDatasetFingerprintString(data);
+    const isComplete = navigationState.datasetFingerprint === currentFingerprint && navigationState.optimizationCompleted;
+    
+    console.log(`Enhanced cache: Navigation check - fingerprint match: ${navigationState.datasetFingerprint === currentFingerprint}, complete: ${navigationState.optimizationCompleted}, result: ${isComplete}`);
+    
+    return isComplete;
+  }, [navigationState, getDatasetFingerprintString]);
+
+  // PRIORITY 2: Check session state
+  const isOptimizationCompleteBySession = useCallback((data: SalesData[], models: ModelConfig[]): boolean => {
+    if (!currentSession || !currentSession.optimizationComplete) {
+      console.log('Enhanced cache: No session or session not complete');
+      return false;
+    }
+    
+    const currentFingerprint = generateDatasetFingerprint(data);
+    
+    if (currentSession.datasetFingerprint.globalHash !== currentFingerprint.globalHash ||
+        currentSession.datasetFingerprint.cleaningHash !== currentFingerprint.cleaningHash) {
+      console.log('Enhanced cache: Session dataset fingerprint mismatch');
+      return false;
+    }
+    
+    const allSKUs = Array.from(new Set(data.map(d => d.sku))).sort();
+    const skusWithSufficientData = allSKUs.filter(sku => {
+      const skuData = data.filter(d => d.sku === sku);
+      return skuData.length >= 3;
+    });
+    
+    const allCovered = skusWithSufficientData.every(sku => 
+      currentSession.completedSKUs.has(sku)
+    );
+    
+    console.log(`Enhanced cache: Session check - ${allCovered ? 'COMPLETE' : 'INCOMPLETE'} (${currentSession.completedSKUs.size}/${skusWithSufficientData.length} SKUs)`);
+    
+    return allCovered;
+  }, [currentSession, generateDatasetFingerprint]);
+
+  // NEW: Main optimization completion check with proper priority
+  const isOptimizationComplete = useCallback((data: SalesData[], models: ModelConfig[]): boolean => {
+    // PRIORITY 1: Navigation state (persistent across navigation)
+    if (isOptimizationCompleteByNavigation(data)) {
+      console.log('Enhanced cache: ✅ Optimization complete via NAVIGATION STATE');
+      setCacheStats(prev => ({ ...prev, skipped: prev.skipped + 1 }));
+      return true;
+    }
+    
+    // PRIORITY 2: Session state (current session)
+    if (isOptimizationCompleteBySession(data, models)) {
+      console.log('Enhanced cache: ✅ Optimization complete via SESSION STATE');
+      
+      // Update navigation state to persist this completion
+      const currentFingerprint = getDatasetFingerprintString(data);
+      setNavigationState({
+        datasetFingerprint: currentFingerprint,
+        optimizationCompleted: true,
+        timestamp: Date.now()
+      });
+      
+      setCacheStats(prev => ({ ...prev, skipped: prev.skipped + 1 }));
+      return true;
+    }
+    
+    console.log('Enhanced cache: ❌ Optimization NOT complete - needs optimization');
+    return false;
+  }, [isOptimizationCompleteByNavigation, isOptimizationCompleteBySession, getDatasetFingerprintString]);
+
+  // Check if optimization has been started for this dataset
   const hasOptimizationStarted = useCallback((data: SalesData[]): boolean => {
     const currentFingerprint = getDatasetFingerprintString(data);
     
@@ -266,7 +340,7 @@ export const useOptimizationCache = () => {
     return false;
   }, [navigationState, currentSession, getDatasetFingerprintString]);
 
-  // NEW: Mark optimization as started for this dataset
+  // Mark optimization as started for this dataset
   const markOptimizationStarted = useCallback((data: SalesData[]) => {
     const fingerprint = generateDatasetFingerprint(data);
     
@@ -281,79 +355,6 @@ export const useOptimizationCache = () => {
     
     console.log('Enhanced cache: Marked optimization as started');
   }, [generateDatasetFingerprint]);
-
-  const isDatasetUnchanged = useCallback((data: SalesData[]): boolean => {
-    const currentFingerprint = generateDatasetFingerprint(data);
-    
-    // Check session first - more reliable
-    if (currentSession && 
-        currentSession.datasetFingerprint.globalHash === currentFingerprint.globalHash &&
-        currentSession.datasetFingerprint.cleaningHash === currentFingerprint.cleaningHash) {
-      console.log('Enhanced cache: Session fingerprint check - UNCHANGED');
-      return true;
-    }
-    
-    // Check manifest as fallback
-    if (manifest && 
-        manifest.datasetFingerprint.globalHash === currentFingerprint.globalHash &&
-        manifest.datasetFingerprint.cleaningHash === currentFingerprint.cleaningHash) {
-      console.log('Enhanced cache: Manifest fingerprint check - UNCHANGED');
-      return true;
-    }
-    
-    console.log('Enhanced cache: Dataset fingerprint check - CHANGED');
-    return false;
-  }, [currentSession, manifest, generateDatasetFingerprint]);
-
-  const isOptimizationCompleteForSession = useCallback((data: SalesData[], models: ModelConfig[]): boolean => {
-    const currentFingerprint = generateDatasetFingerprint(data);
-    const currentFingerprintString = `${currentFingerprint.globalHash}:${currentFingerprint.cleaningHash}`;
-    
-    // PRIORITY 1: Check navigation state first
-    if (navigationState && 
-        navigationState.datasetFingerprint === currentFingerprintString &&
-        navigationState.optimizationCompleted) {
-      console.log('Enhanced cache: Navigation state confirms optimization complete');
-      return true;
-    }
-    
-    // PRIORITY 2: Check session state
-    if (!currentSession || !currentSession.optimizationComplete) {
-      console.log('Enhanced cache: No session or optimization not complete');
-      return false;
-    }
-    
-    if (currentSession.datasetFingerprint.globalHash !== currentFingerprint.globalHash ||
-        currentSession.datasetFingerprint.cleaningHash !== currentFingerprint.cleaningHash) {
-      console.log('Enhanced cache: Session dataset changed, optimization not complete');
-      return false;
-    }
-    
-    const enabledModels = models.filter(m => m.enabled && m.parameters && Object.keys(m.parameters).length > 0);
-    const allSKUs = Array.from(new Set(data.map(d => d.sku))).sort();
-    
-    const skusWithSufficientData = allSKUs.filter(sku => {
-      const skuData = data.filter(d => d.sku === sku);
-      return skuData.length >= 3;
-    });
-    
-    const allCovered = skusWithSufficientData.every(sku => 
-      currentSession.completedSKUs.has(sku)
-    );
-    
-    console.log(`Enhanced cache: Session optimization check - ${allCovered ? 'COMPLETE' : 'INCOMPLETE'} (${currentSession.completedSKUs.size}/${skusWithSufficientData.length} SKUs)`);
-    
-    // Update navigation state if optimization is complete
-    if (allCovered) {
-      setNavigationState({
-        datasetFingerprint: currentFingerprintString,
-        optimizationCompleted: true,
-        timestamp: Date.now()
-      });
-    }
-    
-    return allCovered;
-  }, [currentSession, navigationState, generateDatasetFingerprint]);
 
   const startOptimizationSession = useCallback((data: SalesData[]) => {
     const fingerprint = generateDatasetFingerprint(data);
@@ -510,49 +511,13 @@ export const useOptimizationCache = () => {
     return isValid;
   }, [getCachedParameters]);
 
+  // SIMPLIFIED: Get SKUs needing optimization without circular dependency
   const getSKUsNeedingOptimization = useCallback((
     data: SalesData[], 
     models: ModelConfig[]
   ): { sku: string; models: string[] }[] => {
-    // PRIORITY 1: Check if optimization is already complete for this session
-    if (isOptimizationCompleteForSession(data, models)) {
-      console.log('Enhanced cache: Session optimization complete, no SKUs need optimization');
-      setCacheStats(prev => ({ ...prev, skipped: prev.skipped + 1 }));
-      return [];
-    }
+    console.log('Enhanced cache: Checking SKUs needing optimization...');
     
-    // PRIORITY 2: Check if we can skip entirely due to unchanged dataset
-    if (isDatasetUnchanged(data)) {
-      console.log('Enhanced cache: Dataset unchanged, checking manifest for optimization needs');
-      
-      const currentManifest = manifest!;
-      const enabledModelsWithParams = models.filter(m => 
-        m.enabled && m.parameters && Object.keys(m.parameters).length > 0
-      );
-      
-      const skus = Array.from(new Set(data.map(d => d.sku))).sort();
-      const result: { sku: string; models: string[] }[] = [];
-      
-      skus.forEach(sku => {
-        const skuData = data.filter(d => d.sku === sku);
-        if (skuData.length < 3) return;
-        
-        const modelsNeedingOptimization = enabledModelsWithParams
-          .filter(m => !currentManifest.validEntries.has(`${sku}:${m.id}`))
-          .map(m => m.id);
-        
-        if (modelsNeedingOptimization.length > 0) {
-          result.push({ sku, models: modelsNeedingOptimization });
-        }
-      });
-      
-      console.log(`Enhanced cache: Using manifest - ${result.length} SKUs need optimization`);
-      setCacheStats(prev => ({ ...prev, skipped: prev.skipped + 1 }));
-      return result;
-    }
-    
-    // Dataset changed, do full validation
-    console.log('Enhanced cache: Dataset changed, performing full cache validation');
     const updatedManifest = batchValidateCache(data, models);
     
     const enabledModelsWithParams = models.filter(m => 
@@ -575,8 +540,9 @@ export const useOptimizationCache = () => {
       }
     });
     
+    console.log(`Enhanced cache: ${result.length} SKUs need optimization`);
     return result;
-  }, [isOptimizationCompleteForSession, isDatasetUnchanged, manifest, batchValidateCache]);
+  }, [batchValidateCache]);
 
   const clearCacheForSKU = useCallback((sku: string) => {
     setCache(prev => {
@@ -610,9 +576,8 @@ export const useOptimizationCache = () => {
     isCacheValid,
     getSKUsNeedingOptimization,
     clearCacheForSKU,
-    isDatasetUnchanged,
     batchValidateCache,
-    isOptimizationCompleteForSession,
+    isOptimizationComplete,
     startOptimizationSession,
     markSKUOptimized,
     completeOptimizationSession,

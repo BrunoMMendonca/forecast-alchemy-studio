@@ -47,12 +47,11 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     setCachedParameters,
     isCacheValid,
     getSKUsNeedingOptimization,
-    isOptimizationCompleteForSession,
+    isOptimizationComplete,
     startOptimizationSession,
     markSKUOptimized,
     completeOptimizationSession,
     getDatasetFingerprintString,
-    hasOptimizationStarted,
     markOptimizationStarted
   } = useOptimizationCache();
   
@@ -72,30 +71,22 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // ENHANCED: Main optimization effect with persistent state tracking
+  // ENHANCED: Main optimization effect with stable dependency and proper priority checks
   React.useEffect(() => {
     if (data.length === 0) return;
 
     const currentDatasetFingerprint = getDatasetFingerprintString(data);
-    console.log(`Enhanced cache: Optimization effect triggered for dataset: ${currentDatasetFingerprint}`);
+    const enabledModels = models.filter(m => m.enabled);
+    
+    console.log(`Enhanced cache: MAIN EFFECT triggered for dataset: ${currentDatasetFingerprint}`);
 
-    // PRIORITY CHECK 1: Has optimization already been started for this exact dataset?
-    if (hasOptimizationStarted(data)) {
-      console.log('Enhanced cache: Optimization already started for this dataset, skipping');
+    // PRIORITY 1: Check if optimization is already complete (navigation + session state)
+    if (isOptimizationComplete(data, enabledModels)) {
+      console.log('Enhanced cache: ✅ OPTIMIZATION COMPLETE - Loading cached parameters');
       
-      // Load cached parameters and generate forecasts
-      if (selectedSKU) {
-        loadCachedParametersAndForecast();
-      }
-      return;
-    }
-
-    // PRIORITY CHECK 2: Is optimization complete for this session?
-    if (isOptimizationCompleteForSession(data, models.filter(m => m.enabled))) {
-      console.log('Enhanced cache: Session optimization already complete, loading cached parameters');
       toast({
         title: "Cache Hit",
-        description: "Using previously optimized parameters from this session",
+        description: "Using previously optimized parameters",
       });
       
       if (selectedSKU) {
@@ -104,31 +95,31 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       return;
     }
     
-    // PRIORITY CHECK 3: Check if optimization is needed
-    const skusNeedingOptimization = getSKUsNeedingOptimization(data, models.filter(m => m.enabled));
+    console.log('Enhanced cache: ❌ Optimization needed - checking requirements');
+    
+    // PRIORITY 2: Check what specifically needs optimization
+    const skusNeedingOptimization = getSKUsNeedingOptimization(data, enabledModels);
     
     if (skusNeedingOptimization.length === 0) {
-      console.log('Enhanced cache: No optimization needed, all parameters cached');
+      console.log('Enhanced cache: ✅ All parameters cached, marking as complete');
+      
+      // Mark optimization as started and completed
+      markOptimizationStarted(data);
+      completeOptimizationSession();
+      
       toast({
         title: "Cache Hit",
         description: "All optimization parameters loaded from cache",
       });
       
-      // Mark optimization as started to prevent re-running
-      markOptimizationStarted(data);
-      
       if (selectedSKU) {
         loadCachedParametersAndForecast();
       }
     } else {
-      console.log(`Enhanced cache: ${skusNeedingOptimization.length} SKUs need optimization:`, skusNeedingOptimization);
-      
-      // Mark optimization as started before beginning
-      markOptimizationStarted(data);
-      
+      console.log(`Enhanced cache: 🔄 Starting optimization for ${skusNeedingOptimization.length} SKUs`);
       handleInitialOptimization();
     }
-  }, [getDatasetFingerprintString(data)]); // STABLE DEPENDENCY: Only changes when dataset actually changes
+  }, [getDatasetFingerprintString(data)]); // STABLE DEPENDENCY: Only dataset fingerprint
 
   // Load cached parameters and generate forecasts when SKU changes
   React.useEffect(() => {
@@ -168,9 +159,10 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   const handleInitialOptimization = async () => {
     const enabledModels = models.filter(m => m.enabled);
     
-    console.log(`Enhanced cache: Starting optimization. Cache stats: ${cacheStats.hits} hits, ${cacheStats.misses} misses, ${cacheStats.skipped} dataset skips`);
+    console.log(`Enhanced cache: 🚀 STARTING OPTIMIZATION. Cache stats: ${cacheStats.hits} hits, ${cacheStats.misses} misses, ${cacheStats.skipped} dataset skips`);
     
-    // Start optimization session
+    // Mark optimization as started and start session
+    markOptimizationStarted(data);
     startOptimizationSession(data);
     
     await optimizeAllSKUs(
