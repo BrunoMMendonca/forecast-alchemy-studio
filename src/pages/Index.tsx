@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -16,6 +14,7 @@ export interface SalesData {
   sku: string;
   sales: number;
   isOutlier?: boolean;
+  note?: string;
 }
 
 export interface ForecastResult {
@@ -236,4 +235,3 @@ const Index = () => {
 };
 
 export default Index;
-
