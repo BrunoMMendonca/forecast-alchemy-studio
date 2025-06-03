@@ -1,6 +1,6 @@
-
 import { SalesData } from '@/pages/Index';
 import { generateMovingAverage, generateSimpleExponentialSmoothing, generateDoubleExponentialSmoothing } from './forecastAlgorithms';
+import { optimizationLogger } from './optimizationLogger';
 
 interface OptimizationResult {
   parameters: Record<string, number>;

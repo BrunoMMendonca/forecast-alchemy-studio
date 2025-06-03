@@ -21,6 +21,8 @@ import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimi
 import { ModelSelection } from './ModelSelection';
 import { ProductSelector } from './ProductSelector';
 import { ModelConfig } from '@/types/forecast';
+import { OptimizationLogger } from './OptimizationLogger';
+import { optimizationLogger } from '@/utils/optimizationLogger';
 
 interface ForecastModelsProps {
   data: SalesData[];
@@ -43,6 +45,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   const lastDataHashRef = useRef<string>('');
   const isTogglingAIManualRef = useRef<boolean>(false);
   const lastSKURef = useRef<string>('');
+  const [showOptimizationLog, setShowOptimizationLog] = useState(false);
   
   const {
     cache,
@@ -503,11 +506,19 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 
       {isOptimizing && progress && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-            <span className="text-sm font-medium text-blue-800">
-              Enhanced AI Optimization in Progress...
-            </span>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <span className="text-sm font-medium text-blue-800">
+                Enhanced AI Optimization in Progress...
+              </span>
+            </div>
+            <button
+              onClick={() => setShowOptimizationLog(!showOptimizationLog)}
+              className="text-xs bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded text-blue-700"
+            >
+              {showOptimizationLog ? 'Hide' : 'Show'} Log
+            </button>
           </div>
           <p className="text-sm text-blue-600 mb-2">
             Processing {progress.currentSKU} - {progress.currentModel} ({progress.completedSKUs + 1}/{progress.totalSKUs})
@@ -545,6 +556,11 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           | Last SKU: {lastSKURef.current}
         </div>
       )}
+
+      <OptimizationLogger 
+        isVisible={showOptimizationLog} 
+        onClose={() => setShowOptimizationLog(false)} 
+      />
     </div>
   );
 };

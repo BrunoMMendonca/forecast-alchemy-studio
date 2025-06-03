@@ -32,11 +32,23 @@ export const useBatchOptimization = () => {
     sku: string
   ): Promise<{ parameters: Record<string, number>; confidence: number; method: string } | undefined> => {
     if (!model.parameters || Object.keys(model.parameters).length === 0) {
-      console.log(`❌ ${sku}:${model.id} - No parameters to optimize`);
+      optimizationLogger.logStep({
+        sku,
+        modelId: model.id,
+        step: 'complete',
+        message: 'No parameters to optimize - using defaults',
+        parameters: model.parameters
+      });
       return { parameters: model.parameters, confidence: 70, method: 'default' };
     }
 
-    console.log(`🚀 Starting optimization for ${sku}:${model.id}`);
+    optimizationLogger.logStep({
+      sku,
+      modelId: model.id,
+      step: 'start',
+      message: 'Starting optimization process',
+      parameters: model.parameters
+    });
     
     let aiResult = null;
     let gridResult = null;
@@ -45,7 +57,13 @@ export const useBatchOptimization = () => {
     // Step 1: Try AI optimization (if API key available)
     if (GROK_API_KEY && !GROK_API_KEY.includes('XXXXXXXX') && !GROK_API_KEY.startsWith('your-grok-api-key')) {
       try {
-        console.log(`🤖 Attempting AI optimization for ${sku}:${model.id}`);
+        optimizationLogger.logStep({
+          sku,
+          modelId: model.id,
+          step: 'ai_attempt',
+          message: 'Attempting AI optimization with Grok'
+        });
+
         const frequency = detectDateFrequency(skuData.map(d => d.date));
         
         const result = await optimizeParametersWithGrok({
@@ -56,6 +74,14 @@ export const useBatchOptimization = () => {
           targetMetric: 'mape'
         }, GROK_API_KEY);
 
+        optimizationLogger.logStep({
+          sku,
+          modelId: model.id,
+          step: 'validation',
+          message: 'Validating AI-optimized parameters',
+          parameters: result.optimizedParameters
+        });
+
         // Step 2: Validate AI optimization
         const validationResult = validateOptimizedParameters(
           model.id,
@@ -65,36 +91,75 @@ export const useBatchOptimization = () => {
         );
 
         if (validationResult) {
-          console.log(`✅ AI optimization validated for ${sku}:${model.id}`);
+          optimizationLogger.logStep({
+            sku,
+            modelId: model.id,
+            step: 'ai_success',
+            message: 'AI optimization validated and approved',
+            parameters: validationResult.parameters,
+            accuracy: validationResult.accuracy,
+            confidence: validationResult.confidence
+          });
+
           aiResult = {
             parameters: validationResult.parameters,
             confidence: validationResult.confidence,
             method: 'ai_validated'
           };
         } else {
-          console.log(`❌ AI optimization rejected for ${sku}:${model.id} - not better than baseline`);
-          // Track AI rejection for progress
+          optimizationLogger.logStep({
+            sku,
+            modelId: model.id,
+            step: 'ai_rejected',
+            message: 'AI optimization rejected - no improvement over baseline'
+          });
           setProgress(prev => prev ? { ...prev, aiRejected: prev.aiRejected + 1 } : null);
         }
       } catch (error) {
-        console.error(`❌ AI optimization failed for ${sku}:${model.id}:`, error);
+        optimizationLogger.logStep({
+          sku,
+          modelId: model.id,
+          step: 'error',
+          message: 'AI optimization failed',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
       }
     }
 
     // Step 3: Try grid search if AI failed or was rejected
     if (!aiResult) {
-      console.log(`🔍 Falling back to grid search for ${sku}:${model.id}`);
+      optimizationLogger.logStep({
+        sku,
+        modelId: model.id,
+        step: 'grid_search',
+        message: 'Starting grid search optimization'
+      });
+
       const gridSearchResult = gridSearchOptimization(model.id, skuData);
       
       if (gridSearchResult) {
-        console.log(`✅ Grid search completed for ${sku}:${model.id}`);
+        optimizationLogger.logStep({
+          sku,
+          modelId: model.id,
+          step: 'complete',
+          message: 'Grid search optimization completed',
+          parameters: gridSearchResult.parameters,
+          accuracy: gridSearchResult.accuracy,
+          confidence: gridSearchResult.confidence
+        });
+
         gridResult = {
           parameters: gridSearchResult.parameters,
           confidence: gridSearchResult.confidence,
           method: 'grid_search'
         };
       } else {
-        console.log(`❌ Grid search failed for ${sku}:${model.id}`);
+        optimizationLogger.logStep({
+          sku,
+          modelId: model.id,
+          step: 'error',
+          message: 'Grid search optimization failed'
+        });
       }
     }
 
@@ -106,8 +171,15 @@ export const useBatchOptimization = () => {
       finalResult = gridResult;
       setProgress(prev => prev ? { ...prev, gridOptimized: prev.gridOptimized + 1 } : null);
     } else {
-      // Fallback to original parameters
-      console.log(`⚠️ All optimization methods failed for ${sku}:${model.id}, using original parameters`);
+      optimizationLogger.logStep({
+        sku,
+        modelId: model.id,
+        step: 'complete',
+        message: 'All optimization methods failed - using original parameters',
+        parameters: model.parameters,
+        confidence: 60
+      });
+
       finalResult = {
         parameters: model.parameters,
         confidence: 60,
@@ -115,7 +187,6 @@ export const useBatchOptimization = () => {
       };
     }
 
-    console.log(`🎯 Final result for ${sku}:${model.id}: ${finalResult.method} with confidence ${finalResult.confidence}%`);
     return finalResult;
   };
 
@@ -144,7 +215,9 @@ export const useBatchOptimization = () => {
     let aiRejectedCount = 0;
 
     setIsOptimizing(true);
-    console.log(`🚀 Starting enhanced batch optimization for ${totalSKUs} SKUs`);
+    
+    // Start logging session
+    optimizationLogger.startSession(totalSKUs);
 
     try {
       for (let i = 0; i < skusToOptimize.length; i++) {
@@ -189,7 +262,6 @@ export const useBatchOptimization = () => {
       }
 
       const successMessage = `Optimization Complete! AI: ${aiOptimizedCount}, Grid: ${gridOptimizedCount}, Rejected: ${aiRejectedCount}`;
-      console.log(`✅ ${successMessage}`);
 
       toast({
         title: "Enhanced Optimization Complete",
@@ -206,6 +278,7 @@ export const useBatchOptimization = () => {
     } finally {
       setIsOptimizing(false);
       setProgress(null);
+      optimizationLogger.endSession();
     }
   };
 
