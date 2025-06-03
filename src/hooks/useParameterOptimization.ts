@@ -5,7 +5,8 @@ import { optimizeParametersWithGrok } from '@/utils/grokApiUtils';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
 
-const GROK_API_KEY = 'your-grok-api-key-here';
+// Replace with your actual Grok API key from X.AI
+const GROK_API_KEY = 'grok-beta-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
 
 export const useParameterOptimization = () => {
   const [optimizationProgress, setOptimizationProgress] = useState<string>('');
@@ -17,6 +18,12 @@ export const useParameterOptimization = () => {
     frequency: any
   ): Promise<Record<string, number> | undefined> => {
     if (!model.parameters || Object.keys(model.parameters).length === 0) {
+      return model.parameters;
+    }
+
+    // Check if API key is still placeholder
+    if (GROK_API_KEY === 'grok-beta-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' || GROK_API_KEY.startsWith('your-grok-api-key')) {
+      console.warn('Using placeholder Grok API key, skipping optimization');
       return model.parameters;
     }
 
