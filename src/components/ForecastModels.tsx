@@ -39,7 +39,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 }) => {
   const [models, setModels] = useState<ModelConfig[]>(getDefaultModels());
   const { toast } = useToast();
-  const hasRunOptimization = useRef(false);
   
   const {
     cache,
@@ -76,7 +75,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // BULLETPROOF: Main optimization effect with navigation awareness
+  // BULLETPROOF: Main optimization effect with navigation state as primary source of truth
   React.useEffect(() => {
     if (data.length === 0) return;
 
@@ -85,11 +84,12 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     
     console.log(`BULLETPROOF: Main effect triggered (#${triggerCount})`);
     console.log('BULLETPROOF: Navigation state:', navigationState);
-    console.log('BULLETPROOF: Has run optimization:', hasRunOptimization.current);
 
-    // ABSOLUTE FIRST PRIORITY: Check if we should optimize at all
-    if (!shouldOptimize(data, '/')) {
-      console.log('BULLETPROOF: ❌ OPTIMIZATION BLOCKED - Using cached parameters');
+    // ABSOLUTE FIRST PRIORITY: Check navigation state - this is the single source of truth
+    const shouldRunOptimization = shouldOptimize(data, '/');
+    
+    if (!shouldRunOptimization) {
+      console.log('BULLETPROOF: ❌ OPTIMIZATION BLOCKED BY NAVIGATION STATE - Loading cached parameters');
       
       toast({
         title: "Using Cached Results",
@@ -101,15 +101,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       return;
     }
 
-    // Prevent multiple optimizations in the same session
-    if (hasRunOptimization.current) {
-      console.log('BULLETPROOF: ❌ OPTIMIZATION BLOCKED - Already run in this session');
-      loadCachedParametersAndForecast();
-      return;
-    }
-
-    console.log('BULLETPROOF: ✅ STARTING OPTIMIZATION - All checks passed');
-    hasRunOptimization.current = true;
+    console.log('BULLETPROOF: ✅ NAVIGATION STATE APPROVED OPTIMIZATION - Starting process');
     handleInitialOptimization();
   }, [data.length]); // MINIMAL DEPENDENCY: Only data length
 
@@ -180,10 +172,10 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       getSKUsNeedingOptimization
     );
 
-    // Mark optimization as completed
+    // Mark optimization as completed - this should prevent any future runs
     markOptimizationCompleted(data, '/');
 
-    console.log('BULLETPROOF: ✅ OPTIMIZATION COMPLETE');
+    console.log('BULLETPROOF: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE FOREVER');
 
     // Generate forecasts after optimization
     if (selectedSKU) {
@@ -405,6 +397,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           Navigation Optimization: {navigationState.optimizationCompleted ? '✅ Complete' : '⏳ Pending'} 
           | Trigger Count: {getTriggerCount()} 
           | Cache: {cacheStats.hits} hits, {cacheStats.misses} misses
+          | Fingerprint: {navigationState.datasetFingerprint}
         </div>
       )}
     </div>

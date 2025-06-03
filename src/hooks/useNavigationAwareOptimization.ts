@@ -71,29 +71,48 @@ export const useNavigationAwareOptimization = () => {
     const currentFingerprint = generateStableFingerprint(data);
     const now = Date.now();
 
-    // Check if this is the same data we've seen before
-    if (lastDataRef.current === currentFingerprint) {
-      console.log('NAVIGATION: ❌ Same data as before - skipping optimization');
-      return false;
-    }
-
-    // Check navigation state
+    console.log('NAVIGATION: PRIORITY CHECK - Navigation state check FIRST');
+    
+    // PRIORITY 1: Check navigation state FIRST - this is the single source of truth
     if (navigationState) {
+      console.log(`NAVIGATION: Checking navigation state - fingerprint: ${navigationState.datasetFingerprint}, current: ${currentFingerprint}, completed: ${navigationState.optimizationCompleted}`);
+      
       // Same dataset and already optimized
       if (navigationState.datasetFingerprint === currentFingerprint && 
           navigationState.optimizationCompleted) {
-        console.log('NAVIGATION: ❌ Dataset already optimized - skipping');
+        console.log('NAVIGATION: ❌ OPTIMIZATION ALREADY COMPLETE FOR THIS DATASET - ABSOLUTE BLOCK');
         return false;
       }
 
-      // Cooling off period check
+      // Cooling off period check (secondary safety)
       if (now - navigationState.lastOptimizationTime < COOLING_OFF_PERIOD) {
         console.log('NAVIGATION: ❌ In cooling off period - skipping');
         return false;
       }
     }
 
-    console.log('NAVIGATION: ✅ Optimization needed');
+    // PRIORITY 2: Check localStorage directly as backup
+    try {
+      const stored = localStorage.getItem(NAVIGATION_STATE_KEY);
+      if (stored) {
+        const parsedState = JSON.parse(stored);
+        if (parsedState.datasetFingerprint === currentFingerprint && 
+            parsedState.optimizationCompleted) {
+          console.log('NAVIGATION: ❌ LOCALSTORAGE BACKUP CHECK - Already optimized');
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error('NAVIGATION: Failed to check localStorage backup:', error);
+    }
+
+    // PRIORITY 3: Check if this is the same data we've seen before (session level)
+    if (lastDataRef.current === currentFingerprint) {
+      console.log('NAVIGATION: ❌ Same data as before in session - skipping optimization');
+      return false;
+    }
+
+    console.log('NAVIGATION: ✅ OPTIMIZATION APPROVED - All checks passed');
     lastDataRef.current = currentFingerprint;
     return true;
   }, [navigationState, generateStableFingerprint]);
@@ -123,7 +142,7 @@ export const useNavigationAwareOptimization = () => {
     };
     
     setNavigationState(newState);
-    console.log('NAVIGATION: ✅ Marked optimization completed');
+    console.log('NAVIGATION: ✅ OPTIMIZATION MARKED AS COMPLETE - SHOULD NEVER RUN AGAIN');
   }, [navigationState, generateStableFingerprint]);
 
   const markDataModified = useCallback(() => {
