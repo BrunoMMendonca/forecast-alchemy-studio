@@ -66,7 +66,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     shouldOptimize,
     markOptimizationStarted,
     markOptimizationCompleted,
-    markDataModified,
     getTriggerCount,
     incrementTriggerCount,
     navigationState,
@@ -101,7 +100,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // FIXED: Main optimization effect with AI/Manual toggle protection
+  // FIXED: Main optimization effect - only runs on actual data changes
   React.useEffect(() => {
     if (data.length === 0) return;
 
@@ -126,9 +125,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     const triggerCount = getTriggerCount();
     
     console.log(`FIXED: Data changed - trigger #${triggerCount}, hash: ${currentDataHash}`);
-    
-    // Mark data as modified for navigation state
-    markDataModified(data);
 
     // Check navigation state - this is the single source of truth
     const shouldRunOptimization = shouldOptimize(data, '/');
@@ -150,9 +146,16 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     handleInitialOptimization();
   }, [data]); // FIXED: Only depends on data, hash generated inside effect
 
-  // Load cached parameters and generate forecasts when SKU changes
+  // FIXED: Load preferences and cached parameters when SKU changes
   React.useEffect(() => {
     if (!selectedSKU) return;
+    
+    console.log(`PREFERENCE: Loading preferences for SKU: ${selectedSKU}`);
+    
+    // Load preferences synchronously BEFORE updating models
+    const preferences = loadManualAIPreferences();
+    console.log('PREFERENCE: Loaded preferences:', preferences);
+    
     loadCachedParametersAndForecast();
   }, [selectedSKU, forecastPeriods]);
 
@@ -163,11 +166,15 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     const currentDataHash = generateDataHash(skuData);
     const preferences = loadManualAIPreferences();
 
-    // Load cached parameters immediately
+    console.log(`PREFERENCE: Applying preferences for ${selectedSKU}:`, preferences);
+
+    // Load cached parameters immediately with preferences applied
     setModels(prev => prev.map(model => {
       const cached = getCachedParameters(selectedSKU, model.id);
       const preferenceKey = `${selectedSKU}:${model.id}`;
       const isUsingAI = preferences[preferenceKey] !== false; // Default to AI if no preference
+      
+      console.log(`PREFERENCE: ${preferenceKey} - isUsingAI: ${isUsingAI}, cached: ${!!cached}`);
       
       if (cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
         return {
@@ -370,6 +377,8 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     preferences[preferenceKey] = false; // Mark as manual when parameters are manually updated
     saveManualAIPreferences(preferences);
 
+    console.log(`PREFERENCE: Updated ${preferenceKey} to manual (parameter change)`);
+
     setModels(prev => prev.map(model => 
       model.id === modelId 
         ? { 
@@ -396,6 +405,8 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     const preferenceKey = `${selectedSKU}:${modelId}`;
     preferences[preferenceKey] = true; // Mark as AI
     saveManualAIPreferences(preferences);
+
+    console.log(`PREFERENCE: Updated ${preferenceKey} to AI`);
 
     const cached = getCachedParameters(selectedSKU, modelId);
     if (cached) {
@@ -428,6 +439,8 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     const preferenceKey = `${selectedSKU}:${modelId}`;
     preferences[preferenceKey] = false; // Mark as manual
     saveManualAIPreferences(preferences);
+
+    console.log(`PREFERENCE: Updated ${preferenceKey} to manual (reset)`);
 
     setModels(prev => prev.map(model => 
       model.id === modelId 
