@@ -44,6 +44,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   const lastDataHashRef = useRef<string>('');
   const isTogglingAIManualRef = useRef<boolean>(false);
   const hasLoadedPreferencesRef = useRef<boolean>(false);
+  const lastSelectedSKURef = useRef<string>('');
   
   const {
     cache,
@@ -147,25 +148,31 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     handleInitialOptimization();
   }, [data]); // FIXED: Only depends on data, hash generated inside effect
 
-  // FIXED: Load preferences when SKU changes
+  // FIXED: Load preferences when SKU changes OR when returning to component
   React.useEffect(() => {
     if (!selectedSKU) return;
     
-    console.log(`PREFERENCE: Loading preferences for SKU: ${selectedSKU}`);
-    hasLoadedPreferencesRef.current = false; // Reset flag when SKU changes
-    loadCachedParametersAndForecast();
+    const skuChanged = lastSelectedSKURef.current !== selectedSKU;
+    const returningToComponent = !hasLoadedPreferencesRef.current;
+    
+    if (skuChanged || returningToComponent) {
+      console.log(`PREFERENCE: Loading preferences for SKU: ${selectedSKU} (SKU changed: ${skuChanged}, returning: ${returningToComponent})`);
+      lastSelectedSKURef.current = selectedSKU;
+      hasLoadedPreferencesRef.current = false; // Reset flag to reload preferences
+      loadCachedParametersAndForecast();
+    }
   }, [selectedSKU, forecastPeriods]);
 
-  // FIXED: Load preferences on component mount or when returning to forecasting step
+  // FIXED: Always load preferences when component is rendered (e.g., returning from another step)
   React.useEffect(() => {
     if (!selectedSKU || data.length === 0) return;
     
-    // Only load if we haven't loaded preferences yet
+    // Always load preferences when the component is active, unless we just loaded them
     if (!hasLoadedPreferencesRef.current) {
-      console.log('PREFERENCE: Component mounted/returned - loading preferences');
+      console.log('PREFERENCE: Component active - loading preferences');
       loadCachedParametersAndForecast();
     }
-  }, [selectedSKU, data.length]); // Include selectedSKU and data.length to trigger when needed
+  }, [selectedSKU, data.length, models.length]); // Include models.length to detect when models are reset
 
   const loadCachedParametersAndForecast = () => {
     if (!selectedSKU) return;
