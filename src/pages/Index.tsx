@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -44,8 +45,10 @@ const Index = () => {
   };
 
   const handleDataCleaning = (cleaned: SalesData[]) => {
+    console.log('Updating cleaned data:', cleaned.length, 'records');
     setCleanedData(cleaned);
-    setCurrentStep(3);
+    // Don't automatically advance to forecast step when data is cleaned
+    // User can manually proceed when ready
   };
 
   const handleForecastGeneration = (results: ForecastResult[]) => {
@@ -57,6 +60,14 @@ const Index = () => {
     if (stepIndex !== -1) {
       setCurrentStep(stepIndex);
     }
+  };
+
+  const handleProceedToDataCleaning = () => {
+    setCurrentStep(2);
+  };
+
+  const handleProceedToForecasting = () => {
+    setCurrentStep(3);
   };
 
   return (
@@ -156,7 +167,7 @@ const Index = () => {
                 <DataVisualization data={salesData} />
                 {salesData.length > 0 && (
                   <div className="mt-6 flex justify-end">
-                    <Button onClick={() => setCurrentStep(2)}>
+                    <Button onClick={handleProceedToDataCleaning}>
                       Proceed to Data Cleaning
                     </Button>
                   </div>
@@ -225,3 +236,4 @@ const Index = () => {
 };
 
 export default Index;
+

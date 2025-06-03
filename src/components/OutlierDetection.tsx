@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +21,7 @@ interface OutlierDataPoint extends SalesData {
   zScore: number;
   index: number;
   key: string;
+  originalSales: number; // Store original value for comparison
 }
 
 export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onDataCleaning }) => {
@@ -52,13 +52,17 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
     if (cleanedData.length === 0 || !selectedSKU) return [];
 
     const skuData = cleanedData.filter(d => d.sku === selectedSKU);
-    if (skuData.length < 3) return skuData.map((item, index) => ({
-      ...item,
-      isOutlier: false,
-      zScore: 0,
-      index,
-      key: `${index}_${item.sku}_${item.date}` // More reliable key format
-    }));
+    if (skuData.length < 3) return skuData.map((item, index) => {
+      const originalItem = data.find(d => d.sku === item.sku && d.date === item.date);
+      return {
+        ...item,
+        isOutlier: false,
+        zScore: 0,
+        index,
+        key: `${index}_${item.sku}_${item.date}`,
+        originalSales: originalItem?.sales || item.sales
+      };
+    });
 
     const sales = skuData.map(d => d.sales);
     const mean = sales.reduce((sum, s) => sum + s, 0) / sales.length;
@@ -69,16 +73,18 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
       const zScore = stdDev > 0 ? Math.abs((item.sales - mean) / stdDev) : 0;
       const isOutlier = zScore > threshold[0];
       const key = `${index}_${item.sku}_${item.date}`;
+      const originalItem = data.find(d => d.sku === item.sku && d.date === item.date);
       
       return {
         ...item,
         isOutlier,
         zScore,
         index,
-        key
+        key,
+        originalSales: originalItem?.sales || item.sales
       };
     });
-  }, [cleanedData, selectedSKU, threshold]);
+  }, [cleanedData, selectedSKU, threshold, data]);
 
   const outliers = useMemo(() => {
     return outlierData.filter(d => d.isOutlier);
@@ -166,6 +172,9 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
     });
     
     setCleanedData(updatedData);
+    // Immediately update the parent component with cleaned data
+    onDataCleaning(updatedData);
+    
     setEditingOutliers(prev => {
       const updated = { ...prev };
       delete updated[key];
@@ -401,14 +410,20 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
             const isEditing = editingOutliers.hasOwnProperty(dataPoint.key);
             const badgeVariant = dataPoint.isOutlier ? "destructive" : "secondary";
             const badgeColor = dataPoint.isOutlier ? "text-red-800" : "text-green-800";
+            const hasBeenModified = dataPoint.sales !== dataPoint.originalSales;
             
             return (
               <div key={dataPoint.key} className={`p-3 rounded-lg ${dataPoint.isOutlier ? 'bg-red-50' : 'bg-green-50'}`}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center space-x-4">
                     <div className="text-sm text-slate-600">{dataPoint.date}</div>
-                    <div className="text-sm font-medium">
-                      Current: {dataPoint.sales.toLocaleString()}
+                    <div className="text-sm">
+                      <span className="font-medium">Current: {dataPoint.sales.toLocaleString()}</span>
+                      {hasBeenModified && (
+                        <span className="text-slate-500 ml-2">
+                          (Original: {dataPoint.originalSales.toLocaleString()})
+                        </span>
+                      )}
                     </div>
                     <Badge variant={badgeVariant} className={`text-xs ${badgeColor}`}>
                       Z-Score: {dataPoint.zScore.toFixed(2)}
@@ -416,6 +431,11 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                     {!dataPoint.isOutlier && (
                       <Badge variant="secondary" className="text-xs text-green-800 bg-green-100">
                         Clean
+                      </Badge>
+                    )}
+                    {hasBeenModified && (
+                      <Badge variant="outline" className="text-xs text-blue-800 bg-blue-50">
+                        Modified
                       </Badge>
                     )}
                   </div>
@@ -454,6 +474,9 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                           })}
                           className="w-full"
                         />
+                        <div className="text-xs text-slate-500 mt-1">
+                          Original: {dataPoint.originalSales.toLocaleString()}
+                        </div>
                       </div>
                       <div>
                         <label className="text-xs text-slate-600 mb-1 block">Note (optional)</label>
