@@ -519,7 +519,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
                 </div>
               )}
               <span className={`text-sm font-medium ${optimizationCompleted ? 'text-green-800' : 'text-blue-800'}`}>
-                {isOptimizing ? 'Enhanced AI Optimization in Progress...' : 'Optimization Complete!'}
+                {isOptimizing ? 'Enhanced AI Optimization in Progress...' : 'Enhanced Optimization Complete!'}
               </span>
             </div>
             <button
@@ -547,9 +547,16 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
               </div>
             </>
           ) : (
-            <p className="text-sm text-green-600 mb-2">
-              Successfully processed {progress.totalSKUs} SKU{progress.totalSKUs > 1 ? 's' : ''}
-            </p>
+            <div>
+              <p className="text-sm text-green-600 mb-2">
+                Successfully processed {progress.totalSKUs} SKU{progress.totalSKUs > 1 ? 's' : ''}
+              </p>
+              {progress.aiOptimized > 0 && (
+                <p className="text-xs text-green-500 mb-1">
+                  AI Acceptance Rate: {((progress.aiOptimized / (progress.aiOptimized + progress.aiRejected)) * 100).toFixed(1)}%
+                </p>
+              )}
+            </div>
           )}
           
           <div className={`grid grid-cols-2 gap-2 text-xs ${optimizationCompleted ? 'text-green-600' : 'text-blue-500'}`}>
@@ -557,6 +564,11 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
             <div>🔍 Grid Optimized: {progress.gridOptimized || 0}</div>
             <div>❌ AI Rejected: {progress.aiRejected || 0}</div>
             <div>📋 From Cache: {progress.skipped || 0}</div>
+            {progress.aiAcceptedByTolerance > 0 && (
+              <div className="col-span-2 text-xs text-blue-600">
+                ✅ AI by Tolerance: {progress.aiAcceptedByTolerance} | by Confidence: {progress.aiAcceptedByConfidence || 0}
+              </div>
+            )}
           </div>
         </div>
       )}

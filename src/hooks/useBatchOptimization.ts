@@ -20,6 +20,8 @@ interface BatchOptimizationProgress {
   aiOptimized: number;
   gridOptimized: number;
   aiRejected: number;
+  aiAcceptedByTolerance: number;
+  aiAcceptedByConfidence: number;
 }
 
 export const useBatchOptimization = () => {
@@ -47,7 +49,7 @@ export const useBatchOptimization = () => {
       sku,
       modelId: model.id,
       step: 'start',
-      message: 'Starting optimization process',
+      message: 'Starting enhanced optimization process',
       parameters: model.parameters
     });
     
@@ -62,7 +64,7 @@ export const useBatchOptimization = () => {
           sku,
           modelId: model.id,
           step: 'ai_attempt',
-          message: 'Attempting AI optimization with Grok'
+          message: 'Attempting enhanced AI optimization with Grok'
         });
 
         const frequency = detectDateFrequency(skuData.map(d => d.date));
@@ -79,24 +81,35 @@ export const useBatchOptimization = () => {
           sku,
           modelId: model.id,
           step: 'validation',
-          message: 'Validating AI-optimized parameters',
+          message: `Validating AI parameters with enhanced criteria (confidence: ${result.confidence}%)`,
           parameters: result.optimizedParameters
         });
 
-        // Step 2: Validate AI optimization
+        // Step 2: Enhanced validation with tolerance and confidence-based acceptance
+        const validationConfig = {
+          tolerance: 2.0, // Accept within 2%
+          minConfidenceForAcceptance: 85, // Accept high confidence results
+          useMultipleValidationSets: skuData.length >= 15,
+          roundAIParameters: true
+        };
+
         const validationResult = validateOptimizedParameters(
           model.id,
           skuData,
           model.parameters,
-          result.optimizedParameters
+          result.optimizedParameters,
+          result.confidence,
+          validationConfig
         );
 
         if (validationResult) {
+          const acceptanceType = validationResult.method === 'ai_high_confidence' ? 'confidence' : 'tolerance';
+          
           optimizationLogger.logStep({
             sku,
             modelId: model.id,
             step: 'ai_success',
-            message: 'AI optimization validated and approved',
+            message: `AI optimization accepted by ${acceptanceType}`,
             parameters: validationResult.parameters,
             accuracy: validationResult.accuracy,
             confidence: validationResult.confidence
@@ -105,14 +118,21 @@ export const useBatchOptimization = () => {
           aiResult = {
             parameters: validationResult.parameters,
             confidence: validationResult.confidence,
-            method: 'ai_validated'
+            method: `ai_${acceptanceType}`
           };
+
+          // Update progress counters
+          if (acceptanceType === 'confidence') {
+            setProgress(prev => prev ? { ...prev, aiAcceptedByConfidence: prev.aiAcceptedByConfidence + 1 } : null);
+          } else {
+            setProgress(prev => prev ? { ...prev, aiAcceptedByTolerance: prev.aiAcceptedByTolerance + 1 } : null);
+          }
         } else {
           optimizationLogger.logStep({
             sku,
             modelId: model.id,
             step: 'ai_rejected',
-            message: 'AI optimization rejected - no improvement over baseline'
+            message: 'AI optimization rejected - outside tolerance and confidence thresholds'
           });
           setProgress(prev => prev ? { ...prev, aiRejected: prev.aiRejected + 1 } : null);
         }
@@ -127,23 +147,30 @@ export const useBatchOptimization = () => {
       }
     }
 
-    // Step 3: Try grid search if AI failed or was rejected
+    // Step 3: Try enhanced grid search if AI failed or was rejected
     if (!aiResult) {
       optimizationLogger.logStep({
         sku,
         modelId: model.id,
         step: 'grid_search',
-        message: 'Starting grid search optimization'
+        message: 'Starting enhanced grid search optimization'
       });
 
-      const gridSearchResult = gridSearchOptimization(model.id, skuData);
+      const enhancedConfig = {
+        tolerance: 2.0,
+        minConfidenceForAcceptance: 85,
+        useMultipleValidationSets: skuData.length >= 15,
+        roundAIParameters: true
+      };
+
+      const gridSearchResult = gridSearchOptimization(model.id, skuData, enhancedConfig);
       
       if (gridSearchResult) {
         optimizationLogger.logStep({
           sku,
           modelId: model.id,
           step: 'complete',
-          message: 'Grid search optimization completed',
+          message: 'Enhanced grid search optimization completed',
           parameters: gridSearchResult.parameters,
           accuracy: gridSearchResult.accuracy,
           confidence: gridSearchResult.confidence
@@ -159,7 +186,7 @@ export const useBatchOptimization = () => {
           sku,
           modelId: model.id,
           step: 'error',
-          message: 'Grid search optimization failed'
+          message: 'Enhanced grid search optimization failed'
         });
       }
     }
@@ -214,6 +241,8 @@ export const useBatchOptimization = () => {
     let aiOptimizedCount = 0;
     let gridOptimizedCount = 0;
     let aiRejectedCount = 0;
+    let aiAcceptedByToleranceCount = 0;
+    let aiAcceptedByConfidenceCount = 0;
 
     setIsOptimizing(true);
     
@@ -236,7 +265,9 @@ export const useBatchOptimization = () => {
           optimized: optimizedCount,
           aiOptimized: aiOptimizedCount,
           gridOptimized: gridOptimizedCount,
-          aiRejected: aiRejectedCount
+          aiRejected: aiRejectedCount,
+          aiAcceptedByTolerance: aiAcceptedByToleranceCount,
+          aiAcceptedByConfidence: aiAcceptedByConfidenceCount
         });
 
         for (const modelId of modelsToOptimize) {
@@ -251,8 +282,13 @@ export const useBatchOptimization = () => {
             optimizedCount++;
             
             // Update counters based on method
-            if (result.method === 'ai_validated') {
+            if (result.method.startsWith('ai_')) {
               aiOptimizedCount++;
+              if (result.method === 'ai_confidence') {
+                aiAcceptedByConfidenceCount++;
+              } else if (result.method === 'ai_tolerance') {
+                aiAcceptedByToleranceCount++;
+              }
             } else if (result.method === 'grid_search') {
               gridOptimizedCount++;
             }
@@ -262,7 +298,10 @@ export const useBatchOptimization = () => {
         }
       }
 
-      const successMessage = `Optimization Complete! AI: ${aiOptimizedCount}, Grid: ${gridOptimizedCount}, Rejected: ${aiRejectedCount}`;
+      const aiAcceptanceRate = aiOptimizedCount > 0 ? 
+        ((aiOptimizedCount / (aiOptimizedCount + aiRejectedCount)) * 100).toFixed(1) : '0';
+
+      const successMessage = `Enhanced Optimization Complete! AI: ${aiOptimizedCount} (${aiAcceptanceRate}% accepted), Grid: ${gridOptimizedCount}, Rejected: ${aiRejectedCount}`;
 
       toast({
         title: "Enhanced Optimization Complete",
