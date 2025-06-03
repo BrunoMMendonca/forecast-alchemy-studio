@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -56,7 +57,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
       isOutlier: false,
       zScore: 0,
       index,
-      key: `${item.sku}-${item.date}`
+      key: `${index}_${item.sku}_${item.date}` // More reliable key format
     }));
 
     const sales = skuData.map(d => d.sales);
@@ -67,7 +68,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
     return skuData.map((item, index): OutlierDataPoint => {
       const zScore = stdDev > 0 ? Math.abs((item.sales - mean) / stdDev) : 0;
       const isOutlier = zScore > threshold[0];
-      const key = `${item.sku}-${item.date}`;
+      const key = `${index}_${item.sku}_${item.date}`;
       
       return {
         ...item,
@@ -111,8 +112,24 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
   }, [data, cleanedData, selectedSKU]);
 
   const handleEditOutlier = (key: string) => {
-    const [sku, date] = key.split('-');
+    console.log('Edit button clicked for key:', key);
+    
+    // Parse the key format: index_sku_date
+    const parts = key.split('_');
+    if (parts.length < 3) {
+      console.error('Invalid key format:', key);
+      return;
+    }
+    
+    const index = parseInt(parts[0]);
+    const sku = parts.slice(1, -1).join('_'); // Handle SKUs that might contain underscores
+    const date = parts[parts.length - 1];
+    
+    console.log('Parsed key:', { index, sku, date });
+    
     const currentItem = cleanedData.find(item => item.sku === sku && item.date === date);
+    console.log('Found item:', currentItem);
+    
     if (currentItem) {
       setEditingOutliers({ 
         ...editingOutliers, 
@@ -121,6 +138,9 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
           note: ''
         }
       });
+      console.log('Set editing state for key:', key);
+    } else {
+      console.error('Could not find item for editing:', { sku, date });
     }
   };
 
@@ -128,7 +148,16 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
     const editData = editingOutliers[key];
     if (!editData) return;
 
-    const [sku, date] = key.split('-');
+    // Parse the key format: index_sku_date
+    const parts = key.split('_');
+    if (parts.length < 3) {
+      console.error('Invalid key format for save:', key);
+      return;
+    }
+    
+    const sku = parts.slice(1, -1).join('_');
+    const date = parts[parts.length - 1];
+
     const updatedData = cleanedData.map(item => {
       if (item.sku === sku && item.date === date) {
         return { ...item, sales: editData.value };
@@ -396,7 +425,10 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleEditOutlier(dataPoint.key)}
+                        onClick={() => {
+                          console.log('Edit button clicked for:', dataPoint.key);
+                          handleEditOutlier(dataPoint.key);
+                        }}
                       >
                         <Edit3 className="h-3 w-3 mr-1" />
                         Edit
