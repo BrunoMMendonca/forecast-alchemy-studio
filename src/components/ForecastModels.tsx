@@ -151,13 +151,16 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     if (!selectedSKU) return;
     
     console.log(`PREFERENCE: Loading preferences for SKU: ${selectedSKU}`);
-    
-    // Load preferences synchronously BEFORE updating models
-    const preferences = loadManualAIPreferences();
-    console.log('PREFERENCE: Loaded preferences:', preferences);
-    
     loadCachedParametersAndForecast();
   }, [selectedSKU, forecastPeriods]);
+
+  // FIXED: Load preferences on component mount or when returning to forecasting step
+  React.useEffect(() => {
+    if (!selectedSKU || data.length === 0) return;
+    
+    console.log('PREFERENCE: Component mounted/returned - loading preferences');
+    loadCachedParametersAndForecast();
+  }, []); // Empty dependency array - runs once on mount
 
   const loadCachedParametersAndForecast = () => {
     if (!selectedSKU) return;
