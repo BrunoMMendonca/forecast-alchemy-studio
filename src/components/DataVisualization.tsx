@@ -1,8 +1,9 @@
-
 import React, { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { SalesData } from '@/pages/Index';
 
 interface DataVisualizationProps {
@@ -52,6 +53,20 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) =>
     };
   }, [data, selectedSKU]);
 
+  const handlePrevSKU = () => {
+    const currentIndex = skus.indexOf(selectedSKU);
+    if (currentIndex > 0) {
+      setSelectedSKU(skus[currentIndex - 1]);
+    }
+  };
+
+  const handleNextSKU = () => {
+    const currentIndex = skus.indexOf(selectedSKU);
+    if (currentIndex < skus.length - 1) {
+      setSelectedSKU(skus[currentIndex + 1]);
+    }
+  };
+
   if (data.length === 0) {
     return (
       <div className="text-center py-8 text-slate-500">
@@ -68,16 +83,34 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) =>
           <label className="text-sm font-medium text-slate-700">
             Select SKU:
           </label>
-          <Select value={selectedSKU} onValueChange={setSelectedSKU}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Select SKU" />
-            </SelectTrigger>
-            <SelectContent>
-              {skus.map(sku => (
-                <SelectItem key={sku} value={sku}>{sku}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center space-x-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handlePrevSKU}
+              disabled={skus.indexOf(selectedSKU) === 0}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Select value={selectedSKU} onValueChange={setSelectedSKU}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Select SKU" />
+              </SelectTrigger>
+              <SelectContent>
+                {skus.map(sku => (
+                  <SelectItem key={sku} value={sku}>{sku}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleNextSKU}
+              disabled={skus.indexOf(selectedSKU) === skus.length - 1}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         
         <div className="flex items-center space-x-2">

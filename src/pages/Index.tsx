@@ -45,12 +45,18 @@ const Index = () => {
 
   const handleDataCleaning = (cleaned: SalesData[]) => {
     setCleanedData(cleaned);
-    setCurrentStep(2);
+    setCurrentStep(3);
   };
 
   const handleForecastGeneration = (results: ForecastResult[]) => {
     setForecastResults(results);
-    setCurrentStep(3);
+  };
+
+  const handleTabChange = (value: string) => {
+    const stepIndex = steps.findIndex(step => step.id === value);
+    if (stepIndex !== -1) {
+      setCurrentStep(stepIndex);
+    }
   };
 
   return (
@@ -99,15 +105,16 @@ const Index = () => {
         </div>
 
         {/* Main Content */}
-        <Tabs value={steps[currentStep]?.id} className="w-full">
+        <Tabs value={steps[currentStep]?.id} onValueChange={handleTabChange} className="w-full">
           <TabsList className="grid w-full grid-cols-4 mb-8">
             {steps.map((step, index) => {
               const Icon = step.icon;
+              const isDisabled = index > Math.max(currentStep, salesData.length > 0 ? 1 : 0);
               return (
                 <TabsTrigger 
                   key={step.id} 
                   value={step.id}
-                  disabled={index > currentStep}
+                  disabled={isDisabled}
                   className="flex items-center gap-2"
                 >
                   <Icon size={16} />

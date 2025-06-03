@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,7 +28,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
   const [threshold, setThreshold] = useState([2.5]);
   const [editingOutliers, setEditingOutliers] = useState<{ [key: string]: { value: number; note: string } }>({});
   const [cleanedData, setCleanedData] = useState<SalesData[]>(data);
-  const [hideCleanData, setHideCleanData] = useState(false);
+  const [hideCleanData, setHideCleanData] = useState(true); // Default to true
   const { toast } = useToast();
 
   // Update cleaned data when original data changes
