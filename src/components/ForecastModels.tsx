@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -253,7 +254,8 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
 
           // Optimize parameters with AI if enabled
           if (useAiOptimization && model.parameters && Object.keys(model.parameters).length > 0) {
-            effectiveParameters = await optimizeModelParameters(model, skuData, frequency);
+            const optimizedParams = await optimizeModelParameters(model, skuData, frequency);
+            effectiveParameters = optimizedParams || model.parameters;
           }
 
           let predictions: number[] = [];
@@ -367,7 +369,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
               <Checkbox
                 id="ai-optimization"
                 checked={useAiOptimization}
-                onCheckedChange={setUseAiOptimization}
+                onCheckedChange={(checked) => setUseAiOptimization(checked === true)}
               />
               <Label htmlFor="ai-optimization" className="flex items-center gap-2 font-medium">
                 <Zap className="h-4 w-4 text-purple-600" />
@@ -447,7 +449,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
                           step={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
                           min={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
                           max={param === 'alpha' || param === 'beta' || param === 'gamma' ? 1 : 30}
-                          disabled={useAiOptimization && model.optimizedParameters}
+                          disabled={useAiOptimization && !!model.optimizedParameters}
                         />
                         <span className="text-xs text-slate-500">
                           {param === 'window' && 'periods'}
@@ -508,7 +510,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
                           step={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
                           min={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
                           max={param === 'alpha' || param === 'beta' || param === 'gamma' ? 1 : 30}
-                          disabled={useAiOptimization && model.optimizedParameters}
+                          disabled={useAiOptimization && !!model.optimizedParameters}
                         />
                         <span className="text-xs text-slate-500">
                           {param === 'window' && 'periods'}
