@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { AlertTriangle, Zap, Edit3, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SalesData } from '@/pages/Index';
@@ -27,6 +28,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
   const [threshold, setThreshold] = useState([2.5]);
   const [editingOutliers, setEditingOutliers] = useState<{ [key: string]: number }>({});
   const [cleanedData, setCleanedData] = useState<SalesData[]>(data);
+  const [hideCleanData, setHideCleanData] = useState(false);
   const { toast } = useToast();
 
   // Update cleaned data when original data changes
@@ -81,6 +83,13 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
     return outlierData.filter(d => d.isOutlier);
   }, [outlierData]);
 
+  const filteredOutlierData = useMemo(() => {
+    if (hideCleanData) {
+      return outlierData.filter(d => d.isOutlier);
+    }
+    return outlierData;
+  }, [outlierData, hideCleanData]);
+
   const chartData = useMemo(() => {
     if (!selectedSKU || data.length === 0) return [];
 
@@ -101,8 +110,13 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
     });
   }, [data, cleanedData, selectedSKU]);
 
-  const handleEditOutlier = (key: string, currentValue: number) => {
-    setEditingOutliers({ ...editingOutliers, [key]: currentValue });
+  const handleEditOutlier = (key: string) => {
+    // Find the current value from cleanedData, not the original data
+    const [sku, date] = key.split('-');
+    const currentItem = cleanedData.find(item => item.sku === sku && item.date === date);
+    if (currentItem) {
+      setEditingOutliers({ ...editingOutliers, [key]: currentItem.sales });
+    }
   };
 
   const handleSaveEdit = (key: string, newValue: number) => {
@@ -329,11 +343,23 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
 
       {/* Data Editing Table */}
       <div className="bg-white rounded-lg p-4 border">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">
-          Edit Data Values - {selectedSKU}
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-slate-800">
+            Edit Data Values - {selectedSKU}
+          </h3>
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="hide-clean" 
+              checked={hideCleanData}
+              onCheckedChange={setHideCleanData}
+            />
+            <label htmlFor="hide-clean" className="text-sm text-slate-700 cursor-pointer">
+              Hide clean data
+            </label>
+          </div>
+        </div>
         <div className="space-y-3 max-h-96 overflow-y-auto">
-          {outlierData.map((dataPoint) => {
+          {filteredOutlierData.map((dataPoint) => {
             const isEditing = editingOutliers.hasOwnProperty(dataPoint.key);
             const badgeVariant = dataPoint.isOutlier ? "destructive" : "secondary";
             const badgeColor = dataPoint.isOutlier ? "text-red-800" : "text-green-800";
@@ -385,7 +411,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleEditOutlier(dataPoint.key, dataPoint.sales)}
+                      onClick={() => handleEditOutlier(dataPoint.key)}
                     >
                       <Edit3 className="h-3 w-3 mr-1" />
                       Edit
