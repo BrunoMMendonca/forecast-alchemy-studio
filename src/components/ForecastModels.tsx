@@ -39,11 +39,56 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   selectedSKU,
   onSKUChange
 }) => {
-  const [models, setModels] = useState<ModelConfig[]>(getDefaultModels());
+  // FIXED: Initialize models with preferences applied immediately
+  const initializeModelsWithPreferences = () => {
+    const defaultModels = getDefaultModels();
+    
+    // If no selectedSKU yet, return defaults
+    if (!selectedSKU || data.length === 0) {
+      console.log('INIT: No SKU selected yet, using defaults');
+      return defaultModels;
+    }
+
+    try {
+      const preferences = loadManualAIPreferences();
+      const skuData = data.filter(d => d.sku === selectedSKU);
+      const currentDataHash = generateDataHash(skuData);
+      
+      console.log(`INIT: Initializing models with preferences for ${selectedSKU}`);
+      
+      return defaultModels.map(model => {
+        const cached = getCachedParameters(selectedSKU, model.id);
+        const preferenceKey = `${selectedSKU}:${model.id}`;
+        const preference = preferences[preferenceKey];
+        
+        console.log(`INIT: ${preferenceKey} - preference: ${preference}, cached: ${!!cached}`);
+        
+        if (preference === true && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
+          return {
+            ...model,
+            optimizedParameters: cached.parameters,
+            optimizationConfidence: cached.confidence
+          };
+        } else {
+          return {
+            ...model,
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined
+          };
+        }
+      });
+    } catch (error) {
+      console.error('INIT: Error initializing with preferences:', error);
+      return defaultModels;
+    }
+  };
+
+  const [models, setModels] = useState<ModelConfig[]>(() => initializeModelsWithPreferences());
   const { toast } = useToast();
   const lastDataHashRef = useRef<string>('');
   const isTogglingAIManualRef = useRef<boolean>(false);
   const hasAppliedPreferencesRef = useRef<boolean>(false);
+  const initializationKeyRef = useRef<string>('');
   
   const {
     cache,
@@ -106,34 +151,29 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     setModels(prev => prev.map(model => {
       const cached = getCachedParameters(selectedSKU, model.id);
       const preferenceKey = `${selectedSKU}:${model.id}`;
-      const preference = preferences[preferenceKey]; // Can be true, false, or undefined
+      const preference = preferences[preferenceKey];
       
       console.log(`PREFERENCE APPLY: ${preferenceKey} - preference: ${preference}, cached: ${!!cached}`);
       
-      // FIXED: Explicit logic for AI vs Manual
       if (preference === true && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
-        // Explicitly set to AI AND have valid cached parameters
         return {
           ...model,
           optimizedParameters: cached.parameters,
           optimizationConfidence: cached.confidence
         };
       } else if (preference === false) {
-        // Explicitly set to Manual
         return {
           ...model,
           optimizedParameters: undefined,
           optimizationConfidence: undefined
         };
       } else if (preference === undefined) {
-        // No preference set - default to Manual
         return {
           ...model,
           optimizedParameters: undefined,
           optimizationConfidence: undefined
         };
       } else if (preference === true && !cached) {
-        // Set to AI but no cached parameters - fallback to Manual
         console.log(`PREFERENCE APPLY: ${preferenceKey} set to AI but no cached parameters, using Manual`);
         return {
           ...model,
@@ -141,7 +181,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           optimizationConfidence: undefined
         };
       } else {
-        // Fallback to Manual
         return {
           ...model,
           optimizedParameters: undefined,
@@ -162,17 +201,34 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // FIXED: Apply preferences whenever component has data and selectedSKU (including after navigation)
+  // FIXED: Reliable preference application effect - triggers on navigation back
   React.useEffect(() => {
     if (selectedSKU && data.length > 0) {
-      console.log(`PREFERENCE TRIGGER: Component ready with SKU ${selectedSKU}, applying preferences`);
-      hasAppliedPreferencesRef.current = false;
-      applyPreferencesToModels();
+      const newKey = `${selectedSKU}_${data.length}_${Date.now()}`;
       
-      // Generate forecasts after preferences are applied
-      setTimeout(() => generateForecastsForSelectedSKU(), 100);
+      // Only apply if this is a new initialization or SKU change
+      if (initializationKeyRef.current !== newKey) {
+        console.log(`NAVIGATION FIX: Component ready with SKU ${selectedSKU}, applying preferences (key: ${newKey})`);
+        initializationKeyRef.current = newKey;
+        hasAppliedPreferencesRef.current = false;
+        
+        // Apply preferences immediately
+        applyPreferencesToModels();
+        
+        // Generate forecasts after preferences are applied
+        setTimeout(() => generateForecastsForSelectedSKU(), 100);
+      }
     }
   }, [selectedSKU, data.length]); // This runs whenever we have both data and selectedSKU
+
+  // FIXED: Additional effect to catch navigation back without data changes
+  React.useEffect(() => {
+    if (selectedSKU && data.length > 0 && !hasAppliedPreferencesRef.current) {
+      console.log(`NAVIGATION FIX: Fallback preference application for ${selectedSKU}`);
+      applyPreferencesToModels();
+      setTimeout(() => generateForecastsForSelectedSKU(), 100);
+    }
+  }, [selectedSKU]); // Simpler dependency - just selectedSKU changes
 
   // FIXED: Main optimization effect - only runs on actual data changes
   React.useEffect(() => {
@@ -538,6 +594,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           | Fingerprint: {navigationState.datasetFingerprint}
           | AI/Manual Toggle: {isTogglingAIManualRef.current ? '🔄 Active' : '✅ Idle'}
           | Preferences Applied: {hasAppliedPreferencesRef.current ? '✅' : '❌'}
+          | Init Key: {initializationKeyRef.current}
         </div>
       )}
     </div>
