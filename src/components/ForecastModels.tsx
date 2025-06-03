@@ -118,8 +118,15 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           optimizedParameters: cached.parameters,
           optimizationConfidence: cached.confidence
         };
-      } else if (preference === false || !preference) {
-        // Explicitly set to Manual OR no preference (default to Manual)
+      } else if (preference === false) {
+        // Explicitly set to Manual
+        return {
+          ...model,
+          optimizedParameters: undefined,
+          optimizationConfidence: undefined
+        };
+      } else if (preference === undefined) {
+        // No preference set - default to Manual
         return {
           ...model,
           optimizedParameters: undefined,
@@ -237,7 +244,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         saveManualAIPreferences(preferences);
         console.log(`PREFERENCE: Auto-set ${sku} models to AI after optimization`);
         
-        // Update models state if this is for the currently selected SKU
+        // FIXED: Update models state immediately if this is for the currently selected SKU
         if (sku === selectedSKU) {
           setModels(prev => prev.map(model => 
             model.id === modelId 
@@ -258,9 +265,12 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 
     console.log('FIXED: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE');
 
-    // Generate forecasts after optimization
+    // FIXED: After optimization completes, re-apply preferences to ensure all models show as AI
     if (selectedSKU) {
-      setTimeout(() => generateForecastsForSelectedSKU(), 100);
+      setTimeout(() => {
+        applyPreferencesToModels();
+        generateForecastsForSelectedSKU();
+      }, 100);
     }
   };
 
