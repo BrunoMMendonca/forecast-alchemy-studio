@@ -158,7 +158,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   React.useEffect(() => {
     if (selectedSKU && data.length > 0) {
       // Always apply preferences when SKU changes or component mounts
-      const modelsWithPreferences = createModelsWithPreferences(selectedSKU);
+      const modelsWithPreferences = createModelsWithPreferences();
       console.log(`EFFECT: Setting models with preferences for ${selectedSKU}`);
       setModels(modelsWithPreferences);
       
@@ -267,7 +267,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       console.log(`IMMEDIATE FIX: Forcing immediate UI update for current SKU: ${selectedSKU}`);
       
       // Apply preferences immediately - no setTimeout
-      const modelsWithPreferences = createModelsWithPreferences(selectedSKU);
+      const modelsWithPreferences = createModelsWithPreferences();
       setModels(modelsWithPreferences);
       generateForecastsForSelectedSKU();
     }
