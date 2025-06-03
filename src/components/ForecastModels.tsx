@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -48,11 +49,8 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     isCacheValid,
     getSKUsNeedingOptimization,
     isOptimizationComplete,
-    startOptimizationSession,
-    markSKUOptimized,
-    completeOptimizationSession,
-    getDatasetFingerprintString,
-    markOptimizationStarted
+    markOptimizationComplete,
+    getDatasetFingerprintString
   } = useOptimizationCache();
   
   const {
@@ -63,6 +61,9 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   
   const { isOptimizing, progress, optimizeAllSKUs } = useBatchOptimization();
 
+  // Stable dataset fingerprint for dependency tracking
+  const datasetFingerprint = getDatasetFingerprintString(data);
+
   // Auto-select first SKU when data changes
   React.useEffect(() => {
     const skus = Array.from(new Set(data.map(d => d.sku))).sort();
@@ -71,18 +72,17 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // ENHANCED: Main optimization effect with stable dependency and proper priority checks
+  // FIXED: Main optimization effect with proper priority
   React.useEffect(() => {
     if (data.length === 0) return;
 
-    const currentDatasetFingerprint = getDatasetFingerprintString(data);
     const enabledModels = models.filter(m => m.enabled);
     
-    console.log(`Enhanced cache: MAIN EFFECT triggered for dataset: ${currentDatasetFingerprint}`);
+    console.log(`FIXED: Main effect triggered for dataset: ${datasetFingerprint}`);
 
-    // PRIORITY 1: Check if optimization is already complete (navigation + session state)
-    if (isOptimizationComplete(data, enabledModels)) {
-      console.log('Enhanced cache: ✅ OPTIMIZATION COMPLETE - Loading cached parameters');
+    // PRIORITY 1: Check if optimization is already complete for this dataset
+    if (isOptimizationComplete(data)) {
+      console.log('FIXED: ✅ OPTIMIZATION ALREADY COMPLETE - Loading cached parameters');
       
       toast({
         title: "Cache Hit",
@@ -95,31 +95,9 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       return;
     }
     
-    console.log('Enhanced cache: ❌ Optimization needed - checking requirements');
-    
-    // PRIORITY 2: Check what specifically needs optimization
-    const skusNeedingOptimization = getSKUsNeedingOptimization(data, enabledModels);
-    
-    if (skusNeedingOptimization.length === 0) {
-      console.log('Enhanced cache: ✅ All parameters cached, marking as complete');
-      
-      // Mark optimization as started and completed
-      markOptimizationStarted(data);
-      completeOptimizationSession();
-      
-      toast({
-        title: "Cache Hit",
-        description: "All optimization parameters loaded from cache",
-      });
-      
-      if (selectedSKU) {
-        loadCachedParametersAndForecast();
-      }
-    } else {
-      console.log(`Enhanced cache: 🔄 Starting optimization for ${skusNeedingOptimization.length} SKUs`);
-      handleInitialOptimization();
-    }
-  }, [getDatasetFingerprintString(data)]); // STABLE DEPENDENCY: Only dataset fingerprint
+    console.log('FIXED: ❌ Optimization needed - starting optimization process');
+    handleInitialOptimization();
+  }, [datasetFingerprint]); // STABLE DEPENDENCY: Only dataset fingerprint
 
   // Load cached parameters and generate forecasts when SKU changes
   React.useEffect(() => {
@@ -159,11 +137,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   const handleInitialOptimization = async () => {
     const enabledModels = models.filter(m => m.enabled);
     
-    console.log(`Enhanced cache: 🚀 STARTING OPTIMIZATION. Cache stats: ${cacheStats.hits} hits, ${cacheStats.misses} misses, ${cacheStats.skipped} dataset skips`);
-    
-    // Mark optimization as started and start session
-    markOptimizationStarted(data);
-    startOptimizationSession(data);
+    console.log(`FIXED: 🚀 STARTING OPTIMIZATION. Cache stats: ${cacheStats.hits} hits, ${cacheStats.misses} misses, ${cacheStats.skipped} dataset skips`);
     
     await optimizeAllSKUs(
       data, 
@@ -172,9 +146,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
         setCachedParameters(sku, modelId, parameters, dataHash, confidence);
-        
-        // Mark SKU as optimized in session
-        markSKUOptimized(sku);
         
         // Update models state if this is for the currently selected SKU
         if (sku === selectedSKU) {
@@ -192,8 +163,8 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       getSKUsNeedingOptimization
     );
 
-    // Mark optimization session as complete
-    completeOptimizationSession();
+    // FIXED: Mark optimization as complete for this dataset
+    markOptimizationComplete(data);
 
     // Generate forecasts after optimization
     if (selectedSKU) {
@@ -412,7 +383,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 
       {cacheStats.hits + cacheStats.misses + cacheStats.skipped > 0 && (
         <div className="text-xs text-slate-500 bg-slate-50 rounded p-2">
-          Enhanced Cache: {cacheStats.hits} param hits, {cacheStats.misses} param misses, {cacheStats.skipped} dataset skips
+          Fixed Cache: {cacheStats.hits} param hits, {cacheStats.misses} param misses, {cacheStats.skipped} dataset skips
           ({Math.round((cacheStats.hits / Math.max(1, cacheStats.hits + cacheStats.misses)) * 100)}% param hit rate)
         </div>
       )}
