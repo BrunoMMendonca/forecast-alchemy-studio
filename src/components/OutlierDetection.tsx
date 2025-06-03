@@ -200,7 +200,14 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
   };
 
   const handleProceedToForecasting = () => {
+    console.log('Proceed to forecasting clicked, cleaned data length:', cleanedData.length);
     onDataCleaning(cleanedData);
+    
+    // Navigate to forecasting tab by triggering parent component
+    const forecastTabButton = document.querySelector('[data-state="inactive"][value="forecast"]') as HTMLElement;
+    if (forecastTabButton) {
+      forecastTabButton.click();
+    }
   };
 
   const handlePrevSKU = () => {
@@ -359,19 +366,19 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
               />
               <Line 
                 type="monotone" 
-                dataKey="originalSales" 
-                stroke="#94a3b8" 
+                dataKey="cleanedSales" 
+                stroke="#3b82f6" 
                 strokeWidth={2}
-                name="Original Data"
+                name="Cleaned Data"
                 dot={{ r: 3 }}
                 connectNulls={false}
               />
               <Line 
                 type="monotone" 
-                dataKey="cleanedSales" 
-                stroke="#3b82f6" 
+                dataKey="originalSales" 
+                stroke="#94a3b8" 
                 strokeWidth={2}
-                name="Cleaned Data"
+                name="Original Data"
                 dot={{ r: 3 }}
                 connectNulls={false}
               />
