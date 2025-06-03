@@ -1,17 +1,16 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Slider } from '@/components/ui/slider';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Textarea } from '@/components/ui/textarea';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { AlertTriangle, Zap, Edit3, Save, X, ChevronLeft, ChevronRight, Download, Upload } from 'lucide-react';
+import { AlertTriangle, Zap } from 'lucide-react';
 import { SalesData } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 import { exportCleaningData, parseCleaningCSV, applyImportChanges, ImportPreview } from '@/utils/csvUtils';
 import { ImportPreviewDialog } from '@/components/ImportPreviewDialog';
+import { OutlierChart } from '@/components/OutlierChart';
+import { OutlierStatistics } from '@/components/OutlierStatistics';
+import { OutlierControls } from '@/components/OutlierControls';
+import { OutlierExportImport } from '@/components/OutlierExportImport';
+import { OutlierDataTable } from '@/components/OutlierDataTable';
 
 interface OutlierDetectionProps {
   data: SalesData[];
@@ -343,357 +342,61 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleane
   return (
     <div className="space-y-6">
       {/* Export/Import Section */}
-      <div className="bg-slate-50 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-slate-800 mb-3">Data Cleaning Export/Import</h3>
-        <div className="flex items-center gap-3">
-          <Button 
-            variant="outline" 
-            onClick={handleExportCleaning}
-            disabled={cleanedData.length === 0}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Export Cleaning Data
-          </Button>
-          
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            onChange={handleImportFile}
-            className="hidden"
-          />
-          
-          <Button 
-            variant="outline" 
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Import Cleaning Data
-          </Button>
-          
-          <div className="text-sm text-slate-600">
-            Export your cleaning changes or import previously saved cleaning data
-          </div>
-        </div>
-      </div>
+      <OutlierExportImport
+        onExport={handleExportCleaning}
+        onImportClick={() => fileInputRef.current?.click()}
+        isExportDisabled={cleanedData.length === 0}
+      />
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv"
+        onChange={handleImportFile}
+        className="hidden"
+      />
 
       {/* Controls */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-slate-700">
-            Select SKU:
-          </label>
-          <div className="flex items-center space-x-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handlePrevSKU}
-              disabled={skus.indexOf(selectedSKU) === 0}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Select value={selectedSKU} onValueChange={setSelectedSKU}>
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Select SKU" />
-              </SelectTrigger>
-              <SelectContent>
-                {skus.map(sku => (
-                  <SelectItem key={sku} value={sku}>{sku}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleNextSKU}
-              disabled={skus.indexOf(selectedSKU) === skus.length - 1}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-slate-700">
-            Z-Score Threshold: {threshold[0]}
-          </label>
-          <Slider
-            value={threshold}
-            onValueChange={setThreshold}
-            max={4}
-            min={1}
-            step={0.1}
-            className="w-full"
-          />
-          <p className="text-xs text-slate-500">
-            Higher values = fewer outliers detected
-          </p>
-        </div>
-      </div>
+      <OutlierControls
+        selectedSKU={selectedSKU}
+        skus={skus}
+        threshold={threshold}
+        onSKUChange={setSelectedSKU}
+        onThresholdChange={setThreshold}
+        onPrevSKU={handlePrevSKU}
+        onNextSKU={handleNextSKU}
+      />
 
       {/* Statistics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-blue-50 rounded-lg p-3 text-center">
-          <div className="text-sm text-blue-600 font-medium">Total Records</div>
-          <div className="text-lg font-bold text-blue-800">
-            {outlierData.length}
-          </div>
-        </div>
-        <div className="bg-red-50 rounded-lg p-3 text-center">
-          <div className="text-sm text-red-600 font-medium">Outliers Found</div>
-          <div className="text-lg font-bold text-red-800">
-            {outliers.length}
-          </div>
-        </div>
-        <div className="bg-green-50 rounded-lg p-3 text-center">
-          <div className="text-sm text-green-600 font-medium">Clean Records</div>
-          <div className="text-lg font-bold text-green-800">
-            {outlierData.length - outliers.length}
-          </div>
-        </div>
-        <div className="bg-orange-50 rounded-lg p-3 text-center">
-          <div className="text-sm text-orange-600 font-medium">Outlier Rate</div>
-          <div className="text-lg font-bold text-orange-800">
-            {outlierData.length > 0 ? ((outliers.length / outlierData.length) * 100).toFixed(1) : 0}%
-          </div>
-        </div>
-      </div>
+      <OutlierStatistics
+        totalRecords={outlierData.length}
+        outliersCount={outliers.length}
+        cleanRecords={outlierData.length - outliers.length}
+        outlierRate={outlierData.length > 0 ? ((outliers.length / outlierData.length) * 100) : 0}
+      />
 
-      {/* Outlier Visualization */}
-      <div className="bg-white rounded-lg p-4 border">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">
-          Outlier Detection - {selectedSKU}
-        </h3>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis 
-                dataKey="date" 
-                stroke="#64748b"
-                fontSize={12}
-                tickFormatter={(value) => {
-                  try {
-                    return new Date(value).toLocaleDateString('en-US', { 
-                      month: 'short', 
-                      day: 'numeric' 
-                    });
-                  } catch {
-                    return value;
-                  }
-                }}
-              />
-              <YAxis 
-                stroke="#64748b"
-                fontSize={12}
-                tickFormatter={(value) => value.toLocaleString()}
-              />
-              <Tooltip 
-                formatter={(value: number, name: string) => [
-                  value?.toLocaleString() || '0', 
-                  name
-                ]}
-                labelFormatter={(label) => {
-                  try {
-                    return new Date(label).toLocaleDateString();
-                  } catch {
-                    return label;
-                  }
-                }}
-                contentStyle={{
-                  backgroundColor: 'white',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="originalSales" 
-                stroke="#94a3b8" 
-                strokeWidth={2}
-                name="Original Sales"
-                dot={{ r: 3 }}
-                connectNulls={false}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="cleanedSales" 
-                stroke="#3b82f6" 
-                strokeWidth={2}
-                name="Cleaned Sales"
-                dot={{ r: 3 }}
-                connectNulls={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="flex items-center justify-center space-x-6 mt-4 text-sm">
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-slate-400 rounded-full"></div>
-            <span>Original Data</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-            <span>Cleaned Data</span>
-          </div>
-        </div>
-      </div>
+      {/* Chart */}
+      <OutlierChart data={chartData} selectedSKU={selectedSKU} />
 
       {/* Data Editing Table */}
-      <div className="bg-white rounded-lg p-4 border">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-slate-800">
-            Edit Data Values - {selectedSKU}
-          </h3>
-          <div className="flex items-center space-x-2">
-            <Checkbox 
-              id="hide-clean" 
-              checked={hideCleanData}
-              onCheckedChange={(checked) => setHideCleanData(checked === true)}
-            />
-            <label htmlFor="hide-clean" className="text-sm text-slate-700 cursor-pointer">
-              Hide clean data
-            </label>
-          </div>
-        </div>
-        <div className="space-y-3 max-h-96 overflow-y-auto">
-          {filteredOutlierData.map((dataPoint) => {
-            const isEditing = editingOutliers.hasOwnProperty(dataPoint.key);
-            const badgeVariant = dataPoint.isOutlier ? "destructive" : "secondary";
-            const hasBeenModified = dataPoint.sales !== dataPoint.originalSales;
-            
-            return (
-              <div key={dataPoint.key} className={`p-3 rounded-lg ${dataPoint.isOutlier ? 'bg-red-50' : 'bg-green-50'}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-4">
-                    <div className="text-sm text-slate-600">{dataPoint.date}</div>
-                    <div className="text-sm">
-                      <span className="font-medium">Current: {dataPoint.sales.toLocaleString()}</span>
-                      <span className="text-slate-500 ml-2">
-                        (Original: {dataPoint.originalSales.toLocaleString()})
-                      </span>
-                    </div>
-                    <Badge variant={badgeVariant} className={`text-xs ${dataPoint.isOutlier ? 'text-white' : 'text-green-800'}`}>
-                      Z-Score: {dataPoint.zScore.toFixed(2)}
-                    </Badge>
-                    {!dataPoint.isOutlier && (
-                      <Badge variant="secondary" className="text-xs text-green-800 bg-green-100">
-                        Clean
-                      </Badge>
-                    )}
-                    {hasBeenModified && (
-                      <Badge variant="outline" className="text-xs text-blue-800 bg-blue-50">
-                        Modified
-                      </Badge>
-                    )}
-                    {dataPoint.note && (
-                      <Badge variant="outline" className="text-xs text-purple-800 bg-purple-50">
-                        Note
-                      </Badge>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    {!isEditing && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          console.log('Edit button clicked for:', dataPoint.key);
-                          handleEditOutlier(dataPoint.key);
-                        }}
-                      >
-                        <Edit3 className="h-3 w-3 mr-1" />
-                        Edit
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {dataPoint.note && !isEditing && (
-                  <div className="text-xs text-purple-700 bg-purple-50 p-2 rounded mt-2">
-                    <strong>Note:</strong> {dataPoint.note}
-                  </div>
-                )}
-
-                {isEditing && (
-                  <div className="space-y-3 bg-white p-3 rounded border">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-slate-600 mb-1 block">New Value</label>
-                        <Input
-                          type="number"
-                          value={editingOutliers[dataPoint.key]?.value || 0}
-                          onChange={(e) => setEditingOutliers({
-                            ...editingOutliers,
-                            [dataPoint.key]: {
-                              ...editingOutliers[dataPoint.key],
-                              value: parseFloat(e.target.value) || 0
-                            }
-                          })}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleSaveEdit(dataPoint.key);
-                            }
-                          }}
-                          className="w-full"
-                        />
-                        <div className="text-xs text-slate-500 mt-1">
-                          Original: {dataPoint.originalSales.toLocaleString()}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-600 mb-1 block">Note (optional)</label>
-                        <Textarea
-                          value={editingOutliers[dataPoint.key]?.note || ''}
-                          onChange={(e) => setEditingOutliers({
-                            ...editingOutliers,
-                            [dataPoint.key]: {
-                              ...editingOutliers[dataPoint.key],
-                              note: e.target.value
-                            }
-                          })}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleSaveEdit(dataPoint.key);
-                            }
-                          }}
-                          placeholder="Add a note about this change..."
-                          className="w-full resize-none"
-                          rows={2}
-                        />
-                        <div className="text-xs text-slate-500 mt-1">
-                          Press Enter to save
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleSaveEdit(dataPoint.key)}
-                      >
-                        <Save className="h-3 w-3 mr-1" />
-                        Save
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleCancelEdit(dataPoint.key)}
-                      >
-                        <X className="h-3 w-3 mr-1" />
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <OutlierDataTable
+        filteredData={filteredOutlierData}
+        selectedSKU={selectedSKU}
+        hideCleanData={hideCleanData}
+        editingOutliers={editingOutliers}
+        onHideCleanDataChange={setHideCleanData}
+        onEditOutlier={handleEditOutlier}
+        onSaveEdit={handleSaveEdit}
+        onCancelEdit={handleCancelEdit}
+        onEditValueChange={(key, value) => setEditingOutliers({
+          ...editingOutliers,
+          [key]: { ...editingOutliers[key], value }
+        })}
+        onEditNoteChange={(key, note) => setEditingOutliers({
+          ...editingOutliers,
+          [key]: { ...editingOutliers[key], note }
+        })}
+      />
 
       {/* Actions */}
       <div className="flex items-center justify-between bg-slate-50 rounded-lg p-4">
