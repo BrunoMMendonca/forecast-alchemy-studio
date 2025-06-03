@@ -9,7 +9,7 @@ interface ModelCardProps {
   model: ModelConfig;
   onToggle: (modelId: string) => void;
   onParameterUpdate: (modelId: string, parameter: string, value: number) => void;
-  onReOptimize?: (modelId: string) => void;
+  onUseAI?: (modelId: string) => void;
   onResetToManual?: (modelId: string) => void;
 }
 
@@ -17,7 +17,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   model,
   onToggle,
   onParameterUpdate,
-  onReOptimize,
+  onUseAI,
   onResetToManual
 }) => {
   const ringColor = model.isSeasonal ? 'ring-green-200' : 'ring-blue-200';
@@ -56,7 +56,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
           <ParameterControl
             model={model}
             onParameterUpdate={(param, value) => onParameterUpdate(model.id, param, value)}
-            onReOptimize={() => onReOptimize?.(model.id)}
+            onUseAI={() => onUseAI?.(model.id)}
             onResetToManual={() => onResetToManual?.(model.id)}
           />
         </CardContent>

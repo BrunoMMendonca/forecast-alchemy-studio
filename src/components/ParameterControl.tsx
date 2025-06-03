@@ -4,20 +4,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Undo } from 'lucide-react';
+import { Bot, User } from 'lucide-react';
 import { ModelConfig } from '@/types/forecast';
 
 interface ParameterControlProps {
   model: ModelConfig;
   onParameterUpdate: (parameter: string, value: number) => void;
-  onReOptimize?: () => void;
+  onUseAI?: () => void;
   onResetToManual?: () => void;
 }
 
 export const ParameterControl: React.FC<ParameterControlProps> = ({
   model,
   onParameterUpdate,
-  onReOptimize,
+  onUseAI,
   onResetToManual
 }) => {
   if (!model.parameters || Object.keys(model.parameters).length === 0) {
@@ -26,32 +26,41 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 
   const hasOptimizedParams = !!model.optimizedParameters;
   const displayParams = model.optimizedParameters || model.parameters;
+  const isUsingAI = hasOptimizedParams;
 
   return (
     <div className="space-y-3 pl-8">
       <div className="flex items-center gap-2 mb-3">
-        {hasOptimizedParams && (
+        {hasOptimizedParams ? (
           <>
-            <Badge variant="secondary" className="text-purple-700 bg-purple-100">
+            <Badge variant="default" className="text-white bg-purple-600">
+              <Bot className="h-3 w-3 mr-1" />
               AI Optimized
             </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onReOptimize}
-              className="h-6 text-xs"
-            >
-              <RefreshCw className="h-3 w-3 mr-1" />
-              Re-optimize
-            </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={onResetToManual}
               className="h-6 text-xs"
             >
-              <Undo className="h-3 w-3 mr-1" />
+              <User className="h-3 w-3 mr-1" />
+              Use Manual
+            </Button>
+          </>
+        ) : (
+          <>
+            <Badge variant="outline" className="text-slate-600">
+              <User className="h-3 w-3 mr-1" />
               Manual
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onUseAI}
+              className="h-6 text-xs text-purple-600 border-purple-200"
+            >
+              <Bot className="h-3 w-3 mr-1" />
+              Use AI
             </Button>
           </>
         )}
@@ -68,6 +77,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
             step={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
             min={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
             max={param === 'alpha' || param === 'beta' || param === 'gamma' ? 1 : 30}
+            disabled={isUsingAI}
           />
           <span className="text-xs text-slate-500">
             {param === 'window' && 'periods'}
@@ -75,7 +85,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
           </span>
           {hasOptimizedParams && model.parameters && (
             <span className="text-xs text-slate-400">
-              (was: {model.parameters[param]})
+              (manual: {model.parameters[param]})
             </span>
           )}
         </div>

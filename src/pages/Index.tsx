@@ -29,6 +29,7 @@ const Index = () => {
   const [salesData, setSalesData] = useState<SalesData[]>([]);
   const [cleanedData, setCleanedData] = useState<SalesData[]>([]);
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
+  const [selectedSKUForResults, setSelectedSKUForResults] = useState<string>('');
   const [currentStep, setCurrentStep] = useState(0);
 
   const steps = [
@@ -65,13 +66,11 @@ const Index = () => {
 
   const handleForecastGeneration = (results: ForecastResult[], selectedSKU?: string) => {
     setForecastResults(results);
-    // If a specific SKU was selected, we can use it for auto-selection in results
     if (selectedSKU) {
-      // Store selected SKU for results panel if needed
+      setSelectedSKUForResults(selectedSKU);
       console.log('Generated forecasts for SKU:', selectedSKU);
     }
     // Don't auto-proceed to finalization - let user review results first
-    // User can manually navigate to finalization when ready
   };
 
   const handleStepClick = (stepIndex: number) => {
@@ -220,7 +219,7 @@ const Index = () => {
                     Forecast Models
                   </CardTitle>
                   <CardDescription>
-                    Generate forecasts using multiple predictive models
+                    Generate forecasts using multiple predictive models with AI optimization
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -239,7 +238,10 @@ const Index = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ForecastResults results={forecastResults} />
+                  <ForecastResults 
+                    results={forecastResults} 
+                    selectedSKU={selectedSKUForResults}
+                  />
                 </CardContent>
               </Card>
             </div>
