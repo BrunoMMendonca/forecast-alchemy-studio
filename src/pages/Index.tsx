@@ -70,8 +70,8 @@ const Index = () => {
       // Store selected SKU for results panel if needed
       console.log('Generated forecasts for SKU:', selectedSKU);
     }
-    // Auto-proceed to finalization step
-    setTimeout(() => setCurrentStep(4), 1000);
+    // Don't auto-proceed to finalization - let user review results first
+    // User can manually navigate to finalization when ready
   };
 
   const handleStepClick = (stepIndex: number) => {
@@ -181,7 +181,7 @@ const Index = () => {
                 <DataVisualization data={salesData} />
                 {salesData.length > 0 && (
                   <div className="mt-6 flex justify-end">
-                    <Button onClick={handleProceedToDataCleaning}>
+                    <Button onClick={() => setCurrentStep(2)}>
                       Proceed to Data Cleaning
                     </Button>
                   </div>

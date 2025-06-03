@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, Package } from 'lucide-react';
@@ -215,6 +216,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
         });
       }
 
+      // Pass the selected SKU to ensure results sync
       onForecastGeneration(results, selectedSKU);
       
       toast({
