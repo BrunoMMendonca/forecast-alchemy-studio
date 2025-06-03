@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -5,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { AlertTriangle, Zap, Edit3, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SalesData } from '@/pages/Index';
@@ -25,7 +27,7 @@ interface OutlierDataPoint extends SalesData {
 export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onDataCleaning }) => {
   const [selectedSKU, setSelectedSKU] = useState<string>('');
   const [threshold, setThreshold] = useState([2.5]);
-  const [editingOutliers, setEditingOutliers] = useState<{ [key: string]: number }>({});
+  const [editingOutliers, setEditingOutliers] = useState<{ [key: string]: { value: number; note: string } }>({});
   const [cleanedData, setCleanedData] = useState<SalesData[]>(data);
   const [hideCleanData, setHideCleanData] = useState(false);
   const { toast } = useToast();
@@ -110,19 +112,27 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
   }, [data, cleanedData, selectedSKU]);
 
   const handleEditOutlier = (key: string) => {
-    // Find the current value from cleanedData, not the original data
     const [sku, date] = key.split('-');
     const currentItem = cleanedData.find(item => item.sku === sku && item.date === date);
     if (currentItem) {
-      setEditingOutliers({ ...editingOutliers, [key]: currentItem.sales });
+      setEditingOutliers({ 
+        ...editingOutliers, 
+        [key]: { 
+          value: currentItem.sales,
+          note: ''
+        }
+      });
     }
   };
 
-  const handleSaveEdit = (key: string, newValue: number) => {
+  const handleSaveEdit = (key: string) => {
+    const editData = editingOutliers[key];
+    if (!editData) return;
+
     const [sku, date] = key.split('-');
     const updatedData = cleanedData.map(item => {
       if (item.sku === sku && item.date === date) {
-        return { ...item, sales: newValue };
+        return { ...item, sales: editData.value };
       }
       return item;
     });
@@ -134,9 +144,10 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
       return updated;
     });
 
+    const noteText = editData.note ? ` (Note: ${editData.note})` : '';
     toast({
       title: "Value Updated",
-      description: `Sales value for ${sku} on ${date} has been updated`,
+      description: `Sales value for ${sku} on ${date} updated to ${editData.value.toLocaleString()}${noteText}`,
     });
   };
 
@@ -364,59 +375,91 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
             const badgeColor = dataPoint.isOutlier ? "text-red-800" : "text-green-800";
             
             return (
-              <div key={dataPoint.key} className={`flex items-center justify-between p-3 rounded-lg ${dataPoint.isOutlier ? 'bg-red-50' : 'bg-green-50'}`}>
-                <div className="flex items-center space-x-4">
-                  <div className="text-sm text-slate-600">{dataPoint.date}</div>
-                  <div className="text-sm font-medium">
-                    Current: {dataPoint.sales.toLocaleString()}
-                  </div>
-                  <Badge variant={badgeVariant} className={`text-xs ${badgeColor}`}>
-                    Z-Score: {dataPoint.zScore.toFixed(2)}
-                  </Badge>
-                  {!dataPoint.isOutlier && (
-                    <Badge variant="secondary" className="text-xs text-green-800 bg-green-100">
-                      Clean
+              <div key={dataPoint.key} className={`p-3 rounded-lg ${dataPoint.isOutlier ? 'bg-red-50' : 'bg-green-50'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-4">
+                    <div className="text-sm text-slate-600">{dataPoint.date}</div>
+                    <div className="text-sm font-medium">
+                      Current: {dataPoint.sales.toLocaleString()}
+                    </div>
+                    <Badge variant={badgeVariant} className={`text-xs ${badgeColor}`}>
+                      Z-Score: {dataPoint.zScore.toFixed(2)}
                     </Badge>
-                  )}
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  {isEditing ? (
-                    <>
-                      <Input
-                        type="number"
-                        value={editingOutliers[dataPoint.key]}
-                        onChange={(e) => setEditingOutliers({
-                          ...editingOutliers,
-                          [dataPoint.key]: parseFloat(e.target.value) || 0
-                        })}
-                        className="w-32"
-                      />
+                    {!dataPoint.isOutlier && (
+                      <Badge variant="secondary" className="text-xs text-green-800 bg-green-100">
+                        Clean
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    {!isEditing && (
                       <Button
                         size="sm"
-                        onClick={() => handleSaveEdit(dataPoint.key, editingOutliers[dataPoint.key])}
+                        variant="outline"
+                        onClick={() => handleEditOutlier(dataPoint.key)}
                       >
-                        <Save className="h-3 w-3" />
+                        <Edit3 className="h-3 w-3 mr-1" />
+                        Edit
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {isEditing && (
+                  <div className="space-y-3 bg-white p-3 rounded border">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-slate-600 mb-1 block">New Value</label>
+                        <Input
+                          type="number"
+                          value={editingOutliers[dataPoint.key]?.value || 0}
+                          onChange={(e) => setEditingOutliers({
+                            ...editingOutliers,
+                            [dataPoint.key]: {
+                              ...editingOutliers[dataPoint.key],
+                              value: parseFloat(e.target.value) || 0
+                            }
+                          })}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-600 mb-1 block">Note (optional)</label>
+                        <Textarea
+                          value={editingOutliers[dataPoint.key]?.note || ''}
+                          onChange={(e) => setEditingOutliers({
+                            ...editingOutliers,
+                            [dataPoint.key]: {
+                              ...editingOutliers[dataPoint.key],
+                              note: e.target.value
+                            }
+                          })}
+                          placeholder="Add a note about this change..."
+                          className="w-full resize-none"
+                          rows={2}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleSaveEdit(dataPoint.key)}
+                      >
+                        <Save className="h-3 w-3 mr-1" />
+                        Save
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => handleCancelEdit(dataPoint.key)}
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-3 w-3 mr-1" />
+                        Cancel
                       </Button>
-                    </>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleEditOutlier(dataPoint.key)}
-                    >
-                      <Edit3 className="h-3 w-3 mr-1" />
-                      Edit
-                    </Button>
-                  )}
-                </div>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
