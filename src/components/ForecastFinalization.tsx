@@ -57,16 +57,20 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
     
     skus.forEach(sku => {
       const skuResults = forecastResults.filter(r => r.sku === sku);
-      const bestResult = skuResults.reduce((best, current) => 
-        (current.accuracy || 0) > (best.accuracy || 0) ? current : best
-      );
       
-      if (bestResult) {
-        newEditableForecasts[sku] = bestResult.predictions.map(p => ({
-          date: p.date,
-          value: p.value,
-          isEdited: false
-        }));
+      // Check if skuResults is not empty before using reduce
+      if (skuResults.length > 0) {
+        const bestResult = skuResults.reduce((best, current) => 
+          (current.accuracy || 0) > (best.accuracy || 0) ? current : best
+        );
+        
+        if (bestResult && bestResult.predictions) {
+          newEditableForecasts[sku] = bestResult.predictions.map(p => ({
+            date: p.date,
+            value: p.value,
+            isEdited: false
+          }));
+        }
       }
     });
     
@@ -97,9 +101,13 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
   }, [cleanedData, selectedSKU, editableForecasts]);
 
   const selectedSKUResults = forecastResults.filter(r => r.sku === selectedSKU);
-  const bestModel = selectedSKUResults.reduce((best, current) => 
-    (current.accuracy || 0) > (best.accuracy || 0) ? current : best
-  );
+  
+  // Safely get best model with empty array check
+  const bestModel = selectedSKUResults.length > 0 
+    ? selectedSKUResults.reduce((best, current) => 
+        (current.accuracy || 0) > (best.accuracy || 0) ? current : best
+      )
+    : null;
 
   const handleEditForecast = (index: number, newValue: number) => {
     if (!selectedSKU) return;
@@ -296,7 +304,7 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
                 />
                 
                 {/* Separation line between historical and forecast */}
-                {chartData.length > 0 && (
+                {chartData.length > 0 && cleanedData.filter(d => d.sku === selectedSKU).length > 0 && (
                   <ReferenceLine 
                     x={cleanedData.filter(d => d.sku === selectedSKU).slice(-1)[0]?.date} 
                     stroke="#64748b" 
