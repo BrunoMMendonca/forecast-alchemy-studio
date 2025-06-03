@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -70,17 +71,19 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // Enhanced optimization check with session tracking
+  // Enhanced optimization check with session tracking and better logging
   React.useEffect(() => {
     if (data.length > 0 && !optimizationStarted.current) {
       optimizationStarted.current = true;
       
+      console.log('ForecastModels: Starting optimization check...');
+      
       // Check if optimization is complete for this session
       if (isOptimizationCompleteForSession(data, models.filter(m => m.enabled))) {
-        console.log('Session optimization already complete, loading cached parameters');
+        console.log('ForecastModels: Session optimization already complete, loading cached parameters');
         toast({
-          title: "Session Cache Hit",
-          description: "Optimization already completed for this dataset",
+          title: "Cache Hit",
+          description: "Using previously optimized parameters from this session",
         });
         
         if (selectedSKU) {
@@ -93,7 +96,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       const skusNeedingOptimization = getSKUsNeedingOptimization(data, models.filter(m => m.enabled));
       
       if (skusNeedingOptimization.length === 0) {
-        console.log('Enhanced cache: No optimization needed, all parameters cached');
+        console.log('ForecastModels: Enhanced cache - No optimization needed, all parameters cached');
         toast({
           title: "Cache Hit",
           description: "All optimization parameters loaded from cache",
@@ -104,11 +107,16 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           loadCachedParametersAndForecast();
         }
       } else {
-        console.log(`Enhanced cache: ${skusNeedingOptimization.length} SKUs need optimization`);
+        console.log(`ForecastModels: Enhanced cache - ${skusNeedingOptimization.length} SKUs need optimization:`, skusNeedingOptimization);
         handleInitialOptimization();
       }
     }
   }, [data]);
+
+  // Reset optimization flag when data actually changes
+  React.useEffect(() => {
+    optimizationStarted.current = false;
+  }, [data.length, data.map(d => `${d.sku}-${d.date}-${d.sales}`).join(',')]);
 
   // Load cached parameters and generate forecasts when SKU changes
   React.useEffect(() => {

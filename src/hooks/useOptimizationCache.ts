@@ -20,7 +20,7 @@ interface DatasetFingerprint {
   skuCount: number;
   totalRecords: number;
   dateRange: string;
-  cleaningHash: string; // Include cleaning state
+  cleaningHash: string;
   timestamp: number;
 }
 
@@ -43,7 +43,7 @@ const CACHE_KEY = 'forecast_optimization_cache';
 const MANIFEST_KEY = 'forecast_cache_manifest';
 const SESSION_KEY = 'forecast_optimization_session';
 const CACHE_EXPIRY_HOURS = 24;
-const MANIFEST_EXPIRY_HOURS = 24; // Increased from 1 hour
+const MANIFEST_EXPIRY_HOURS = 24;
 const SESSION_EXPIRY_HOURS = 24;
 
 export const useOptimizationCache = () => {
@@ -155,77 +155,96 @@ export const useOptimizationCache = () => {
     }
   }, [currentSession]);
 
+  // Fixed dataset fingerprinting to be stable across navigation
   const generateDatasetFingerprint = useCallback((data: SalesData[]): DatasetFingerprint => {
-    const skus = Array.from(new Set(data.map(d => d.sku))).sort();
-    const dates = data.map(d => d.date).sort();
-    const totalSales = data.reduce((sum, d) => sum + d.sales, 0);
+    // Sort data to ensure consistent ordering
+    const sortedData = [...data].sort((a, b) => {
+      const skuCompare = a.sku.localeCompare(b.sku);
+      if (skuCompare !== 0) return skuCompare;
+      return a.date.localeCompare(b.date);
+    });
     
-    // Include outlier/cleaning state in fingerprint
-    const outlierCount = data.filter(d => d.isOutlier).length;
-    const notesCount = data.filter(d => d.note).length;
+    const skus = Array.from(new Set(sortedData.map(d => d.sku))).sort();
+    const dates = sortedData.map(d => d.date);
     
-    const fingerprintData = {
-      skus: skus.join(','),
+    // Create stable data signature
+    const dataSignature = {
       skuCount: skus.length,
-      totalRecords: data.length,
-      totalSales: Math.round(totalSales),
-      dateRange: `${dates[0]}-${dates[dates.length - 1]}`,
-      avgSales: Math.round(totalSales / data.length),
-      outlierCount,
-      notesCount
+      totalRecords: sortedData.length,
+      firstDate: dates[0],
+      lastDate: dates[dates.length - 1],
+      totalSales: Math.round(sortedData.reduce((sum, d) => sum + d.sales, 0)),
+      avgSales: Math.round(sortedData.reduce((sum, d) => sum + d.sales, 0) / sortedData.length)
     };
     
-    const globalHash = btoa(JSON.stringify(fingerprintData)).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
-    const cleaningHash = btoa(`${outlierCount}-${notesCount}`).replace(/[^a-zA-Z0-9]/g, '').substring(0, 10);
+    // Include cleaning state in fingerprint - this tracks outlier detection/cleaning
+    const cleaningSignature = {
+      outliersMarked: sortedData.filter(d => d.isOutlier).length,
+      notesCount: sortedData.filter(d => d.note && d.note.trim()).length,
+      // Create a signature of all sales values to detect modifications
+      salesSignature: sortedData.map(d => Math.round(d.sales * 100) / 100).join(',').substring(0, 100)
+    };
+    
+    const globalHash = btoa(JSON.stringify(dataSignature)).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+    const cleaningHash = btoa(JSON.stringify(cleaningSignature)).replace(/[^a-zA-Z0-9]/g, '').substring(0, 10);
     
     return {
       globalHash,
       skuCount: skus.length,
-      totalRecords: data.length,
-      dateRange: fingerprintData.dateRange,
+      totalRecords: sortedData.length,
+      dateRange: `${dataSignature.firstDate}-${dataSignature.lastDate}`,
       cleaningHash,
       timestamp: Date.now()
     };
   }, []);
 
   const generateDataHash = useCallback((skuData: SalesData[]): string => {
-    const recent = skuData.slice(-20);
-    const sum = recent.reduce((acc, d) => acc + d.sales, 0);
-    const avg = sum / recent.length;
-    const values = recent.map(d => Math.round(d.sales)).join('-');
-    const outlierFlags = recent.map(d => d.isOutlier ? '1' : '0').join('');
-    return `${skuData.length}-${Math.round(avg)}-${values.substring(0, 50)}-${outlierFlags}`;
+    // Sort to ensure consistent ordering
+    const sorted = [...skuData].sort((a, b) => a.date.localeCompare(b.date));
+    const salesValues = sorted.map(d => Math.round(d.sales * 100) / 100).join('-');
+    const outlierFlags = sorted.map(d => d.isOutlier ? '1' : '0').join('');
+    const noteFlags = sorted.map(d => d.note ? '1' : '0').join('');
+    
+    return `${sorted.length}-${salesValues.substring(0, 50)}-${outlierFlags}-${noteFlags}`.substring(0, 100);
   }, []);
 
   const isDatasetUnchanged = useCallback((data: SalesData[]): boolean => {
     const currentFingerprint = generateDatasetFingerprint(data);
     
-    // Check session first
-    if (currentSession && currentSession.datasetFingerprint.globalHash === currentFingerprint.globalHash) {
-      console.log('Session fingerprint check: UNCHANGED');
+    // Check session first - more reliable
+    if (currentSession && 
+        currentSession.datasetFingerprint.globalHash === currentFingerprint.globalHash &&
+        currentSession.datasetFingerprint.cleaningHash === currentFingerprint.cleaningHash) {
+      console.log('Enhanced cache: Session fingerprint check - UNCHANGED');
       return true;
     }
     
-    // Check manifest
-    if (manifest && manifest.datasetFingerprint.globalHash === currentFingerprint.globalHash) {
-      console.log('Manifest fingerprint check: UNCHANGED');
+    // Check manifest as fallback
+    if (manifest && 
+        manifest.datasetFingerprint.globalHash === currentFingerprint.globalHash &&
+        manifest.datasetFingerprint.cleaningHash === currentFingerprint.cleaningHash) {
+      console.log('Enhanced cache: Manifest fingerprint check - UNCHANGED');
       return true;
     }
     
-    console.log('Dataset fingerprint check: CHANGED');
-    console.log(`Current: ${currentFingerprint.globalHash}, Session: ${currentSession?.datasetFingerprint.globalHash}, Manifest: ${manifest?.datasetFingerprint.globalHash}`);
+    console.log('Enhanced cache: Dataset fingerprint check - CHANGED');
+    console.log(`Current: ${currentFingerprint.globalHash}:${currentFingerprint.cleaningHash}`);
+    console.log(`Session: ${currentSession?.datasetFingerprint.globalHash}:${currentSession?.datasetFingerprint.cleaningHash}`);
+    console.log(`Manifest: ${manifest?.datasetFingerprint.globalHash}:${manifest?.datasetFingerprint.cleaningHash}`);
     
     return false;
   }, [currentSession, manifest, generateDatasetFingerprint]);
 
   const isOptimizationCompleteForSession = useCallback((data: SalesData[], models: ModelConfig[]): boolean => {
     if (!currentSession || !currentSession.optimizationComplete) {
+      console.log('Enhanced cache: No session or optimization not complete');
       return false;
     }
     
     const currentFingerprint = generateDatasetFingerprint(data);
-    if (currentSession.datasetFingerprint.globalHash !== currentFingerprint.globalHash) {
-      console.log('Session dataset changed, optimization not complete');
+    if (currentSession.datasetFingerprint.globalHash !== currentFingerprint.globalHash ||
+        currentSession.datasetFingerprint.cleaningHash !== currentFingerprint.cleaningHash) {
+      console.log('Enhanced cache: Session dataset changed, optimization not complete');
       return false;
     }
     
@@ -242,7 +261,7 @@ export const useOptimizationCache = () => {
       currentSession.completedSKUs.has(sku)
     );
     
-    console.log(`Session optimization check: ${allCovered ? 'COMPLETE' : 'INCOMPLETE'} (${currentSession.completedSKUs.size}/${skusWithSufficientData.length} SKUs)`);
+    console.log(`Enhanced cache: Session optimization check - ${allCovered ? 'COMPLETE' : 'INCOMPLETE'} (${currentSession.completedSKUs.size}/${skusWithSufficientData.length} SKUs)`);
     return allCovered;
   }, [currentSession, generateDatasetFingerprint]);
 
@@ -289,16 +308,18 @@ export const useOptimizationCache = () => {
     const fingerprint = generateDatasetFingerprint(data);
     const validEntries = new Set<string>();
     
-    // If dataset is unchanged, use existing valid entries
-    if (manifest && fingerprint.globalHash === manifest.datasetFingerprint.globalHash) {
-      console.log('Dataset unchanged, using existing cache manifest');
+    // If dataset is unchanged (including cleaning state), use existing valid entries
+    if (manifest && 
+        fingerprint.globalHash === manifest.datasetFingerprint.globalHash &&
+        fingerprint.cleaningHash === manifest.datasetFingerprint.cleaningHash) {
+      console.log('Enhanced cache: Dataset completely unchanged, using existing cache manifest');
       return {
         ...manifest,
         lastValidated: Date.now()
       };
     }
     
-    console.log('Dataset changed or no manifest, rebuilding cache validity');
+    console.log('Enhanced cache: Dataset or cleaning state changed, rebuilding cache validity');
     
     // Rebuild cache validity
     const skus = Array.from(new Set(data.map(d => d.sku))).sort();
@@ -327,7 +348,7 @@ export const useOptimizationCache = () => {
     };
     
     setManifest(newManifest);
-    console.log(`Cache manifest updated: ${validEntries.size} valid entries`);
+    console.log(`Enhanced cache: Cache manifest updated - ${validEntries.size} valid entries`);
     
     return newManifest;
   }, [cache, manifest, currentSession, generateDatasetFingerprint, generateDataHash]);
@@ -393,14 +414,14 @@ export const useOptimizationCache = () => {
   ): { sku: string; models: string[] }[] => {
     // First check if optimization is already complete for this session
     if (isOptimizationCompleteForSession(data, models)) {
-      console.log('Session optimization complete, no SKUs need optimization');
+      console.log('Enhanced cache: Session optimization complete, no SKUs need optimization');
       setCacheStats(prev => ({ ...prev, skipped: prev.skipped + 1 }));
       return [];
     }
     
     // Check if we can skip entirely due to unchanged dataset
     if (isDatasetUnchanged(data)) {
-      console.log('Dataset unchanged, checking manifest for optimization needs');
+      console.log('Enhanced cache: Dataset unchanged, checking manifest for optimization needs');
       
       const currentManifest = manifest!;
       const enabledModelsWithParams = models.filter(m => 
@@ -423,13 +444,13 @@ export const useOptimizationCache = () => {
         }
       });
       
-      console.log(`Using manifest: ${result.length} SKUs need optimization`);
+      console.log(`Enhanced cache: Using manifest - ${result.length} SKUs need optimization`);
       setCacheStats(prev => ({ ...prev, skipped: prev.skipped + 1 }));
       return result;
     }
     
     // Dataset changed, do full validation
-    console.log('Dataset changed, performing full cache validation');
+    console.log('Enhanced cache: Dataset changed, performing full cache validation');
     const updatedManifest = batchValidateCache(data, models);
     
     const enabledModelsWithParams = models.filter(m => 
