@@ -55,14 +55,24 @@ export const useNavigationAwareOptimization = () => {
       return a.date.localeCompare(b.date);
     });
     
-    // Include sales values, outlier flags, and notes in fingerprint
-    const dataContent = sortedData.map(d => 
-      `${d.sku}-${d.date}-${d.sales}-${d.isOutlier ? '1' : '0'}-${d.note || ''}`
-    ).join('|');
+    // Include sales values, outlier flags, and notes in fingerprint - more precise
+    const dataContent = sortedData.map(d => {
+      // Round sales to 2 decimals to avoid floating point precision issues
+      const roundedSales = Math.round(d.sales * 100) / 100;
+      return `${d.sku}|${d.date}|${roundedSales}|${d.isOutlier ? '1' : '0'}|${d.note || ''}`;
+    }).join('||');
     
-    const fingerprint = btoa(dataContent).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
+    // Create a more stable hash
+    let hash = 0;
+    for (let i = 0; i < dataContent.length; i++) {
+      const char = dataContent.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
     
-    console.log('NAVIGATION: Generated fingerprint:', fingerprint);
+    const fingerprint = Math.abs(hash).toString(36).substring(0, 16);
+    
+    console.log('NAVIGATION: Generated fingerprint:', fingerprint, 'for', sortedData.length, 'records');
     return fingerprint;
   }, []);
 
@@ -143,7 +153,7 @@ export const useNavigationAwareOptimization = () => {
     };
     
     setNavigationState(newState);
-    console.log('NAVIGATION: ✅ Marked optimization started');
+    console.log('NAVIGATION: ✅ Marked optimization started for fingerprint:', fingerprint);
   }, [generateStableFingerprint]);
 
   const markOptimizationCompleted = useCallback((data: SalesData[], currentRoute: string = '/') => {
@@ -157,7 +167,7 @@ export const useNavigationAwareOptimization = () => {
     };
     
     setNavigationState(newState);
-    console.log('NAVIGATION: ✅ OPTIMIZATION MARKED AS COMPLETE');
+    console.log('NAVIGATION: ✅ OPTIMIZATION MARKED AS COMPLETE for fingerprint:', fingerprint);
   }, [navigationState, generateStableFingerprint]);
 
   const markDataModified = useCallback((data?: SalesData[]) => {
