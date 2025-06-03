@@ -41,6 +41,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 }) => {
   const [models, setModels] = useState<ModelConfig[]>(getDefaultModels());
   const { toast } = useToast();
+  const lastDataHashRef = useRef<string>('');
   
   const {
     cache,
@@ -98,28 +99,58 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // Detect data changes and mark for re-optimization
-  React.useEffect(() => {
-    if (data.length > 0) {
-      markDataModified(data);
+  // Generate a stable hash for the current dataset to detect real changes
+  const generateDatasetHash = React.useCallback((data: SalesData[]): string => {
+    if (!data || data.length === 0) return 'empty';
+    
+    const sortedData = [...data].sort((a, b) => {
+      const skuCompare = a.sku.localeCompare(b.sku);
+      if (skuCompare !== 0) return skuCompare;
+      return a.date.localeCompare(b.date);
+    });
+    
+    const dataContent = sortedData.map(d => {
+      const roundedSales = Math.round(d.sales * 100) / 100;
+      return `${d.sku}|${d.date}|${roundedSales}|${d.isOutlier ? '1' : '0'}|${d.note || ''}`;
+    }).join('||');
+    
+    let hash = 0;
+    for (let i = 0; i < dataContent.length; i++) {
+      const char = dataContent.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
     }
-  }, [data.length, JSON.stringify(data.map(d => `${d.sku}-${d.date}-${d.sales}-${d.isOutlier}-${d.note || ''}`).sort())]);
+    
+    return Math.abs(hash).toString(36).substring(0, 16);
+  }, []);
 
-  // BULLETPROOF: Main optimization effect with navigation state as primary source of truth
+  // STABLE: Main optimization effect with stable data hash dependency
   React.useEffect(() => {
     if (data.length === 0) return;
 
+    const currentDataHash = generateDatasetHash(data);
+    
+    // Only proceed if data actually changed
+    if (lastDataHashRef.current === currentDataHash) {
+      console.log('STABLE: ❌ Same data hash - no optimization needed');
+      return;
+    }
+    
+    lastDataHashRef.current = currentDataHash;
+    
     incrementTriggerCount();
     const triggerCount = getTriggerCount();
     
-    console.log(`BULLETPROOF: Main effect triggered (#${triggerCount})`);
-    console.log('BULLETPROOF: Navigation state:', navigationState);
+    console.log(`STABLE: Data changed - trigger #${triggerCount}, hash: ${currentDataHash}`);
+    
+    // Mark data as modified for navigation state
+    markDataModified(data);
 
-    // ABSOLUTE FIRST PRIORITY: Check navigation state - this is the single source of truth
+    // Check navigation state - this is the single source of truth
     const shouldRunOptimization = shouldOptimize(data, '/');
     
     if (!shouldRunOptimization) {
-      console.log('BULLETPROOF: ❌ OPTIMIZATION BLOCKED BY NAVIGATION STATE - Loading cached parameters');
+      console.log('STABLE: ❌ OPTIMIZATION BLOCKED BY NAVIGATION STATE - Loading cached parameters');
       
       toast({
         title: "Using Cached Results",
@@ -131,9 +162,9 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       return;
     }
 
-    console.log('BULLETPROOF: ✅ NAVIGATION STATE APPROVED OPTIMIZATION - Starting process');
+    console.log('STABLE: ✅ NAVIGATION STATE APPROVED OPTIMIZATION - Starting process');
     handleInitialOptimization();
-  }, [data.length]); // MINIMAL DEPENDENCY: Only data length
+  }, [generateDatasetHash(data)]); // STABLE: Only depends on the hash of the data
 
   // Load cached parameters and generate forecasts when SKU changes
   React.useEffect(() => {
@@ -176,7 +207,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   const handleInitialOptimization = async () => {
     const enabledModels = models.filter(m => m.enabled);
     
-    console.log('BULLETPROOF: 🚀 STARTING OPTIMIZATION PROCESS');
+    console.log('STABLE: 🚀 STARTING OPTIMIZATION PROCESS');
     
     // Mark optimization as started
     markOptimizationStarted(data, '/');
@@ -208,7 +239,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     // Mark optimization as completed - this should prevent any future runs
     markOptimizationCompleted(data, '/');
 
-    console.log('BULLETPROOF: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE FOREVER');
+    console.log('STABLE: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE');
 
     // Generate forecasts after optimization
     if (selectedSKU) {
