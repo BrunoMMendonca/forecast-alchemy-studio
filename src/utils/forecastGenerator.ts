@@ -14,6 +14,33 @@ import {
   generateLinearTrend 
 } from '@/utils/forecastAlgorithms';
 
+// Standardized accuracy calculation - same as used in optimization
+const calculateStandardizedAccuracy = (actual: number[], predicted: number[]): number => {
+  if (actual.length === 0 || predicted.length === 0) return 0;
+  
+  let mapeSum = 0;
+  let validCount = 0;
+  
+  const length = Math.min(actual.length, predicted.length);
+  
+  for (let i = 0; i < length; i++) {
+    if (actual[i] !== 0) {
+      const error = Math.abs(actual[i] - predicted[i]);
+      const percentError = error / Math.abs(actual[i]);
+      mapeSum += percentError;
+      validCount++;
+    }
+  }
+  
+  if (validCount === 0) return 0;
+  
+  const mape = (mapeSum / validCount) * 100;
+  const accuracy = Math.max(0, 100 - mape);
+  
+  console.log(`📊 Accuracy calculation: MAPE=${mape.toFixed(2)}%, Accuracy=${accuracy.toFixed(2)}%`);
+  return accuracy;
+};
+
 export const generateForecastsForSKU = async (
   selectedSKU: string,
   data: SalesData[],
@@ -39,18 +66,22 @@ export const generateForecastsForSKU = async (
   const forecastDates = generateForecastDates(lastDate, forecastPeriods, frequency);
   const results: ForecastResult[] = [];
 
+  console.log(`🎯 Generating forecasts for ${selectedSKU} using standardized accuracy calculation`);
+
   for (const model of enabledModels) {
     const effectiveParameters = model.optimizedParameters || model.parameters;
     const parametersHash = generateParametersHash(model.parameters, model.optimizedParameters);
     
     const cachedForecast = getCachedForecast(selectedSKU, model.name, parametersHash, forecastPeriods);
     if (cachedForecast) {
-      console.log(`Using cached forecast for ${selectedSKU}:${model.name}`);
+      console.log(`📋 Using cached forecast for ${selectedSKU}:${model.name}`);
       results.push(cachedForecast);
       continue;
     }
 
     let predictions: number[] = [];
+
+    console.log(`🔧 Generating ${model.name} with parameters:`, effectiveParameters);
 
     switch (model.id) {
       case 'moving_average':
@@ -100,14 +131,12 @@ export const generateForecastsForSKU = async (
         break;
     }
 
-    const recentActual = skuData.slice(-5).map(d => d.sales);
-    const recentPredicted = predictions.slice(0, 5);
-    const mape = recentActual.reduce((sum, actual, i) => {
-      const predicted = recentPredicted[i] || predictions[0];
-      return sum + Math.abs((actual - predicted) / actual);
-    }, 0) / recentActual.length * 100;
-    
-    const accuracy = Math.max(0, 100 - mape);
+    // Use standardized accuracy calculation - same as optimization
+    const recentActual = skuData.slice(-Math.min(10, skuData.length)).map(d => d.sales);
+    const syntheticPredicted = predictions.slice(0, recentActual.length);
+    const accuracy = calculateStandardizedAccuracy(recentActual, syntheticPredicted);
+
+    console.log(`📊 ${model.name} accuracy: ${accuracy.toFixed(2)}% (using standardized calculation)`);
 
     const result: ForecastResult = {
       sku: selectedSKU,
@@ -123,5 +152,6 @@ export const generateForecastsForSKU = async (
     results.push(result);
   }
 
+  console.log(`✅ Generated ${results.length} forecasts for ${selectedSKU} with aligned accuracy metrics`);
   return results;
 };

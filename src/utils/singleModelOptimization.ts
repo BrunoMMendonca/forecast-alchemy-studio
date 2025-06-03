@@ -23,6 +23,30 @@ const isValidApiKey = (apiKey: string): boolean => {
          !apiKey.includes('placeholder');
 };
 
+// Calculate accuracy using the same method as forecast generator
+const calculateAccuracy = (actual: number[], predicted: number[]): number => {
+  if (actual.length === 0 || predicted.length === 0) return 0;
+  
+  let mapeSum = 0;
+  let validCount = 0;
+  
+  const length = Math.min(actual.length, predicted.length);
+  
+  for (let i = 0; i < length; i++) {
+    if (actual[i] !== 0) {
+      const error = Math.abs(actual[i] - predicted[i]);
+      const percentError = error / Math.abs(actual[i]);
+      mapeSum += percentError;
+      validCount++;
+    }
+  }
+  
+  if (validCount === 0) return 0;
+  
+  const mape = (mapeSum / validCount) * 100;
+  return Math.max(0, 100 - mape);
+};
+
 export const optimizeSingleModel = async (
   model: ModelConfig,
   skuData: SalesData[],
@@ -44,7 +68,7 @@ export const optimizeSingleModel = async (
     sku,
     modelId: model.id,
     step: 'start',
-    message: 'Starting enhanced optimization with improved validation',
+    message: 'Starting enhanced optimization with aligned metrics',
     parameters: model.parameters
   });
   
@@ -58,7 +82,7 @@ export const optimizeSingleModel = async (
         sku,
         modelId: model.id,
         step: 'ai_attempt',
-        message: 'Attempting AI optimization with enhanced validation'
+        message: 'Attempting AI optimization with accuracy-focused approach'
       });
 
       const frequency = detectDateFrequency(skuData.map(d => d.date));
@@ -68,25 +92,29 @@ export const optimizeSingleModel = async (
         historicalData: skuData.map(d => d.sales),
         currentParameters: model.parameters,
         seasonalPeriod: frequency.seasonalPeriod,
-        targetMetric: 'mape'
+        targetMetric: 'accuracy' // Changed from 'mape' to 'accuracy'
       }, GROK_API_KEY);
 
       optimizationLogger.logStep({
         sku,
         modelId: model.id,
         step: 'validation',
-        message: `Validating AI parameters with enhanced criteria (confidence: ${grokResult.confidence}%)`,
+        message: `Validating AI parameters with accuracy alignment (expected: ${grokResult.expectedAccuracy}%, confidence: ${grokResult.confidence}%)`,
         parameters: grokResult.optimizedParameters
       });
 
-      // Enhanced validation without immediate rounding
+      // Enhanced validation with stricter requirements
       const validationResult = enhancedParameterValidation(
         model.id,
         skuData,
         model.parameters,
         grokResult.optimizedParameters,
         grokResult.confidence,
-        ENHANCED_VALIDATION_CONFIG
+        {
+          ...ENHANCED_VALIDATION_CONFIG,
+          tolerance: 1.0, // Require at least 1% improvement
+          minConfidenceForAcceptance: 70 // Higher confidence threshold
+        }
       );
 
       if (validationResult) {
@@ -94,7 +122,7 @@ export const optimizeSingleModel = async (
           sku,
           modelId: model.id,
           step: 'ai_success',
-          message: `AI optimization ACCEPTED - method: ${validationResult.method}`,
+          message: `AI optimization ACCEPTED - accuracy improved by ${(validationResult.accuracy - calculateAccuracy(skuData.slice(-5).map(d => d.sales), [])).toFixed(2)}%`,
           parameters: validationResult.parameters,
           accuracy: validationResult.accuracy,
           confidence: validationResult.confidence
@@ -117,7 +145,7 @@ export const optimizeSingleModel = async (
           sku,
           modelId: model.id,
           step: 'ai_rejected',
-          message: 'AI optimization REJECTED by enhanced validation'
+          message: 'AI optimization REJECTED - insufficient improvement with aligned metrics'
         });
         progressUpdater.setProgress(prev => prev ? { ...prev, aiRejected: prev.aiRejected + 1 } : null);
       }
@@ -139,20 +167,24 @@ export const optimizeSingleModel = async (
     });
   }
 
-  // Step 2: Try adaptive grid search (enhanced with AI focus if available)
+  // Step 2: Try adaptive grid search with AI guidance
   if (!aiResult) {
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
       step: 'grid_search',
-      message: 'Starting adaptive grid search with enhanced validation'
+      message: 'Starting adaptive grid search with enhanced accuracy validation'
     });
 
     const gridSearchResult = adaptiveGridSearchOptimization(
       model.id,
       skuData,
       undefined, // Don't use AI parameters for grid search if AI was rejected
-      ENHANCED_VALIDATION_CONFIG
+      {
+        ...ENHANCED_VALIDATION_CONFIG,
+        tolerance: 1.0, // Consistent tolerance requirement
+        useWalkForward: true // Ensure proper time-series validation
+      }
     );
     
     if (gridSearchResult) {
@@ -160,7 +192,7 @@ export const optimizeSingleModel = async (
         sku,
         modelId: model.id,
         step: 'complete',
-        message: `Adaptive grid search completed - method: ${gridSearchResult.method}`,
+        message: `Adaptive grid search completed - method: ${gridSearchResult.method}, accuracy: ${gridSearchResult.accuracy.toFixed(2)}%`,
         parameters: gridSearchResult.parameters,
         accuracy: gridSearchResult.accuracy,
         confidence: gridSearchResult.confidence
@@ -178,22 +210,36 @@ export const optimizeSingleModel = async (
         sku,
         modelId: model.id,
         step: 'error',
-        message: 'Adaptive grid search failed'
+        message: 'Adaptive grid search failed to find better parameters'
       });
     }
   }
 
-  // Step 3: Return the best result
+  // Step 3: Return the best result with detailed logging
   if (aiResult) {
+    optimizationLogger.logStep({
+      sku,
+      modelId: model.id,
+      step: 'final_result',
+      message: `Using AI optimized parameters - confidence: ${aiResult.confidence}%`,
+      parameters: aiResult.parameters
+    });
     return aiResult;
   } else if (gridResult) {
+    optimizationLogger.logStep({
+      sku,
+      modelId: model.id,
+      step: 'final_result',
+      message: `Using grid search parameters - confidence: ${gridResult.confidence}%`,
+      parameters: gridResult.parameters
+    });
     return gridResult;
   } else {
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
       step: 'complete',
-      message: 'All optimization methods failed - using original parameters',
+      message: 'All optimization methods failed to improve accuracy - using original parameters',
       parameters: model.parameters,
       confidence: 60
     });

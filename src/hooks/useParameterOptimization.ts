@@ -28,22 +28,27 @@ export const useParameterOptimization = () => {
     }
 
     try {
-      setOptimizationProgress(`Optimizing ${model.name} parameters with AI...`);
+      setOptimizationProgress(`Optimizing ${model.name} parameters with enhanced AI approach...`);
       
       const result = await optimizeParametersWithGrok({
         modelType: model.id,
         historicalData: skuData.map(d => d.sales),
         currentParameters: model.parameters,
         seasonalPeriod: frequency.seasonalPeriod,
-        targetMetric: 'mape'
+        targetMetric: 'accuracy' // Changed from 'mape' to 'accuracy' for metric alignment
       }, GROK_API_KEY);
+
+      console.log(`🎯 Enhanced optimization completed for ${model.name}:`);
+      console.log(`📊 Expected accuracy: ${result.expectedAccuracy}%`);
+      console.log(`🔧 Optimized parameters:`, result.optimizedParameters);
+      console.log(`💭 AI reasoning:`, result.reasoning);
 
       return result.optimizedParameters;
     } catch (error) {
       console.error(`Failed to optimize ${model.name}:`, error);
       toast({
         title: "Optimization Warning",
-        description: `Failed to optimize ${model.name}, using manual parameters`,
+        description: `Failed to optimize ${model.name} with enhanced approach, using manual parameters`,
         variant: "destructive",
       });
       return model.parameters;
