@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -156,15 +155,14 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         const dataHash = generateDataHash(skuData);
         setCachedParameters(sku, modelId, parameters, dataHash, confidence);
         
-        // FIXED: When optimization completes for a SKU, automatically set all models to AI
+        // FIXED: Set preferences to AI ONLY for models that were actually optimized
+        console.log(`OPTIMIZATION CALLBACK: Setting ${sku}:${modelId} to AI (confidence: ${confidence})`);
+        
+        // Update preferences for this specific SKU/model combination
         const preferences = loadManualAIPreferences();
-        const enabledModelIds = enabledModels.map(m => m.id);
-        enabledModelIds.forEach(mId => {
-          const preferenceKey = `${sku}:${mId}`;
-          preferences[preferenceKey] = true; // Set to AI when optimization completes
-        });
+        const preferenceKey = `${sku}:${modelId}`;
+        preferences[preferenceKey] = true; // Set to AI when optimization completes
         saveManualAIPreferences(preferences);
-        console.log(`PREFERENCE: Auto-set ${sku} models to AI after optimization`);
         
         // IMMEDIATE FIX: Update models state immediately if this is for the currently selected SKU
         if (sku === selectedSKU) {
@@ -183,19 +181,26 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       getSKUsNeedingOptimization
     );
 
-    // Mark optimization as completed - this should prevent any future runs
+    // Mark optimization as completed
     markOptimizationCompleted(data, '/');
 
     console.log('FIXED: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE');
 
-    // IMMEDIATE FIX: Force immediate UI update for the current SKU - no timeout
+    // CRITICAL FIX: Force UI update for the current SKU with a delay to ensure all callbacks completed
     if (selectedSKU) {
-      console.log(`IMMEDIATE FIX: Forcing immediate UI update for current SKU: ${selectedSKU}`);
+      console.log(`CRITICAL FIX: Forcing UI update for current SKU: ${selectedSKU} after 500ms delay`);
       
-      // Apply preferences immediately - no setTimeout
-      const modelsWithPreferences = createModelsWithPreferences();
-      setModels(modelsWithPreferences);
-      generateForecastsForSelectedSKU();
+      setTimeout(() => {
+        // Apply preferences after optimization callbacks have completed
+        const modelsWithPreferences = createModelsWithPreferences();
+        console.log(`CRITICAL FIX: Applied preferences for ${selectedSKU}:`, modelsWithPreferences.map(m => ({
+          id: m.id,
+          hasOptimized: !!m.optimizedParameters,
+          confidence: m.optimizationConfidence
+        })));
+        setModels(modelsWithPreferences);
+        generateForecastsForSelectedSKU();
+      }, 500); // Increased delay to ensure all optimization callbacks complete
     }
   };
 
