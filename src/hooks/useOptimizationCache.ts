@@ -29,6 +29,7 @@ interface OptimizationSession {
   datasetFingerprint: DatasetFingerprint;
   completedSKUs: Set<string>;
   optimizationComplete: boolean;
+  startedOptimization: boolean; // Track if optimization has been initiated
   timestamp: number;
 }
 
@@ -39,25 +40,34 @@ interface CacheManifest {
   optimizationSession?: OptimizationSession;
 }
 
+interface NavigationState {
+  datasetFingerprint: string;
+  optimizationCompleted: boolean;
+  timestamp: number;
+}
+
 const CACHE_KEY = 'forecast_optimization_cache';
 const MANIFEST_KEY = 'forecast_cache_manifest';
 const SESSION_KEY = 'forecast_optimization_session';
+const NAVIGATION_STATE_KEY = 'forecast_navigation_state';
 const CACHE_EXPIRY_HOURS = 24;
 const MANIFEST_EXPIRY_HOURS = 24;
 const SESSION_EXPIRY_HOURS = 24;
+const NAVIGATION_STATE_EXPIRY_HOURS = 24;
 
 export const useOptimizationCache = () => {
   const [cache, setCache] = useState<OptimizationCache>({});
   const [cacheStats, setCacheStats] = useState({ hits: 0, misses: 0, skipped: 0 });
   const [manifest, setManifest] = useState<CacheManifest | null>(null);
   const [currentSession, setCurrentSession] = useState<OptimizationSession | null>(null);
+  const [navigationState, setNavigationState] = useState<NavigationState | null>(null);
 
   // Generate a unique session ID
   const generateSessionId = useCallback(() => {
     return `session_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
   }, []);
 
-  // Load cache, manifest, and session from localStorage on mount
+  // Load all state from localStorage on mount
   useEffect(() => {
     try {
       // Load cache
@@ -78,7 +88,7 @@ export const useOptimizationCache = () => {
         });
         
         setCache(filteredCache);
-        console.log('Loaded optimization cache from storage');
+        console.log('Enhanced cache: Loaded optimization cache from storage');
       }
 
       // Load manifest
@@ -92,7 +102,7 @@ export const useOptimizationCache = () => {
             parsedManifest.optimizationSession.completedSKUs = new Set(parsedManifest.optimizationSession.completedSKUs);
           }
           setManifest(parsedManifest);
-          console.log('Loaded cache manifest from storage');
+          console.log('Enhanced cache: Loaded cache manifest from storage');
         }
       }
 
@@ -104,24 +114,34 @@ export const useOptimizationCache = () => {
         if (now - parsedSession.timestamp < SESSION_EXPIRY_HOURS * 60 * 60 * 1000) {
           parsedSession.completedSKUs = new Set(parsedSession.completedSKUs);
           setCurrentSession(parsedSession);
-          console.log('Loaded optimization session from storage');
+          console.log('Enhanced cache: Loaded optimization session from storage');
+        }
+      }
+
+      // Load navigation state
+      const storedNavState = localStorage.getItem(NAVIGATION_STATE_KEY);
+      if (storedNavState) {
+        const parsedNavState = JSON.parse(storedNavState);
+        const now = Date.now();
+        if (now - parsedNavState.timestamp < NAVIGATION_STATE_EXPIRY_HOURS * 60 * 60 * 1000) {
+          setNavigationState(parsedNavState);
+          console.log('Enhanced cache: Loaded navigation state from storage');
         }
       }
     } catch (error) {
-      console.error('Failed to load cache from localStorage:', error);
+      console.error('Enhanced cache: Failed to load from localStorage:', error);
     }
   }, []);
 
-  // Save cache to localStorage whenever it changes
+  // Save states to localStorage when they change
   useEffect(() => {
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
     } catch (error) {
-      console.error('Failed to save cache to localStorage:', error);
+      console.error('Enhanced cache: Failed to save cache to localStorage:', error);
     }
   }, [cache]);
 
-  // Save manifest to localStorage whenever it changes
   useEffect(() => {
     if (manifest) {
       try {
@@ -135,12 +155,11 @@ export const useOptimizationCache = () => {
         };
         localStorage.setItem(MANIFEST_KEY, JSON.stringify(manifestToStore));
       } catch (error) {
-        console.error('Failed to save manifest to localStorage:', error);
+        console.error('Enhanced cache: Failed to save manifest to localStorage:', error);
       }
     }
   }, [manifest]);
 
-  // Save session to localStorage whenever it changes
   useEffect(() => {
     if (currentSession) {
       try {
@@ -150,10 +169,20 @@ export const useOptimizationCache = () => {
         };
         localStorage.setItem(SESSION_KEY, JSON.stringify(sessionToStore));
       } catch (error) {
-        console.error('Failed to save session to localStorage:', error);
+        console.error('Enhanced cache: Failed to save session to localStorage:', error);
       }
     }
   }, [currentSession]);
+
+  useEffect(() => {
+    if (navigationState) {
+      try {
+        localStorage.setItem(NAVIGATION_STATE_KEY, JSON.stringify(navigationState));
+      } catch (error) {
+        console.error('Enhanced cache: Failed to save navigation state to localStorage:', error);
+      }
+    }
+  }, [navigationState]);
 
   // Fixed dataset fingerprinting to be stable across navigation
   const generateDatasetFingerprint = useCallback((data: SalesData[]): DatasetFingerprint => {
@@ -208,6 +237,51 @@ export const useOptimizationCache = () => {
     return `${sorted.length}-${salesValues.substring(0, 50)}-${outlierFlags}-${noteFlags}`.substring(0, 100);
   }, []);
 
+  // NEW: Get stable dataset fingerprint for dependency tracking
+  const getDatasetFingerprintString = useCallback((data: SalesData[]): string => {
+    const fingerprint = generateDatasetFingerprint(data);
+    return `${fingerprint.globalHash}:${fingerprint.cleaningHash}`;
+  }, [generateDatasetFingerprint]);
+
+  // NEW: Check if optimization has been started for this dataset
+  const hasOptimizationStarted = useCallback((data: SalesData[]): boolean => {
+    const currentFingerprint = getDatasetFingerprintString(data);
+    
+    // Check navigation state first
+    if (navigationState && navigationState.datasetFingerprint === currentFingerprint) {
+      console.log('Enhanced cache: Navigation state indicates optimization completed');
+      return navigationState.optimizationCompleted;
+    }
+    
+    // Check session state
+    if (currentSession && currentSession.startedOptimization) {
+      const sessionFingerprint = `${currentSession.datasetFingerprint.globalHash}:${currentSession.datasetFingerprint.cleaningHash}`;
+      if (sessionFingerprint === currentFingerprint) {
+        console.log('Enhanced cache: Session indicates optimization started');
+        return true;
+      }
+    }
+    
+    console.log('Enhanced cache: No optimization started for this dataset');
+    return false;
+  }, [navigationState, currentSession, getDatasetFingerprintString]);
+
+  // NEW: Mark optimization as started for this dataset
+  const markOptimizationStarted = useCallback((data: SalesData[]) => {
+    const fingerprint = generateDatasetFingerprint(data);
+    
+    // Update session to mark optimization as started
+    setCurrentSession(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        startedOptimization: true
+      };
+    });
+    
+    console.log('Enhanced cache: Marked optimization as started');
+  }, [generateDatasetFingerprint]);
+
   const isDatasetUnchanged = useCallback((data: SalesData[]): boolean => {
     const currentFingerprint = generateDatasetFingerprint(data);
     
@@ -228,20 +302,27 @@ export const useOptimizationCache = () => {
     }
     
     console.log('Enhanced cache: Dataset fingerprint check - CHANGED');
-    console.log(`Current: ${currentFingerprint.globalHash}:${currentFingerprint.cleaningHash}`);
-    console.log(`Session: ${currentSession?.datasetFingerprint.globalHash}:${currentSession?.datasetFingerprint.cleaningHash}`);
-    console.log(`Manifest: ${manifest?.datasetFingerprint.globalHash}:${manifest?.datasetFingerprint.cleaningHash}`);
-    
     return false;
   }, [currentSession, manifest, generateDatasetFingerprint]);
 
   const isOptimizationCompleteForSession = useCallback((data: SalesData[], models: ModelConfig[]): boolean => {
+    const currentFingerprint = generateDatasetFingerprint(data);
+    const currentFingerprintString = `${currentFingerprint.globalHash}:${currentFingerprint.cleaningHash}`;
+    
+    // PRIORITY 1: Check navigation state first
+    if (navigationState && 
+        navigationState.datasetFingerprint === currentFingerprintString &&
+        navigationState.optimizationCompleted) {
+      console.log('Enhanced cache: Navigation state confirms optimization complete');
+      return true;
+    }
+    
+    // PRIORITY 2: Check session state
     if (!currentSession || !currentSession.optimizationComplete) {
       console.log('Enhanced cache: No session or optimization not complete');
       return false;
     }
     
-    const currentFingerprint = generateDatasetFingerprint(data);
     if (currentSession.datasetFingerprint.globalHash !== currentFingerprint.globalHash ||
         currentSession.datasetFingerprint.cleaningHash !== currentFingerprint.cleaningHash) {
       console.log('Enhanced cache: Session dataset changed, optimization not complete');
@@ -251,7 +332,6 @@ export const useOptimizationCache = () => {
     const enabledModels = models.filter(m => m.enabled && m.parameters && Object.keys(m.parameters).length > 0);
     const allSKUs = Array.from(new Set(data.map(d => d.sku))).sort();
     
-    // Check if all SKUs with sufficient data are covered
     const skusWithSufficientData = allSKUs.filter(sku => {
       const skuData = data.filter(d => d.sku === sku);
       return skuData.length >= 3;
@@ -262,8 +342,18 @@ export const useOptimizationCache = () => {
     );
     
     console.log(`Enhanced cache: Session optimization check - ${allCovered ? 'COMPLETE' : 'INCOMPLETE'} (${currentSession.completedSKUs.size}/${skusWithSufficientData.length} SKUs)`);
+    
+    // Update navigation state if optimization is complete
+    if (allCovered) {
+      setNavigationState({
+        datasetFingerprint: currentFingerprintString,
+        optimizationCompleted: true,
+        timestamp: Date.now()
+      });
+    }
+    
     return allCovered;
-  }, [currentSession, generateDatasetFingerprint]);
+  }, [currentSession, navigationState, generateDatasetFingerprint]);
 
   const startOptimizationSession = useCallback((data: SalesData[]) => {
     const fingerprint = generateDatasetFingerprint(data);
@@ -274,11 +364,12 @@ export const useOptimizationCache = () => {
       datasetFingerprint: fingerprint,
       completedSKUs: new Set(),
       optimizationComplete: false,
+      startedOptimization: true,
       timestamp: Date.now()
     };
     
     setCurrentSession(newSession);
-    console.log(`Started new optimization session: ${sessionId}`);
+    console.log(`Enhanced cache: Started new optimization session: ${sessionId}`);
   }, [generateDatasetFingerprint, generateSessionId]);
 
   const markSKUOptimized = useCallback((sku: string) => {
@@ -301,8 +392,19 @@ export const useOptimizationCache = () => {
         optimizationComplete: true
       };
     });
-    console.log('Optimization session marked as complete');
-  }, []);
+    
+    // Update navigation state to mark optimization as complete
+    if (currentSession) {
+      const fingerprint = `${currentSession.datasetFingerprint.globalHash}:${currentSession.datasetFingerprint.cleaningHash}`;
+      setNavigationState({
+        datasetFingerprint: fingerprint,
+        optimizationCompleted: true,
+        timestamp: Date.now()
+      });
+    }
+    
+    console.log('Enhanced cache: Optimization session marked as complete');
+  }, [currentSession]);
 
   const batchValidateCache = useCallback((data: SalesData[], models: ModelConfig[]): CacheManifest => {
     const fingerprint = generateDatasetFingerprint(data);
@@ -412,14 +514,14 @@ export const useOptimizationCache = () => {
     data: SalesData[], 
     models: ModelConfig[]
   ): { sku: string; models: string[] }[] => {
-    // First check if optimization is already complete for this session
+    // PRIORITY 1: Check if optimization is already complete for this session
     if (isOptimizationCompleteForSession(data, models)) {
       console.log('Enhanced cache: Session optimization complete, no SKUs need optimization');
       setCacheStats(prev => ({ ...prev, skipped: prev.skipped + 1 }));
       return [];
     }
     
-    // Check if we can skip entirely due to unchanged dataset
+    // PRIORITY 2: Check if we can skip entirely due to unchanged dataset
     if (isDatasetUnchanged(data)) {
       console.log('Enhanced cache: Dataset unchanged, checking manifest for optimization needs');
       
@@ -513,6 +615,9 @@ export const useOptimizationCache = () => {
     isOptimizationCompleteForSession,
     startOptimizationSession,
     markSKUOptimized,
-    completeOptimizationSession
+    completeOptimizationSession,
+    getDatasetFingerprintString,
+    hasOptimizationStarted,
+    markOptimizationStarted
   };
 };
