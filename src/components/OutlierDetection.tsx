@@ -21,7 +21,8 @@ interface OutlierDataPoint extends SalesData {
   zScore: number;
   index: number;
   key: string;
-  originalSales: number; // Store original value for comparison
+  originalSales: number;
+  note?: string;
 }
 
 export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onDataCleaning }) => {
@@ -29,7 +30,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
   const [threshold, setThreshold] = useState([2.5]);
   const [editingOutliers, setEditingOutliers] = useState<{ [key: string]: { value: number; note: string } }>({});
   const [cleanedData, setCleanedData] = useState<SalesData[]>(data);
-  const [hideCleanData, setHideCleanData] = useState(true); // Default to true
+  const [hideCleanData, setHideCleanData] = useState(true);
   const { toast } = useToast();
 
   // Update cleaned data when original data changes
@@ -59,8 +60,9 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
         isOutlier: false,
         zScore: 0,
         index,
-        key: `${index}_${item.sku}_${item.date}`,
-        originalSales: originalItem?.sales || item.sales
+        key: `${selectedSKU}_${item.date}_${index}`,
+        originalSales: originalItem?.sales !== undefined ? originalItem.sales : item.sales,
+        note: item.note
       };
     });
 
@@ -72,7 +74,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
     return skuData.map((item, index): OutlierDataPoint => {
       const zScore = stdDev > 0 ? Math.abs((item.sales - mean) / stdDev) : 0;
       const isOutlier = zScore > threshold[0];
-      const key = `${index}_${item.sku}_${item.date}`;
+      const key = `${selectedSKU}_${item.date}_${index}`;
       const originalItem = data.find(d => d.sku === item.sku && d.date === item.date);
       
       return {
@@ -81,7 +83,8 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
         zScore,
         index,
         key,
-        originalSales: originalItem?.sales || item.sales
+        originalSales: originalItem?.sales !== undefined ? originalItem.sales : item.sales,
+        note: item.note
       };
     });
   }, [cleanedData, selectedSKU, threshold, data]);
@@ -112,7 +115,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
       return {
         date: originalItem.date,
         originalSales: originalItem.sales,
-        cleanedSales: cleanedItem?.sales || originalItem.sales
+        cleanedSales: cleanedItem?.sales !== undefined ? cleanedItem.sales : originalItem.sales
       };
     });
   }, [data, cleanedData, selectedSKU]);
@@ -120,18 +123,16 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
   const handleEditOutlier = (key: string) => {
     console.log('Edit button clicked for key:', key);
     
-    // Parse the key format: index_sku_date
     const parts = key.split('_');
     if (parts.length < 3) {
       console.error('Invalid key format:', key);
       return;
     }
     
-    const index = parseInt(parts[0]);
-    const sku = parts.slice(1, -1).join('_'); // Handle SKUs that might contain underscores
-    const date = parts[parts.length - 1];
+    const date = parts[parts.length - 2];
+    const sku = parts.slice(0, -2).join('_');
     
-    console.log('Parsed key:', { index, sku, date });
+    console.log('Parsed key:', { sku, date });
     
     const currentItem = cleanedData.find(item => item.sku === sku && item.date === date);
     console.log('Found item:', currentItem);
@@ -141,7 +142,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
         ...editingOutliers, 
         [key]: { 
           value: currentItem.sales,
-          note: ''
+          note: currentItem.note || ''
         }
       });
       console.log('Set editing state for key:', key);
@@ -154,25 +155,27 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
     const editData = editingOutliers[key];
     if (!editData) return;
 
-    // Parse the key format: index_sku_date
     const parts = key.split('_');
     if (parts.length < 3) {
       console.error('Invalid key format for save:', key);
       return;
     }
     
-    const sku = parts.slice(1, -1).join('_');
-    const date = parts[parts.length - 1];
+    const date = parts[parts.length - 2];
+    const sku = parts.slice(0, -2).join('_');
 
     const updatedData = cleanedData.map(item => {
       if (item.sku === sku && item.date === date) {
-        return { ...item, sales: editData.value };
+        return { 
+          ...item, 
+          sales: editData.value,
+          note: editData.note || undefined
+        };
       }
       return item;
     });
     
     setCleanedData(updatedData);
-    // Immediately update the parent component with cleaned data
     onDataCleaning(updatedData);
     
     setEditingOutliers(prev => {
@@ -419,11 +422,9 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                     <div className="text-sm text-slate-600">{dataPoint.date}</div>
                     <div className="text-sm">
                       <span className="font-medium">Current: {dataPoint.sales.toLocaleString()}</span>
-                      {hasBeenModified && (
-                        <span className="text-slate-500 ml-2">
-                          (Original: {dataPoint.originalSales.toLocaleString()})
-                        </span>
-                      )}
+                      <span className="text-slate-500 ml-2">
+                        (Original: {dataPoint.originalSales.toLocaleString()})
+                      </span>
                     </div>
                     <Badge variant={badgeVariant} className={`text-xs ${badgeColor}`}>
                       Z-Score: {dataPoint.zScore.toFixed(2)}
@@ -436,6 +437,11 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                     {hasBeenModified && (
                       <Badge variant="outline" className="text-xs text-blue-800 bg-blue-50">
                         Modified
+                      </Badge>
+                    )}
+                    {dataPoint.note && (
+                      <Badge variant="outline" className="text-xs text-purple-800 bg-purple-50">
+                        Note
                       </Badge>
                     )}
                   </div>
@@ -456,6 +462,12 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                     )}
                   </div>
                 </div>
+
+                {dataPoint.note && !isEditing && (
+                  <div className="text-xs text-purple-700 bg-purple-50 p-2 rounded mt-2">
+                    <strong>Note:</strong> {dataPoint.note}
+                  </div>
+                )}
 
                 {isEditing && (
                   <div className="space-y-3 bg-white p-3 rounded border">
