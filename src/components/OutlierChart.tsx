@@ -29,9 +29,10 @@ export const OutlierChart: React.FC<OutlierChartProps> = ({ data, selectedSKU })
               fontSize={12}
               tickFormatter={(value) => {
                 try {
-                  return new Date(value).toLocaleDateString('en-US', { 
+                  const date = new Date(value);
+                  return date.toLocaleDateString('en-US', { 
                     month: 'short', 
-                    day: 'numeric' 
+                    year: 'numeric' 
                   });
                 } catch {
                   return value;
@@ -50,7 +51,11 @@ export const OutlierChart: React.FC<OutlierChartProps> = ({ data, selectedSKU })
               ]}
               labelFormatter={(label) => {
                 try {
-                  return new Date(label).toLocaleDateString();
+                  const date = new Date(label);
+                  return date.toLocaleDateString('en-US', {
+                    month: 'long',
+                    year: 'numeric'
+                  });
                 } catch {
                   return label;
                 }

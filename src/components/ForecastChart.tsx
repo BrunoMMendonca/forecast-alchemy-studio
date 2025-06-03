@@ -46,9 +46,10 @@ const ChartContent: React.FC<{ chartData: any[], selectedSKUResults: ForecastRes
             fontSize={10}
             tickFormatter={(value) => {
               try {
-                return new Date(value).toLocaleDateString('en-US', { 
+                const date = new Date(value);
+                return date.toLocaleDateString('en-US', { 
                   month: 'short', 
-                  day: 'numeric' 
+                  year: 'numeric' 
                 });
               } catch {
                 return value;
@@ -67,7 +68,11 @@ const ChartContent: React.FC<{ chartData: any[], selectedSKUResults: ForecastRes
             ]}
             labelFormatter={(label) => {
               try {
-                return new Date(label).toLocaleDateString();
+                const date = new Date(label);
+                return date.toLocaleDateString('en-US', {
+                  month: 'long',
+                  year: 'numeric'
+                });
               } catch {
                 return label;
               }
