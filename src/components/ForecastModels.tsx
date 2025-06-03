@@ -521,7 +521,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           | Cache: {cacheStats.hits} hits, {cacheStats.misses} misses
           | Fingerprint: {navigationState.datasetFingerprint}
           | AI/Manual Toggle: {isTogglingAIManualRef.current ? '🔄 Active' : '✅ Idle'}
-          | Preferences Loaded: {hasLoadedPreferencesRef.current ? '✅' : '❌'}
         </div>
       )}
     </div>
