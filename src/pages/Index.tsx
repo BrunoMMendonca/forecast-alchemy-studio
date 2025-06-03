@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
 import { OutlierDetection } from '@/components/OutlierDetection';
@@ -68,6 +68,20 @@ const Index = () => {
   const handleProceedToForecasting = () => {
     setCurrentStep(3);
   };
+
+  // Listen for custom events from child components
+  useEffect(() => {
+    const handleCustomTabChange = (event: CustomEvent) => {
+      if (event.detail?.value === 'forecast') {
+        handleProceedToForecasting();
+      }
+    };
+
+    window.addEventListener('tabChange', handleCustomTabChange as EventListener);
+    return () => {
+      window.removeEventListener('tabChange', handleCustomTabChange as EventListener);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">

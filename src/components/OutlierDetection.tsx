@@ -203,11 +203,17 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
     console.log('Proceed to forecasting clicked, cleaned data length:', cleanedData.length);
     onDataCleaning(cleanedData);
     
-    // Navigate to forecasting tab by triggering parent component
-    const forecastTabButton = document.querySelector('[data-state="inactive"][value="forecast"]') as HTMLElement;
-    if (forecastTabButton) {
-      forecastTabButton.click();
-    }
+    // Use a more reliable method to switch to the forecast tab
+    setTimeout(() => {
+      const forecastTab = document.querySelector('[value="forecast"]') as HTMLElement;
+      if (forecastTab) {
+        forecastTab.click();
+      } else {
+        // Fallback: try to trigger the parent component's tab change directly
+        const event = new CustomEvent('tabChange', { detail: { value: 'forecast' } });
+        window.dispatchEvent(event);
+      }
+    }, 100);
   };
 
   const handlePrevSKU = () => {
@@ -490,6 +496,12 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                               value: parseFloat(e.target.value) || 0
                             }
                           })}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleSaveEdit(dataPoint.key);
+                            }
+                          }}
                           className="w-full"
                         />
                         <div className="text-xs text-slate-500 mt-1">
@@ -507,10 +519,19 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                               note: e.target.value
                             }
                           })}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.ctrlKey) {
+                              e.preventDefault();
+                              handleSaveEdit(dataPoint.key);
+                            }
+                          }}
                           placeholder="Add a note about this change..."
                           className="w-full resize-none"
                           rows={2}
                         />
+                        <div className="text-xs text-slate-500 mt-1">
+                          Press Ctrl+Enter to save
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
