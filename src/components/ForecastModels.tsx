@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+
+import React, { useState, useRef, useCallback } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 import { detectDateFrequency, generateForecastDates } from '@/utils/dateUtils';
@@ -39,56 +40,10 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   selectedSKU,
   onSKUChange
 }) => {
-  // FIXED: Initialize models with preferences applied immediately
-  const initializeModelsWithPreferences = () => {
-    const defaultModels = getDefaultModels();
-    
-    // If no selectedSKU yet, return defaults
-    if (!selectedSKU || data.length === 0) {
-      console.log('INIT: No SKU selected yet, using defaults');
-      return defaultModels;
-    }
-
-    try {
-      const preferences = loadManualAIPreferences();
-      const skuData = data.filter(d => d.sku === selectedSKU);
-      const currentDataHash = generateDataHash(skuData);
-      
-      console.log(`INIT: Initializing models with preferences for ${selectedSKU}`);
-      
-      return defaultModels.map(model => {
-        const cached = getCachedParameters(selectedSKU, model.id);
-        const preferenceKey = `${selectedSKU}:${model.id}`;
-        const preference = preferences[preferenceKey];
-        
-        console.log(`INIT: ${preferenceKey} - preference: ${preference}, cached: ${!!cached}`);
-        
-        if (preference === true && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
-          return {
-            ...model,
-            optimizedParameters: cached.parameters,
-            optimizationConfidence: cached.confidence
-          };
-        } else {
-          return {
-            ...model,
-            optimizedParameters: undefined,
-            optimizationConfidence: undefined
-          };
-        }
-      });
-    } catch (error) {
-      console.error('INIT: Error initializing with preferences:', error);
-      return defaultModels;
-    }
-  };
-
-  const [models, setModels] = useState<ModelConfig[]>(() => initializeModelsWithPreferences());
   const { toast } = useToast();
   const lastDataHashRef = useRef<string>('');
   const isTogglingAIManualRef = useRef<boolean>(false);
-  const hasAppliedPreferencesRef = useRef<boolean>(false);
-  const initializationKeyRef = useRef<string>('');
+  const lastSKURef = useRef<string>('');
   
   const {
     cache,
@@ -119,7 +74,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   } = useNavigationAwareOptimization();
 
   // Load manual/AI preferences from localStorage
-  const loadManualAIPreferences = (): Record<string, boolean> => {
+  const loadManualAIPreferences = useCallback((): Record<string, boolean> => {
     try {
       const stored = localStorage.getItem(MANUAL_AI_PREFERENCE_KEY);
       return stored ? JSON.parse(stored) : {};
@@ -127,71 +82,67 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       console.error('Failed to load manual/AI preferences:', error);
       return {};
     }
-  };
+  }, []);
 
   // Save manual/AI preferences to localStorage
-  const saveManualAIPreferences = (preferences: Record<string, boolean>) => {
+  const saveManualAIPreferences = useCallback((preferences: Record<string, boolean>) => {
     try {
       localStorage.setItem(MANUAL_AI_PREFERENCE_KEY, JSON.stringify(preferences));
     } catch (error) {
       console.error('Failed to save manual/AI preferences:', error);
     }
-  };
+  }, []);
 
-  // Apply preferences to models state
-  const applyPreferencesToModels = () => {
-    if (!selectedSKU) return;
+  // FIXED: Create models with preferences applied immediately
+  const createModelsWithPreferences = useCallback((sku: string): ModelConfig[] => {
+    const defaultModels = getDefaultModels();
     
-    const preferences = loadManualAIPreferences();
-    const skuData = data.filter(d => d.sku === selectedSKU);
-    const currentDataHash = generateDataHash(skuData);
+    if (!sku || data.length === 0) {
+      console.log('CREATE: No SKU or data, using defaults');
+      return defaultModels;
+    }
 
-    console.log(`PREFERENCE APPLY: Applying preferences for ${selectedSKU}:`, preferences);
-
-    setModels(prev => prev.map(model => {
-      const cached = getCachedParameters(selectedSKU, model.id);
-      const preferenceKey = `${selectedSKU}:${model.id}`;
-      const preference = preferences[preferenceKey];
+    try {
+      const preferences = loadManualAIPreferences();
+      const skuData = data.filter(d => d.sku === sku);
+      const currentDataHash = generateDataHash(skuData);
       
-      console.log(`PREFERENCE APPLY: ${preferenceKey} - preference: ${preference}, cached: ${!!cached}`);
+      console.log(`CREATE: Creating models with preferences for ${sku}:`, preferences);
       
-      if (preference === true && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
-        return {
-          ...model,
-          optimizedParameters: cached.parameters,
-          optimizationConfidence: cached.confidence
-        };
-      } else if (preference === false) {
-        return {
-          ...model,
-          optimizedParameters: undefined,
-          optimizationConfidence: undefined
-        };
-      } else if (preference === undefined) {
-        return {
-          ...model,
-          optimizedParameters: undefined,
-          optimizationConfidence: undefined
-        };
-      } else if (preference === true && !cached) {
-        console.log(`PREFERENCE APPLY: ${preferenceKey} set to AI but no cached parameters, using Manual`);
-        return {
-          ...model,
-          optimizedParameters: undefined,
-          optimizationConfidence: undefined
-        };
-      } else {
-        return {
-          ...model,
-          optimizedParameters: undefined,
-          optimizationConfidence: undefined
-        };
-      }
-    }));
+      return defaultModels.map(model => {
+        const cached = getCachedParameters(sku, model.id);
+        const preferenceKey = `${sku}:${model.id}`;
+        const preference = preferences[preferenceKey];
+        
+        console.log(`CREATE: ${preferenceKey} - preference: ${preference}, cached: ${!!cached}`);
+        
+        if (preference === true && cached && isCacheValid(sku, model.id, currentDataHash)) {
+          console.log(`CREATE: ✅ Applying AI parameters for ${preferenceKey}`);
+          return {
+            ...model,
+            optimizedParameters: cached.parameters,
+            optimizationConfidence: cached.confidence
+          };
+        } else {
+          console.log(`CREATE: ❌ Using manual parameters for ${preferenceKey}`);
+          return {
+            ...model,
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined
+          };
+        }
+      });
+    } catch (error) {
+      console.error('CREATE: Error creating models with preferences:', error);
+      return defaultModels;
+    }
+  }, [data, loadManualAIPreferences, generateDataHash, getCachedParameters, isCacheValid]);
 
-    hasAppliedPreferencesRef.current = true;
-    console.log('PREFERENCE APPLY: ✅ Applied preferences to models state');
-  };
+  // FIXED: Initialize state with a function that gets called on every mount
+  const [models, setModels] = useState<ModelConfig[]>(() => {
+    console.log('STATE INIT: Initializing models state');
+    return getDefaultModels(); // Start with defaults, will be updated by effect
+  });
 
   // Auto-select first SKU when data changes
   React.useEffect(() => {
@@ -201,34 +152,21 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // FIXED: Reliable preference application effect - triggers on navigation back
+  // FIXED: Apply preferences immediately when SKU changes or component mounts
   React.useEffect(() => {
     if (selectedSKU && data.length > 0) {
-      const newKey = `${selectedSKU}_${data.length}_${Date.now()}`;
+      // Always apply preferences when SKU changes or component mounts
+      const modelsWithPreferences = createModelsWithPreferences(selectedSKU);
+      console.log(`EFFECT: Setting models with preferences for ${selectedSKU}`);
+      setModels(modelsWithPreferences);
       
-      // Only apply if this is a new initialization or SKU change
-      if (initializationKeyRef.current !== newKey) {
-        console.log(`NAVIGATION FIX: Component ready with SKU ${selectedSKU}, applying preferences (key: ${newKey})`);
-        initializationKeyRef.current = newKey;
-        hasAppliedPreferencesRef.current = false;
-        
-        // Apply preferences immediately
-        applyPreferencesToModels();
-        
-        // Generate forecasts after preferences are applied
-        setTimeout(() => generateForecastsForSelectedSKU(), 100);
-      }
+      // Generate forecasts after a short delay to ensure state is updated
+      setTimeout(() => generateForecastsForSelectedSKU(), 50);
+      
+      // Update the last SKU ref
+      lastSKURef.current = selectedSKU;
     }
-  }, [selectedSKU, data.length]); // This runs whenever we have both data and selectedSKU
-
-  // FIXED: Additional effect to catch navigation back without data changes
-  React.useEffect(() => {
-    if (selectedSKU && data.length > 0 && !hasAppliedPreferencesRef.current) {
-      console.log(`NAVIGATION FIX: Fallback preference application for ${selectedSKU}`);
-      applyPreferencesToModels();
-      setTimeout(() => generateForecastsForSelectedSKU(), 100);
-    }
-  }, [selectedSKU]); // Simpler dependency - just selectedSKU changes
+  }, [selectedSKU, data.length, createModelsWithPreferences]); // Depend on the memoized function
 
   // FIXED: Main optimization effect - only runs on actual data changes
   React.useEffect(() => {
@@ -327,7 +265,8 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       console.log(`IMMEDIATE FIX: Forcing immediate UI update for current SKU: ${selectedSKU}`);
       
       // Apply preferences immediately - no setTimeout
-      applyPreferencesToModels();
+      const modelsWithPreferences = createModelsWithPreferences(selectedSKU);
+      setModels(modelsWithPreferences);
       generateForecastsForSelectedSKU();
     }
   };
@@ -593,8 +532,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           | Cache: {cacheStats.hits} hits, {cacheStats.misses} misses
           | Fingerprint: {navigationState.datasetFingerprint}
           | AI/Manual Toggle: {isTogglingAIManualRef.current ? '🔄 Active' : '✅ Idle'}
-          | Preferences Applied: {hasAppliedPreferencesRef.current ? '✅' : '❌'}
-          | Init Key: {initializationKeyRef.current}
+          | Last SKU: {lastSKURef.current}
         </div>
       )}
     </div>
