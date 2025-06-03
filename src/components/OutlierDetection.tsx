@@ -491,7 +491,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleane
               <Tooltip 
                 formatter={(value: number, name: string) => [
                   value?.toLocaleString() || '0', 
-                  name === 'cleanedSales' ? 'Cleaned Sales' : 'Original Sales'
+                  name
                 ]}
                 labelFormatter={(label) => {
                   try {
