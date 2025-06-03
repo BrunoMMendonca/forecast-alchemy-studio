@@ -7,7 +7,6 @@ import { ForecastModels } from '@/components/ForecastModels';
 import { ForecastResults } from '@/components/ForecastResults';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart3, TrendingUp, Upload, Zap } from 'lucide-react';
 
 export interface SalesData {
@@ -53,9 +52,9 @@ const Index = () => {
     setForecastResults(results);
   };
 
-  const handleTabChange = (value: string) => {
-    const stepIndex = steps.findIndex(step => step.id === value);
-    if (stepIndex !== -1) {
+  const handleStepClick = (stepIndex: number) => {
+    // Allow navigation to any step if data is uploaded
+    if (stepIndex === 0 || salesData.length > 0) {
       setCurrentStep(stepIndex);
     }
   };
@@ -67,20 +66,6 @@ const Index = () => {
   const handleProceedToForecasting = () => {
     setCurrentStep(3);
   };
-
-  // Listen for custom events from child components
-  useEffect(() => {
-    const handleCustomTabChange = (event: CustomEvent) => {
-      if (event.detail?.value === 'forecast') {
-        handleProceedToForecasting();
-      }
-    };
-
-    window.addEventListener('tabChange', handleCustomTabChange as EventListener);
-    return () => {
-      window.removeEventListener('tabChange', handleCustomTabChange as EventListener);
-    };
-  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -102,19 +87,25 @@ const Index = () => {
               const Icon = step.icon;
               const isActive = index <= currentStep;
               const isCurrent = index === currentStep;
+              const isClickable = index === 0 || salesData.length > 0;
               
               return (
                 <div key={step.id} className="flex items-center">
-                  <div className={`
-                    flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all duration-300
-                    ${isActive 
-                      ? 'bg-blue-600 border-blue-600 text-white shadow-lg' 
-                      : 'bg-white border-slate-300 text-slate-400'
-                    }
-                    ${isCurrent ? 'ring-4 ring-blue-200' : ''}
-                  `}>
+                  <button
+                    onClick={() => handleStepClick(index)}
+                    disabled={!isClickable}
+                    className={`
+                      flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all duration-300
+                      ${isActive 
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg' 
+                        : 'bg-white border-slate-300 text-slate-400'
+                      }
+                      ${isCurrent ? 'ring-4 ring-blue-200' : ''}
+                      ${isClickable ? 'cursor-pointer hover:scale-105' : 'cursor-not-allowed opacity-50'}
+                    `}
+                  >
                     <Icon size={20} />
-                  </div>
+                  </button>
                   <span className={`ml-2 font-medium ${isActive ? 'text-slate-800' : 'text-slate-400'}`}>
                     {step.title}
                   </span>
@@ -128,26 +119,8 @@ const Index = () => {
         </div>
 
         {/* Main Content */}
-        <Tabs value={steps[currentStep]?.id} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-8">
-            {steps.map((step, index) => {
-              const Icon = step.icon;
-              const isDisabled = index > Math.max(currentStep, salesData.length > 0 ? 1 : 0);
-              return (
-                <TabsTrigger 
-                  key={step.id} 
-                  value={step.id}
-                  disabled={isDisabled}
-                  className="flex items-center gap-2"
-                >
-                  <Icon size={16} />
-                  {step.title}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-
-          <TabsContent value="upload" className="space-y-6">
+        <div className="w-full">
+          {currentStep === 0 && (
             <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -162,9 +135,9 @@ const Index = () => {
                 <FileUpload onDataUpload={handleDataUpload} />
               </CardContent>
             </Card>
-          </TabsContent>
+          )}
 
-          <TabsContent value="visualize" className="space-y-6">
+          {currentStep === 1 && (
             <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -186,9 +159,9 @@ const Index = () => {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
+          )}
 
-          <TabsContent value="clean" className="space-y-6">
+          {currentStep === 2 && (
             <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -207,9 +180,9 @@ const Index = () => {
                 />
               </CardContent>
             </Card>
-          </TabsContent>
+          )}
 
-          <TabsContent value="forecast" className="space-y-6">
+          {currentStep === 3 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
                 <CardHeader>
@@ -241,8 +214,8 @@ const Index = () => {
                 </CardContent>
               </Card>
             </div>
-          </TabsContent>
-        </Tabs>
+          )}
+        </div>
       </div>
     </div>
   );
