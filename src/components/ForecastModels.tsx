@@ -106,30 +106,39 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     setModels(prev => prev.map(model => {
       const cached = getCachedParameters(selectedSKU, model.id);
       const preferenceKey = `${selectedSKU}:${model.id}`;
-      const isUsingAI = preferences[preferenceKey] !== false; // Default to AI if no preference
+      const preference = preferences[preferenceKey]; // Can be true, false, or undefined
       
-      console.log(`PREFERENCE APPLY: ${preferenceKey} - isUsingAI: ${isUsingAI}, cached: ${!!cached}`);
+      console.log(`PREFERENCE APPLY: ${preferenceKey} - preference: ${preference}, cached: ${!!cached}`);
       
-      if (isUsingAI && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
-        // Using AI and have valid cached parameters
+      // FIXED: Explicit logic for AI vs Manual
+      if (preference === true && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
+        // Explicitly set to AI AND have valid cached parameters
         return {
           ...model,
           optimizedParameters: cached.parameters,
           optimizationConfidence: cached.confidence
         };
-      } else if (!isUsingAI) {
-        // Using manual - remove AI parameters
+      } else if (preference === false || !preference) {
+        // Explicitly set to Manual OR no preference (default to Manual)
+        return {
+          ...model,
+          optimizedParameters: undefined,
+          optimizationConfidence: undefined
+        };
+      } else if (preference === true && !cached) {
+        // Set to AI but no cached parameters - fallback to Manual
+        console.log(`PREFERENCE APPLY: ${preferenceKey} set to AI but no cached parameters, using Manual`);
         return {
           ...model,
           optimizedParameters: undefined,
           optimizationConfidence: undefined
         };
       } else {
-        // Using AI but no cached parameters or invalid cache
+        // Fallback to Manual
         return {
           ...model,
-          optimizedParameters: cached?.parameters,
-          optimizationConfidence: cached?.confidence
+          optimizedParameters: undefined,
+          optimizationConfidence: undefined
         };
       }
     }));
