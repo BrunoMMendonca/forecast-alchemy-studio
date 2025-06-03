@@ -43,8 +43,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   const { toast } = useToast();
   const lastDataHashRef = useRef<string>('');
   const isTogglingAIManualRef = useRef<boolean>(false);
-  const hasLoadedPreferencesRef = useRef<boolean>(false);
-  const lastSelectedSKURef = useRef<string>('');
+  const lastAppliedPreferencesRef = useRef<string>(''); // Track when preferences were last applied
   
   const {
     cache,
@@ -148,31 +147,19 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     handleInitialOptimization();
   }, [data]); // FIXED: Only depends on data, hash generated inside effect
 
-  // FIXED: Load preferences when SKU changes OR when returning to component
-  React.useEffect(() => {
-    if (!selectedSKU) return;
-    
-    const skuChanged = lastSelectedSKURef.current !== selectedSKU;
-    const returningToComponent = !hasLoadedPreferencesRef.current;
-    
-    if (skuChanged || returningToComponent) {
-      console.log(`PREFERENCE: Loading preferences for SKU: ${selectedSKU} (SKU changed: ${skuChanged}, returning: ${returningToComponent})`);
-      lastSelectedSKURef.current = selectedSKU;
-      hasLoadedPreferencesRef.current = false; // Reset flag to reload preferences
-      loadCachedParametersAndForecast();
-    }
-  }, [selectedSKU, forecastPeriods]);
-
-  // FIXED: Always load preferences when component is rendered (e.g., returning from another step)
+  // FIXED: Always reload preferences when component renders with selectedSKU
   React.useEffect(() => {
     if (!selectedSKU || data.length === 0) return;
+
+    // Create a unique key for current state to detect when we need to reload preferences
+    const currentStateKey = `${selectedSKU}-${data.length}-${models.length}`;
     
-    // Always load preferences when the component is active, unless we just loaded them
-    if (!hasLoadedPreferencesRef.current) {
-      console.log('PREFERENCE: Component active - loading preferences');
+    if (lastAppliedPreferencesRef.current !== currentStateKey) {
+      console.log(`PREFERENCE: State changed, reloading preferences: ${currentStateKey}`);
+      lastAppliedPreferencesRef.current = currentStateKey;
       loadCachedParametersAndForecast();
     }
-  }, [selectedSKU, data.length, models.length]); // Include models.length to detect when models are reset
+  }, [selectedSKU, data.length, models.length]); // React to any state change
 
   const loadCachedParametersAndForecast = () => {
     if (!selectedSKU) return;
@@ -180,7 +167,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
     const preferences = loadManualAIPreferences();
-    hasLoadedPreferencesRef.current = true;
 
     console.log(`PREFERENCE: Applying preferences for ${selectedSKU}:`, preferences);
 
