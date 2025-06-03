@@ -84,13 +84,12 @@ const Index = () => {
                   onForecastGeneration={handleForecastGeneration}
                   selectedSKU={selectedSKU}
                   onSKUChange={setSelectedSKU}
-                  models={models}
-                  setModels={setModels}
                 />
               </div>
 
               <div className="space-y-6">
                 <ForecastControls
+                  forecastPeriods={forecastPeriods}
                   onForecastPeriodsChange={setForecastPeriods}
                 />
 

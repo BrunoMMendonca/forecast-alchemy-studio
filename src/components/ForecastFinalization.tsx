@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Download, Edit3, Save, Trash2, Eye, TrendingUp, CheckCircle } from 'lucide-react';
-import { SalesData, ForecastResult } from '@/pages/Index';
+import { SalesData } from '@/types/sales';
+import { ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 import { exportForecastResults, generateSOPSummary, ExportOptions } from '@/utils/exportUtils';
 
