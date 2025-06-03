@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -8,7 +7,12 @@ import {
   generateHoltWinters, 
   generateSeasonalNaive 
 } from '@/utils/seasonalUtils';
-import { generateMovingAverage, generateExponentialSmoothing, generateLinearTrend } from '@/utils/forecastAlgorithms';
+import { 
+  generateMovingAverage, 
+  generateSimpleExponentialSmoothing, 
+  generateDoubleExponentialSmoothing,
+  generateLinearTrend 
+} from '@/utils/forecastAlgorithms';
 import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useBatchOptimization } from '@/hooks/useBatchOptimization';
