@@ -64,6 +64,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     shouldOptimize,
     markOptimizationStarted,
     markOptimizationCompleted,
+    markDataModified,
     getTriggerCount,
     incrementTriggerCount,
     navigationState
@@ -96,6 +97,13 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       onSKUChange(skus[0]);
     }
   }, [data, selectedSKU, onSKUChange]);
+
+  // Detect data changes and mark for re-optimization
+  React.useEffect(() => {
+    if (data.length > 0) {
+      markDataModified(data);
+    }
+  }, [data.length, JSON.stringify(data.map(d => `${d.sku}-${d.date}-${d.sales}-${d.isOutlier}-${d.note || ''}`).sort())]);
 
   // BULLETPROOF: Main optimization effect with navigation state as primary source of truth
   React.useEffect(() => {

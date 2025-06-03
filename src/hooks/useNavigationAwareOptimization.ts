@@ -48,14 +48,18 @@ export const useNavigationAwareOptimization = () => {
   const generateStableFingerprint = useCallback((data: SalesData[]): string => {
     if (!data || data.length === 0) return 'empty';
     
-    // Create a stable fingerprint based on data content, not object references
+    // Create a stable fingerprint based on data content, including modifications
     const sortedData = [...data].sort((a, b) => {
       const skuCompare = a.sku.localeCompare(b.sku);
       if (skuCompare !== 0) return skuCompare;
       return a.date.localeCompare(b.date);
     });
     
-    const dataContent = sortedData.map(d => `${d.sku}-${d.date}-${d.sales}-${d.isOutlier ? '1' : '0'}`).join('|');
+    // Include sales values, outlier flags, and notes in fingerprint
+    const dataContent = sortedData.map(d => 
+      `${d.sku}-${d.date}-${d.sales}-${d.isOutlier ? '1' : '0'}-${d.note || ''}`
+    ).join('|');
+    
     const fingerprint = btoa(dataContent).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
     
     console.log('NAVIGATION: Generated fingerprint:', fingerprint);
@@ -71,16 +75,23 @@ export const useNavigationAwareOptimization = () => {
     const currentFingerprint = generateStableFingerprint(data);
     const now = Date.now();
 
-    console.log('NAVIGATION: PRIORITY CHECK - Navigation state check FIRST');
+    console.log('NAVIGATION: CHECKING OPTIMIZATION NEED');
+    console.log(`NAVIGATION: Current fingerprint: ${currentFingerprint}`);
+    console.log(`NAVIGATION: Stored fingerprint: ${navigationState?.datasetFingerprint}`);
+    console.log(`NAVIGATION: Optimization completed: ${navigationState?.optimizationCompleted}`);
     
-    // PRIORITY 1: Check navigation state FIRST - this is the single source of truth
+    // PRIORITY 1: Check if data has actually changed
     if (navigationState) {
-      console.log(`NAVIGATION: Checking navigation state - fingerprint: ${navigationState.datasetFingerprint}, current: ${currentFingerprint}, completed: ${navigationState.optimizationCompleted}`);
-      
+      // If fingerprint has changed, data was modified - need to re-optimize
+      if (navigationState.datasetFingerprint !== currentFingerprint) {
+        console.log('NAVIGATION: ✅ DATA HAS CHANGED - Re-optimization needed');
+        return true;
+      }
+
       // Same dataset and already optimized
       if (navigationState.datasetFingerprint === currentFingerprint && 
           navigationState.optimizationCompleted) {
-        console.log('NAVIGATION: ❌ OPTIMIZATION ALREADY COMPLETE FOR THIS DATASET - ABSOLUTE BLOCK');
+        console.log('NAVIGATION: ❌ SAME DATA AND ALREADY OPTIMIZED - ABSOLUTE BLOCK');
         return false;
       }
 
@@ -96,6 +107,10 @@ export const useNavigationAwareOptimization = () => {
       const stored = localStorage.getItem(NAVIGATION_STATE_KEY);
       if (stored) {
         const parsedState = JSON.parse(stored);
+        if (parsedState.datasetFingerprint !== currentFingerprint) {
+          console.log('NAVIGATION: ✅ LOCALSTORAGE BACKUP - Data changed, re-optimization needed');
+          return true;
+        }
         if (parsedState.datasetFingerprint === currentFingerprint && 
             parsedState.optimizationCompleted) {
           console.log('NAVIGATION: ❌ LOCALSTORAGE BACKUP CHECK - Already optimized');
@@ -142,20 +157,33 @@ export const useNavigationAwareOptimization = () => {
     };
     
     setNavigationState(newState);
-    console.log('NAVIGATION: ✅ OPTIMIZATION MARKED AS COMPLETE - SHOULD NEVER RUN AGAIN');
+    console.log('NAVIGATION: ✅ OPTIMIZATION MARKED AS COMPLETE');
   }, [navigationState, generateStableFingerprint]);
 
-  const markDataModified = useCallback(() => {
-    if (navigationState) {
-      setNavigationState({
-        ...navigationState,
+  const markDataModified = useCallback((data?: SalesData[]) => {
+    if (data) {
+      // When data is provided, update the fingerprint to reflect the change
+      const newFingerprint = generateStableFingerprint(data);
+      setNavigationState(prev => prev ? {
+        ...prev,
+        datasetFingerprint: newFingerprint,
         optimizationCompleted: false,
         dataModificationTime: Date.now()
-      });
-      console.log('NAVIGATION: ✅ Marked data as modified');
+      } : null);
+      console.log('NAVIGATION: ✅ Marked data as modified with new fingerprint:', newFingerprint);
+    } else {
+      // Legacy support - just mark as modified
+      if (navigationState) {
+        setNavigationState({
+          ...navigationState,
+          optimizationCompleted: false,
+          dataModificationTime: Date.now()
+        });
+        console.log('NAVIGATION: ✅ Marked data as modified (legacy)');
+      }
     }
     lastDataRef.current = '';
-  }, [navigationState]);
+  }, [navigationState, generateStableFingerprint]);
 
   const getTriggerCount = useCallback(() => {
     return optimizationTriggerRef.current;
