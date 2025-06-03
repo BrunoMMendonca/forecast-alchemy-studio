@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,9 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { AlertTriangle, Zap, Edit3, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Zap, Edit3, Save, X, ChevronLeft, ChevronRight, Download, Upload } from 'lucide-react';
 import { SalesData } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
+import { exportCleaningData, parseCleaningCSV, applyImportChanges, ImportPreview } from '@/utils/csvUtils';
+import { ImportPreviewDialog } from '@/components/ImportPreviewDialog';
 
 interface OutlierDetectionProps {
   data: SalesData[];
@@ -31,6 +33,12 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleane
   const [threshold, setThreshold] = useState([2.5]);
   const [editingOutliers, setEditingOutliers] = useState<{ [key: string]: { value: number; note: string } }>({});
   const [hideCleanData, setHideCleanData] = useState(true);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importPreviews, setImportPreviews] = useState<ImportPreview[]>([]);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [importMetadata, setImportMetadata] = useState<{ threshold?: number; exportDate?: string; totalRecords?: number }>({});
+  const [importFileName, setImportFileName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const skus = useMemo(() => {
@@ -114,6 +122,114 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleane
       };
     });
   }, [data, cleanedData, selectedSKU]);
+
+  const handleExportCleaning = () => {
+    if (data.length === 0 || cleanedData.length === 0) {
+      toast({
+        title: "Export Error",
+        description: "No data available to export",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      exportCleaningData(data, cleanedData, threshold[0]);
+      toast({
+        title: "Export Successful",
+        description: `Data cleaning exported for ${new Set(cleanedData.map(d => d.sku)).size} SKUs`,
+      });
+    } catch (error) {
+      toast({
+        title: "Export Error",
+        description: error instanceof Error ? error.message : "Failed to export data",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      toast({
+        title: "Invalid File",
+        description: "Please select a CSV file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const csvText = e.target?.result as string;
+        const { previews, errors, metadata } = parseCleaningCSV(csvText);
+        
+        // Filter previews to only include SKUs that exist in current data
+        const currentSKUs = new Set(data.map(d => d.sku));
+        const validPreviews = previews.filter(p => {
+          const skuExists = currentSKUs.has(p.sku);
+          const dateExists = data.some(d => d.sku === p.sku && d.date === p.date);
+          return skuExists && dateExists;
+        });
+
+        const skuNotFoundErrors = previews
+          .filter(p => !currentSKUs.has(p.sku))
+          .map(p => `SKU "${p.sku}" not found in current dataset`);
+        
+        const dateNotFoundErrors = previews
+          .filter(p => currentSKUs.has(p.sku) && !data.some(d => d.sku === p.sku && d.date === p.date))
+          .map(p => `Date "${p.date}" not found for SKU "${p.sku}"`);
+
+        setImportPreviews(validPreviews);
+        setImportErrors([...errors, ...skuNotFoundErrors, ...dateNotFoundErrors]);
+        setImportMetadata(metadata);
+        setImportFileName(file.name);
+        setShowImportDialog(true);
+      } catch (error) {
+        toast({
+          title: "Import Error",
+          description: error instanceof Error ? error.message : "Failed to parse CSV file",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    reader.readAsText(file);
+    // Reset the file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleConfirmImport = () => {
+    try {
+      const updatedData = applyImportChanges(cleanedData, importPreviews);
+      onDataCleaning(updatedData);
+      
+      const modifications = importPreviews.filter(p => p.action === 'modify');
+      const noteAdditions = importPreviews.filter(p => p.action === 'add_note');
+      
+      toast({
+        title: "Import Successful",
+        description: `Applied ${modifications.length} value changes and ${noteAdditions.length} note additions`,
+      });
+      
+      setShowImportDialog(false);
+      setImportPreviews([]);
+      setImportErrors([]);
+      setImportMetadata({});
+      setImportFileName('');
+    } catch (error) {
+      toast({
+        title: "Import Error",
+        description: error instanceof Error ? error.message : "Failed to apply changes",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleEditOutlier = (key: string) => {
     console.log('Edit button clicked for key:', key);
@@ -234,6 +350,41 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleane
 
   return (
     <div className="space-y-6">
+      {/* Export/Import Section */}
+      <div className="bg-slate-50 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-slate-800 mb-3">Data Cleaning Export/Import</h3>
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="outline" 
+            onClick={handleExportCleaning}
+            disabled={cleanedData.length === 0}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export Cleaning Data
+          </Button>
+          
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleImportFile}
+            className="hidden"
+          />
+          
+          <Button 
+            variant="outline" 
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Import Cleaning Data
+          </Button>
+          
+          <div className="text-sm text-slate-600">
+            Export your cleaning changes or import previously saved cleaning data
+          </div>
+        </div>
+      </div>
+
       {/* Controls */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
@@ -577,6 +728,17 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleane
           Proceed to Forecasting
         </Button>
       </div>
+
+      {/* Import Preview Dialog */}
+      <ImportPreviewDialog
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        previews={importPreviews}
+        errors={importErrors}
+        metadata={importMetadata}
+        onConfirm={handleConfirmImport}
+        fileName={importFileName}
+      />
     </div>
   );
 };
