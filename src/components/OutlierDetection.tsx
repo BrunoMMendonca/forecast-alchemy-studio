@@ -520,7 +520,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                             }
                           })}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter' && e.ctrlKey) {
+                            if (e.key === 'Enter') {
                               e.preventDefault();
                               handleSaveEdit(dataPoint.key);
                             }
@@ -530,7 +530,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                           rows={2}
                         />
                         <div className="text-xs text-slate-500 mt-1">
-                          Press Ctrl+Enter to save
+                          Press Enter to save
                         </div>
                       </div>
                     </div>
