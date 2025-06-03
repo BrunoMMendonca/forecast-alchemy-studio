@@ -1,6 +1,7 @@
+
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/types/sales';
-import { getFrequencyInfo } from '@/utils/seasonalUtils';
+import { detectDateFrequency } from '@/utils/dateUtils';
 
 export const generateForecasts = async (
   data: SalesData[],
@@ -14,7 +15,7 @@ export const generateForecasts = async (
     return [];
   }
 
-  const frequencyInfo = getFrequencyInfo(skuData.map(d => d.date));
+  const frequencyInfo = detectDateFrequency(skuData.map(d => d.date));
   if (!frequencyInfo) {
     console.warn(`Could not determine frequency for SKU: ${selectedSKU}`);
     return [];
@@ -29,7 +30,7 @@ export const generateForecasts = async (
     }
 
     try {
-      const forecastFunction = await import(`./forecastAlgorithms/${modelConfig.algorithm}`);
+      const forecastFunction = await import(`./forecastAlgorithms/${modelConfig.id}`);
       const forecast = await forecastFunction.default(
         skuData.map(d => d.sales),
         modelConfig.parameters,
@@ -72,4 +73,16 @@ export const generateForecasts = async (
   }
 
   return results;
+};
+
+export const generateForecastsForSKU = async (
+  selectedSKU: string,
+  data: SalesData[],
+  models: ModelConfig[],
+  forecastPeriods: number,
+  getCachedForecast?: any,
+  setCachedForecast?: any,
+  generateParametersHash?: any
+) => {
+  return generateForecasts(data, models, forecastPeriods, selectedSKU);
 };
