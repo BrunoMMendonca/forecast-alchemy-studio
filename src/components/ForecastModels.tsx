@@ -201,18 +201,20 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     if (!selectedSKU) return;
 
     try {
+      console.log(`🎯 Generating forecasts for ${selectedSKU} with models:`, models.map(m => ({ id: m.id, enabled: m.enabled })));
+      
       const results = await generateForecastsForSKU(
         selectedSKU,
         data,
-        models,
+        models, // Pass all models - the function will filter enabled ones
         forecastPeriods,
         getCachedForecast,
         setCachedForecast,
         generateParametersHash
       );
 
+      console.log(`✅ Generated ${results.length} forecasts for ${selectedSKU}, passing to parent`);
       onForecastGeneration(results, selectedSKU);
-      console.log(`Generated forecasts for SKU: ${selectedSKU} (${results.length} models)`);
 
     } catch (error) {
       toast({
@@ -225,23 +227,40 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   };
 
   const handleToggleModel = (modelId: string) => {
+    console.log(`🔄 Toggling model ${modelId}`);
     toggleModel(modelId);
-    setTimeout(() => generateForecastsForSelectedSKU(), 100);
+    // Immediately generate forecasts after model toggle to ensure right panel updates
+    setTimeout(() => {
+      console.log(`🔄 Regenerating forecasts after toggling ${modelId}`);
+      generateForecastsForSelectedSKU();
+    }, 50);
   };
 
   const handleUpdateParameter = (modelId: string, parameter: string, value: number) => {
+    console.log(`🔧 Updating parameter ${parameter} for ${modelId} to ${value}`);
     updateParameter(modelId, parameter, value);
-    setTimeout(() => generateForecastsForSelectedSKU(), 100);
+    setTimeout(() => {
+      console.log(`🔧 Regenerating forecasts after parameter update for ${modelId}`);
+      generateForecastsForSelectedSKU();
+    }, 50);
   };
 
   const handleUseAI = (modelId: string) => {
+    console.log(`🤖 Using AI for ${modelId}`);
     useAIOptimization(modelId);
-    setTimeout(() => generateForecastsForSelectedSKU(), 100);
+    setTimeout(() => {
+      console.log(`🤖 Regenerating forecasts after AI toggle for ${modelId}`);
+      generateForecastsForSelectedSKU();
+    }, 50);
   };
 
   const handleResetToManual = (modelId: string) => {
+    console.log(`👤 Resetting to manual for ${modelId}`);
     resetToManual(modelId);
-    setTimeout(() => generateForecastsForSelectedSKU(), 100);
+    setTimeout(() => {
+      console.log(`👤 Regenerating forecasts after manual reset for ${modelId}`);
+      generateForecastsForSelectedSKU();
+    }, 50);
   };
 
   return (
