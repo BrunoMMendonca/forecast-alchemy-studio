@@ -1,10 +1,16 @@
-
 export interface GrokOptimizationRequest {
   modelType: string;
   historicalData: number[];
   currentParameters: Record<string, number>;
   seasonalPeriod?: number;
   targetMetric: 'mape' | 'mae' | 'rmse';
+  dataStats?: {
+    mean: number;
+    std: number;
+    trend: string;
+    seasonality: boolean;
+    volatility: number;
+  };
 }
 
 export interface GrokOptimizationResponse {
@@ -25,43 +31,86 @@ export interface GrokModelRecommendation {
   }>;
 }
 
+// Calculate data statistics to provide better context to AI
+const calculateDataStats = (data: number[]) => {
+  const mean = data.reduce((sum, val) => sum + val, 0) / data.length;
+  const variance = data.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / data.length;
+  const std = Math.sqrt(variance);
+  
+  // Simple trend detection
+  const firstHalf = data.slice(0, Math.floor(data.length / 2));
+  const secondHalf = data.slice(Math.floor(data.length / 2));
+  const firstMean = firstHalf.reduce((sum, val) => sum + val, 0) / firstHalf.length;
+  const secondMean = secondHalf.reduce((sum, val) => sum + val, 0) / secondHalf.length;
+  
+  let trend = 'stable';
+  if (secondMean > firstMean * 1.1) trend = 'increasing';
+  else if (secondMean < firstMean * 0.9) trend = 'decreasing';
+  
+  // Simple seasonality detection (look for patterns)
+  const volatility = std / mean;
+  const seasonality = volatility > 0.2 && data.length >= 12;
+  
+  return {
+    mean: Math.round(mean * 100) / 100,
+    std: Math.round(std * 100) / 100,
+    trend,
+    seasonality,
+    volatility: Math.round(volatility * 100) / 100
+  };
+};
+
 export const optimizeParametersWithGrok = async (
   request: GrokOptimizationRequest,
   apiKey: string
 ): Promise<GrokOptimizationResponse> => {
+  // Provide more data context (last 50 points instead of 20)
+  const dataPoints = request.historicalData.slice(-50);
+  const dataStats = calculateDataStats(request.historicalData);
+  
   const prompt = `Analyze this time series data and optimize parameters for ${request.modelType} forecasting model.
 
-Historical data: ${request.historicalData.slice(-20).join(', ')} (showing last 20 points)
-Current parameters: ${JSON.stringify(request.currentParameters)}
-Seasonal period: ${request.seasonalPeriod || 'unknown'}
-Target metric: ${request.targetMetric}
+FULL HISTORICAL DATA (last 50 points): ${dataPoints.join(', ')}
+DATA STATISTICS:
+- Mean: ${dataStats.mean}
+- Standard Deviation: ${dataStats.std}
+- Trend: ${dataStats.trend}
+- Volatility: ${dataStats.volatility}
+- Has Seasonality: ${dataStats.seasonality}
+- Seasonal Period: ${request.seasonalPeriod || 'unknown'}
 
-Model-specific parameter constraints:
-- simple_exponential_smoothing: alpha (0.1-1.0) only - for stable data without trend
-- double_exponential_smoothing: alpha (0.1-1.0), beta (0.1-1.0) - for data with trend but no seasonality  
-- holt_winters: alpha (0.1-1.0), beta (0.1-1.0), gamma (0.1-1.0) - for data with trend and seasonality
-- moving_average: window (1-30) only
-- linear_trend: no parameters
-- seasonal_moving_average: window (1-30) only
-- seasonal_naive: no parameters
+CURRENT PARAMETERS: ${JSON.stringify(request.currentParameters)}
+TARGET METRIC: ${request.targetMetric}
 
-Please recommend optimal parameter values that would minimize ${request.targetMetric.toUpperCase()}. Consider:
-1. Data volatility and trends
-2. Seasonal patterns if present
-3. Model-specific parameter constraints listed above
-4. Balance between responsiveness and stability
+IMPORTANT CONSTRAINTS for ${request.modelType}:
+- simple_exponential_smoothing: alpha (0.1-0.9) - Use lower alpha (0.1-0.3) for stable data, higher (0.4-0.9) for volatile data
+- double_exponential_smoothing: alpha (0.1-0.9), beta (0.1-0.9) - Alpha for level, beta for trend
+- holt_winters: alpha (0.1-0.9), beta (0.1-0.9), gamma (0.1-0.9) - Alpha for level, beta for trend, gamma for seasonality  
+- moving_average: window (2-15) - Use smaller windows (2-5) for volatile data, larger (6-12) for stable data
+- linear_trend: no parameters to optimize
+- seasonal_moving_average: window (2-15) - Consider seasonal period when choosing window
+- seasonal_naive: no parameters to optimize
 
-IMPORTANT: Only return parameters that are valid for the specific model type. Do not suggest parameters that don't exist for the model.
+OPTIMIZATION GUIDELINES:
+1. For HIGH volatility (>0.3): Use more responsive parameters (higher alpha, smaller windows)
+2. For LOW volatility (<0.2): Use more stable parameters (lower alpha, larger windows)
+3. For TRENDING data: Ensure beta parameter is appropriate for trend strength
+4. For SEASONAL data: Consider seasonal period in window selection and gamma values
+5. VALIDATE your choices against the actual data patterns shown
 
-Respond in JSON format:
+Based on the data characteristics, recommend parameters that would minimize ${request.targetMetric.toUpperCase()} while being robust to outliers.
+
+Respond in JSON format only:
 {
   "optimizedParameters": {"param1": value1, "param2": value2},
-  "expectedAccuracy": percentage,
-  "confidence": percentage,
-  "reasoning": "explanation of choices"
+  "expectedAccuracy": percentage_between_60_and_95,
+  "confidence": percentage_between_60_and_95,
+  "reasoning": "detailed explanation of parameter choices based on data analysis"
 }`;
 
   try {
+    console.log(`🤖 Sending enhanced optimization request to Grok for ${request.modelType}`);
+    
     const response = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -72,7 +121,7 @@ Respond in JSON format:
         messages: [
           {
             role: 'system',
-            content: 'You are an expert time series forecasting analyst. Provide precise, data-driven parameter optimization recommendations that strictly match the available parameters for each model type.'
+            content: 'You are an expert time series forecasting analyst with deep knowledge of parameter optimization. Analyze the data patterns carefully and provide precise, data-driven recommendations that will actually improve forecast accuracy.'
           },
           {
             role: 'user',
@@ -86,21 +135,31 @@ Respond in JSON format:
     });
 
     if (!response.ok) {
-      throw new Error(`Grok API error: ${response.status}`);
+      throw new Error(`Grok API error: ${response.status} - ${response.statusText}`);
     }
 
     const data = await response.json();
     const content = data.choices[0].message.content;
     
+    console.log(`🤖 Grok response received for ${request.modelType}`);
+    
     // Try to parse JSON from the response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+      const result = JSON.parse(jsonMatch[0]);
+      
+      // Validate the response has required fields
+      if (!result.optimizedParameters || !result.expectedAccuracy || !result.confidence) {
+        throw new Error('Invalid response format from Grok API');
+      }
+      
+      console.log(`✅ Grok optimization result: ${JSON.stringify(result.optimizedParameters)}`);
+      return result;
     } else {
-      throw new Error('Unable to parse optimization response');
+      throw new Error('Unable to parse optimization response - no valid JSON found');
     }
   } catch (error) {
-    console.error('Grok optimization error:', error);
+    console.error(`❌ Grok optimization error for ${request.modelType}:`, error);
     throw error;
   }
 };

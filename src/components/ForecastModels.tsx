@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useCallback } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -507,15 +506,24 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           <div className="flex items-center gap-2 mb-2">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
             <span className="text-sm font-medium text-blue-800">
-              AI Optimizing Parameters...
+              Enhanced AI Optimization in Progress...
             </span>
           </div>
-          <p className="text-sm text-blue-600">
-            Processing {progress.currentSKU} ({progress.completedSKUs + 1}/{progress.totalSKUs})
+          <p className="text-sm text-blue-600 mb-2">
+            Processing {progress.currentSKU} - {progress.currentModel} ({progress.completedSKUs + 1}/{progress.totalSKUs})
           </p>
-          <p className="text-xs text-blue-500">
-            Optimized: {progress.optimized} | From Cache: {progress.skipped}
-          </p>
+          <div className="grid grid-cols-2 gap-2 text-xs text-blue-500">
+            <div>🤖 AI Optimized: {progress.aiOptimized || 0}</div>
+            <div>🔍 Grid Optimized: {progress.gridOptimized || 0}</div>
+            <div>❌ AI Rejected: {progress.aiRejected || 0}</div>
+            <div>📋 From Cache: {progress.skipped || 0}</div>
+          </div>
+          <div className="mt-2 bg-blue-200 rounded-full h-2">
+            <div 
+              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${((progress.completedSKUs) / progress.totalSKUs) * 100}%` }}
+            />
+          </div>
         </div>
       )}
 
