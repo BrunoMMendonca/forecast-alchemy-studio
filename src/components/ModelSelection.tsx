@@ -7,12 +7,16 @@ interface ModelSelectionProps {
   models: ModelConfig[];
   onToggleModel: (modelId: string) => void;
   onUpdateParameter: (modelId: string, parameter: string, value: number) => void;
+  onReOptimize?: (modelId: string) => void;
+  onResetToManual?: (modelId: string) => void;
 }
 
 export const ModelSelection: React.FC<ModelSelectionProps> = ({
   models,
   onToggleModel,
-  onUpdateParameter
+  onUpdateParameter,
+  onReOptimize,
+  onResetToManual
 }) => {
   const basicModels = models.filter(m => !m.isSeasonal);
   const seasonalModels = models.filter(m => m.isSeasonal);
@@ -21,7 +25,7 @@ export const ModelSelection: React.FC<ModelSelectionProps> = ({
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-slate-800">Select Forecasting Models</h3>
       <p className="text-sm text-slate-500">
-        Parameters are automatically optimized with AI for better accuracy
+        Parameters can be AI-optimized or manually adjusted for the selected product
       </p>
       
       {/* Basic Models */}
@@ -33,6 +37,8 @@ export const ModelSelection: React.FC<ModelSelectionProps> = ({
             model={model}
             onToggle={onToggleModel}
             onParameterUpdate={onUpdateParameter}
+            onReOptimize={onReOptimize}
+            onResetToManual={onResetToManual}
           />
         ))}
       </div>
@@ -49,6 +55,8 @@ export const ModelSelection: React.FC<ModelSelectionProps> = ({
             model={model}
             onToggle={onToggleModel}
             onParameterUpdate={onUpdateParameter}
+            onReOptimize={onReOptimize}
+            onResetToManual={onResetToManual}
           />
         ))}
       </div>

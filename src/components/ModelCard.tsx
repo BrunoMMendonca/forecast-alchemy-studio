@@ -2,20 +2,23 @@
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { ModelConfig } from '@/types/forecast';
+import { ParameterControl } from './ParameterControl';
 
 interface ModelCardProps {
   model: ModelConfig;
   onToggle: (modelId: string) => void;
   onParameterUpdate: (modelId: string, parameter: string, value: number) => void;
+  onReOptimize?: (modelId: string) => void;
+  onResetToManual?: (modelId: string) => void;
 }
 
 export const ModelCard: React.FC<ModelCardProps> = ({
   model,
   onToggle,
-  onParameterUpdate
+  onParameterUpdate,
+  onReOptimize,
+  onResetToManual
 }) => {
   const ringColor = model.isSeasonal ? 'ring-green-200' : 'ring-blue-200';
 
@@ -48,30 +51,14 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         </div>
       </CardHeader>
       
-      {model.enabled && model.parameters && Object.keys(model.parameters).length > 0 && (
+      {model.enabled && (
         <CardContent className="pt-0">
-          <div className="space-y-3 pl-8">
-            {Object.entries(model.optimizedParameters || model.parameters).map(([param, value]) => (
-              <div key={param} className="flex items-center space-x-3">
-                <Label className="w-20 text-sm capitalize">{param}:</Label>
-                <Input
-                  type="number"
-                  value={value}
-                  onChange={(e) => onParameterUpdate(model.id, param, parseFloat(e.target.value) || 0)}
-                  className="w-24 h-8"
-                  step={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
-                  min={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
-                  max={param === 'alpha' || param === 'beta' || param === 'gamma' ? 1 : 30}
-                  disabled={!!model.optimizedParameters}
-                />
-                <span className="text-xs text-slate-500">
-                  {param === 'window' && 'periods'}
-                  {(param === 'alpha' || param === 'beta' || param === 'gamma') && '(0.1-1.0)'}
-                  {model.optimizedParameters && <span className="text-purple-600 ml-1">(AI optimized)</span>}
-                </span>
-              </div>
-            ))}
-          </div>
+          <ParameterControl
+            model={model}
+            onParameterUpdate={(param, value) => onParameterUpdate(model.id, param, value)}
+            onReOptimize={() => onReOptimize?.(model.id)}
+            onResetToManual={() => onResetToManual?.(model.id)}
+          />
         </CardContent>
       )}
     </Card>

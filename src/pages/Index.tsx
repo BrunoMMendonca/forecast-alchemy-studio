@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -64,8 +63,13 @@ const Index = () => {
     setCleanedData(cleaned);
   };
 
-  const handleForecastGeneration = (results: ForecastResult[]) => {
+  const handleForecastGeneration = (results: ForecastResult[], selectedSKU?: string) => {
     setForecastResults(results);
+    // If a specific SKU was selected, we can use it for auto-selection in results
+    if (selectedSKU) {
+      // Store selected SKU for results panel if needed
+      console.log('Generated forecasts for SKU:', selectedSKU);
+    }
     // Auto-proceed to finalization step
     setTimeout(() => setCurrentStep(4), 1000);
   };

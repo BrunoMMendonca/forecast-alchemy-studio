@@ -1,0 +1,85 @@
+
+import React from 'react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { RefreshCw, Undo } from 'lucide-react';
+import { ModelConfig } from '@/types/forecast';
+
+interface ParameterControlProps {
+  model: ModelConfig;
+  onParameterUpdate: (parameter: string, value: number) => void;
+  onReOptimize?: () => void;
+  onResetToManual?: () => void;
+}
+
+export const ParameterControl: React.FC<ParameterControlProps> = ({
+  model,
+  onParameterUpdate,
+  onReOptimize,
+  onResetToManual
+}) => {
+  if (!model.parameters || Object.keys(model.parameters).length === 0) {
+    return null;
+  }
+
+  const hasOptimizedParams = !!model.optimizedParameters;
+  const displayParams = model.optimizedParameters || model.parameters;
+
+  return (
+    <div className="space-y-3 pl-8">
+      <div className="flex items-center gap-2 mb-3">
+        {hasOptimizedParams && (
+          <>
+            <Badge variant="secondary" className="text-purple-700 bg-purple-100">
+              AI Optimized
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onReOptimize}
+              className="h-6 text-xs"
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              Re-optimize
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onResetToManual}
+              className="h-6 text-xs"
+            >
+              <Undo className="h-3 w-3 mr-1" />
+              Manual
+            </Button>
+          </>
+        )}
+      </div>
+
+      {Object.entries(displayParams).map(([param, value]) => (
+        <div key={param} className="flex items-center space-x-3">
+          <Label className="w-20 text-sm capitalize">{param}:</Label>
+          <Input
+            type="number"
+            value={value}
+            onChange={(e) => onParameterUpdate(param, parseFloat(e.target.value) || 0)}
+            className="w-24 h-8"
+            step={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
+            min={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
+            max={param === 'alpha' || param === 'beta' || param === 'gamma' ? 1 : 30}
+          />
+          <span className="text-xs text-slate-500">
+            {param === 'window' && 'periods'}
+            {(param === 'alpha' || param === 'beta' || param === 'gamma') && '(0.1-1.0)'}
+          </span>
+          {hasOptimizedParams && model.parameters && (
+            <span className="text-xs text-slate-400">
+              (was: {model.parameters[param]})
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
