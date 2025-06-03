@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { SalesData } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
@@ -211,6 +210,7 @@ export const useNavigationAwareOptimization = () => {
     markDataModified,
     getTriggerCount,
     incrementTriggerCount,
-    navigationState
+    navigationState,
+    generateStableFingerprint
   };
 };
