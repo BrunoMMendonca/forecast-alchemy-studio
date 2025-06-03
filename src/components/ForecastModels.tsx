@@ -68,7 +68,8 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     markDataModified,
     getTriggerCount,
     incrementTriggerCount,
-    navigationState
+    navigationState,
+    generateStableFingerprint
   } = useNavigationAwareOptimization();
 
   // Load manual/AI preferences from localStorage
@@ -99,40 +100,16 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // Generate a stable hash for the current dataset to detect real changes
-  const generateDatasetHash = React.useCallback((data: SalesData[]): string => {
-    if (!data || data.length === 0) return 'empty';
-    
-    const sortedData = [...data].sort((a, b) => {
-      const skuCompare = a.sku.localeCompare(b.sku);
-      if (skuCompare !== 0) return skuCompare;
-      return a.date.localeCompare(b.date);
-    });
-    
-    const dataContent = sortedData.map(d => {
-      const roundedSales = Math.round(d.sales * 100) / 100;
-      return `${d.sku}|${d.date}|${roundedSales}|${d.isOutlier ? '1' : '0'}|${d.note || ''}`;
-    }).join('||');
-    
-    let hash = 0;
-    for (let i = 0; i < dataContent.length; i++) {
-      const char = dataContent.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    
-    return Math.abs(hash).toString(36).substring(0, 16);
-  }, []);
-
-  // STABLE: Main optimization effect with stable data hash dependency
+  // FIXED: Main optimization effect with stable data dependency
   React.useEffect(() => {
     if (data.length === 0) return;
 
-    const currentDataHash = generateDatasetHash(data);
+    // Generate hash INSIDE the effect to avoid constant recalculation
+    const currentDataHash = generateStableFingerprint(data);
     
     // Only proceed if data actually changed
     if (lastDataHashRef.current === currentDataHash) {
-      console.log('STABLE: ❌ Same data hash - no optimization needed');
+      console.log('FIXED: ❌ Same data hash - no optimization needed');
       return;
     }
     
@@ -141,7 +118,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     incrementTriggerCount();
     const triggerCount = getTriggerCount();
     
-    console.log(`STABLE: Data changed - trigger #${triggerCount}, hash: ${currentDataHash}`);
+    console.log(`FIXED: Data changed - trigger #${triggerCount}, hash: ${currentDataHash}`);
     
     // Mark data as modified for navigation state
     markDataModified(data);
@@ -150,7 +127,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     const shouldRunOptimization = shouldOptimize(data, '/');
     
     if (!shouldRunOptimization) {
-      console.log('STABLE: ❌ OPTIMIZATION BLOCKED BY NAVIGATION STATE - Loading cached parameters');
+      console.log('FIXED: ❌ OPTIMIZATION BLOCKED BY NAVIGATION STATE - Loading cached parameters');
       
       toast({
         title: "Using Cached Results",
@@ -162,9 +139,9 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       return;
     }
 
-    console.log('STABLE: ✅ NAVIGATION STATE APPROVED OPTIMIZATION - Starting process');
+    console.log('FIXED: ✅ NAVIGATION STATE APPROVED OPTIMIZATION - Starting process');
     handleInitialOptimization();
-  }, [generateDatasetHash(data)]); // STABLE: Only depends on the hash of the data
+  }, [data]); // FIXED: Only depends on data, hash generated inside effect
 
   // Load cached parameters and generate forecasts when SKU changes
   React.useEffect(() => {
@@ -207,7 +184,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   const handleInitialOptimization = async () => {
     const enabledModels = models.filter(m => m.enabled);
     
-    console.log('STABLE: 🚀 STARTING OPTIMIZATION PROCESS');
+    console.log('FIXED: 🚀 STARTING OPTIMIZATION PROCESS');
     
     // Mark optimization as started
     markOptimizationStarted(data, '/');
@@ -239,7 +216,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     // Mark optimization as completed - this should prevent any future runs
     markOptimizationCompleted(data, '/');
 
-    console.log('STABLE: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE');
+    console.log('FIXED: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE');
 
     // Generate forecasts after optimization
     if (selectedSKU) {
