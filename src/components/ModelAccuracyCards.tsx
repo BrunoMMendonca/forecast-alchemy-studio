@@ -49,20 +49,20 @@ export const ModelAccuracyCards: React.FC<ModelAccuracyCardsProps> = ({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
                   <span className="text-sm text-slate-600">Accuracy:</span>
-                  <Badge variant={result.accuracy && result.accuracy > 80 ? "default" : "secondary"}>
+                  <Badge variant={result.accuracy && result.accuracy > 80 ? "default" : "secondary"} className="justify-self-end">
                     {result.accuracy ? `${result.accuracy.toFixed(1)}%` : 'N/A'}
                   </Badge>
                 </div>
-                <div className="flex justify-between items-center">
+                <div className="grid grid-cols-2 gap-2">
                   <span className="text-sm text-slate-600">Predictions:</span>
-                  <span className="text-sm font-medium">{result.predictions.length}</span>
+                  <span className="text-sm font-medium justify-self-end">{result.predictions.length}</span>
                 </div>
-                <div className="flex justify-between items-center">
+                <div className="grid grid-cols-2 gap-2">
                   <span className="text-sm text-slate-600">Avg. Value:</span>
-                  <span className="text-sm font-medium">
+                  <span className="text-sm font-medium justify-self-end">
                     {Math.round(result.predictions.reduce((sum, p) => sum + p.value, 0) / result.predictions.length).toLocaleString()}
                   </span>
                 </div>
