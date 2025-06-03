@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -46,8 +47,6 @@ const Index = () => {
   const handleDataCleaning = (cleaned: SalesData[]) => {
     console.log('Updating cleaned data:', cleaned.length, 'records');
     setCleanedData(cleaned);
-    // Don't automatically advance to forecast step when data is cleaned
-    // User can manually proceed when ready
   };
 
   const handleForecastGeneration = (results: ForecastResult[]) => {
@@ -202,7 +201,8 @@ const Index = () => {
               </CardHeader>
               <CardContent>
                 <OutlierDetection 
-                  data={salesData} 
+                  data={salesData}
+                  cleanedData={cleanedData}
                   onDataCleaning={handleDataCleaning}
                 />
               </CardContent>

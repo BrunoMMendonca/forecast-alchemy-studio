@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 
 interface OutlierDetectionProps {
   data: SalesData[];
+  cleanedData: SalesData[];
   onDataCleaning: (cleanedData: SalesData[]) => void;
 }
 
@@ -25,18 +26,12 @@ interface OutlierDataPoint extends SalesData {
   note?: string;
 }
 
-export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onDataCleaning }) => {
+export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleanedData, onDataCleaning }) => {
   const [selectedSKU, setSelectedSKU] = useState<string>('');
   const [threshold, setThreshold] = useState([2.5]);
   const [editingOutliers, setEditingOutliers] = useState<{ [key: string]: { value: number; note: string } }>({});
-  const [cleanedData, setCleanedData] = useState<SalesData[]>(data);
   const [hideCleanData, setHideCleanData] = useState(true);
   const { toast } = useToast();
-
-  // Update cleaned data when original data changes
-  React.useEffect(() => {
-    setCleanedData(data);
-  }, [data]);
 
   const skus = useMemo(() => {
     return Array.from(new Set(data.map(d => d.sku))).sort();
@@ -175,7 +170,6 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
       return item;
     });
     
-    setCleanedData(updatedData);
     onDataCleaning(updatedData);
     
     setEditingOutliers(prev => {
@@ -372,19 +366,19 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
               />
               <Line 
                 type="monotone" 
-                dataKey="cleanedSales" 
-                stroke="#3b82f6" 
+                dataKey="originalSales" 
+                stroke="#94a3b8" 
                 strokeWidth={2}
-                name="Cleaned Data"
+                name="Original Sales"
                 dot={{ r: 3 }}
                 connectNulls={false}
               />
               <Line 
                 type="monotone" 
-                dataKey="originalSales" 
-                stroke="#94a3b8" 
+                dataKey="cleanedSales" 
+                stroke="#3b82f6" 
                 strokeWidth={2}
-                name="Original Data"
+                name="Cleaned Sales"
                 dot={{ r: 3 }}
                 connectNulls={false}
               />
