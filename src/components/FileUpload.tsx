@@ -1,17 +1,24 @@
-
 import React, { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Upload, FileText, CheckCircle } from 'lucide-react';
+import { Upload, FileText, CheckCircle, RefreshCw } from 'lucide-react';
 import { SalesData } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 
 interface FileUploadProps {
   onDataUpload: (data: SalesData[]) => void;
+  hasExistingData?: boolean;
+  dataCount?: number;
+  skuCount?: number;
 }
 
-export const FileUpload: React.FC<FileUploadProps> = ({ onDataUpload }) => {
+export const FileUpload: React.FC<FileUploadProps> = ({ 
+  onDataUpload, 
+  hasExistingData = false,
+  dataCount = 0,
+  skuCount = 0
+}) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -116,6 +123,21 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onDataUpload }) => {
 
   return (
     <div className="space-y-6">
+      {/* Existing Data Indicator */}
+      {hasExistingData && !uploadedFile && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <CheckCircle className="h-5 w-5 text-green-600" />
+            <div>
+              <h4 className="font-semibold text-green-800">Data Already Loaded</h4>
+              <p className="text-green-700 text-sm">
+                {dataCount.toLocaleString()} records from {skuCount} SKUs currently loaded
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Drag and Drop Area */}
       <div
         className={`
@@ -124,7 +146,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onDataUpload }) => {
             ? 'border-blue-500 bg-blue-50' 
             : uploadedFile 
               ? 'border-green-500 bg-green-50' 
-              : 'border-slate-300 bg-slate-50 hover:border-slate-400'
+              : hasExistingData
+                ? 'border-orange-300 bg-orange-50 hover:border-orange-400'
+                : 'border-slate-300 bg-slate-50 hover:border-slate-400'
           }
         `}
         onDrop={handleDrop}
@@ -141,13 +165,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onDataUpload }) => {
           </div>
         ) : (
           <div className="space-y-4">
-            <Upload className={`h-12 w-12 mx-auto transition-colors ${isDragging ? 'text-blue-600' : 'text-slate-400'}`} />
+            {hasExistingData ? (
+              <RefreshCw className={`h-12 w-12 mx-auto transition-colors ${isDragging ? 'text-blue-600' : 'text-orange-500'}`} />
+            ) : (
+              <Upload className={`h-12 w-12 mx-auto transition-colors ${isDragging ? 'text-blue-600' : 'text-slate-400'}`} />
+            )}
             <div>
               <h3 className="text-lg font-semibold text-slate-700">
-                Drop your CSV file here
+                {hasExistingData ? 'Upload New CSV File' : 'Drop your CSV file here'}
               </h3>
               <p className="text-slate-500">
-                or click to browse files
+                {hasExistingData ? 'Replace current data or click to browse files' : 'or click to browse files'}
               </p>
             </div>
           </div>
@@ -156,7 +184,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onDataUpload }) => {
 
       {/* File Input */}
       <div className="space-y-2">
-        <Label htmlFor="file-upload">Upload CSV File</Label>
+        <Label htmlFor="file-upload">
+          {hasExistingData ? 'Upload New CSV File' : 'Upload CSV File'}
+        </Label>
         <Input
           id="file-upload"
           type="file"

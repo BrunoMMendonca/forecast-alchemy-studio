@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -132,7 +131,12 @@ const Index = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <FileUpload onDataUpload={handleDataUpload} />
+                <FileUpload 
+                  onDataUpload={handleDataUpload}
+                  hasExistingData={salesData.length > 0}
+                  dataCount={salesData.length}
+                  skuCount={new Set(salesData.map(d => d.sku)).size}
+                />
               </CardContent>
             </Card>
           )}
