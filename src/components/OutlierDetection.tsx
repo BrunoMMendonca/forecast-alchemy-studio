@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -61,7 +62,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
         zScore: 0,
         index,
         key: `${selectedSKU}_${item.date}_${index}`,
-        originalSales: originalItem?.sales !== undefined ? originalItem.sales : item.sales,
+        originalSales: originalItem?.sales ?? item.sales,
         note: item.note
       };
     });
@@ -83,7 +84,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
         zScore,
         index,
         key,
-        originalSales: originalItem?.sales !== undefined ? originalItem.sales : item.sales,
+        originalSales: originalItem?.sales ?? item.sales,
         note: item.note
       };
     });
@@ -115,7 +116,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
       return {
         date: originalItem.date,
         originalSales: originalItem.sales,
-        cleanedSales: cleanedItem?.sales !== undefined ? cleanedItem.sales : originalItem.sales
+        cleanedSales: cleanedItem?.sales ?? originalItem.sales
       };
     });
   }, [data, cleanedData, selectedSKU]);
@@ -340,7 +341,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
               />
               <Tooltip 
                 formatter={(value: number, name: string) => [
-                  value?.toLocaleString() || 'N/A', 
+                  value?.toLocaleString() || '0', 
                   name === 'originalSales' ? 'Original Sales' : 'Cleaned Sales'
                 ]}
                 labelFormatter={(label) => {
@@ -364,7 +365,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                 stroke="#94a3b8" 
                 strokeWidth={2}
                 name="Original Data"
-                dot={false}
+                dot={{ r: 3 }}
                 connectNulls={false}
               />
               <Line 
@@ -373,7 +374,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                 stroke="#3b82f6" 
                 strokeWidth={2}
                 name="Cleaned Data"
-                dot={false}
+                dot={{ r: 3 }}
                 connectNulls={false}
               />
             </LineChart>
