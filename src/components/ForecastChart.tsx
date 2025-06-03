@@ -26,10 +26,12 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
   selectedSKU,
   selectedSKUResults
 }) => {
-  // Find the best model for highlighting
-  const bestModel = selectedSKUResults.reduce((best, current) => 
-    (current.accuracy || 0) > (best.accuracy || 0) ? current : best
-  );
+  // Find the best model for highlighting, but handle empty arrays
+  const bestModel = selectedSKUResults.length > 0 
+    ? selectedSKUResults.reduce((best, current) => 
+        (current.accuracy || 0) > (best.accuracy || 0) ? current : best
+      )
+    : null;
 
   return (
     <Card className="bg-white">
@@ -50,7 +52,7 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
               <XAxis 
                 dataKey="date" 
                 stroke="#64748b"
-                fontSize={12}
+                fontSize={10}
                 tickFormatter={(value) => {
                   try {
                     return new Date(value).toLocaleDateString('en-US', { 
@@ -64,7 +66,7 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
               />
               <YAxis 
                 stroke="#64748b"
-                fontSize={12}
+                fontSize={10}
                 tickFormatter={(value) => value.toLocaleString()}
               />
               <Tooltip 
@@ -87,12 +89,12 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
                 }}
               />
               <Legend 
-                wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
-                iconSize={12}
+                wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }}
+                iconSize={10}
               />
               
               {selectedSKUResults.map((result) => {
-                const isBestModel = result.model === bestModel.model;
+                const isBestModel = bestModel && result.model === bestModel.model;
                 
                 return (
                   <Line
