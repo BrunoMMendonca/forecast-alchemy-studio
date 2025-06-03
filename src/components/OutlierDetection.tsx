@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +6,7 @@ import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { AlertTriangle, Zap, Edit3, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SalesData } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -358,7 +357,6 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}
               />
-              <Legend />
               <Line 
                 type="monotone" 
                 dataKey="originalSales" 
