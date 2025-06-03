@@ -4,7 +4,6 @@ import { TrendingUp } from 'lucide-react';
 import { ForecastResult } from '@/pages/Index';
 import { ModelAccuracyCards } from './ModelAccuracyCards';
 import { ForecastChart } from './ForecastChart';
-import { ForecastSummaryStats } from './ForecastSummaryStats';
 
 interface ForecastResultsProps {
   results: ForecastResult[];
@@ -56,11 +55,6 @@ export const ForecastResults: React.FC<ForecastResultsProps> = ({ results, selec
         chartData={chartData}
         selectedSKU={selectedSKU}
         selectedSKUResults={selectedSKUResults}
-      />
-
-      <ForecastSummaryStats 
-        results={results} 
-        skus={selectedSKU ? [selectedSKU] : []} 
       />
     </div>
   );
