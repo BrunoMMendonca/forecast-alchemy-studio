@@ -13,6 +13,8 @@ interface BatchOptimizationProgress {
   completedSKUs: number;
   totalSKUs: number;
   currentModel: string;
+  skipped: number;
+  optimized: number;
 }
 
 export const useBatchOptimization = () => {
@@ -30,10 +32,12 @@ export const useBatchOptimization = () => {
     }
 
     if (!GROK_API_KEY || GROK_API_KEY.includes('XXXXXXXX') || GROK_API_KEY.startsWith('your-grok-api-key')) {
+      console.log(`Skipping optimization for ${sku}:${model.id} - no valid API key`);
       return model.parameters;
     }
 
     try {
+      console.log(`Starting API optimization for ${sku}:${model.id}`);
       const frequency = detectDateFrequency(skuData.map(d => d.date));
       
       const result = await optimizeParametersWithGrok({
@@ -44,6 +48,7 @@ export const useBatchOptimization = () => {
         targetMetric: 'mape'
       }, GROK_API_KEY);
 
+      console.log(`API optimization completed for ${sku}:${model.id}`);
       return result.optimizedParameters;
     } catch (error) {
       console.error(`Failed to optimize ${model.name} for ${sku}:`, error);
@@ -54,44 +59,62 @@ export const useBatchOptimization = () => {
   const optimizeAllSKUs = async (
     data: SalesData[],
     models: ModelConfig[],
-    onParametersOptimized: (sku: string, modelId: string, parameters: Record<string, number>, confidence?: number) => void
+    onParametersOptimized: (sku: string, modelId: string, parameters: Record<string, number>, confidence?: number) => void,
+    getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[]
   ) => {
-    const skus = Array.from(new Set(data.map(d => d.sku))).sort();
-    const enabledModels = models.filter(m => m.enabled && m.parameters && Object.keys(m.parameters).length > 0);
+    const skusToOptimize = getSKUsNeedingOptimization(data, models);
     
-    if (skus.length === 0 || enabledModels.length === 0) return;
+    if (skusToOptimize.length === 0) {
+      console.log('No SKUs need optimization - all parameters are cached');
+      toast({
+        title: "Optimization Skipped",
+        description: "All parameters are already optimized and cached",
+      });
+      return;
+    }
+
+    const totalSKUs = skusToOptimize.length;
+    let optimizedCount = 0;
+    let skippedCount = 0;
 
     setIsOptimizing(true);
+    console.log(`Starting batch optimization for ${totalSKUs} SKUs`);
 
     try {
-      for (let i = 0; i < skus.length; i++) {
-        const sku = skus[i];
+      for (let i = 0; i < skusToOptimize.length; i++) {
+        const { sku, models: modelsToOptimize } = skusToOptimize[i];
         const skuData = data
           .filter(d => d.sku === sku)
           .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-        if (skuData.length < 3) continue;
-
         setProgress({
           currentSKU: sku,
           completedSKUs: i,
-          totalSKUs: skus.length,
-          currentModel: ''
+          totalSKUs,
+          currentModel: '',
+          skipped: skippedCount,
+          optimized: optimizedCount
         });
 
-        for (const model of enabledModels) {
+        for (const modelId of modelsToOptimize) {
+          const model = models.find(m => m.id === modelId);
+          if (!model) continue;
+
           setProgress(prev => prev ? { ...prev, currentModel: model.name } : null);
 
           const optimizedParams = await optimizeSingleModel(model, skuData, sku);
           if (optimizedParams) {
             onParametersOptimized(sku, model.id, optimizedParams, 85);
+            optimizedCount++;
+          } else {
+            skippedCount++;
           }
         }
       }
 
       toast({
         title: "Optimization Complete",
-        description: `Optimized parameters for ${skus.length} products across ${enabledModels.length} models`,
+        description: `Optimized ${optimizedCount} parameters across ${totalSKUs} products (${skippedCount} skipped from cache)`,
       });
 
     } catch (error) {

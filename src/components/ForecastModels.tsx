@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 import { detectDateFrequency, generateForecastDates } from '@/utils/dateUtils';
@@ -33,13 +33,16 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 }) => {
   const [models, setModels] = useState<ModelConfig[]>(getDefaultModels());
   const { toast } = useToast();
+  const optimizationStarted = useRef(false);
   
   const {
     cache,
+    cacheStats,
     generateDataHash,
     getCachedParameters,
     setCachedParameters,
-    isCacheValid
+    isCacheValid,
+    getSKUsNeedingOptimization
   } = useOptimizationCache();
   
   const { isOptimizing, progress, optimizeAllSKUs } = useBatchOptimization();
@@ -52,20 +55,22 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // Auto-start AI optimization when component loads or data changes
+  // Start AI optimization once when component loads with data
   React.useEffect(() => {
-    if (data.length > 0 && selectedSKU) {
+    if (data.length > 0 && !optimizationStarted.current) {
+      optimizationStarted.current = true;
       handleInitialOptimization();
     }
-  }, [data, selectedSKU]);
+  }, [data]);
 
-  // Load cached parameters when SKU changes
+  // Load cached parameters and generate forecasts when SKU changes
   React.useEffect(() => {
     if (!selectedSKU) return;
 
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
 
+    // Load cached parameters immediately
     setModels(prev => prev.map(model => {
       const cached = getCachedParameters(selectedSKU, model.id);
       
@@ -84,33 +89,43 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       }
     }));
 
-    // Generate forecasts for the selected SKU
-    generateForecastsForSelectedSKU();
+    // Generate forecasts immediately with available data
+    setTimeout(() => generateForecastsForSelectedSKU(), 100);
   }, [selectedSKU, data, getCachedParameters, isCacheValid, generateDataHash]);
 
   const handleInitialOptimization = async () => {
     const enabledModels = models.filter(m => m.enabled);
     
-    await optimizeAllSKUs(data, enabledModels, (sku, modelId, parameters, confidence) => {
-      const skuData = data.filter(d => d.sku === sku);
-      const dataHash = generateDataHash(skuData);
-      setCachedParameters(sku, modelId, parameters, dataHash, confidence);
-      
-      if (sku === selectedSKU) {
-        setModels(prev => prev.map(model => 
-          model.id === modelId 
-            ? { 
-                ...model, 
-                optimizedParameters: parameters,
-                optimizationConfidence: confidence
-              }
-            : model
-        ));
-      }
-    });
+    console.log(`Starting optimization check. Cache stats: ${cacheStats.hits} hits, ${cacheStats.misses} misses`);
+    
+    await optimizeAllSKUs(
+      data, 
+      enabledModels, 
+      (sku, modelId, parameters, confidence) => {
+        const skuData = data.filter(d => d.sku === sku);
+        const dataHash = generateDataHash(skuData);
+        setCachedParameters(sku, modelId, parameters, dataHash, confidence);
+        
+        // Update models state if this is for the currently selected SKU
+        if (sku === selectedSKU) {
+          setModels(prev => prev.map(model => 
+            model.id === modelId 
+              ? { 
+                  ...model, 
+                  optimizedParameters: parameters,
+                  optimizationConfidence: confidence
+                }
+              : model
+          ));
+        }
+      },
+      getSKUsNeedingOptimization
+    );
 
     // Generate forecasts after optimization
-    generateForecastsForSelectedSKU();
+    if (selectedSKU) {
+      setTimeout(() => generateForecastsForSelectedSKU(), 100);
+    }
   };
 
   const generateForecastsForSelectedSKU = async () => {
@@ -200,6 +215,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       }
 
       onForecastGeneration(results, selectedSKU);
+      console.log(`Generated forecasts for SKU: ${selectedSKU}`);
 
     } catch (error) {
       toast({
@@ -296,6 +312,16 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           <p className="text-sm text-blue-600">
             Processing {progress.currentSKU} ({progress.completedSKUs + 1}/{progress.totalSKUs})
           </p>
+          <p className="text-xs text-blue-500">
+            Optimized: {progress.optimized} | From Cache: {progress.skipped}
+          </p>
+        </div>
+      )}
+
+      {cacheStats.hits + cacheStats.misses > 0 && (
+        <div className="text-xs text-slate-500 bg-slate-50 rounded p-2">
+          Cache: {cacheStats.hits} hits, {cacheStats.misses} misses 
+          ({Math.round((cacheStats.hits / (cacheStats.hits + cacheStats.misses)) * 100)}% hit rate)
         </div>
       )}
     </div>
