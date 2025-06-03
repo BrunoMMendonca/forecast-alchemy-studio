@@ -184,7 +184,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 
     console.log(`PREFERENCE: Applying preferences for ${selectedSKU}:`, preferences);
 
-    // Load cached parameters immediately with preferences applied
+    // FIXED: Always apply preferences to models, regardless of cached parameters
     setModels(prev => prev.map(model => {
       const cached = getCachedParameters(selectedSKU, model.id);
       const preferenceKey = `${selectedSKU}:${model.id}`;
@@ -192,13 +192,23 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       
       console.log(`PREFERENCE: ${preferenceKey} - isUsingAI: ${isUsingAI}, cached: ${!!cached}`);
       
-      if (cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
+      // Apply preferences regardless of cache validity
+      if (isUsingAI && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
+        // Using AI and have valid cached parameters
         return {
           ...model,
-          optimizedParameters: isUsingAI ? cached.parameters : undefined,
-          optimizationConfidence: isUsingAI ? cached.confidence : undefined
+          optimizedParameters: cached.parameters,
+          optimizationConfidence: cached.confidence
+        };
+      } else if (isUsingAI && cached) {
+        // Using AI but cache is invalid - show we have AI parameters but they're stale
+        return {
+          ...model,
+          optimizedParameters: cached.parameters,
+          optimizationConfidence: cached.confidence
         };
       } else {
+        // Using manual or no cached parameters
         return {
           ...model,
           optimizedParameters: undefined,
