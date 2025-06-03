@@ -1,13 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { SalesData } from '@/types/sales';
-import { ForecastResult } from '@/pages/Index';
+import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useForecastCache } from '@/hooks/useForecastCache';
 import { useBatchOptimization } from '@/hooks/useBatchOptimization';
 import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimization';
 import { useModelManagement } from '@/hooks/useModelManagement';
-import { generateForecasts } from '@/utils/forecastGenerator';
+import { generateForecastsForSKU } from '@/utils/forecastGenerator';
 import { ModelSelection } from './ModelSelection';
 import { ProductSelector } from './ProductSelector';
 import { OptimizationLogger } from './OptimizationLogger';
@@ -207,11 +206,14 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       console.log(`🎯 Generating forecasts for ${selectedSKU} with current models:`, 
         currentModels.map(m => ({ id: m.id, enabled: m.enabled })));
       
-      const results = await generateForecasts(
+      const results = await generateForecastsForSKU(
+        selectedSKU,
         data,
-        currentModels,
+        currentModels, // Use current models state
         forecastPeriods,
-        selectedSKU
+        getCachedForecast,
+        setCachedForecast,
+        generateParametersHash
       );
 
       console.log(`✅ Generated ${results.length} forecasts for ${selectedSKU}, passing to parent`);

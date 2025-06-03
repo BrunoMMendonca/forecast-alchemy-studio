@@ -1,7 +1,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { ModelConfig } from '@/types/forecast';
-import { SalesData } from '@/types/sales';
+import { SalesData } from '@/pages/Index';
 import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
