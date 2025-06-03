@@ -27,6 +27,7 @@ interface BatchOptimizationProgress {
 export const useBatchOptimization = () => {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [progress, setProgress] = useState<BatchOptimizationProgress | null>(null);
+  const [optimizationCompleted, setOptimizationCompleted] = useState(false);
   const { toast } = useToast();
 
   const optimizeSingleModel = async (
@@ -245,6 +246,7 @@ export const useBatchOptimization = () => {
     let aiAcceptedByConfidenceCount = 0;
 
     setIsOptimizing(true);
+    setOptimizationCompleted(false);
     
     // Start logging session
     optimizationLogger.startSession(totalSKUs);
@@ -308,6 +310,23 @@ export const useBatchOptimization = () => {
         description: successMessage,
       });
 
+      // Update final progress state
+      setProgress({
+        currentSKU: '',
+        completedSKUs: totalSKUs,
+        totalSKUs,
+        currentModel: '',
+        skipped: skippedCount,
+        optimized: optimizedCount,
+        aiOptimized: aiOptimizedCount,
+        gridOptimized: gridOptimizedCount,
+        aiRejected: aiRejectedCount,
+        aiAcceptedByTolerance: aiAcceptedByToleranceCount,
+        aiAcceptedByConfidence: aiAcceptedByConfidenceCount
+      });
+
+      setOptimizationCompleted(true);
+
     } catch (error) {
       toast({
         title: "Optimization Error",
@@ -322,10 +341,17 @@ export const useBatchOptimization = () => {
     }
   };
 
+  const clearProgress = () => {
+    setProgress(null);
+    setOptimizationCompleted(false);
+  };
+
   return {
     isOptimizing,
     progress,
+    optimizationCompleted,
     optimizeAllSKUs,
-    optimizeSingleModel
+    optimizeSingleModel,
+    clearProgress
   };
 };

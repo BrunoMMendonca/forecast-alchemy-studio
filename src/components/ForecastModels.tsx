@@ -46,7 +46,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   const isTogglingAIManualRef = useRef<boolean>(false);
   const lastSKURef = useRef<string>('');
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
-  const [optimizationCompleted, setOptimizationCompleted] = useState(false);
   
   const {
     cache,
@@ -64,7 +63,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     generateParametersHash
   } = useForecastCache();
   
-  const { isOptimizing, progress, optimizeAllSKUs } = useBatchOptimization();
+  const { isOptimizing, progress, optimizationCompleted, optimizeAllSKUs, clearProgress } = useBatchOptimization();
 
   const {
     shouldOptimize,
@@ -507,7 +506,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         onSKUChange={onSKUChange}
       />
 
-      {(isOptimizing || (progress && optimizationCompleted)) && progress && (
+      {(isOptimizing || (progress && (optimizationCompleted || isOptimizing))) && progress && (
         <div className={`border rounded-lg p-4 ${optimizationCompleted ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -522,16 +521,26 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
                 {isOptimizing ? 'Enhanced AI Optimization in Progress...' : 'Enhanced Optimization Complete!'}
               </span>
             </div>
-            <button
-              onClick={() => setShowOptimizationLog(!showOptimizationLog)}
-              className={`text-xs px-2 py-1 rounded ${
-                optimizationCompleted 
-                  ? 'bg-green-100 hover:bg-green-200 text-green-700'
-                  : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
-              }`}
-            >
-              {showOptimizationLog ? 'Hide' : 'Show'} Log
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowOptimizationLog(!showOptimizationLog)}
+                className={`text-xs px-2 py-1 rounded ${
+                  optimizationCompleted 
+                    ? 'bg-green-100 hover:bg-green-200 text-green-700'
+                    : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
+                }`}
+              >
+                {showOptimizationLog ? 'Hide' : 'Show'} Log
+              </button>
+              {optimizationCompleted && (
+                <button
+                  onClick={clearProgress}
+                  className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
+                >
+                  Dismiss
+                </button>
+              )}
+            </div>
           </div>
           
           {isOptimizing ? (
