@@ -36,11 +36,22 @@ Current parameters: ${JSON.stringify(request.currentParameters)}
 Seasonal period: ${request.seasonalPeriod || 'unknown'}
 Target metric: ${request.targetMetric}
 
+Model-specific parameter constraints:
+- simple_exponential_smoothing: alpha (0.1-1.0) only - for stable data without trend
+- double_exponential_smoothing: alpha (0.1-1.0), beta (0.1-1.0) - for data with trend but no seasonality  
+- holt_winters: alpha (0.1-1.0), beta (0.1-1.0), gamma (0.1-1.0) - for data with trend and seasonality
+- moving_average: window (1-30) only
+- linear_trend: no parameters
+- seasonal_moving_average: window (1-30) only
+- seasonal_naive: no parameters
+
 Please recommend optimal parameter values that would minimize ${request.targetMetric.toUpperCase()}. Consider:
 1. Data volatility and trends
 2. Seasonal patterns if present
-3. Parameter constraints (alpha, beta, gamma: 0.1-1.0, window: 1-30)
+3. Model-specific parameter constraints listed above
 4. Balance between responsiveness and stability
+
+IMPORTANT: Only return parameters that are valid for the specific model type. Do not suggest parameters that don't exist for the model.
 
 Respond in JSON format:
 {
@@ -61,7 +72,7 @@ Respond in JSON format:
         messages: [
           {
             role: 'system',
-            content: 'You are an expert time series forecasting analyst. Provide precise, data-driven parameter optimization recommendations.'
+            content: 'You are an expert time series forecasting analyst. Provide precise, data-driven parameter optimization recommendations that strictly match the available parameters for each model type.'
           },
           {
             role: 'user',
@@ -107,11 +118,12 @@ Data length: ${historicalData.length} points
 
 Available models:
 1. Simple Moving Average - Good for stable data with minimal trend
-2. Exponential Smoothing - Good for data with trend but no seasonality
-3. Linear Trend - Good for data with consistent linear growth/decline
-4. Seasonal Moving Average - Good for data with seasonal patterns
-5. Holt-Winters - Best for data with trend AND seasonality
-6. Seasonal Naive - Simple baseline for seasonal data
+2. Simple Exponential Smoothing - Good for stable data without trend (alpha parameter)
+3. Double Exponential Smoothing (Holt) - Good for data with trend but no seasonality (alpha, beta parameters)
+4. Linear Trend - Good for data with consistent linear growth/decline
+5. Seasonal Moving Average - Good for data with seasonal patterns
+6. Holt-Winters (Triple Exponential) - Best for data with trend AND seasonality (alpha, beta, gamma parameters)
+7. Seasonal Naive - Simple baseline for seasonal data
 
 Analyze:
 - Trend presence and strength

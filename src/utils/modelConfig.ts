@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Calculator, TrendingUp, Target, Calendar, Activity, BarChart3 } from 'lucide-react';
+import { Calculator, TrendingUp, Target, Calendar, Activity, BarChart3, ArrowRight } from 'lucide-react';
 import { ModelConfig } from '@/types/forecast';
 
 export const getDefaultModels = (): ModelConfig[] => [
@@ -13,12 +13,20 @@ export const getDefaultModels = (): ModelConfig[] => [
     parameters: { window: 3 }
   },
   {
-    id: 'exponential_smoothing',
-    name: 'Exponential Smoothing',
-    description: 'Gives more weight to recent observations while smoothing out fluctuations',
+    id: 'simple_exponential_smoothing',
+    name: 'Simple Exponential Smoothing',
+    description: 'Gives more weight to recent observations for stable data without trend',
     icon: React.createElement(TrendingUp, { className: "h-4 w-4" }),
     enabled: true,
     parameters: { alpha: 0.3 }
+  },
+  {
+    id: 'double_exponential_smoothing',
+    name: 'Double Exponential Smoothing (Holt)',
+    description: 'Handles both level and trend for data with trend but no seasonality',
+    icon: React.createElement(ArrowRight, { className: "h-4 w-4" }),
+    enabled: true,
+    parameters: { alpha: 0.3, beta: 0.1 }
   },
   {
     id: 'linear_trend',

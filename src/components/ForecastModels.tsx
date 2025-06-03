@@ -161,8 +161,20 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           case 'moving_average':
             predictions = generateMovingAverage(skuData, effectiveParameters?.window || 3, forecastPeriods);
             break;
+          case 'simple_exponential_smoothing':
+            predictions = generateSimpleExponentialSmoothing(skuData, effectiveParameters?.alpha || 0.3, forecastPeriods);
+            break;
+          case 'double_exponential_smoothing':
+            predictions = generateDoubleExponentialSmoothing(
+              skuData, 
+              effectiveParameters?.alpha || 0.3, 
+              effectiveParameters?.beta || 0.1, 
+              forecastPeriods
+            );
+            break;
           case 'exponential_smoothing':
-            predictions = generateExponentialSmoothing(skuData, effectiveParameters?.alpha || 0.3, forecastPeriods);
+            // Backward compatibility - treat as simple exponential smoothing
+            predictions = generateSimpleExponentialSmoothing(skuData, effectiveParameters?.alpha || 0.3, forecastPeriods);
             break;
           case 'linear_trend':
             predictions = generateLinearTrend(skuData, forecastPeriods);
