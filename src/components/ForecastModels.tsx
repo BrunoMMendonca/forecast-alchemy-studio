@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -18,6 +17,7 @@ import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useForecastCache } from '@/hooks/useForecastCache';
 import { useBatchOptimization } from '@/hooks/useBatchOptimization';
+import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimization';
 import { ModelSelection } from './ModelSelection';
 import { ProductSelector } from './ProductSelector';
 import { ModelConfig } from '@/types/forecast';
@@ -39,6 +39,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 }) => {
   const [models, setModels] = useState<ModelConfig[]>(getDefaultModels());
   const { toast } = useToast();
+  const hasRunOptimization = useRef(false);
   
   const {
     cache,
@@ -47,10 +48,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     getCachedParameters,
     setCachedParameters,
     isCacheValid,
-    getSKUsNeedingOptimization,
-    isOptimizationComplete,
-    markOptimizationComplete,
-    getDatasetFingerprintString
+    getSKUsNeedingOptimization
   } = useOptimizationCache();
   
   const {
@@ -61,8 +59,14 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   
   const { isOptimizing, progress, optimizeAllSKUs } = useBatchOptimization();
 
-  // Stable dataset fingerprint for dependency tracking
-  const datasetFingerprint = getDatasetFingerprintString(data);
+  const {
+    shouldOptimize,
+    markOptimizationStarted,
+    markOptimizationCompleted,
+    getTriggerCount,
+    incrementTriggerCount,
+    navigationState
+  } = useNavigationAwareOptimization();
 
   // Auto-select first SKU when data changes
   React.useEffect(() => {
@@ -72,38 +76,48 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // FIXED: Main optimization effect with proper priority
+  // BULLETPROOF: Main optimization effect with navigation awareness
   React.useEffect(() => {
     if (data.length === 0) return;
 
-    const enabledModels = models.filter(m => m.enabled);
+    incrementTriggerCount();
+    const triggerCount = getTriggerCount();
     
-    console.log(`FIXED: Main effect triggered for dataset: ${datasetFingerprint}`);
+    console.log(`BULLETPROOF: Main effect triggered (#${triggerCount})`);
+    console.log('BULLETPROOF: Navigation state:', navigationState);
+    console.log('BULLETPROOF: Has run optimization:', hasRunOptimization.current);
 
-    // PRIORITY 1: Check if optimization is already complete for this dataset
-    if (isOptimizationComplete(data)) {
-      console.log('FIXED: ✅ OPTIMIZATION ALREADY COMPLETE - Loading cached parameters');
+    // ABSOLUTE FIRST PRIORITY: Check if we should optimize at all
+    if (!shouldOptimize(data, '/')) {
+      console.log('BULLETPROOF: ❌ OPTIMIZATION BLOCKED - Using cached parameters');
       
       toast({
-        title: "Cache Hit",
-        description: "Using previously optimized parameters",
+        title: "Using Cached Results",
+        description: "Optimization already completed for this dataset",
       });
       
-      if (selectedSKU) {
-        loadCachedParametersAndForecast();
-      }
+      // Load cached parameters immediately
+      loadCachedParametersAndForecast();
       return;
     }
-    
-    console.log('FIXED: ❌ Optimization needed - starting optimization process');
+
+    // Prevent multiple optimizations in the same session
+    if (hasRunOptimization.current) {
+      console.log('BULLETPROOF: ❌ OPTIMIZATION BLOCKED - Already run in this session');
+      loadCachedParametersAndForecast();
+      return;
+    }
+
+    console.log('BULLETPROOF: ✅ STARTING OPTIMIZATION - All checks passed');
+    hasRunOptimization.current = true;
     handleInitialOptimization();
-  }, [datasetFingerprint]); // STABLE DEPENDENCY: Only dataset fingerprint
+  }, [data.length]); // MINIMAL DEPENDENCY: Only data length
 
   // Load cached parameters and generate forecasts when SKU changes
   React.useEffect(() => {
     if (!selectedSKU) return;
     loadCachedParametersAndForecast();
-  }, [selectedSKU, data, forecastPeriods]);
+  }, [selectedSKU, forecastPeriods]);
 
   const loadCachedParametersAndForecast = () => {
     if (!selectedSKU) return;
@@ -137,7 +151,10 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   const handleInitialOptimization = async () => {
     const enabledModels = models.filter(m => m.enabled);
     
-    console.log(`FIXED: 🚀 STARTING OPTIMIZATION. Cache stats: ${cacheStats.hits} hits, ${cacheStats.misses} misses, ${cacheStats.skipped} dataset skips`);
+    console.log('BULLETPROOF: 🚀 STARTING OPTIMIZATION PROCESS');
+    
+    // Mark optimization as started
+    markOptimizationStarted(data, '/');
     
     await optimizeAllSKUs(
       data, 
@@ -163,8 +180,10 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       getSKUsNeedingOptimization
     );
 
-    // FIXED: Mark optimization as complete for this dataset
-    markOptimizationComplete(data);
+    // Mark optimization as completed
+    markOptimizationCompleted(data, '/');
+
+    console.log('BULLETPROOF: ✅ OPTIMIZATION COMPLETE');
 
     // Generate forecasts after optimization
     if (selectedSKU) {
@@ -381,10 +400,11 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         </div>
       )}
 
-      {cacheStats.hits + cacheStats.misses + cacheStats.skipped > 0 && (
+      {navigationState && (
         <div className="text-xs text-slate-500 bg-slate-50 rounded p-2">
-          Fixed Cache: {cacheStats.hits} param hits, {cacheStats.misses} param misses, {cacheStats.skipped} dataset skips
-          ({Math.round((cacheStats.hits / Math.max(1, cacheStats.hits + cacheStats.misses)) * 100)}% param hit rate)
+          Navigation Optimization: {navigationState.optimizationCompleted ? '✅ Complete' : '⏳ Pending'} 
+          | Trigger Count: {getTriggerCount()} 
+          | Cache: {cacheStats.hits} hits, {cacheStats.misses} misses
         </div>
       )}
     </div>
