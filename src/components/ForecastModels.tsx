@@ -93,38 +93,40 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, []);
 
-  // FIXED: Create models with preferences applied immediately
-  const createModelsWithPreferences = useCallback((sku: string): ModelConfig[] => {
+  // IMMEDIATE FIX: Apply preferences during initial model creation
+  const createModelsWithPreferences = useCallback((): ModelConfig[] => {
+    console.log('🏗️ CREATING MODELS WITH PREFERENCES');
+    
     const defaultModels = getDefaultModels();
     
-    if (!sku || data.length === 0) {
-      console.log('CREATE: No SKU or data, using defaults');
+    if (!selectedSKU || data.length === 0) {
+      console.log('❌ No SKU or data, using defaults');
       return defaultModels;
     }
 
     try {
       const preferences = loadManualAIPreferences();
-      const skuData = data.filter(d => d.sku === sku);
+      const skuData = data.filter(d => d.sku === selectedSKU);
       const currentDataHash = generateDataHash(skuData);
       
-      console.log(`CREATE: Creating models with preferences for ${sku}:`, preferences);
+      console.log(`📋 Creating models for ${selectedSKU} with preferences:`, preferences);
       
       return defaultModels.map(model => {
-        const cached = getCachedParameters(sku, model.id);
-        const preferenceKey = `${sku}:${model.id}`;
+        const cached = getCachedParameters(selectedSKU, model.id);
+        const preferenceKey = `${selectedSKU}:${model.id}`;
         const preference = preferences[preferenceKey];
         
-        console.log(`CREATE: ${preferenceKey} - preference: ${preference}, cached: ${!!cached}`);
+        console.log(`🔍 ${preferenceKey}: preference=${preference}, cached=${!!cached}`);
         
-        if (preference === true && cached && isCacheValid(sku, model.id, currentDataHash)) {
-          console.log(`CREATE: ✅ Applying AI parameters for ${preferenceKey}`);
+        if (preference === true && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
+          console.log(`✅ Applying AI for ${preferenceKey}`);
           return {
             ...model,
             optimizedParameters: cached.parameters,
             optimizationConfidence: cached.confidence
           };
         } else {
-          console.log(`CREATE: ❌ Using manual parameters for ${preferenceKey}`);
+          console.log(`🛠️ Using manual for ${preferenceKey}`);
           return {
             ...model,
             optimizedParameters: undefined,
@@ -133,15 +135,15 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         }
       });
     } catch (error) {
-      console.error('CREATE: Error creating models with preferences:', error);
+      console.error('❌ Error creating models with preferences:', error);
       return defaultModels;
     }
-  }, [data, loadManualAIPreferences, generateDataHash, getCachedParameters, isCacheValid]);
+  }, [selectedSKU, data, loadManualAIPreferences, generateDataHash, getCachedParameters, isCacheValid]);
 
-  // FIXED: Initialize state with a function that gets called on every mount
+  // IMMEDIATE FIX: Initialize models with a reactive function
   const [models, setModels] = useState<ModelConfig[]>(() => {
-    console.log('STATE INIT: Initializing models state');
-    return getDefaultModels(); // Start with defaults, will be updated by effect
+    console.log('🎯 INITIAL STATE CREATION');
+    return getDefaultModels(); // Will be immediately updated by the effect
   });
 
   // Auto-select first SKU when data changes
@@ -500,14 +502,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         onSKUChange={onSKUChange}
       />
 
-      <ModelSelection
-        models={models}
-        onToggleModel={toggleModel}
-        onUpdateParameter={updateParameter}
-        onUseAI={useAIOptimization}
-        onResetToManual={resetToManual}
-      />
-
       {isOptimizing && progress && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -524,6 +518,14 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           </p>
         </div>
       )}
+
+      <ModelSelection
+        models={models}
+        onToggleModel={toggleModel}
+        onUpdateParameter={updateParameter}
+        onUseAI={useAIOptimization}
+        onResetToManual={resetToManual}
+      />
 
       {navigationState && (
         <div className="text-xs text-slate-500 bg-slate-50 rounded p-2">
