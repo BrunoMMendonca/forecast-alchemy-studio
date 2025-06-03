@@ -336,7 +336,7 @@ export const useBatchOptimization = () => {
       console.error('Enhanced batch optimization error:', error);
     } finally {
       setIsOptimizing(false);
-      setProgress(null);
+      // DON'T clear progress here - let it stay visible with final results
       optimizationLogger.endSession();
     }
   };
