@@ -36,6 +36,19 @@ const Index = () => {
     { id: 'forecast', title: 'Generate Forecasts', icon: TrendingUp },
   ];
 
+  // Listen for the proceed to forecasting event
+  useEffect(() => {
+    const handleProceedToForecasting = () => {
+      setCurrentStep(3);
+    };
+
+    window.addEventListener('proceedToForecasting', handleProceedToForecasting);
+    
+    return () => {
+      window.removeEventListener('proceedToForecasting', handleProceedToForecasting);
+    };
+  }, []);
+
   const handleDataUpload = (data: SalesData[]) => {
     setSalesData(data);
     setCleanedData(data);

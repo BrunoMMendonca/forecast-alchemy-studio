@@ -313,17 +313,9 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleane
     console.log('Proceed to forecasting clicked, cleaned data length:', cleanedData.length);
     onDataCleaning(cleanedData);
     
-    // Use a more reliable method to switch to the forecast tab
-    setTimeout(() => {
-      const forecastTab = document.querySelector('[value="forecast"]') as HTMLElement;
-      if (forecastTab) {
-        forecastTab.click();
-      } else {
-        // Fallback: try to trigger the parent component's tab change directly
-        const event = new CustomEvent('tabChange', { detail: { value: 'forecast' } });
-        window.dispatchEvent(event);
-      }
-    }, 100);
+    // Dispatch a custom event that the parent Index component can listen to
+    const event = new CustomEvent('proceedToForecasting');
+    window.dispatchEvent(event);
   };
 
   const handlePrevSKU = () => {
@@ -499,7 +491,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleane
               <Tooltip 
                 formatter={(value: number, name: string) => [
                   value?.toLocaleString() || '0', 
-                  name === 'originalSales' ? 'Original Sales' : 'Cleaned Sales'
+                  name === 'cleanedSales' ? 'Cleaned Sales' : 'Original Sales'
                 ]}
                 labelFormatter={(label) => {
                   try {
@@ -517,19 +509,19 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleane
               />
               <Line 
                 type="monotone" 
-                dataKey="originalSales" 
-                stroke="#94a3b8" 
+                dataKey="cleanedSales" 
+                stroke="#3b82f6" 
                 strokeWidth={2}
-                name="Original Sales"
+                name="Cleaned Sales"
                 dot={{ r: 3 }}
                 connectNulls={false}
               />
               <Line 
                 type="monotone" 
-                dataKey="cleanedSales" 
-                stroke="#3b82f6" 
+                dataKey="originalSales" 
+                stroke="#94a3b8" 
                 strokeWidth={2}
-                name="Cleaned Sales"
+                name="Original Sales"
                 dot={{ r: 3 }}
                 connectNulls={false}
               />
