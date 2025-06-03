@@ -1,3 +1,4 @@
+
 import React, { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -121,6 +122,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     }
   };
 
+  const handleDropAreaClick = () => {
+    document.getElementById('file-upload')?.click();
+  };
+
   return (
     <div className="space-y-6">
       {/* Existing Data Indicator */}
@@ -141,7 +146,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       {/* Drag and Drop Area */}
       <div
         className={`
-          border-2 border-dashed rounded-lg p-8 text-center transition-all duration-300
+          border-2 border-dashed rounded-lg p-8 text-center transition-all duration-300 cursor-pointer
           ${isDragging 
             ? 'border-blue-500 bg-blue-50' 
             : uploadedFile 
@@ -154,6 +159,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         onDrop={handleDrop}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
+        onClick={handleDropAreaClick}
       >
         {uploadedFile ? (
           <div className="space-y-4">
