@@ -1,26 +1,15 @@
-import React, { useState, useRef, useCallback } from 'react';
+
+import React, { useState, useRef } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
-import { detectDateFrequency, generateForecastDates } from '@/utils/dateUtils';
-import { 
-  generateSeasonalMovingAverage, 
-  generateHoltWinters, 
-  generateSeasonalNaive 
-} from '@/utils/seasonalUtils';
-import { 
-  generateMovingAverage, 
-  generateSimpleExponentialSmoothing, 
-  generateDoubleExponentialSmoothing,
-  generateLinearTrend 
-} from '@/utils/forecastAlgorithms';
-import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useForecastCache } from '@/hooks/useForecastCache';
 import { useBatchOptimization } from '@/hooks/useBatchOptimization';
 import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimization';
+import { useModelManagement } from '@/hooks/useModelManagement';
+import { generateForecastsForSKU } from '@/utils/forecastGenerator';
 import { ModelSelection } from './ModelSelection';
 import { ProductSelector } from './ProductSelector';
-import { ModelConfig } from '@/types/forecast';
 import { OptimizationLogger } from './OptimizationLogger';
 import { optimizationLogger } from '@/utils/optimizationLogger';
 
@@ -32,8 +21,6 @@ interface ForecastModelsProps {
   onSKUChange: (sku: string) => void;
 }
 
-const MANUAL_AI_PREFERENCE_KEY = 'manual_ai_preferences';
-
 export const ForecastModels: React.FC<ForecastModelsProps> = ({ 
   data, 
   forecastPeriods,
@@ -43,7 +30,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 }) => {
   const { toast } = useToast();
   const lastDataHashRef = useRef<string>('');
-  const isTogglingAIManualRef = useRef<boolean>(false);
   const lastSKURef = useRef<string>('');
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
   
@@ -51,9 +37,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     cache,
     cacheStats,
     generateDataHash,
-    getCachedParameters,
     setCachedParameters,
-    isCacheValid,
     getSKUsNeedingOptimization
   } = useOptimizationCache();
   
@@ -75,78 +59,18 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     generateStableFingerprint
   } = useNavigationAwareOptimization();
 
-  // Load manual/AI preferences from localStorage
-  const loadManualAIPreferences = useCallback((): Record<string, boolean> => {
-    try {
-      const stored = localStorage.getItem(MANUAL_AI_PREFERENCE_KEY);
-      return stored ? JSON.parse(stored) : {};
-    } catch (error) {
-      console.error('Failed to load manual/AI preferences:', error);
-      return {};
-    }
-  }, []);
-
-  // Save manual/AI preferences to localStorage
-  const saveManualAIPreferences = useCallback((preferences: Record<string, boolean>) => {
-    try {
-      localStorage.setItem(MANUAL_AI_PREFERENCE_KEY, JSON.stringify(preferences));
-    } catch (error) {
-      console.error('Failed to save manual/AI preferences:', error);
-    }
-  }, []);
-
-  // IMMEDIATE FIX: Apply preferences during initial model creation
-  const createModelsWithPreferences = useCallback((): ModelConfig[] => {
-    console.log('🏗️ CREATING MODELS WITH PREFERENCES');
-    
-    const defaultModels = getDefaultModels();
-    
-    if (!selectedSKU || data.length === 0) {
-      console.log('❌ No SKU or data, using defaults');
-      return defaultModels;
-    }
-
-    try {
-      const preferences = loadManualAIPreferences();
-      const skuData = data.filter(d => d.sku === selectedSKU);
-      const currentDataHash = generateDataHash(skuData);
-      
-      console.log(`📋 Creating models for ${selectedSKU} with preferences:`, preferences);
-      
-      return defaultModels.map(model => {
-        const cached = getCachedParameters(selectedSKU, model.id);
-        const preferenceKey = `${selectedSKU}:${model.id}`;
-        const preference = preferences[preferenceKey];
-        
-        console.log(`🔍 ${preferenceKey}: preference=${preference}, cached=${!!cached}`);
-        
-        if (preference === true && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
-          console.log(`✅ Applying AI for ${preferenceKey}`);
-          return {
-            ...model,
-            optimizedParameters: cached.parameters,
-            optimizationConfidence: cached.confidence
-          };
-        } else {
-          console.log(`🛠️ Using manual for ${preferenceKey}`);
-          return {
-            ...model,
-            optimizedParameters: undefined,
-            optimizationConfidence: undefined
-          };
-        }
-      });
-    } catch (error) {
-      console.error('❌ Error creating models with preferences:', error);
-      return defaultModels;
-    }
-  }, [selectedSKU, data, loadManualAIPreferences, generateDataHash, getCachedParameters, isCacheValid]);
-
-  // IMMEDIATE FIX: Initialize models with a reactive function
-  const [models, setModels] = useState<ModelConfig[]>(() => {
-    console.log('🎯 INITIAL STATE CREATION');
-    return getDefaultModels(); // Will be immediately updated by the effect
-  });
+  const {
+    models,
+    setModels,
+    createModelsWithPreferences,
+    toggleModel,
+    updateParameter,
+    useAIOptimization,
+    resetToManual,
+    isTogglingAIManualRef,
+    loadManualAIPreferences,
+    saveManualAIPreferences
+  } = useModelManagement(selectedSKU, data);
 
   // Auto-select first SKU when data changes
   React.useEffect(() => {
@@ -170,7 +94,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       // Update the last SKU ref
       lastSKURef.current = selectedSKU;
     }
-  }, [selectedSKU, data.length, createModelsWithPreferences]); // Depend on the memoized function
+  }, [selectedSKU, data.length, createModelsWithPreferences]);
 
   // FIXED: Main optimization effect - only runs on actual data changes
   React.useEffect(() => {
@@ -214,7 +138,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 
     console.log('FIXED: ✅ NAVIGATION STATE APPROVED OPTIMIZATION - Starting process');
     handleInitialOptimization();
-  }, [data]); // FIXED: Only depends on data, hash generated inside effect
+  }, [data]);
 
   const handleInitialOptimization = async () => {
     const enabledModels = models.filter(m => m.enabled);
@@ -278,111 +202,16 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   const generateForecastsForSelectedSKU = async () => {
     if (!selectedSKU) return;
 
-    const enabledModels = models.filter(m => m.enabled);
-    if (enabledModels.length === 0) return;
-
     try {
-      const skuData = data
-        .filter(d => d.sku === selectedSKU)
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-      if (skuData.length < 3) {
-        toast({
-          title: "Insufficient Data",
-          description: `Not enough data points for ${selectedSKU}. Need at least 3 data points.`,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const frequency = detectDateFrequency(skuData.map(d => d.date));
-      const lastDate = new Date(Math.max(...skuData.map(d => new Date(d.date).getTime())));
-      const forecastDates = generateForecastDates(lastDate, forecastPeriods, frequency);
-      const results: ForecastResult[] = [];
-
-      for (const model of enabledModels) {
-        const effectiveParameters = model.optimizedParameters || model.parameters;
-        const parametersHash = generateParametersHash(model.parameters, model.optimizedParameters);
-        
-        const cachedForecast = getCachedForecast(selectedSKU, model.name, parametersHash, forecastPeriods);
-        if (cachedForecast) {
-          console.log(`Using cached forecast for ${selectedSKU}:${model.name}`);
-          results.push(cachedForecast);
-          continue;
-        }
-
-        let predictions: number[] = [];
-
-        switch (model.id) {
-          case 'moving_average':
-            predictions = generateMovingAverage(skuData, effectiveParameters?.window || 3, forecastPeriods);
-            break;
-          case 'simple_exponential_smoothing':
-            predictions = generateSimpleExponentialSmoothing(skuData, effectiveParameters?.alpha || 0.3, forecastPeriods);
-            break;
-          case 'double_exponential_smoothing':
-            predictions = generateDoubleExponentialSmoothing(
-              skuData, 
-              effectiveParameters?.alpha || 0.3, 
-              effectiveParameters?.beta || 0.1, 
-              forecastPeriods
-            );
-            break;
-          case 'exponential_smoothing':
-            predictions = generateSimpleExponentialSmoothing(skuData, effectiveParameters?.alpha || 0.3, forecastPeriods);
-            break;
-          case 'linear_trend':
-            predictions = generateLinearTrend(skuData, forecastPeriods);
-            break;
-          case 'seasonal_moving_average':
-            predictions = generateSeasonalMovingAverage(
-              skuData.map(d => d.sales),
-              effectiveParameters?.window || 3,
-              frequency.seasonalPeriod,
-              forecastPeriods
-            );
-            break;
-          case 'holt_winters':
-            predictions = generateHoltWinters(
-              skuData.map(d => d.sales),
-              frequency.seasonalPeriod,
-              forecastPeriods,
-              effectiveParameters?.alpha || 0.3,
-              effectiveParameters?.beta || 0.1,
-              effectiveParameters?.gamma || 0.1
-            );
-            break;
-          case 'seasonal_naive':
-            predictions = generateSeasonalNaive(
-              skuData.map(d => d.sales),
-              frequency.seasonalPeriod,
-              forecastPeriods
-            );
-            break;
-        }
-
-        const recentActual = skuData.slice(-5).map(d => d.sales);
-        const recentPredicted = predictions.slice(0, 5);
-        const mape = recentActual.reduce((sum, actual, i) => {
-          const predicted = recentPredicted[i] || predictions[0];
-          return sum + Math.abs((actual - predicted) / actual);
-        }, 0) / recentActual.length * 100;
-        
-        const accuracy = Math.max(0, 100 - mape);
-
-        const result: ForecastResult = {
-          sku: selectedSKU,
-          model: model.name,
-          predictions: forecastDates.map((date, i) => ({
-            date,
-            value: Math.round(predictions[i] || 0)
-          })),
-          accuracy
-        };
-
-        setCachedForecast(result, parametersHash, forecastPeriods);
-        results.push(result);
-      }
+      const results = await generateForecastsForSKU(
+        selectedSKU,
+        data,
+        models,
+        forecastPeriods,
+        getCachedForecast,
+        setCachedForecast,
+        generateParametersHash
+      );
 
       onForecastGeneration(results, selectedSKU);
       console.log(`Generated forecasts for SKU: ${selectedSKU} (${results.length} models)`);
@@ -390,110 +219,31 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     } catch (error) {
       toast({
         title: "Forecast Error",
-        description: "Failed to generate forecasts. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to generate forecasts. Please try again.",
         variant: "destructive",
       });
       console.error('Forecast generation error:', error);
     }
   };
 
-  const toggleModel = (modelId: string) => {
-    setModels(prev => prev.map(model => 
-      model.id === modelId ? { ...model, enabled: !model.enabled } : model
-    ));
-    
+  const handleToggleModel = (modelId: string) => {
+    toggleModel(modelId);
     setTimeout(() => generateForecastsForSelectedSKU(), 100);
   };
 
-  const updateParameter = (modelId: string, parameter: string, value: number) => {
-    // Set flag to prevent optimization during manual parameter updates
-    isTogglingAIManualRef.current = true;
-    
-    const preferences = loadManualAIPreferences();
-    const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = false; // Mark as manual when parameters are manually updated
-    saveManualAIPreferences(preferences);
-
-    console.log(`PREFERENCE: Updated ${preferenceKey} to manual (parameter change)`);
-
-    setModels(prev => prev.map(model => 
-      model.id === modelId 
-        ? { 
-            ...model, 
-            parameters: { ...model.parameters, [parameter]: value },
-            optimizedParameters: undefined,
-            optimizationConfidence: undefined
-          }
-        : model
-    ));
-
-    setTimeout(() => {
-      generateForecastsForSelectedSKU();
-      // Clear the flag after operations complete
-      isTogglingAIManualRef.current = false;
-    }, 100);
+  const handleUpdateParameter = (modelId: string, parameter: string, value: number) => {
+    updateParameter(modelId, parameter, value);
+    setTimeout(() => generateForecastsForSelectedSKU(), 100);
   };
 
-  const useAIOptimization = (modelId: string) => {
-    // Set flag to prevent optimization during AI toggle
-    isTogglingAIManualRef.current = true;
-    
-    const preferences = loadManualAIPreferences();
-    const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = true; // Mark as AI
-    saveManualAIPreferences(preferences);
-
-    console.log(`PREFERENCE: Updated ${preferenceKey} to AI`);
-
-    const cached = getCachedParameters(selectedSKU, modelId);
-    if (cached) {
-      setModels(prev => prev.map(model => 
-        model.id === modelId 
-          ? { 
-              ...model, 
-              optimizedParameters: cached.parameters,
-              optimizationConfidence: cached.confidence
-            }
-          : model
-      ));
-      
-      setTimeout(() => {
-        generateForecastsForSelectedSKU();
-        // Clear the flag after operations complete
-        isTogglingAIManualRef.current = false;
-      }, 100);
-    } else {
-      // Clear flag if no cached parameters
-      isTogglingAIManualRef.current = false;
-    }
+  const handleUseAI = (modelId: string) => {
+    useAIOptimization(modelId);
+    setTimeout(() => generateForecastsForSelectedSKU(), 100);
   };
 
-  const resetToManual = (modelId: string) => {
-    // Set flag to prevent optimization during manual reset
-    isTogglingAIManualRef.current = true;
-    
-    const preferences = loadManualAIPreferences();
-    const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = false; // Mark as manual
-    saveManualAIPreferences(preferences);
-
-    console.log(`PREFERENCE: Updated ${preferenceKey} to manual (reset)`);
-
-    setModels(prev => prev.map(model => 
-      model.id === modelId 
-        ? { 
-            ...model, 
-            optimizedParameters: undefined,
-            optimizationConfidence: undefined
-          }
-        : model
-    ));
-    
-    setTimeout(() => {
-      generateForecastsForSelectedSKU();
-      // Clear the flag after operations complete
-      isTogglingAIManualRef.current = false;
-    }, 100);
+  const handleResetToManual = (modelId: string) => {
+    resetToManual(modelId);
+    setTimeout(() => generateForecastsForSelectedSKU(), 100);
   };
 
   return (
@@ -582,10 +332,10 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 
       <ModelSelection
         models={models}
-        onToggleModel={toggleModel}
-        onUpdateParameter={updateParameter}
-        onUseAI={useAIOptimization}
-        onResetToManual={resetToManual}
+        onToggleModel={handleToggleModel}
+        onUpdateParameter={handleUpdateParameter}
+        onUseAI={handleUseAI}
+        onResetToManual={handleResetToManual}
       />
 
       {navigationState && (
