@@ -220,7 +220,7 @@ export const optimizeSingleModel = async (
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
-      step: 'final_result',
+      step: 'complete',
       message: `Using AI optimized parameters - confidence: ${aiResult.confidence}%`,
       parameters: aiResult.parameters
     });
@@ -229,7 +229,7 @@ export const optimizeSingleModel = async (
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
-      step: 'final_result',
+      step: 'complete',
       message: `Using grid search parameters - confidence: ${gridResult.confidence}%`,
       parameters: gridResult.parameters
     });
