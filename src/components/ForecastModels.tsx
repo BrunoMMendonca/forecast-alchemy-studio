@@ -223,7 +223,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     
     // Mark optimization as started
     markOptimizationStarted(data, '/');
-    setOptimizationCompleted(false);
     
     await optimizeAllSKUs(
       data, 
@@ -262,7 +261,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 
     // Mark optimization as completed - this should prevent any future runs
     markOptimizationCompleted(data, '/');
-    setOptimizationCompleted(true);
 
     console.log('FIXED: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE');
 
