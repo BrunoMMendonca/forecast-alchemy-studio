@@ -33,7 +33,7 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
   const [editMode, setEditMode] = useState(false);
   const [editableForecasts, setEditableForecasts] = useState<Record<string, EditableForecast[]>>({});
   const [exportMode, setExportMode] = useState<'all_models' | 'single_forecast'>('single_forecast');
-  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [selectedModel, setSelectedModel] = useState<string>('auto_select_best');
   const { toast } = useToast();
 
   const skus = useMemo(() => {
@@ -169,7 +169,7 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
     const exportOptions: ExportOptions = {
       format,
       mode: exportMode,
-      selectedModel: exportMode === 'single_forecast' ? selectedModel : undefined,
+      selectedModel: exportMode === 'single_forecast' && selectedModel !== 'auto_select_best' ? selectedModel : undefined,
       includeAccuracy: true,
       includeConfidenceIntervals: false
     };
@@ -398,7 +398,7 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
                     <SelectValue placeholder="Auto-select best" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Auto-select Best Model</SelectItem>
+                    <SelectItem value="auto_select_best">Auto-select Best Model</SelectItem>
                     {models.map(model => (
                       <SelectItem key={model} value={model}>{model}</SelectItem>
                     ))}
