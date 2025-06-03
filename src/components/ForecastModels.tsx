@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -165,18 +164,28 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         preferences[preferenceKey] = true; // Set to AI when optimization completes
         saveManualAIPreferences(preferences);
         
-        // IMMEDIATE UI UPDATE: Update models state immediately if this is for the currently selected SKU
+        // CRITICAL FIX: Update models state immediately if this is for the currently selected SKU
         if (sku === selectedSKU) {
-          console.log(`IMMEDIATE UI UPDATE: Updating UI state for current SKU ${sku}:${modelId}`);
-          setModels(prev => prev.map(model => 
-            model.id === modelId 
-              ? { 
-                  ...model, 
-                  optimizedParameters: parameters,
-                  optimizationConfidence: confidence
-                }
-              : model
-          ));
+          console.log(`CRITICAL FIX: Immediately updating UI for ${sku}:${modelId} with optimized parameters`);
+          setModels(prev => {
+            const updated = prev.map(model => 
+              model.id === modelId 
+                ? { 
+                    ...model, 
+                    optimizedParameters: parameters,
+                    optimizationConfidence: confidence
+                  }
+                : model
+            );
+            console.log(`CRITICAL FIX: Models state updated for ${modelId}:`, {
+              hasOptimized: !!updated.find(m => m.id === modelId)?.optimizedParameters,
+              confidence: updated.find(m => m.id === modelId)?.optimizationConfidence
+            });
+            return updated;
+          });
+          
+          // Force a forecast generation to ensure everything is in sync
+          setTimeout(() => generateForecastsForSelectedSKU(), 100);
         }
       },
       getSKUsNeedingOptimization
@@ -186,23 +195,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     markOptimizationCompleted(data, '/');
 
     console.log('FIXED: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE');
-
-    // FINAL UI REFRESH: Force UI update for the current SKU after a delay to ensure all callbacks completed
-    if (selectedSKU) {
-      console.log(`FINAL UI REFRESH: Forcing final UI update for current SKU: ${selectedSKU} after 200ms delay`);
-      
-      setTimeout(() => {
-        // Apply preferences after optimization callbacks have completed
-        const modelsWithPreferences = createModelsWithPreferences();
-        console.log(`FINAL UI REFRESH: Applied preferences for ${selectedSKU}:`, modelsWithPreferences.map(m => ({
-          id: m.id,
-          hasOptimized: !!m.optimizedParameters,
-          confidence: m.optimizationConfidence
-        })));
-        setModels(modelsWithPreferences);
-        generateForecastsForSelectedSKU();
-      }, 200); // Reduced delay since we're now updating immediately in the callback
-    }
   };
 
   const generateForecastsForSelectedSKU = async () => {
