@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { optimizeParametersWithGrok } from '@/utils/grokApiUtils';
 import { gridSearchOptimization, validateOptimizedParameters } from '@/utils/localOptimization';
+import { optimizationLogger } from '@/utils/optimizationLogger';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
 import { detectDateFrequency } from '@/utils/dateUtils';
