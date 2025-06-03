@@ -2,7 +2,7 @@
 import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 
@@ -20,6 +20,20 @@ export const ForecastControls: React.FC<ForecastControlsProps> = ({
   results
 }) => {
   const { toast } = useToast();
+  
+  const currentIndex = skus.indexOf(selectedSKU);
+  
+  const handlePrevSKU = () => {
+    if (currentIndex > 0) {
+      onSKUChange(skus[currentIndex - 1]);
+    }
+  };
+  
+  const handleNextSKU = () => {
+    if (currentIndex < skus.length - 1) {
+      onSKUChange(skus[currentIndex + 1]);
+    }
+  };
 
   const exportResults = () => {
     if (results.length === 0) return;
@@ -57,20 +71,38 @@ export const ForecastControls: React.FC<ForecastControlsProps> = ({
 
   return (
     <div className="flex items-center justify-between">
-      <div className="flex items-center space-x-4">
+      <div className="space-y-2">
         <label className="text-sm font-medium text-slate-700">
           Select SKU:
         </label>
-        <Select value={selectedSKU} onValueChange={onSKUChange}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Select SKU" />
-          </SelectTrigger>
-          <SelectContent>
-            {skus.map(sku => (
-              <SelectItem key={sku} value={sku}>{sku}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center space-x-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handlePrevSKU}
+            disabled={currentIndex === 0}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Select value={selectedSKU} onValueChange={onSKUChange}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Select SKU" />
+            </SelectTrigger>
+            <SelectContent>
+              {skus.map(sku => (
+                <SelectItem key={sku} value={sku}>{sku}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleNextSKU}
+            disabled={currentIndex === skus.length - 1}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       
       <Button variant="outline" onClick={exportResults}>
