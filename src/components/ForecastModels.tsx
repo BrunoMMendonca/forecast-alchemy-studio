@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,6 +14,8 @@ import {
   generateHoltWinters, 
   generateSeasonalNaive 
 } from '@/utils/seasonalUtils';
+import { ModelRecommendation } from './ModelRecommendation';
+import { ParameterOptimizer } from './ParameterOptimizer';
 
 interface ForecastModelsProps {
   data: SalesData[];

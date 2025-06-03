@@ -4,9 +4,12 @@ import { DataVisualization } from '@/components/DataVisualization';
 import { OutlierDetection } from '@/components/OutlierDetection';
 import { ForecastModels } from '@/components/ForecastModels';
 import { ForecastResults } from '@/components/ForecastResults';
+import { ForecastFinalization } from '@/components/ForecastFinalization';
+import { ModelRecommendation } from '@/components/ModelRecommendation';
+import { ParameterOptimizer } from '@/components/ParameterOptimizer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, TrendingUp, Upload, Zap } from 'lucide-react';
+import { BarChart3, TrendingUp, Upload, Zap, Eye } from 'lucide-react';
 
 export interface SalesData {
   date: string;
@@ -34,6 +37,7 @@ const Index = () => {
     { id: 'visualize', title: 'Visualize', icon: BarChart3 },
     { id: 'clean', title: 'Clean Data', icon: Zap },
     { id: 'forecast', title: 'Generate Forecasts', icon: TrendingUp },
+    { id: 'finalize', title: 'Finalize & Export', icon: Eye },
   ];
 
   // Listen for the proceed to forecasting event
@@ -62,11 +66,15 @@ const Index = () => {
 
   const handleForecastGeneration = (results: ForecastResult[]) => {
     setForecastResults(results);
+    // Auto-proceed to finalization step
+    setTimeout(() => setCurrentStep(4), 1000);
   };
 
   const handleStepClick = (stepIndex: number) => {
     // Allow navigation to any step if data is uploaded
     if (stepIndex === 0 || salesData.length > 0) {
+      // Don't allow finalization step without forecasts
+      if (stepIndex === 4 && forecastResults.length === 0) return;
       setCurrentStep(stepIndex);
     }
   };
@@ -85,10 +93,10 @@ const Index = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-slate-800 mb-4">
-            Sales Forecast Analytics
+            AI-Powered Sales Forecast Analytics
           </h1>
           <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-            Upload your historical sales data, clean outliers, and generate accurate forecasts using multiple predictive models.
+            Upload your historical sales data, leverage AI for optimization, and generate enterprise-ready forecasts for S&OP planning.
           </p>
         </div>
 
@@ -231,6 +239,27 @@ const Index = () => {
                 </CardContent>
               </Card>
             </div>
+          )}
+
+          {currentStep === 4 && (
+            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Eye className="h-5 w-5 text-blue-600" />
+                  Finalize & Export Forecasts
+                </CardTitle>
+                <CardDescription>
+                  Review, edit, and export your forecasts for Sales & Operations Planning
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ForecastFinalization 
+                  historicalData={salesData}
+                  cleanedData={cleanedData}
+                  forecastResults={forecastResults}
+                />
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>
