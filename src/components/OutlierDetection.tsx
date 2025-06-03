@@ -509,19 +509,19 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleane
               />
               <Line 
                 type="monotone" 
-                dataKey="cleanedSales" 
-                stroke="#3b82f6" 
+                dataKey="originalSales" 
+                stroke="#94a3b8" 
                 strokeWidth={2}
-                name="Cleaned Sales"
+                name="Original Sales"
                 dot={{ r: 3 }}
                 connectNulls={false}
               />
               <Line 
                 type="monotone" 
-                dataKey="originalSales" 
-                stroke="#94a3b8" 
+                dataKey="cleanedSales" 
+                stroke="#3b82f6" 
                 strokeWidth={2}
-                name="Original Sales"
+                name="Cleaned Sales"
                 dot={{ r: 3 }}
                 connectNulls={false}
               />
@@ -561,7 +561,6 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleane
           {filteredOutlierData.map((dataPoint) => {
             const isEditing = editingOutliers.hasOwnProperty(dataPoint.key);
             const badgeVariant = dataPoint.isOutlier ? "destructive" : "secondary";
-            const badgeColor = dataPoint.isOutlier ? "text-red-800" : "text-green-800";
             const hasBeenModified = dataPoint.sales !== dataPoint.originalSales;
             
             return (
@@ -575,7 +574,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleane
                         (Original: {dataPoint.originalSales.toLocaleString()})
                       </span>
                     </div>
-                    <Badge variant={badgeVariant} className={`text-xs ${badgeColor}`}>
+                    <Badge variant={badgeVariant} className={`text-xs ${dataPoint.isOutlier ? 'text-white' : 'text-green-800'}`}>
                       Z-Score: {dataPoint.zScore.toFixed(2)}
                     </Badge>
                     {!dataPoint.isOutlier && (
