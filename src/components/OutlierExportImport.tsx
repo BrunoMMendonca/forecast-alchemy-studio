@@ -23,7 +23,7 @@ export const OutlierExportImport: React.FC<OutlierExportImportProps> = ({
           onClick={onExport}
           disabled={isExportDisabled}
         >
-          <Download className="h-4 w-4 mr-2" />
+          <Upload className="h-4 w-4 mr-2" />
           Export Cleaning Data
         </Button>
         
@@ -31,7 +31,7 @@ export const OutlierExportImport: React.FC<OutlierExportImportProps> = ({
           variant="outline" 
           onClick={onImportClick}
         >
-          <Upload className="h-4 w-4 mr-2" />
+          <Download className="h-4 w-4 mr-2" />
           Import Cleaning Data
         </Button>
         
