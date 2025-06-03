@@ -42,6 +42,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   const [models, setModels] = useState<ModelConfig[]>(getDefaultModels());
   const { toast } = useToast();
   const lastDataHashRef = useRef<string>('');
+  const isTogglingAIManualRef = useRef<boolean>(false);
   
   const {
     cache,
@@ -100,9 +101,15 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // FIXED: Main optimization effect with stable data dependency
+  // FIXED: Main optimization effect with AI/Manual toggle protection
   React.useEffect(() => {
     if (data.length === 0) return;
+
+    // CRITICAL: Skip optimization if we're toggling AI/Manual modes
+    if (isTogglingAIManualRef.current) {
+      console.log('FIXED: ❌ SKIPPING OPTIMIZATION - AI/Manual toggle in progress');
+      return;
+    }
 
     // Generate hash INSIDE the effect to avoid constant recalculation
     const currentDataHash = generateStableFingerprint(data);
@@ -355,6 +362,9 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   };
 
   const updateParameter = (modelId: string, parameter: string, value: number) => {
+    // Set flag to prevent optimization during manual parameter updates
+    isTogglingAIManualRef.current = true;
+    
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
     preferences[preferenceKey] = false; // Mark as manual when parameters are manually updated
@@ -371,10 +381,17 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         : model
     ));
 
-    setTimeout(() => generateForecastsForSelectedSKU(), 100);
+    setTimeout(() => {
+      generateForecastsForSelectedSKU();
+      // Clear the flag after operations complete
+      isTogglingAIManualRef.current = false;
+    }, 100);
   };
 
   const useAIOptimization = (modelId: string) => {
+    // Set flag to prevent optimization during AI toggle
+    isTogglingAIManualRef.current = true;
+    
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
     preferences[preferenceKey] = true; // Mark as AI
@@ -392,11 +409,21 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           : model
       ));
       
-      setTimeout(() => generateForecastsForSelectedSKU(), 100);
+      setTimeout(() => {
+        generateForecastsForSelectedSKU();
+        // Clear the flag after operations complete
+        isTogglingAIManualRef.current = false;
+      }, 100);
+    } else {
+      // Clear flag if no cached parameters
+      isTogglingAIManualRef.current = false;
     }
   };
 
   const resetToManual = (modelId: string) => {
+    // Set flag to prevent optimization during manual reset
+    isTogglingAIManualRef.current = true;
+    
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
     preferences[preferenceKey] = false; // Mark as manual
@@ -412,7 +439,11 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         : model
     ));
     
-    setTimeout(() => generateForecastsForSelectedSKU(), 100);
+    setTimeout(() => {
+      generateForecastsForSelectedSKU();
+      // Clear the flag after operations complete
+      isTogglingAIManualRef.current = false;
+    }, 100);
   };
 
   return (
@@ -454,6 +485,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           | Trigger Count: {getTriggerCount()} 
           | Cache: {cacheStats.hits} hits, {cacheStats.misses} misses
           | Fingerprint: {navigationState.datasetFingerprint}
+          | AI/Manual Toggle: {isTogglingAIManualRef.current ? '🔄 Active' : '✅ Idle'}
         </div>
       )}
     </div>
