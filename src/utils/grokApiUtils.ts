@@ -68,7 +68,7 @@ Respond in JSON format:
             content: prompt
           }
         ],
-        model: 'grok-beta',
+        model: 'grok-3',
         temperature: 0.1,
         max_tokens: 1000
       }),
@@ -149,7 +149,7 @@ Respond in JSON format:
             content: prompt
           }
         ],
-        model: 'grok-beta',
+        model: 'grok-3',
         temperature: 0.2,
         max_tokens: 1000
       }),
