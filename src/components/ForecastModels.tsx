@@ -15,6 +15,7 @@ import {
 } from '@/utils/forecastAlgorithms';
 import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
+import { useForecastCache } from '@/hooks/useForecastCache';
 import { useBatchOptimization } from '@/hooks/useBatchOptimization';
 import { ModelSelection } from './ModelSelection';
 import { ProductSelector } from './ProductSelector';
@@ -46,8 +47,15 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     getCachedParameters,
     setCachedParameters,
     isCacheValid,
-    getSKUsNeedingOptimization
+    getSKUsNeedingOptimization,
+    isDatasetUnchanged
   } = useOptimizationCache();
+  
+  const {
+    getCachedForecast,
+    setCachedForecast,
+    generateParametersHash
+  } = useForecastCache();
   
   const { isOptimizing, progress, optimizeAllSKUs } = useBatchOptimization();
 
@@ -59,16 +67,39 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // Start AI optimization once when component loads with data
+  // Enhanced optimization check - only run if needed
   React.useEffect(() => {
     if (data.length > 0 && !optimizationStarted.current) {
       optimizationStarted.current = true;
-      handleInitialOptimization();
+      
+      // Check if optimization is actually needed
+      const skusNeedingOptimization = getSKUsNeedingOptimization(data, models.filter(m => m.enabled));
+      
+      if (skusNeedingOptimization.length === 0) {
+        console.log('Enhanced cache: No optimization needed, all parameters cached');
+        toast({
+          title: "Cache Hit",
+          description: "All optimization parameters loaded from cache",
+        });
+        
+        // Load cached parameters and generate forecasts immediately
+        if (selectedSKU) {
+          loadCachedParametersAndForecast();
+        }
+      } else {
+        console.log(`Enhanced cache: ${skusNeedingOptimization.length} SKUs need optimization`);
+        handleInitialOptimization();
+      }
     }
   }, [data]);
 
   // Load cached parameters and generate forecasts when SKU changes
   React.useEffect(() => {
+    if (!selectedSKU) return;
+    loadCachedParametersAndForecast();
+  }, [selectedSKU, data, forecastPeriods]);
+
+  const loadCachedParametersAndForecast = () => {
     if (!selectedSKU) return;
 
     const skuData = data.filter(d => d.sku === selectedSKU);
@@ -93,14 +124,14 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       }
     }));
 
-    // Generate forecasts immediately with available data
+    // Generate forecasts with caching
     setTimeout(() => generateForecastsForSelectedSKU(), 100);
-  }, [selectedSKU, data, getCachedParameters, isCacheValid, generateDataHash]);
+  };
 
   const handleInitialOptimization = async () => {
     const enabledModels = models.filter(m => m.enabled);
     
-    console.log(`Starting optimization check. Cache stats: ${cacheStats.hits} hits, ${cacheStats.misses} misses`);
+    console.log(`Starting enhanced optimization. Cache stats: ${cacheStats.hits} hits, ${cacheStats.misses} misses, ${cacheStats.skipped} dataset skips`);
     
     await optimizeAllSKUs(
       data, 
@@ -159,6 +190,17 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 
       for (const model of enabledModels) {
         const effectiveParameters = model.optimizedParameters || model.parameters;
+        const parametersHash = generateParametersHash(model.parameters, model.optimizedParameters);
+        
+        // Check forecast cache first
+        const cachedForecast = getCachedForecast(selectedSKU, model.name, parametersHash, forecastPeriods);
+        if (cachedForecast) {
+          console.log(`Using cached forecast for ${selectedSKU}:${model.name}`);
+          results.push(cachedForecast);
+          continue;
+        }
+
+        // Generate new forecast
         let predictions: number[] = [];
 
         switch (model.id) {
@@ -177,7 +219,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
             );
             break;
           case 'exponential_smoothing':
-            // Backward compatibility - treat as simple exponential smoothing
             predictions = generateSimpleExponentialSmoothing(skuData, effectiveParameters?.alpha || 0.3, forecastPeriods);
             break;
           case 'linear_trend':
@@ -219,7 +260,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         
         const accuracy = Math.max(0, 100 - mape);
 
-        results.push({
+        const result: ForecastResult = {
           sku: selectedSKU,
           model: model.name,
           predictions: forecastDates.map((date, i) => ({
@@ -227,11 +268,15 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
             value: Math.round(predictions[i] || 0)
           })),
           accuracy
-        });
+        };
+
+        // Cache the forecast result
+        setCachedForecast(result, parametersHash, forecastPeriods);
+        results.push(result);
       }
 
       onForecastGeneration(results, selectedSKU);
-      console.log(`Generated forecasts for SKU: ${selectedSKU}`);
+      console.log(`Generated forecasts for SKU: ${selectedSKU} (${results.length} models)`);
 
     } catch (error) {
       toast({
@@ -248,7 +293,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       model.id === modelId ? { ...model, enabled: !model.enabled } : model
     ));
     
-    // Regenerate forecasts after model toggle
     setTimeout(() => generateForecastsForSelectedSKU(), 100);
   };
 
@@ -264,7 +308,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         : model
     ));
 
-    // Regenerate forecasts after parameter change
     setTimeout(() => generateForecastsForSelectedSKU(), 100);
   };
 
@@ -281,7 +324,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           : model
       ));
       
-      // Regenerate forecasts after switching to AI
       setTimeout(() => generateForecastsForSelectedSKU(), 100);
     }
   };
@@ -297,7 +339,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         : model
     ));
     
-    // Regenerate forecasts after switching to manual
     setTimeout(() => generateForecastsForSelectedSKU(), 100);
   };
 
@@ -334,10 +375,10 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         </div>
       )}
 
-      {cacheStats.hits + cacheStats.misses > 0 && (
+      {cacheStats.hits + cacheStats.misses + cacheStats.skipped > 0 && (
         <div className="text-xs text-slate-500 bg-slate-50 rounded p-2">
-          Cache: {cacheStats.hits} hits, {cacheStats.misses} misses 
-          ({Math.round((cacheStats.hits / (cacheStats.hits + cacheStats.misses)) * 100)}% hit rate)
+          Enhanced Cache: {cacheStats.hits} param hits, {cacheStats.misses} param misses, {cacheStats.skipped} dataset skips
+          ({Math.round((cacheStats.hits / Math.max(1, cacheStats.hits + cacheStats.misses)) * 100)}% param hit rate)
         </div>
       )}
     </div>
