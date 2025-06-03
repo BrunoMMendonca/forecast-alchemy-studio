@@ -5,9 +5,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, Calculator, Target } from 'lucide-react';
+import { TrendingUp, Calculator, Target, Calendar, Activity, BarChart3 } from 'lucide-react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
+import { detectDateFrequency, generateForecastDates } from '@/utils/dateUtils';
+import { 
+  calculateSeasonalDecomposition, 
+  generateSeasonalMovingAverage, 
+  generateHoltWinters, 
+  generateSeasonalNaive 
+} from '@/utils/seasonalUtils';
 
 interface ForecastModelsProps {
   data: SalesData[];
@@ -21,10 +28,11 @@ interface ModelConfig {
   icon: React.ReactNode;
   enabled: boolean;
   parameters?: Record<string, number>;
+  isSeasonal?: boolean;
 }
 
 export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecastGeneration }) => {
-  const [forecastPeriods, setForecastPeriods] = useState(30);
+  const [forecastPeriods, setForecastPeriods] = useState(12);
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
 
@@ -35,7 +43,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
       description: 'Uses the average of the last N data points to predict future values',
       icon: <Calculator className="h-4 w-4" />,
       enabled: true,
-      parameters: { window: 7 }
+      parameters: { window: 3 }
     },
     {
       id: 'exponential_smoothing',
@@ -52,6 +60,33 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
       icon: <Target className="h-4 w-4" />,
       enabled: true,
       parameters: {}
+    },
+    {
+      id: 'seasonal_moving_average',
+      name: 'Seasonal Moving Average',
+      description: 'Moving average that accounts for seasonal patterns in your data',
+      icon: <Calendar className="h-4 w-4" />,
+      enabled: false,
+      parameters: { window: 3 },
+      isSeasonal: true
+    },
+    {
+      id: 'holt_winters',
+      name: 'Holt-Winters (Triple Exponential)',
+      description: 'Advanced model that handles trend and seasonality simultaneously',
+      icon: <Activity className="h-4 w-4" />,
+      enabled: false,
+      parameters: { alpha: 0.3, beta: 0.1, gamma: 0.1 },
+      isSeasonal: true
+    },
+    {
+      id: 'seasonal_naive',
+      name: 'Seasonal Naive',
+      description: 'Uses the same period from the previous season as the forecast',
+      icon: <BarChart3 className="h-4 w-4" />,
+      enabled: false,
+      parameters: {},
+      isSeasonal: true
     }
   ]);
 
@@ -81,7 +116,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
       const recentValues = values.slice(-window);
       const average = recentValues.reduce((sum, val) => sum + val, 0) / recentValues.length;
       predictions.push(average);
-      values.push(average); // Use prediction for next iteration
+      values.push(average);
     }
     
     return predictions;
@@ -105,7 +140,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
     const values = salesData.map(d => d.sales);
     const n = values.length;
     
-    // Calculate linear regression coefficients
     const xSum = (n * (n - 1)) / 2;
     const ySum = values.reduce((sum, val) => sum + val, 0);
     const xySum = values.reduce((sum, val, i) => sum + val * i, 0);
@@ -117,7 +151,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
     const predictions: number[] = [];
     for (let i = 0; i < forecastPeriods; i++) {
       const prediction = intercept + slope * (n + i);
-      predictions.push(Math.max(0, prediction)); // Ensure non-negative
+      predictions.push(Math.max(0, prediction));
     }
     
     return predictions;
@@ -149,28 +183,24 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
       const skus = Array.from(new Set(data.map(d => d.sku)));
       const results: ForecastResult[] = [];
 
-      // Generate base dates for forecasts
-      const lastDate = new Date(Math.max(...data.map(d => new Date(d.date).getTime())));
-      const forecastDates: string[] = [];
-      for (let i = 1; i <= forecastPeriods; i++) {
-        const futureDate = new Date(lastDate);
-        futureDate.setDate(lastDate.getDate() + i);
-        forecastDates.push(futureDate.toISOString().split('T')[0]);
-      }
-
       for (const sku of skus) {
         const skuData = data
           .filter(d => d.sku === sku)
           .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-        if (skuData.length < 3) continue; // Skip SKUs with insufficient data
+        if (skuData.length < 3) continue;
+
+        // Detect date frequency for this SKU
+        const frequency = detectDateFrequency(skuData.map(d => d.date));
+        const lastDate = new Date(Math.max(...skuData.map(d => new Date(d.date).getTime())));
+        const forecastDates = generateForecastDates(lastDate, forecastPeriods, frequency);
 
         for (const model of enabledModels) {
           let predictions: number[] = [];
 
           switch (model.id) {
             case 'moving_average':
-              predictions = generateMovingAverage(skuData, model.parameters?.window || 7);
+              predictions = generateMovingAverage(skuData, model.parameters?.window || 3);
               break;
             case 'exponential_smoothing':
               predictions = generateExponentialSmoothing(skuData, model.parameters?.alpha || 0.3);
@@ -178,9 +208,34 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
             case 'linear_trend':
               predictions = generateLinearTrend(skuData);
               break;
+            case 'seasonal_moving_average':
+              predictions = generateSeasonalMovingAverage(
+                skuData.map(d => d.sales),
+                model.parameters?.window || 3,
+                frequency.seasonalPeriod,
+                forecastPeriods
+              );
+              break;
+            case 'holt_winters':
+              predictions = generateHoltWinters(
+                skuData.map(d => d.sales),
+                frequency.seasonalPeriod,
+                forecastPeriods,
+                model.parameters?.alpha || 0.3,
+                model.parameters?.beta || 0.1,
+                model.parameters?.gamma || 0.1
+              );
+              break;
+            case 'seasonal_naive':
+              predictions = generateSeasonalNaive(
+                skuData.map(d => d.sales),
+                frequency.seasonalPeriod,
+                forecastPeriods
+              );
+              break;
           }
 
-          // Calculate simple accuracy metric (could be improved with proper validation)
+          // Calculate accuracy metric
           const recentActual = skuData.slice(-5).map(d => d.sales);
           const recentPredicted = predictions.slice(0, 5);
           const mape = recentActual.reduce((sum, actual, i) => {
@@ -231,7 +286,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="forecast-periods">Forecast Periods (days)</Label>
+            <Label htmlFor="forecast-periods">Forecast Periods</Label>
             <Input
               id="forecast-periods"
               type="number"
@@ -242,7 +297,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
               className="w-32"
             />
             <p className="text-sm text-slate-500">
-              Number of future periods to forecast
+              Number of future periods to forecast (automatically detects your data frequency)
             </p>
           </div>
         </CardContent>
@@ -252,50 +307,106 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-slate-800">Select Forecasting Models</h3>
         
-        {models.map((model) => (
-          <Card key={model.id} className={`transition-all ${model.enabled ? 'ring-2 ring-blue-200' : ''}`}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center space-x-3">
-                <Checkbox
-                  checked={model.enabled}
-                  onCheckedChange={() => toggleModel(model.id)}
-                />
-                {model.icon}
-                <div>
-                  <CardTitle className="text-base">{model.name}</CardTitle>
-                  <CardDescription className="text-sm">
-                    {model.description}
-                  </CardDescription>
+        {/* Basic Models */}
+        <div className="space-y-4">
+          <h4 className="text-md font-medium text-slate-700">Basic Models</h4>
+          {models.filter(m => !m.isSeasonal).map((model) => (
+            <Card key={model.id} className={`transition-all ${model.enabled ? 'ring-2 ring-blue-200' : ''}`}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    checked={model.enabled}
+                    onCheckedChange={() => toggleModel(model.id)}
+                  />
+                  {model.icon}
+                  <div>
+                    <CardTitle className="text-base">{model.name}</CardTitle>
+                    <CardDescription className="text-sm">
+                      {model.description}
+                    </CardDescription>
+                  </div>
                 </div>
-              </div>
-            </CardHeader>
-            
-            {model.enabled && model.parameters && Object.keys(model.parameters).length > 0 && (
-              <CardContent className="pt-0">
-                <div className="space-y-3 pl-8">
-                  {Object.entries(model.parameters).map(([param, value]) => (
-                    <div key={param} className="flex items-center space-x-3">
-                      <Label className="w-20 text-sm capitalize">{param}:</Label>
-                      <Input
-                        type="number"
-                        value={value}
-                        onChange={(e) => updateParameter(model.id, param, parseFloat(e.target.value) || 0)}
-                        className="w-24 h-8"
-                        step={param === 'alpha' ? 0.1 : 1}
-                        min={param === 'alpha' ? 0.1 : 1}
-                        max={param === 'alpha' ? 1 : 30}
-                      />
-                      <span className="text-xs text-slate-500">
-                        {param === 'window' && 'days'}
-                        {param === 'alpha' && '(0.1-1.0)'}
-                      </span>
-                    </div>
-                  ))}
+              </CardHeader>
+              
+              {model.enabled && model.parameters && Object.keys(model.parameters).length > 0 && (
+                <CardContent className="pt-0">
+                  <div className="space-y-3 pl-8">
+                    {Object.entries(model.parameters).map(([param, value]) => (
+                      <div key={param} className="flex items-center space-x-3">
+                        <Label className="w-20 text-sm capitalize">{param}:</Label>
+                        <Input
+                          type="number"
+                          value={value}
+                          onChange={(e) => updateParameter(model.id, param, parseFloat(e.target.value) || 0)}
+                          className="w-24 h-8"
+                          step={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
+                          min={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
+                          max={param === 'alpha' || param === 'beta' || param === 'gamma' ? 1 : 30}
+                        />
+                        <span className="text-xs text-slate-500">
+                          {param === 'window' && 'periods'}
+                          {(param === 'alpha' || param === 'beta' || param === 'gamma') && '(0.1-1.0)'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          ))}
+        </div>
+
+        {/* Seasonal Models */}
+        <div className="space-y-4">
+          <h4 className="text-md font-medium text-slate-700">Seasonal Models</h4>
+          <p className="text-sm text-slate-500">
+            These models automatically detect and account for seasonal patterns in your data
+          </p>
+          {models.filter(m => m.isSeasonal).map((model) => (
+            <Card key={model.id} className={`transition-all ${model.enabled ? 'ring-2 ring-green-200' : ''}`}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    checked={model.enabled}
+                    onCheckedChange={() => toggleModel(model.id)}
+                  />
+                  {model.icon}
+                  <div>
+                    <CardTitle className="text-base">{model.name}</CardTitle>
+                    <CardDescription className="text-sm">
+                      {model.description}
+                    </CardDescription>
+                  </div>
                 </div>
-              </CardContent>
-            )}
-          </Card>
-        ))}
+              </CardHeader>
+              
+              {model.enabled && model.parameters && Object.keys(model.parameters).length > 0 && (
+                <CardContent className="pt-0">
+                  <div className="space-y-3 pl-8">
+                    {Object.entries(model.parameters).map(([param, value]) => (
+                      <div key={param} className="flex items-center space-x-3">
+                        <Label className="w-20 text-sm capitalize">{param}:</Label>
+                        <Input
+                          type="number"
+                          value={value}
+                          onChange={(e) => updateParameter(model.id, param, parseFloat(e.target.value) || 0)}
+                          className="w-24 h-8"
+                          step={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
+                          min={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
+                          max={param === 'alpha' || param === 'beta' || param === 'gamma' ? 1 : 30}
+                        />
+                        <span className="text-xs text-slate-500">
+                          {param === 'window' && 'periods'}
+                          {(param === 'alpha' || param === 'beta' || param === 'gamma') && '(0.1-1.0)'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          ))}
+        </div>
       </div>
 
       {/* Generate Button */}
