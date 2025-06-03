@@ -21,8 +21,8 @@ export const useParameterOptimization = () => {
       return model.parameters;
     }
 
-    // Check if API key is still placeholder
-    if (GROK_API_KEY === 'grok-beta-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' || GROK_API_KEY.startsWith('your-grok-api-key')) {
+    // Check if API key is valid (not a placeholder or empty)
+    if (!GROK_API_KEY || GROK_API_KEY.includes('XXXXXXXX') || GROK_API_KEY.startsWith('your-grok-api-key')) {
       console.warn('Using placeholder Grok API key, skipping optimization');
       return model.parameters;
     }
