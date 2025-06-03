@@ -1,283 +1,111 @@
-import React, { useState, useEffect } from 'react';
-import { FileUpload } from '@/components/FileUpload';
-import { DataVisualization } from '@/components/DataVisualization';
-import { OutlierDetection } from '@/components/OutlierDetection';
+import React, { useState, useCallback } from 'react';
+import { SalesData } from '@/types/sales';
+import { ModelConfig } from '@/types/forecast';
 import { ForecastModels } from '@/components/ForecastModels';
 import { ForecastResults } from '@/components/ForecastResults';
-import { ForecastFinalization } from '@/components/ForecastFinalization';
-import { GlobalForecastParameters } from '@/components/GlobalForecastParameters';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, TrendingUp, Upload, Zap, Eye } from 'lucide-react';
-
-export interface SalesData {
-  date: string;
-  sku: string;
-  sales: number;
-  isOutlier?: boolean;
-  note?: string;
-}
+import { ForecastControls } from '@/components/ForecastControls';
+import { UploadData } from '@/components/UploadData';
+import { DetectOutliers } from '@/components/DetectOutliers';
+import { FinalizeData } from '@/components/FinalizeData';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
 export interface ForecastResult {
   sku: string;
   model: string;
-  predictions: { date: string; value: number }[];
-  accuracy?: number;
+  predictions: { date: Date; value: number }[];
+  accuracy: number;
 }
 
 const Index = () => {
-  const [salesData, setSalesData] = useState<SalesData[]>([]);
-  const [cleanedData, setCleanedData] = useState<SalesData[]>([]);
+  const [data, setData] = useState<SalesData[]>([]);
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
-  const [selectedSKUForResults, setSelectedSKUForResults] = useState<string>('');
-  const [forecastPeriods, setForecastPeriods] = useState(12);
-  const [currentStep, setCurrentStep] = useState(0);
+  const [forecastPeriods, setForecastPeriods] = useState<number>(12);
+  const [selectedSKU, setSelectedSKU] = useState<string>('');
+  const [models, setModels] = useState<ModelConfig[]>([]);
+  const [activeTab, setActiveTab] = React.useState("upload")
 
-  const steps = [
-    { id: 'upload', title: 'Upload Data', icon: Upload },
-    { id: 'visualize', title: 'Visualize', icon: BarChart3 },
-    { id: 'clean', title: 'Clean Data', icon: Zap },
-    { id: 'forecast', title: 'Generate Forecasts', icon: TrendingUp },
-    { id: 'finalize', title: 'Finalize & Export', icon: Eye },
-  ];
+  const handleDataUpload = (uploadedData: SalesData[]) => {
+    setData(uploadedData);
+    setForecastResults([]);
+    setSelectedSKU('');
+  };
 
-  // Listen for the proceed to forecasting event
-  useEffect(() => {
-    const handleProceedToForecasting = () => {
-      setCurrentStep(3);
-    };
-
-    window.addEventListener('proceedToForecasting', handleProceedToForecasting);
-    
-    return () => {
-      window.removeEventListener('proceedToForecasting', handleProceedToForecasting);
-    };
+  const handleForecastGeneration = useCallback((results: ForecastResult[], sku: string) => {
+    console.log(`Received forecast results for SKU ${sku}:`, results);
+    setForecastResults(prevResults => {
+      // Filter out any existing results for the same SKU and model
+      const filteredResults = prevResults.filter(existingResult =>
+        !(existingResult.sku === sku && results.some(newResult => newResult.model === existingResult.model))
+      );
+  
+      // Add the new results
+      const updatedResults = [...filteredResults, ...results];
+      console.log('Updated forecast results:', updatedResults);
+      return updatedResults;
+    });
   }, []);
 
-  const handleDataUpload = (data: SalesData[]) => {
-    setSalesData(data);
-    setCleanedData(data);
-    setCurrentStep(1);
-  };
-
-  const handleDataCleaning = (cleaned: SalesData[]) => {
-    console.log('Updating cleaned data:', cleaned.length, 'records');
-    setCleanedData(cleaned);
-  };
-
-  const handleForecastGeneration = (results: ForecastResult[], selectedSKU?: string) => {
-    setForecastResults(results);
-    if (selectedSKU) {
-      setSelectedSKUForResults(selectedSKU);
-      console.log('Generated forecasts for SKU:', selectedSKU);
-    }
-  };
-
-  const handleStepClick = (stepIndex: number) => {
-    // Allow navigation to any step if data is uploaded
-    if (stepIndex === 0 || salesData.length > 0) {
-      // Don't allow finalization step without forecasts
-      if (stepIndex === 4 && forecastResults.length === 0) return;
-      setCurrentStep(stepIndex);
-    }
-  };
-
-  const handleProceedToDataCleaning = () => {
-    setCurrentStep(2);
-  };
-
-  const handleProceedToForecasting = () => {
-    setCurrentStep(3);
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-slate-800 mb-4">
-            AI-Powered Sales Forecast Analytics
-          </h1>
-          <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-            Upload your historical sales data, leverage AI for optimization, and generate enterprise-ready forecasts for S&OP planning.
+    <div className="min-h-screen bg-slate-50">
+      <div className="bg-white py-6 shadow-md rounded-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h1 className="text-2xl font-semibold text-slate-900">Forecasting Tool</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Upload sales data, detect outliers, and generate forecasts using various models.
           </p>
         </div>
+      </div>
 
-        {/* Progress Steps */}
-        <div className="flex justify-center mb-8">
-          <div className="flex space-x-4">
-            {steps.map((step, index) => {
-              const Icon = step.icon;
-              const isActive = index <= currentStep;
-              const isCurrent = index === currentStep;
-              const isClickable = index === 0 || salesData.length > 0;
-              
-              return (
-                <div key={step.id} className="flex items-center">
-                  <button
-                    onClick={() => handleStepClick(index)}
-                    disabled={!isClickable}
-                    className={`
-                      flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all duration-300
-                      ${isActive 
-                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg' 
-                        : 'bg-white border-slate-300 text-slate-400'
-                      }
-                      ${isCurrent ? 'ring-4 ring-blue-200' : ''}
-                      ${isClickable ? 'cursor-pointer hover:scale-105' : 'cursor-not-allowed opacity-50'}
-                    `}
-                  >
-                    <Icon size={20} />
-                  </button>
-                  <span className={`ml-2 font-medium ${isActive ? 'text-slate-800' : 'text-slate-400'}`}>
-                    {step.title}
-                  </span>
-                  {index < steps.length - 1 && (
-                    <div className={`w-8 h-0.5 ml-4 ${index < currentStep ? 'bg-blue-600' : 'bg-slate-300'}`} />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div className="w-full">
-          {currentStep === 0 && (
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="h-5 w-5 text-blue-600" />
-                  Upload Historical Sales Data
-                </CardTitle>
-                <CardDescription>
-                  Upload a CSV file containing your historical sales data with columns: Date, SKU, Sales
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <FileUpload 
-                  onDataUpload={handleDataUpload}
-                  hasExistingData={salesData.length > 0}
-                  dataCount={salesData.length}
-                  skuCount={new Set(salesData.map(d => d.sku)).size}
-                />
-              </CardContent>
-            </Card>
-          )}
-
-          {currentStep === 1 && (
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-blue-600" />
-                  Data Visualization
-                </CardTitle>
-                <CardDescription>
-                  Explore your historical sales data across different SKUs
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DataVisualization data={salesData} />
-                {salesData.length > 0 && (
-                  <div className="mt-6 flex justify-end">
-                    <Button onClick={() => setCurrentStep(2)}>
-                      Proceed to Data Cleaning
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {currentStep === 2 && (
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-blue-600" />
-                  Outlier Detection & Cleaning
-                </CardTitle>
-                <CardDescription>
-                  Identify and remove outliers from your data to improve forecast accuracy
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <OutlierDetection 
-                  data={salesData}
-                  cleanedData={cleanedData}
-                  onDataCleaning={handleDataCleaning}
-                />
-              </CardContent>
-            </Card>
-          )}
-
-          {currentStep === 3 && (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Tabs defaultvalue="upload" className="w-full">
+          <TabsList>
+            <TabsTrigger value="upload" onClick={() => setActiveTab("upload")}>Upload</TabsTrigger>
+            <TabsTrigger value="outliers" onClick={() => setActiveTab("outliers")}>Outliers</TabsTrigger>
+            <TabsTrigger value="forecast" onClick={() => setActiveTab("forecast")}>Forecast</TabsTrigger>
+            <TabsTrigger value="finalize" onClick={() => setActiveTab("finalize")}>Finalize</TabsTrigger>
+          </TabsList>
+          <TabsContent value="upload">
             <div className="space-y-6">
-              <GlobalForecastParameters
-                forecastPeriods={forecastPeriods}
-                setForecastPeriods={setForecastPeriods}
-              />
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-blue-600" />
-                      Forecast Models
-                    </CardTitle>
-                    <CardDescription>
-                      Generate forecasts using multiple predictive models with AI optimization
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ForecastModels 
-                      data={cleanedData}
-                      forecastPeriods={forecastPeriods}
-                      onForecastGeneration={handleForecastGeneration}
-                      selectedSKU={selectedSKUForResults}
-                      onSKUChange={setSelectedSKUForResults}
-                    />
-                  </CardContent>
-                </Card>
+              <UploadData onDataUpload={handleDataUpload} />
+            </div>
+          </TabsContent>
+          <TabsContent value="outliers">
+            <div className="space-y-6">
+              <DetectOutliers data={data} setData={setData} />
+            </div>
+          </TabsContent>
+          <TabsContent value="forecast">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="space-y-6">
+                <ForecastModels
+                  data={data}
+                  forecastPeriods={forecastPeriods}
+                  onForecastGeneration={handleForecastGeneration}
+                  selectedSKU={selectedSKU}
+                  onSKUChange={setSelectedSKU}
+                />
+              </div>
 
-                <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-                  <CardHeader>
-                    <CardTitle>Forecast Results</CardTitle>
-                    <CardDescription>
-                      Compare predictions from different models for {selectedSKUForResults || 'selected product'}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ForecastResults 
-                      results={forecastResults} 
-                      selectedSKU={selectedSKUForResults}
-                    />
-                  </CardContent>
-                </Card>
+              <div className="space-y-6">
+                <ForecastControls
+                  forecastPeriods={forecastPeriods}
+                  onForecastPeriodsChange={setForecastPeriods}
+                />
+
+                <ForecastResults 
+                  results={forecastResults} 
+                  selectedSKU={selectedSKU}
+                  enabledModels={models} // Pass current models to filter results
+                />
               </div>
             </div>
-          )}
-
-          {currentStep === 4 && (
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Eye className="h-5 w-5 text-blue-600" />
-                  Finalize & Export Forecasts
-                </CardTitle>
-                <CardDescription>
-                  Review, edit, and export your forecasts for Sales & Operations Planning
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ForecastFinalization 
-                  historicalData={salesData}
-                  cleanedData={cleanedData}
-                  forecastResults={forecastResults}
-                />
-              </CardContent>
-            </Card>
-          )}
-        </div>
+          </TabsContent>
+          <TabsContent value="finalize">
+            <div className="space-y-6">
+              <FinalizeData data={data} forecastResults={forecastResults} />
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

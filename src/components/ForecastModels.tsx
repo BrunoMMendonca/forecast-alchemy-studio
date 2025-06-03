@@ -201,12 +201,15 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     if (!selectedSKU) return;
 
     try {
-      console.log(`🎯 Generating forecasts for ${selectedSKU} with models:`, models.map(m => ({ id: m.id, enabled: m.enabled })));
+      // Get the most current models state
+      const currentModels = models;
+      console.log(`🎯 Generating forecasts for ${selectedSKU} with current models:`, 
+        currentModels.map(m => ({ id: m.id, enabled: m.enabled })));
       
       const results = await generateForecastsForSKU(
         selectedSKU,
         data,
-        models, // Pass all models - the function will filter enabled ones
+        currentModels, // Use current models state
         forecastPeriods,
         getCachedForecast,
         setCachedForecast,
@@ -228,12 +231,23 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 
   const handleToggleModel = (modelId: string) => {
     console.log(`🔄 Toggling model ${modelId}`);
-    toggleModel(modelId);
-    // Immediately generate forecasts after model toggle to ensure right panel updates
-    setTimeout(() => {
-      console.log(`🔄 Regenerating forecasts after toggling ${modelId}`);
-      generateForecastsForSelectedSKU();
-    }, 50);
+    
+    // Update the model state and immediately regenerate forecasts
+    setModels(prev => {
+      const updated = prev.map(model => 
+        model.id === modelId ? { ...model, enabled: !model.enabled } : model
+      );
+      
+      console.log(`🔄 Model ${modelId} toggled to ${updated.find(m => m.id === modelId)?.enabled}`);
+      
+      // Use the updated models immediately for forecast generation
+      setTimeout(() => {
+        console.log(`🔄 Regenerating forecasts with updated models after toggling ${modelId}`);
+        generateForecastsForSelectedSKU();
+      }, 10); // Very short delay to ensure state update
+      
+      return updated;
+    });
   };
 
   const handleUpdateParameter = (modelId: string, parameter: string, value: number) => {
