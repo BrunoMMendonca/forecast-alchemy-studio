@@ -48,7 +48,10 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     setCachedParameters,
     isCacheValid,
     getSKUsNeedingOptimization,
-    isDatasetUnchanged
+    isOptimizationCompleteForSession,
+    startOptimizationSession,
+    markSKUOptimized,
+    completeOptimizationSession
   } = useOptimizationCache();
   
   const {
@@ -67,12 +70,26 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // Enhanced optimization check - only run if needed
+  // Enhanced optimization check with session tracking
   React.useEffect(() => {
     if (data.length > 0 && !optimizationStarted.current) {
       optimizationStarted.current = true;
       
-      // Check if optimization is actually needed
+      // Check if optimization is complete for this session
+      if (isOptimizationCompleteForSession(data, models.filter(m => m.enabled))) {
+        console.log('Session optimization already complete, loading cached parameters');
+        toast({
+          title: "Session Cache Hit",
+          description: "Optimization already completed for this dataset",
+        });
+        
+        if (selectedSKU) {
+          loadCachedParametersAndForecast();
+        }
+        return;
+      }
+      
+      // Check if optimization is needed
       const skusNeedingOptimization = getSKUsNeedingOptimization(data, models.filter(m => m.enabled));
       
       if (skusNeedingOptimization.length === 0) {
@@ -133,6 +150,9 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     
     console.log(`Starting enhanced optimization. Cache stats: ${cacheStats.hits} hits, ${cacheStats.misses} misses, ${cacheStats.skipped} dataset skips`);
     
+    // Start optimization session
+    startOptimizationSession(data);
+    
     await optimizeAllSKUs(
       data, 
       enabledModels, 
@@ -140,6 +160,9 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
         setCachedParameters(sku, modelId, parameters, dataHash, confidence);
+        
+        // Mark SKU as optimized in session
+        markSKUOptimized(sku);
         
         // Update models state if this is for the currently selected SKU
         if (sku === selectedSKU) {
@@ -156,6 +179,9 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       },
       getSKUsNeedingOptimization
     );
+
+    // Mark optimization session as complete
+    completeOptimizationSession();
 
     // Generate forecasts after optimization
     if (selectedSKU) {
