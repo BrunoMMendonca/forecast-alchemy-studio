@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -351,7 +350,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, onData
             <Checkbox 
               id="hide-clean" 
               checked={hideCleanData}
-              onCheckedChange={setHideCleanData}
+              onCheckedChange={(checked) => setHideCleanData(checked === true)}
             />
             <label htmlFor="hide-clean" className="text-sm text-slate-700 cursor-pointer">
               Hide clean data
