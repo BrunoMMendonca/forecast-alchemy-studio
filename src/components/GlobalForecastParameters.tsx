@@ -3,26 +3,29 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2 } from 'lucide-react';
+import { Settings } from 'lucide-react';
 
-interface ForecastParametersProps {
+interface GlobalForecastParametersProps {
   forecastPeriods: number;
   setForecastPeriods: (periods: number) => void;
-  optimizationProgress: string;
 }
 
-export const ForecastParameters: React.FC<ForecastParametersProps> = ({
+export const GlobalForecastParameters: React.FC<GlobalForecastParametersProps> = ({
   forecastPeriods,
-  setForecastPeriods,
-  optimizationProgress
+  setForecastPeriods
 }) => {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Forecast Parameters</CardTitle>
-        <CardDescription>Configure the forecasting settings</CardDescription>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Settings className="h-5 w-5 text-blue-600" />
+          Global Forecast Settings
+        </CardTitle>
+        <CardDescription>
+          These settings apply to all forecast models
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent>
         <div className="space-y-2">
           <Label htmlFor="forecast-periods">Forecast Periods</Label>
           <Input
@@ -38,13 +41,6 @@ export const ForecastParameters: React.FC<ForecastParametersProps> = ({
             Number of future periods to forecast (automatically detects your data frequency)
           </p>
         </div>
-
-        {optimizationProgress && (
-          <div className="flex items-center gap-2 text-purple-700 p-3 bg-purple-50 rounded-lg border border-purple-200">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">{optimizationProgress}</span>
-          </div>
-        )}
       </CardContent>
     </Card>
   );

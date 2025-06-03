@@ -5,7 +5,7 @@ import { OutlierDetection } from '@/components/OutlierDetection';
 import { ForecastModels } from '@/components/ForecastModels';
 import { ForecastResults } from '@/components/ForecastResults';
 import { ForecastFinalization } from '@/components/ForecastFinalization';
-import { ModelRecommendation } from '@/components/ModelRecommendation';
+import { GlobalForecastParameters } from '@/components/GlobalForecastParameters';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart3, TrendingUp, Upload, Zap, Eye } from 'lucide-react';
@@ -30,6 +30,7 @@ const Index = () => {
   const [cleanedData, setCleanedData] = useState<SalesData[]>([]);
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
   const [selectedSKUForResults, setSelectedSKUForResults] = useState<string>('');
+  const [forecastPeriods, setForecastPeriods] = useState(12);
   const [currentStep, setCurrentStep] = useState(0);
 
   const steps = [
@@ -70,7 +71,6 @@ const Index = () => {
       setSelectedSKUForResults(selectedSKU);
       console.log('Generated forecasts for SKU:', selectedSKU);
     }
-    // Don't auto-proceed to finalization - let user review results first
   };
 
   const handleStepClick = (stepIndex: number) => {
@@ -211,39 +211,49 @@ const Index = () => {
           )}
 
           {currentStep === 3 && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-blue-600" />
-                    Forecast Models
-                  </CardTitle>
-                  <CardDescription>
-                    Generate forecasts using multiple predictive models with AI optimization
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ForecastModels 
-                    data={cleanedData}
-                    onForecastGeneration={handleForecastGeneration}
-                  />
-                </CardContent>
-              </Card>
+            <div className="space-y-6">
+              <GlobalForecastParameters
+                forecastPeriods={forecastPeriods}
+                setForecastPeriods={setForecastPeriods}
+              />
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-blue-600" />
+                      Forecast Models
+                    </CardTitle>
+                    <CardDescription>
+                      Generate forecasts using multiple predictive models with AI optimization
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ForecastModels 
+                      data={cleanedData}
+                      forecastPeriods={forecastPeriods}
+                      onForecastGeneration={handleForecastGeneration}
+                      selectedSKU={selectedSKUForResults}
+                      onSKUChange={setSelectedSKUForResults}
+                    />
+                  </CardContent>
+                </Card>
 
-              <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-                <CardHeader>
-                  <CardTitle>Forecast Results</CardTitle>
-                  <CardDescription>
-                    Compare predictions from different models
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ForecastResults 
-                    results={forecastResults} 
-                    selectedSKU={selectedSKUForResults}
-                  />
-                </CardContent>
-              </Card>
+                <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
+                  <CardHeader>
+                    <CardTitle>Forecast Results</CardTitle>
+                    <CardDescription>
+                      Compare predictions from different models for {selectedSKUForResults || 'selected product'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ForecastResults 
+                      results={forecastResults} 
+                      selectedSKU={selectedSKUForResults}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, Package } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 import { detectDateFrequency, generateForecastDates } from '@/utils/dateUtils';
@@ -13,20 +13,26 @@ import { generateMovingAverage, generateExponentialSmoothing, generateLinearTren
 import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useBatchOptimization } from '@/hooks/useBatchOptimization';
-import { ForecastParameters } from './ForecastParameters';
 import { ModelSelection } from './ModelSelection';
 import { ProductSelector } from './ProductSelector';
 import { ModelConfig } from '@/types/forecast';
 
 interface ForecastModelsProps {
   data: SalesData[];
+  forecastPeriods: number;
   onForecastGeneration: (results: ForecastResult[], selectedSKU: string) => void;
+  selectedSKU: string;
+  onSKUChange: (sku: string) => void;
 }
 
-export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecastGeneration }) => {
-  const [forecastPeriods, setForecastPeriods] = useState(12);
+export const ForecastModels: React.FC<ForecastModelsProps> = ({ 
+  data, 
+  forecastPeriods,
+  onForecastGeneration,
+  selectedSKU,
+  onSKUChange
+}) => {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [selectedSKU, setSelectedSKU] = useState<string>('');
   const [models, setModels] = useState<ModelConfig[]>(getDefaultModels());
   const { toast } = useToast();
   
@@ -44,9 +50,9 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
   React.useEffect(() => {
     const skus = Array.from(new Set(data.map(d => d.sku))).sort();
     if (skus.length > 0 && !selectedSKU) {
-      setSelectedSKU(skus[0]);
+      onSKUChange(skus[0]);
     }
-  }, [data, selectedSKU]);
+  }, [data, selectedSKU, onSKUChange]);
 
   // Load cached parameters when SKU changes
   React.useEffect(() => {
@@ -65,7 +71,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
           optimizationConfidence: cached.confidence
         };
       } else {
-        // Clear invalid cache
         return {
           ...model,
           optimizedParameters: undefined,
@@ -87,14 +92,12 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
         ? { 
             ...model, 
             parameters: { ...model.parameters, [parameter]: value },
-            // Clear optimized params when manually editing
             optimizedParameters: undefined,
             optimizationConfidence: undefined
           }
         : model
     ));
 
-    // Immediately recalculate forecast for this model
     recalculateSingleModelForecast(modelId, { [parameter]: value });
   };
 
@@ -115,7 +118,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
     const effectiveParameters = updatedParams || model.optimizedParameters || model.parameters;
     let predictions: number[] = [];
 
-    // Generate predictions using the same logic as main forecast generation
     switch (model.id) {
       case 'moving_average':
         predictions = generateMovingAverage(skuData, effectiveParameters?.window || 3, forecastPeriods);
@@ -172,7 +174,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
       accuracy
     };
 
-    // Update only this model's results
     onForecastGeneration([singleResult], selectedSKU);
   };
 
@@ -212,7 +213,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
       const dataHash = generateDataHash(skuData);
       setCachedParameters(sku, modelId, parameters, dataHash, confidence);
       
-      // Update models if this is the currently selected SKU
       if (sku === selectedSKU) {
         setModels(prev => prev.map(model => 
           model.id === modelId 
@@ -250,10 +250,8 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
     setIsGenerating(true);
 
     try {
-      // First, run batch optimization for all SKUs
       await handleBatchOptimization();
 
-      // Then generate forecasts for the selected SKU
       const skuData = data
         .filter(d => d.sku === selectedSKU)
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -352,27 +350,12 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
     }
   };
 
-  const generateForAllSKUs = async () => {
-    const allSKUs = Array.from(new Set(data.map(d => d.sku)));
-    // This would be the existing logic but adapted for all SKUs
-    toast({
-      title: "Feature Coming Soon",
-      description: "Generate for all SKUs will be available in the next update",
-    });
-  };
-
   return (
     <div className="space-y-6">
       <ProductSelector
         data={data}
         selectedSKU={selectedSKU}
-        onSKUChange={setSelectedSKU}
-      />
-
-      <ForecastParameters
-        forecastPeriods={forecastPeriods}
-        setForecastPeriods={setForecastPeriods}
-        optimizationProgress={progress ? `${progress.currentSKU} - ${progress.currentModel}` : ''}
+        onSKUChange={onSKUChange}
       />
 
       <ModelSelection
