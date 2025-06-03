@@ -46,6 +46,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   const isTogglingAIManualRef = useRef<boolean>(false);
   const lastSKURef = useRef<string>('');
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
+  const [optimizationCompleted, setOptimizationCompleted] = useState(false);
   
   const {
     cache,
@@ -223,6 +224,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     
     // Mark optimization as started
     markOptimizationStarted(data, '/');
+    setOptimizationCompleted(false);
     
     await optimizeAllSKUs(
       data, 
@@ -261,6 +263,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 
     // Mark optimization as completed - this should prevent any future runs
     markOptimizationCompleted(data, '/');
+    setOptimizationCompleted(true);
 
     console.log('FIXED: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE');
 
@@ -504,36 +507,56 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         onSKUChange={onSKUChange}
       />
 
-      {isOptimizing && progress && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      {(isOptimizing || (progress && optimizationCompleted)) && progress && (
+        <div className={`border rounded-lg p-4 ${optimizationCompleted ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-              <span className="text-sm font-medium text-blue-800">
-                Enhanced AI Optimization in Progress...
+              {isOptimizing ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              ) : (
+                <div className="rounded-full h-4 w-4 bg-green-600 flex items-center justify-center">
+                  <span className="text-white text-xs">✓</span>
+                </div>
+              )}
+              <span className={`text-sm font-medium ${optimizationCompleted ? 'text-green-800' : 'text-blue-800'}`}>
+                {isOptimizing ? 'Enhanced AI Optimization in Progress...' : 'Optimization Complete!'}
               </span>
             </div>
             <button
               onClick={() => setShowOptimizationLog(!showOptimizationLog)}
-              className="text-xs bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded text-blue-700"
+              className={`text-xs px-2 py-1 rounded ${
+                optimizationCompleted 
+                  ? 'bg-green-100 hover:bg-green-200 text-green-700'
+                  : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
+              }`}
             >
               {showOptimizationLog ? 'Hide' : 'Show'} Log
             </button>
           </div>
-          <p className="text-sm text-blue-600 mb-2">
-            Processing {progress.currentSKU} - {progress.currentModel} ({progress.completedSKUs + 1}/{progress.totalSKUs})
-          </p>
-          <div className="grid grid-cols-2 gap-2 text-xs text-blue-500">
+          
+          {isOptimizing ? (
+            <>
+              <p className="text-sm text-blue-600 mb-2">
+                Processing {progress.currentSKU} - {progress.currentModel} ({progress.completedSKUs + 1}/{progress.totalSKUs})
+              </p>
+              <div className="mt-2 bg-blue-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${((progress.completedSKUs) / progress.totalSKUs) * 100}%` }}
+                />
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-green-600 mb-2">
+              Successfully processed {progress.totalSKUs} SKU{progress.totalSKUs > 1 ? 's' : ''}
+            </p>
+          )}
+          
+          <div className={`grid grid-cols-2 gap-2 text-xs ${optimizationCompleted ? 'text-green-600' : 'text-blue-500'}`}>
             <div>🤖 AI Optimized: {progress.aiOptimized || 0}</div>
             <div>🔍 Grid Optimized: {progress.gridOptimized || 0}</div>
             <div>❌ AI Rejected: {progress.aiRejected || 0}</div>
             <div>📋 From Cache: {progress.skipped || 0}</div>
-          </div>
-          <div className="mt-2 bg-blue-200 rounded-full h-2">
-            <div 
-              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${((progress.completedSKUs) / progress.totalSKUs) * 100}%` }}
-            />
           </div>
         </div>
       )}
