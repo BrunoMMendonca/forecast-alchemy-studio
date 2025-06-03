@@ -37,7 +37,7 @@ export const OutlierStatistics: React.FC<OutlierStatisticsProps> = ({
       <div className="bg-orange-50 rounded-lg p-3 text-center">
         <div className="text-sm text-orange-600 font-medium">Outlier Rate</div>
         <div className="text-lg font-bold text-orange-800">
-          {outlierRate}%
+          {outlierRate.toFixed(1)}%
         </div>
       </div>
     </div>
