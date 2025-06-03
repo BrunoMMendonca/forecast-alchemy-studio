@@ -142,7 +142,7 @@ export const generateForecastsForSKU = async (
       sku: selectedSKU,
       model: model.name,
       predictions: forecastDates.map((date, i) => ({
-        date,
+        date: new Date(date),
         value: Math.round(predictions[i] || 0)
       })),
       accuracy

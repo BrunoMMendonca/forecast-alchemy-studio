@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { SalesData } from '@/types/sales';
 import { ModelConfig } from '@/types/forecast';
@@ -57,7 +58,7 @@ const Index = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Tabs defaultvalue="upload" className="w-full">
+        <Tabs defaultValue="upload" className="w-full">
           <TabsList>
             <TabsTrigger value="upload" onClick={() => setActiveTab("upload")}>Upload</TabsTrigger>
             <TabsTrigger value="outliers" onClick={() => setActiveTab("outliers")}>Outliers</TabsTrigger>
@@ -83,19 +84,20 @@ const Index = () => {
                   onForecastGeneration={handleForecastGeneration}
                   selectedSKU={selectedSKU}
                   onSKUChange={setSelectedSKU}
+                  models={models}
+                  setModels={setModels}
                 />
               </div>
 
               <div className="space-y-6">
                 <ForecastControls
-                  forecastPeriods={forecastPeriods}
                   onForecastPeriodsChange={setForecastPeriods}
                 />
 
                 <ForecastResults 
                   results={forecastResults} 
                   selectedSKU={selectedSKU}
-                  enabledModels={models} // Pass current models to filter results
+                  enabledModels={models}
                 />
               </div>
             </div>
