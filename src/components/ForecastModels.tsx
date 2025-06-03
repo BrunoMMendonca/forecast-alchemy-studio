@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -43,7 +44,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   const { toast } = useToast();
   const lastDataHashRef = useRef<string>('');
   const isTogglingAIManualRef = useRef<boolean>(false);
-  const lastAppliedPreferencesRef = useRef<string>(''); // Track when preferences were last applied
+  const hasAppliedPreferencesRef = useRef<boolean>(false);
   
   const {
     cache,
@@ -93,6 +94,51 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   };
 
+  // Apply preferences to models state
+  const applyPreferencesToModels = () => {
+    if (!selectedSKU) return;
+    
+    const preferences = loadManualAIPreferences();
+    const skuData = data.filter(d => d.sku === selectedSKU);
+    const currentDataHash = generateDataHash(skuData);
+
+    console.log(`PREFERENCE APPLY: Applying preferences for ${selectedSKU}:`, preferences);
+
+    setModels(prev => prev.map(model => {
+      const cached = getCachedParameters(selectedSKU, model.id);
+      const preferenceKey = `${selectedSKU}:${model.id}`;
+      const isUsingAI = preferences[preferenceKey] !== false; // Default to AI if no preference
+      
+      console.log(`PREFERENCE APPLY: ${preferenceKey} - isUsingAI: ${isUsingAI}, cached: ${!!cached}`);
+      
+      if (isUsingAI && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
+        // Using AI and have valid cached parameters
+        return {
+          ...model,
+          optimizedParameters: cached.parameters,
+          optimizationConfidence: cached.confidence
+        };
+      } else if (!isUsingAI) {
+        // Using manual - remove AI parameters
+        return {
+          ...model,
+          optimizedParameters: undefined,
+          optimizationConfidence: undefined
+        };
+      } else {
+        // Using AI but no cached parameters or invalid cache
+        return {
+          ...model,
+          optimizedParameters: cached?.parameters,
+          optimizationConfidence: cached?.confidence
+        };
+      }
+    }));
+
+    hasAppliedPreferencesRef.current = true;
+    console.log('PREFERENCE APPLY: ✅ Applied preferences to models state');
+  };
+
   // Auto-select first SKU when data changes
   React.useEffect(() => {
     const skus = Array.from(new Set(data.map(d => d.sku))).sort();
@@ -100,6 +146,18 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       onSKUChange(skus[0]);
     }
   }, [data, selectedSKU, onSKUChange]);
+
+  // Apply preferences whenever selectedSKU changes or component mounts
+  React.useEffect(() => {
+    if (selectedSKU && data.length > 0) {
+      console.log(`PREFERENCE TRIGGER: SKU changed to ${selectedSKU}, applying preferences`);
+      hasAppliedPreferencesRef.current = false;
+      applyPreferencesToModels();
+      
+      // Generate forecasts after preferences are applied
+      setTimeout(() => generateForecastsForSelectedSKU(), 100);
+    }
+  }, [selectedSKU, data.length]);
 
   // FIXED: Main optimization effect - only runs on actual data changes
   React.useEffect(() => {
@@ -138,74 +196,17 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         description: "Optimization already completed for this dataset",
       });
       
-      // Load cached parameters immediately
-      loadCachedParametersAndForecast();
+      // Apply preferences and load cached parameters
+      if (selectedSKU) {
+        applyPreferencesToModels();
+        setTimeout(() => generateForecastsForSelectedSKU(), 100);
+      }
       return;
     }
 
     console.log('FIXED: ✅ NAVIGATION STATE APPROVED OPTIMIZATION - Starting process');
     handleInitialOptimization();
   }, [data]); // FIXED: Only depends on data, hash generated inside effect
-
-  // FIXED: Always reload preferences when component renders with selectedSKU
-  React.useEffect(() => {
-    if (!selectedSKU || data.length === 0) return;
-
-    // Create a unique key for current state to detect when we need to reload preferences
-    const currentStateKey = `${selectedSKU}-${data.length}-${models.length}`;
-    
-    if (lastAppliedPreferencesRef.current !== currentStateKey) {
-      console.log(`PREFERENCE: State changed, reloading preferences: ${currentStateKey}`);
-      lastAppliedPreferencesRef.current = currentStateKey;
-      loadCachedParametersAndForecast();
-    }
-  }, [selectedSKU, data.length, models.length]); // React to any state change
-
-  const loadCachedParametersAndForecast = () => {
-    if (!selectedSKU) return;
-
-    const skuData = data.filter(d => d.sku === selectedSKU);
-    const currentDataHash = generateDataHash(skuData);
-    const preferences = loadManualAIPreferences();
-
-    console.log(`PREFERENCE: Applying preferences for ${selectedSKU}:`, preferences);
-
-    // FIXED: Always apply preferences to models, regardless of cached parameters
-    setModels(prev => prev.map(model => {
-      const cached = getCachedParameters(selectedSKU, model.id);
-      const preferenceKey = `${selectedSKU}:${model.id}`;
-      const isUsingAI = preferences[preferenceKey] !== false; // Default to AI if no preference
-      
-      console.log(`PREFERENCE: ${preferenceKey} - isUsingAI: ${isUsingAI}, cached: ${!!cached}`);
-      
-      // Apply preferences regardless of cache validity
-      if (isUsingAI && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
-        // Using AI and have valid cached parameters
-        return {
-          ...model,
-          optimizedParameters: cached.parameters,
-          optimizationConfidence: cached.confidence
-        };
-      } else if (isUsingAI && cached) {
-        // Using AI but cache is invalid - show we have AI parameters but they're stale
-        return {
-          ...model,
-          optimizedParameters: cached.parameters,
-          optimizationConfidence: cached.confidence
-        };
-      } else {
-        // Using manual or no cached parameters
-        return {
-          ...model,
-          optimizedParameters: undefined,
-          optimizationConfidence: undefined
-        };
-      }
-    }));
-
-    // Generate forecasts with caching
-    setTimeout(() => generateForecastsForSelectedSKU(), 100);
-  };
 
   const handleInitialOptimization = async () => {
     const enabledModels = models.filter(m => m.enabled);
@@ -521,6 +522,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           | Cache: {cacheStats.hits} hits, {cacheStats.misses} misses
           | Fingerprint: {navigationState.datasetFingerprint}
           | AI/Manual Toggle: {isTogglingAIManualRef.current ? '🔄 Active' : '✅ Idle'}
+          | Preferences Applied: {hasAppliedPreferencesRef.current ? '✅' : '❌'}
         </div>
       )}
     </div>
