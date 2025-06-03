@@ -1,12 +1,10 @@
-
-import { optimizeParametersWithGrok } from '@/utils/grokApiUtils';
-import { adaptiveGridSearchOptimization, enhancedParameterValidation } from '@/utils/adaptiveOptimization';
-import { ENHANCED_VALIDATION_CONFIG } from '@/utils/enhancedValidation';
-import { optimizationLogger } from '@/utils/optimizationLogger';
 import { ModelConfig } from '@/types/forecast';
-import { SalesData } from '@/pages/Index';
-import { detectDateFrequency } from '@/utils/dateUtils';
-import { OptimizationResult } from '@/types/batchOptimization';
+import { optimizeParametersWithGrok } from '@/utils/grokApiUtils';
+import { optimizeModelLocally } from '@/utils/localOptimization';
+import { evaluateParameters } from '@/utils/adaptiveOptimization';
+import { enhancedParameterValidation } from '@/utils/enhancedValidation';
+import { optimizationLogger } from '@/utils/optimizationLogger';
+import { SalesData } from '@/types/sales';
 
 const GROK_API_KEY = 'xai-003DWefvygdxNiCFZlEUAvBIBHCiW4wPmJSOzet8xcOKqJq2nYMwbImiRqfgkoNoYP1sLCPOKPTC4HDf';
 

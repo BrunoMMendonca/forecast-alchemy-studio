@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { SalesData } from '@/pages/Index';
+import { useEffect, useRef } from 'react';
+import { SalesData } from '@/types/sales';
 import { ModelConfig } from '@/types/forecast';
+import { optimizeSingleModel } from '@/utils/singleModelOptimization';
 
 interface NavigationOptimizationState {
   datasetFingerprint: string;
