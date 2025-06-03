@@ -50,17 +50,6 @@ export const ForecastResults: React.FC<ForecastResultsProps> = ({ results, selec
 
   return (
     <div className="space-y-6">
-      {selectedSKU && (
-        <div className="text-center">
-          <h3 className="text-lg font-semibold text-slate-800">
-            Forecasts for {selectedSKU}
-          </h3>
-          <p className="text-sm text-slate-500">
-            Showing results from {selectedSKUResults.length} model(s)
-          </p>
-        </div>
-      )}
-
       <ModelAccuracyCards selectedSKUResults={selectedSKUResults} />
 
       <ForecastChart

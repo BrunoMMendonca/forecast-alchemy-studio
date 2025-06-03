@@ -13,8 +13,12 @@ interface ForecastChartProps {
 
 const modelColors = {
   'Simple Moving Average': '#3b82f6',
-  'Exponential Smoothing': '#10b981',
-  'Linear Trend': '#f59e0b'
+  'Simple Exponential Smoothing': '#10b981',
+  'Double Exponential Smoothing': '#f59e0b',
+  'Linear Trend': '#ef4444',
+  'Seasonal Moving Average': '#8b5cf6',
+  'Holt-Winters (Triple Exponential)': '#06b6d4',
+  'Seasonal Naive': '#84cc16'
 };
 
 export const ForecastChart: React.FC<ForecastChartProps> = ({
@@ -22,6 +26,11 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
   selectedSKU,
   selectedSKUResults
 }) => {
+  // Find the best model for highlighting
+  const bestModel = selectedSKUResults.reduce((best, current) => 
+    (current.accuracy || 0) > (best.accuracy || 0) ? current : best
+  );
+
   return (
     <Card className="bg-white">
       <CardHeader>
@@ -77,34 +86,29 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}
               />
-              <Legend />
+              <Legend 
+                wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
+                iconSize={12}
+              />
               
-              {selectedSKUResults.map((result) => (
-                <Line
-                  key={result.model}
-                  type="monotone"
-                  dataKey={result.model}
-                  stroke={modelColors[result.model as keyof typeof modelColors]}
-                  strokeWidth={2}
-                  dot={false}
-                  connectNulls={false}
-                />
-              ))}
+              {selectedSKUResults.map((result) => {
+                const isBestModel = result.model === bestModel.model;
+                
+                return (
+                  <Line
+                    key={result.model}
+                    type="monotone"
+                    dataKey={result.model}
+                    stroke={modelColors[result.model as keyof typeof modelColors] || '#64748b'}
+                    strokeWidth={isBestModel ? 3 : 2}
+                    dot={false}
+                    connectNulls={false}
+                    strokeDasharray={isBestModel ? "0" : "0"}
+                  />
+                );
+              })}
             </LineChart>
           </ResponsiveContainer>
-        </div>
-        
-        {/* Legend */}
-        <div className="flex justify-center space-x-6 mt-4 text-sm">
-          {selectedSKUResults.map((result) => (
-            <div key={result.model} className="flex items-center space-x-2">
-              <div 
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: modelColors[result.model as keyof typeof modelColors] }}
-              ></div>
-              <span>{result.model}</span>
-            </div>
-          ))}
         </div>
       </CardContent>
     </Card>
