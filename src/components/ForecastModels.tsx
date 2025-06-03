@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -147,17 +146,17 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // Apply preferences whenever selectedSKU changes or component mounts
+  // FIXED: Apply preferences whenever component has data and selectedSKU (including after navigation)
   React.useEffect(() => {
     if (selectedSKU && data.length > 0) {
-      console.log(`PREFERENCE TRIGGER: SKU changed to ${selectedSKU}, applying preferences`);
+      console.log(`PREFERENCE TRIGGER: Component ready with SKU ${selectedSKU}, applying preferences`);
       hasAppliedPreferencesRef.current = false;
       applyPreferencesToModels();
       
       // Generate forecasts after preferences are applied
       setTimeout(() => generateForecastsForSelectedSKU(), 100);
     }
-  }, [selectedSKU, data.length]);
+  }, [selectedSKU, data.length]); // This runs whenever we have both data and selectedSKU
 
   // FIXED: Main optimization effect - only runs on actual data changes
   React.useEffect(() => {
@@ -189,19 +188,14 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     const shouldRunOptimization = shouldOptimize(data, '/');
     
     if (!shouldRunOptimization) {
-      console.log('FIXED: ❌ OPTIMIZATION BLOCKED BY NAVIGATION STATE - Loading cached parameters');
+      console.log('FIXED: ❌ OPTIMIZATION BLOCKED BY NAVIGATION STATE - Using cached results');
       
       toast({
         title: "Using Cached Results",
         description: "Optimization already completed for this dataset",
       });
       
-      // Apply preferences and load cached parameters
-      if (selectedSKU) {
-        applyPreferencesToModels();
-        setTimeout(() => generateForecastsForSelectedSKU(), 100);
-      }
-      return;
+      return; // Don't run optimization, preferences will be applied by the other effect
     }
 
     console.log('FIXED: ✅ NAVIGATION STATE APPROVED OPTIMIZATION - Starting process');
