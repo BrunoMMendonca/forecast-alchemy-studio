@@ -4,7 +4,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, Calculator, Target, Calendar, Activity, BarChart3 } from 'lucide-react';
+import { TrendingUp, Calculator, Target, Calendar, Activity, BarChart3, Zap, Loader2 } from 'lucide-react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 import { detectDateFrequency, generateForecastDates } from '@/utils/dateUtils';
@@ -14,8 +14,7 @@ import {
   generateHoltWinters, 
   generateSeasonalNaive 
 } from '@/utils/seasonalUtils';
-import { ModelRecommendation } from './ModelRecommendation';
-import { ParameterOptimizer } from './ParameterOptimizer';
+import { optimizeParametersWithGrok } from '@/utils/grokApiUtils';
 
 interface ForecastModelsProps {
   data: SalesData[];
@@ -30,11 +29,16 @@ interface ModelConfig {
   enabled: boolean;
   parameters?: Record<string, number>;
   isSeasonal?: boolean;
+  optimizedParameters?: Record<string, number>;
+  optimizationConfidence?: number;
 }
 
 export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecastGeneration }) => {
   const [forecastPeriods, setForecastPeriods] = useState(12);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [useAiOptimization, setUseAiOptimization] = useState(false);
+  const [grokApiKey, setGrokApiKey] = useState('');
+  const [optimizationProgress, setOptimizationProgress] = useState<string>('');
   const { toast } = useToast();
 
   const [models, setModels] = useState<ModelConfig[]>([
@@ -108,6 +112,45 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
     ));
   };
 
+  const optimizeModelParameters = async (model: ModelConfig, skuData: SalesData[], frequency: any) => {
+    if (!grokApiKey.trim() || !model.parameters || Object.keys(model.parameters).length === 0) {
+      return model.parameters;
+    }
+
+    try {
+      setOptimizationProgress(`Optimizing ${model.name} parameters with AI...`);
+      
+      const result = await optimizeParametersWithGrok({
+        modelType: model.id,
+        historicalData: skuData.map(d => d.sales),
+        currentParameters: model.parameters,
+        seasonalPeriod: frequency.seasonalPeriod,
+        targetMetric: 'mape'
+      }, grokApiKey);
+
+      // Update model with optimized parameters
+      setModels(prev => prev.map(m => 
+        m.id === model.id 
+          ? { 
+              ...m, 
+              optimizedParameters: result.optimizedParameters,
+              optimizationConfidence: result.confidence
+            }
+          : m
+      ));
+
+      return result.optimizedParameters;
+    } catch (error) {
+      console.error(`Failed to optimize ${model.name}:`, error);
+      toast({
+        title: "Optimization Warning",
+        description: `Failed to optimize ${model.name}, using manual parameters`,
+        variant: "destructive",
+      });
+      return model.parameters;
+    }
+  };
+
   // Simple Moving Average implementation
   const generateMovingAverage = (salesData: SalesData[], window: number): number[] => {
     const values = salesData.map(d => d.sales);
@@ -178,7 +221,17 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
       return;
     }
 
+    if (useAiOptimization && !grokApiKey.trim()) {
+      toast({
+        title: "API Key Required",
+        description: "Please enter your Grok API key to use AI optimization",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsGenerating(true);
+    setOptimizationProgress('');
 
     try {
       const skus = Array.from(new Set(data.map(d => d.sku)));
@@ -191,20 +244,26 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
 
         if (skuData.length < 3) continue;
 
-        // Detect date frequency for this SKU
         const frequency = detectDateFrequency(skuData.map(d => d.date));
         const lastDate = new Date(Math.max(...skuData.map(d => new Date(d.date).getTime())));
         const forecastDates = generateForecastDates(lastDate, forecastPeriods, frequency);
 
         for (const model of enabledModels) {
+          let effectiveParameters = model.parameters;
+
+          // Optimize parameters with AI if enabled
+          if (useAiOptimization && model.parameters && Object.keys(model.parameters).length > 0) {
+            effectiveParameters = await optimizeModelParameters(model, skuData, frequency);
+          }
+
           let predictions: number[] = [];
 
           switch (model.id) {
             case 'moving_average':
-              predictions = generateMovingAverage(skuData, model.parameters?.window || 3);
+              predictions = generateMovingAverage(skuData, effectiveParameters?.window || 3);
               break;
             case 'exponential_smoothing':
-              predictions = generateExponentialSmoothing(skuData, model.parameters?.alpha || 0.3);
+              predictions = generateExponentialSmoothing(skuData, effectiveParameters?.alpha || 0.3);
               break;
             case 'linear_trend':
               predictions = generateLinearTrend(skuData);
@@ -212,7 +271,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
             case 'seasonal_moving_average':
               predictions = generateSeasonalMovingAverage(
                 skuData.map(d => d.sales),
-                model.parameters?.window || 3,
+                effectiveParameters?.window || 3,
                 frequency.seasonalPeriod,
                 forecastPeriods
               );
@@ -222,9 +281,9 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
                 skuData.map(d => d.sales),
                 frequency.seasonalPeriod,
                 forecastPeriods,
-                model.parameters?.alpha || 0.3,
-                model.parameters?.beta || 0.1,
-                model.parameters?.gamma || 0.1
+                effectiveParameters?.alpha || 0.3,
+                effectiveParameters?.beta || 0.1,
+                effectiveParameters?.gamma || 0.1
               );
               break;
             case 'seasonal_naive':
@@ -236,7 +295,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
               break;
           }
 
-          // Calculate accuracy metric
           const recentActual = skuData.slice(-5).map(d => d.sales);
           const recentPredicted = predictions.slice(0, 5);
           const mape = recentActual.reduce((sum, actual, i) => {
@@ -248,7 +306,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
 
           results.push({
             sku,
-            model: model.name,
+            model: model.name + (useAiOptimization && model.optimizationConfidence ? ` (AI: ${model.optimizationConfidence.toFixed(0)}%)` : ''),
             predictions: forecastDates.map((date, i) => ({
               date,
               value: Math.round(predictions[i] || 0)
@@ -262,7 +320,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
       
       toast({
         title: "Forecasts Generated",
-        description: `Generated ${results.length} forecasts across ${skus.length} SKUs`,
+        description: `Generated ${results.length} forecasts across ${skus.length} SKUs${useAiOptimization ? ' with AI optimization' : ''}`,
       });
 
     } catch (error) {
@@ -274,6 +332,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
       console.error('Forecast generation error:', error);
     } finally {
       setIsGenerating(false);
+      setOptimizationProgress('');
     }
   };
 
@@ -301,6 +360,44 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
               Number of future periods to forecast (automatically detects your data frequency)
             </p>
           </div>
+
+          {/* AI Optimization Section */}
+          <div className="space-y-3 p-4 bg-purple-50/50 border border-purple-200 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="ai-optimization"
+                checked={useAiOptimization}
+                onCheckedChange={setUseAiOptimization}
+              />
+              <Label htmlFor="ai-optimization" className="flex items-center gap-2 font-medium">
+                <Zap className="h-4 w-4 text-purple-600" />
+                Auto-optimize parameters with Grok-3 AI
+              </Label>
+            </div>
+            
+            {useAiOptimization && (
+              <div className="space-y-2">
+                <Label htmlFor="grok-api-key">Grok API Key</Label>
+                <Input
+                  id="grok-api-key"
+                  type="password"
+                  placeholder="Enter your Grok API key"
+                  value={grokApiKey}
+                  onChange={(e) => setGrokApiKey(e.target.value)}
+                />
+                <p className="text-xs text-slate-500">
+                  Your API key is used only for optimization and not stored
+                </p>
+              </div>
+            )}
+
+            {optimizationProgress && (
+              <div className="flex items-center gap-2 text-purple-700">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">{optimizationProgress}</span>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -320,8 +417,15 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
                     onCheckedChange={() => toggleModel(model.id)}
                   />
                   {model.icon}
-                  <div>
-                    <CardTitle className="text-base">{model.name}</CardTitle>
+                  <div className="flex-1">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      {model.name}
+                      {model.optimizationConfidence && (
+                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                          AI: {model.optimizationConfidence.toFixed(0)}% confidence
+                        </span>
+                      )}
+                    </CardTitle>
                     <CardDescription className="text-sm">
                       {model.description}
                     </CardDescription>
@@ -332,7 +436,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
               {model.enabled && model.parameters && Object.keys(model.parameters).length > 0 && (
                 <CardContent className="pt-0">
                   <div className="space-y-3 pl-8">
-                    {Object.entries(model.parameters).map(([param, value]) => (
+                    {Object.entries(model.optimizedParameters || model.parameters).map(([param, value]) => (
                       <div key={param} className="flex items-center space-x-3">
                         <Label className="w-20 text-sm capitalize">{param}:</Label>
                         <Input
@@ -343,10 +447,12 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
                           step={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
                           min={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
                           max={param === 'alpha' || param === 'beta' || param === 'gamma' ? 1 : 30}
+                          disabled={useAiOptimization && model.optimizedParameters}
                         />
                         <span className="text-xs text-slate-500">
                           {param === 'window' && 'periods'}
                           {(param === 'alpha' || param === 'beta' || param === 'gamma') && '(0.1-1.0)'}
+                          {model.optimizedParameters && <span className="text-purple-600 ml-1">(AI optimized)</span>}
                         </span>
                       </div>
                     ))}
@@ -372,8 +478,15 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
                     onCheckedChange={() => toggleModel(model.id)}
                   />
                   {model.icon}
-                  <div>
-                    <CardTitle className="text-base">{model.name}</CardTitle>
+                  <div className="flex-1">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      {model.name}
+                      {model.optimizationConfidence && (
+                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                          AI: {model.optimizationConfidence.toFixed(0)}% confidence
+                        </span>
+                      )}
+                    </CardTitle>
                     <CardDescription className="text-sm">
                       {model.description}
                     </CardDescription>
@@ -384,7 +497,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
               {model.enabled && model.parameters && Object.keys(model.parameters).length > 0 && (
                 <CardContent className="pt-0">
                   <div className="space-y-3 pl-8">
-                    {Object.entries(model.parameters).map(([param, value]) => (
+                    {Object.entries(model.optimizedParameters || model.parameters).map(([param, value]) => (
                       <div key={param} className="flex items-center space-x-3">
                         <Label className="w-20 text-sm capitalize">{param}:</Label>
                         <Input
@@ -395,10 +508,12 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
                           step={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
                           min={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
                           max={param === 'alpha' || param === 'beta' || param === 'gamma' ? 1 : 30}
+                          disabled={useAiOptimization && model.optimizedParameters}
                         />
                         <span className="text-xs text-slate-500">
                           {param === 'window' && 'periods'}
                           {(param === 'alpha' || param === 'beta' || param === 'gamma') && '(0.1-1.0)'}
+                          {model.optimizedParameters && <span className="text-purple-600 ml-1">(AI optimized)</span>}
                         </span>
                       </div>
                     ))}
@@ -421,12 +536,12 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({ data, onForecast
           {isGenerating ? (
             <>
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              Generating Forecasts...
+              {optimizationProgress || 'Generating Forecasts...'}
             </>
           ) : (
             <>
               <TrendingUp className="h-4 w-4 mr-2" />
-              Generate Forecasts
+              Generate Forecasts{useAiOptimization ? ' with AI' : ''}
             </>
           )}
         </Button>
