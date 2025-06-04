@@ -69,7 +69,7 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
         
         if (bestResult && bestResult.predictions) {
           newEditableForecasts[sku] = bestResult.predictions.map(p => ({
-            date: p.date instanceof Date ? p.date.toISOString().split('T')[0] : p.date,
+            date: p.date,
             value: p.value,
             isEdited: false
           }));
@@ -125,7 +125,7 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
       setEditableForecasts(prev => ({
         ...prev,
         [sku]: selectedResult.predictions.map(p => ({
-          date: p.date instanceof Date ? p.date.toISOString().split('T')[0] : p.date,
+          date: p.date,
           value: p.value,
           isEdited: false
         }))
