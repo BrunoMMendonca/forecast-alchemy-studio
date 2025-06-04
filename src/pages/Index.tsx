@@ -1,5 +1,6 @@
+
 import React, { useState, useCallback } from 'react';
-import { SalesData } from '@/types/sales';
+import { SalesData, ForecastResult } from '@/types/sales';
 import { ModelConfig } from '@/types/forecast';
 import { ForecastModels } from '@/components/ForecastModels';
 import { ForecastResults } from '@/components/ForecastResults';
@@ -8,13 +9,6 @@ import { UploadData } from '@/components/UploadData';
 import { DetectOutliers } from '@/components/DetectOutliers';
 import { FinalizeData } from '@/components/FinalizeData';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-
-export interface ForecastResult {
-  sku: string;
-  model: string;
-  predictions: { date: Date; value: number }[];
-  accuracy: number;
-}
 
 const Index = () => {
   const [data, setData] = useState<SalesData[]>([]);
@@ -57,7 +51,7 @@ const Index = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Tabs defaultvalue="upload" className="w-full">
+        <Tabs defaultValue="upload" className="w-full">
           <TabsList>
             <TabsTrigger value="upload" onClick={() => setActiveTab("upload")}>Upload</TabsTrigger>
             <TabsTrigger value="outliers" onClick={() => setActiveTab("outliers")}>Outliers</TabsTrigger>
@@ -88,14 +82,14 @@ const Index = () => {
 
               <div className="space-y-6">
                 <ForecastControls
-                  forecastPeriods={forecastPeriods}
-                  onForecastPeriodsChange={setForecastPeriods}
+                  periods={forecastPeriods}
+                  onPeriodsChange={setForecastPeriods}
                 />
 
                 <ForecastResults 
                   results={forecastResults} 
                   selectedSKU={selectedSKU}
-                  enabledModels={models} // Pass current models to filter results
+                  enabledModels={models}
                 />
               </div>
             </div>

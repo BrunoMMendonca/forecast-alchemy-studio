@@ -1,5 +1,5 @@
 
-import { SalesData, ForecastResult } from '@/pages/Index';
+import { SalesData, ForecastResult } from '@/types/sales';
 import { ModelConfig } from '@/types/forecast';
 import { detectDateFrequency, generateForecastDates } from '@/utils/dateUtils';
 import { 
@@ -142,7 +142,7 @@ export const generateForecastsForSKU = async (
       sku: selectedSKU,
       model: model.name,
       predictions: forecastDates.map((date, i) => ({
-        date,
+        date: new Date(date),
         value: Math.round(predictions[i] || 0)
       })),
       accuracy
