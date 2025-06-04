@@ -11,6 +11,8 @@ import { ModelSelection } from './ModelSelection';
 import { ProductSelector } from './ProductSelector';
 import { OptimizationLogger } from './OptimizationLogger';
 import { optimizationLogger } from '@/utils/optimizationLogger';
+import { AlertCircle, Clock, Zap } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 interface ForecastModelsProps {
   data: SalesData[];
@@ -79,6 +81,10 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     loadManualAIPreferences,
     saveManualAIPreferences
   } = useModelManagement(selectedSKU, data);
+
+  // Check if current SKU is in optimization queue
+  const isCurrentSKUQueued = optimizationQueue ? optimizationQueue.getSKUsInQueue().includes(selectedSKU) : false;
+  const isCurrentSKUBeingOptimized = isOptimizing && progress?.currentSKU === selectedSKU;
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
@@ -245,87 +251,145 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 
   return (
     <div className="space-y-6">
-      <ProductSelector
-        data={data}
-        selectedSKU={selectedSKU}
-        onSKUChange={onSKUChange}
-      />
+      <div className="space-y-4">
+        <ProductSelector
+          data={data}
+          selectedSKU={selectedSKU}
+          onSKUChange={onSKUChange}
+        />
 
-      {(isOptimizing || (progress && (optimizationCompleted || isOptimizing))) && progress && (
-        <div className={`border rounded-lg p-4 ${optimizationCompleted ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              {isOptimizing ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+        {/* Current SKU Optimization Status */}
+        {selectedSKU && (isCurrentSKUQueued || isCurrentSKUBeingOptimized) && (
+          <div className={`border rounded-lg p-4 ${
+            isCurrentSKUBeingOptimized 
+              ? 'bg-blue-50 border-blue-200' 
+              : 'bg-amber-50 border-amber-200'
+          }`}>
+            <div className="flex items-center gap-3">
+              {isCurrentSKUBeingOptimized ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-blue-600" />
+                    <span className="font-medium text-blue-800">
+                      Currently Optimizing: {selectedSKU}
+                    </span>
+                  </div>
+                  {progress?.currentModel && (
+                    <Badge variant="secondary" className="text-xs">
+                      {progress.currentModel}
+                    </Badge>
+                  )}
+                </>
               ) : (
-                <div className="rounded-full h-4 w-4 bg-green-600 flex items-center justify-center">
-                  <span className="text-white text-xs">✓</span>
+                <>
+                  <Clock className="h-5 w-5 text-amber-600" />
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-amber-800">
+                      SKU Queued for Optimization: {selectedSKU}
+                    </span>
+                    <Badge variant="outline" className="text-xs border-amber-300 text-amber-700">
+                      Pending
+                    </Badge>
+                  </div>
+                </>
+              )}
+            </div>
+            
+            {isCurrentSKUBeingOptimized && progress && (
+              <div className="mt-3">
+                <div className="text-sm text-blue-600 mb-2">
+                  Processing model: {progress.currentModel} 
+                  ({progress.completedSKUs + 1}/{progress.totalSKUs} SKUs)
                 </div>
-              )}
-              <span className={`text-sm font-medium ${optimizationCompleted ? 'text-green-800' : 'text-blue-800'}`}>
-                {isOptimizing ? 'Queue AI Optimization in Progress...' : 'Queue Optimization Complete!'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowOptimizationLog(!showOptimizationLog)}
-                className={`text-xs px-2 py-1 rounded ${
-                  optimizationCompleted 
-                    ? 'bg-green-100 hover:bg-green-200 text-green-700'
-                    : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
-                }`}
-              >
-                {showOptimizationLog ? 'Hide' : 'Show'} Log
-              </button>
-              {optimizationCompleted && (
-                <button
-                  onClick={clearProgress}
-                  className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
-                >
-                  Dismiss
-                </button>
-              )}
-            </div>
-          </div>
-          
-          {isOptimizing ? (
-            <>
-              <p className="text-sm text-blue-600 mb-2">
-                Processing {progress.currentSKU} - {progress.currentModel} ({progress.completedSKUs + 1}/{progress.totalSKUs})
-              </p>
-              <div className="mt-2 bg-blue-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${((progress.completedSKUs) / progress.totalSKUs) * 100}%` }}
-                />
-              </div>
-            </>
-          ) : (
-            <div>
-              <p className="text-sm text-green-600 mb-2">
-                Successfully processed {progress.totalSKUs} SKU{progress.totalSKUs > 1 ? 's' : ''} from queue
-              </p>
-              {progress.aiOptimized > 0 && (
-                <p className="text-xs text-green-500 mb-1">
-                  AI Acceptance Rate: {((progress.aiOptimized / (progress.aiOptimized + progress.aiRejected)) * 100).toFixed(1)}%
-                </p>
-              )}
-            </div>
-          )}
-          
-          <div className={`grid grid-cols-2 gap-2 text-xs ${optimizationCompleted ? 'text-green-600' : 'text-blue-500'}`}>
-            <div>🤖 AI Optimized: {progress.aiOptimized || 0}</div>
-            <div>🔍 Grid Optimized: {progress.gridOptimized || 0}</div>
-            <div>❌ AI Rejected: {progress.aiRejected || 0}</div>
-            <div>📋 From Cache: {progress.skipped || 0}</div>
-            {progress.aiAcceptedByTolerance > 0 && (
-              <div className="col-span-2 text-xs text-blue-600">
-                ✅ AI by Tolerance: {progress.aiAcceptedByTolerance} | by Confidence: {progress.aiAcceptedByConfidence || 0}
+                <div className="bg-blue-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${((progress.completedSKUs) / progress.totalSKUs) * 100}%` }}
+                  />
+                </div>
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Queue-wide optimization progress (when not optimizing current SKU) */}
+        {(isOptimizing || (progress && (optimizationCompleted || isOptimizing))) && progress && !isCurrentSKUBeingOptimized && (
+          <div className={`border rounded-lg p-4 ${optimizationCompleted ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                {isOptimizing ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                ) : (
+                  <div className="rounded-full h-4 w-4 bg-green-600 flex items-center justify-center">
+                    <span className="text-white text-xs">✓</span>
+                  </div>
+                )}
+                <span className={`text-sm font-medium ${optimizationCompleted ? 'text-green-800' : 'text-blue-800'}`}>
+                  {isOptimizing ? 'Queue AI Optimization in Progress...' : 'Queue Optimization Complete!'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowOptimizationLog(!showOptimizationLog)}
+                  className={`text-xs px-2 py-1 rounded ${
+                    optimizationCompleted 
+                      ? 'bg-green-100 hover:bg-green-200 text-green-700'
+                      : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
+                  }`}
+                >
+                  {showOptimizationLog ? 'Hide' : 'Show'} Log
+                </button>
+                {optimizationCompleted && (
+                  <button
+                    onClick={clearProgress}
+                    className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
+                  >
+                    Dismiss
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            {isOptimizing ? (
+              <>
+                <p className="text-sm text-blue-600 mb-2">
+                  Processing {progress.currentSKU} - {progress.currentModel} ({progress.completedSKUs + 1}/{progress.totalSKUs})
+                </p>
+                <div className="mt-2 bg-blue-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${((progress.completedSKUs) / progress.totalSKUs) * 100}%` }}
+                  />
+                </div>
+              </>
+            ) : (
+              <div>
+                <p className="text-sm text-green-600 mb-2">
+                  Successfully processed {progress.totalSKUs} SKU{progress.totalSKUs > 1 ? 's' : ''} from queue
+                </p>
+                {progress.aiOptimized > 0 && (
+                  <p className="text-xs text-green-500 mb-1">
+                    AI Acceptance Rate: {((progress.aiOptimized / (progress.aiOptimized + progress.aiRejected)) * 100).toFixed(1)}%
+                  </p>
+                )}
+              </div>
+            )}
+            
+            <div className={`grid grid-cols-2 gap-2 text-xs ${optimizationCompleted ? 'text-green-600' : 'text-blue-500'}`}>
+              <div>🤖 AI Optimized: {progress.aiOptimized || 0}</div>
+              <div>🔍 Grid Optimized: {progress.gridOptimized || 0}</div>
+              <div>❌ AI Rejected: {progress.aiRejected || 0}</div>
+              <div>📋 From Cache: {progress.skipped || 0}</div>
+              {progress.aiAcceptedByTolerance > 0 && (
+                <div className="col-span-2 text-xs text-blue-600">
+                  ✅ AI by Tolerance: {progress.aiAcceptedByTolerance} | by Confidence: {progress.aiAcceptedByConfidence || 0}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       <ModelSelection
         models={models}
