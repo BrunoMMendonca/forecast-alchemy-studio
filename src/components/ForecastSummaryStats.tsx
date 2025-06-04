@@ -1,46 +1,63 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ForecastResult } from '@/pages/Index';
+import { ForecastResult } from '@/types/sales';
 
 interface ForecastSummaryStatsProps {
   results: ForecastResult[];
-  skus: string[];
+  selectedSKU: string;
 }
 
 export const ForecastSummaryStats: React.FC<ForecastSummaryStatsProps> = ({
   results,
-  skus
+  selectedSKU
 }) => {
+  const skuResults = results.filter(r => r.sku === selectedSKU);
+
+  if (!selectedSKU || skuResults.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Forecast Summary</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-gray-500">No forecasts generated for the selected SKU.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <Card className="bg-slate-50">
+    <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Forecast Summary</CardTitle>
+        <CardTitle>Forecast Summary for {selectedSKU}</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-          <div>
-            <div className="text-2xl font-bold text-blue-600">{skus.length}</div>
-            <div className="text-sm text-slate-600">SKUs Forecasted</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-green-600">
-              {results.length}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {skuResults.map(result => (
+            <div key={result.model} className="border rounded-md p-4">
+              <h3 className="text-lg font-semibold">{result.model}</h3>
+              <p>
+                <strong>MAPE:</strong> {result.mape ? result.mape.toFixed(2) : 'N/A'}%
+              </p>
+              <p>
+                <strong>Accuracy:</strong> {result.accuracy ? result.accuracy.toFixed(2) : 'N/A'}%
+              </p>
+              {result.parameters && Object.keys(result.parameters).length > 0 && (
+                <div>
+                  <p>
+                    <strong>Parameters:</strong>
+                  </p>
+                  <ul>
+                    {Object.entries(result.parameters).map(([key, value]) => (
+                      <li key={key}>
+                        {key}: {value.toFixed(2)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-            <div className="text-sm text-slate-600">Total Forecasts</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-purple-600">
-              {results[0]?.predictions.length || 0}
-            </div>
-            <div className="text-sm text-slate-600">Forecast Periods</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-orange-600">
-              {results.filter(r => r.accuracy && r.accuracy > 80).length}
-            </div>
-            <div className="text-sm text-slate-600">High Accuracy (&gt;80%)</div>
-          </div>
+          ))}
         </div>
       </CardContent>
     </Card>

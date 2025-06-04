@@ -1,5 +1,5 @@
-
-import { SalesData } from '@/pages/Index';
+import { parseISO, format } from 'date-fns';
+import { SalesData } from '@/types/sales';
 
 export interface CleaningRecord {
   sku: string;
