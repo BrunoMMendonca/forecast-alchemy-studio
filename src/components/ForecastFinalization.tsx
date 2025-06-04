@@ -141,9 +141,9 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({ resu
       ["Date", "Original Value", "Forecast Value", "Difference", "Percentage Change"],
       ...forecastComparison.map(item => [
         item.model,
-        item.originalValue.toString(),
-        item.forecastValue.toString(),
-        item.difference.toString(),
+        item.originalValue,
+        item.forecastValue,
+        item.difference,
         item.percentageChange.toFixed(2) + "%",
       ]),
     ];
