@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Brain, Loader2, CheckCircle, Star, TrendingUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getModelRecommendation, GrokModelRecommendation } from '@/utils/grokApiUtils';
+import { ModelComparisonReasoning } from './ModelComparisonReasoning';
+import { ReasoningDisplay } from './ReasoningDisplay';
 
 interface ModelRecommendationProps {
   historicalData: number[];
@@ -26,6 +28,11 @@ export const ModelRecommendation: React.FC<ModelRecommendationProps> = ({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [recommendation, setRecommendation] = useState<GrokModelRecommendation | null>(null);
   const [userChoice, setUserChoice] = useState<string>('');
+  const [businessContext, setBusinessContext] = useState({
+    costOfError: 'medium' as 'low' | 'medium' | 'high',
+    forecastHorizon: 'medium' as 'short' | 'medium' | 'long',
+    interpretabilityNeeds: 'medium' as 'low' | 'medium' | 'high'
+  });
   const { toast } = useToast();
 
   const handleAnalyze = async () => {
@@ -50,7 +57,7 @@ export const ModelRecommendation: React.FC<ModelRecommendationProps> = ({
     setIsAnalyzing(true);
 
     try {
-      const result = await getModelRecommendation(historicalData, dataFrequency, apiKey);
+      const result = await getModelRecommendation(historicalData, dataFrequency, apiKey, businessContext);
       setRecommendation(result);
       setUserChoice(result.recommendedModel);
       onModelRecommendation(result);
@@ -77,15 +84,6 @@ export const ModelRecommendation: React.FC<ModelRecommendationProps> = ({
     return 'text-red-600';
   };
 
-  const modelNameMap: Record<string, string> = {
-    'Simple Moving Average': 'moving_average',
-    'Exponential Smoothing': 'exponential_smoothing',
-    'Linear Trend': 'linear_trend',
-    'Seasonal Moving Average': 'seasonal_moving_average',
-    'Holt-Winters': 'holt_winters',
-    'Seasonal Naive': 'seasonal_naive'
-  };
-
   return (
     <Card className="border-blue-200 bg-blue-50/50">
       <CardHeader className="pb-3">
@@ -94,7 +92,7 @@ export const ModelRecommendation: React.FC<ModelRecommendationProps> = ({
           AI Model Recommendation
         </CardTitle>
         <CardDescription>
-          Get AI-powered recommendations for the best forecasting model based on your data patterns
+          Get AI-powered recommendations for the best forecasting model based on your data patterns and business context
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -112,6 +110,49 @@ export const ModelRecommendation: React.FC<ModelRecommendationProps> = ({
               <p className="text-xs text-slate-500">
                 Your API key is used only for this analysis and not stored
               </p>
+            </div>
+
+            {/* Business Context Controls */}
+            <div className="space-y-3 bg-white p-3 rounded border">
+              <Label className="text-sm font-medium">Business Context (Optional)</Label>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs">Cost of Error</Label>
+                  <select 
+                    value={businessContext.costOfError}
+                    onChange={(e) => setBusinessContext({...businessContext, costOfError: e.target.value as any})}
+                    className="w-full text-xs border rounded px-2 py-1"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-xs">Forecast Horizon</Label>
+                  <select 
+                    value={businessContext.forecastHorizon}
+                    onChange={(e) => setBusinessContext({...businessContext, forecastHorizon: e.target.value as any})}
+                    className="w-full text-xs border rounded px-2 py-1"
+                  >
+                    <option value="short">Short-term</option>
+                    <option value="medium">Medium-term</option>
+                    <option value="long">Long-term</option>
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-xs">Interpretability</Label>
+                  <select 
+                    value={businessContext.interpretabilityNeeds}
+                    onChange={(e) => setBusinessContext({...businessContext, interpretabilityNeeds: e.target.value as any})}
+                    className="w-full text-xs border rounded px-2 py-1"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -165,84 +206,88 @@ export const ModelRecommendation: React.FC<ModelRecommendationProps> = ({
               <span className="font-medium">AI Analysis Complete</span>
             </div>
 
-            <div className="space-y-3">
-              <div className="p-4 bg-white rounded-lg border-2 border-blue-200">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Star className="h-4 w-4 text-yellow-500" />
-                    <span className="font-semibold">AI Recommended</span>
-                  </div>
-                  <Badge variant="secondary" className={getConfidenceColor(recommendation.confidence)}>
-                    {recommendation.confidence.toFixed(0)}% confidence
-                  </Badge>
-                </div>
-                <h4 className="font-bold text-lg text-blue-800">{recommendation.recommendedModel}</h4>
-                <p className="text-sm text-slate-600 mt-1">{recommendation.reasoning}</p>
-              </div>
+            {/* Enhanced Reasoning Display */}
+            <ReasoningDisplay
+              reasoning={recommendation.reasoning}
+              confidence={recommendation.confidence}
+              method="ai_recommendation"
+              title="Model Selection Reasoning"
+            />
 
-              {recommendation.alternativeModels.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Alternative Models</Label>
-                  {recommendation.alternativeModels.map((alt, index) => (
-                    <div key={index} className="p-3 bg-white rounded border flex justify-between items-center">
-                      <div>
-                        <div className="font-medium">{alt.model}</div>
-                        <div className="text-xs text-slate-500">{alt.reason}</div>
-                      </div>
-                      <Badge variant="outline" className="text-xs">
-                        {alt.score.toFixed(0)}%
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
+            {/* Model Comparison with Multi-Criteria Reasoning */}
+            {recommendation.alternativeModels.length > 0 && (
+              <ModelComparisonReasoning
+                comparisons={[
+                  {
+                    model: recommendation.recommendedModel,
+                    score: recommendation.confidence,
+                    accuracy: recommendation.alternativeModels.find(m => m.model === recommendation.recommendedModel)?.accuracy || 85,
+                    stability: recommendation.alternativeModels.find(m => m.model === recommendation.recommendedModel)?.stability || 80,
+                    interpretability: recommendation.alternativeModels.find(m => m.model === recommendation.recommendedModel)?.interpretability || 75,
+                    businessFit: recommendation.alternativeModels.find(m => m.model === recommendation.recommendedModel)?.businessFit || 80,
+                    reason: `Recommended choice: ${recommendation.reasoning.slice(0, 100)}...`,
+                    isRecommended: true
+                  },
+                  ...recommendation.alternativeModels.map(alt => ({
+                    model: alt.model,
+                    score: alt.score,
+                    accuracy: alt.accuracy,
+                    stability: alt.stability,
+                    interpretability: alt.interpretability,
+                    businessFit: alt.businessFit,
+                    reason: alt.reason
+                  }))
+                ]}
+                reasoning={recommendation.reasoning}
+                decisionFactors={recommendation.decisionFactors}
+              />
+            )}
 
-              <div className="space-y-2">
-                <Label>Your Choice</Label>
-                <div className="grid grid-cols-1 gap-2">
-                  {[recommendation.recommendedModel, ...recommendation.alternativeModels.map(a => a.model)].map((modelName) => (
-                    <label key={modelName} className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="model-choice"
-                        value={modelName}
-                        checked={userChoice === modelName}
-                        onChange={(e) => setUserChoice(e.target.value)}
-                        className="text-blue-600"
-                      />
-                      <span className={`${userChoice === modelName ? 'font-semibold text-blue-800' : ''} flex items-center gap-1`}>
-                        {modelName}
-                        {modelName === recommendation.recommendedModel && (
-                          <Star className="h-3 w-3 text-yellow-500" />
-                        )}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+            <div className="space-y-2">
+              <Label>Your Choice</Label>
+              <div className="grid grid-cols-1 gap-2">
+                {[recommendation.recommendedModel, ...recommendation.alternativeModels.map(a => a.model)].map((modelName) => (
+                  <label key={modelName} className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="model-choice"
+                      value={modelName}
+                      checked={userChoice === modelName}
+                      onChange={(e) => setUserChoice(e.target.value)}
+                      className="text-blue-600"
+                    />
+                    <span className={`${userChoice === modelName ? 'font-semibold text-blue-800' : ''} flex items-center gap-1`}>
+                      {modelName}
+                      {modelName === recommendation.recommendedModel && (
+                        <Star className="h-3 w-3 text-yellow-500" />
+                      )}
+                    </span>
+                  </label>
+                ))}
               </div>
+            </div>
 
-              <div className="flex gap-2">
-                <Button 
-                  onClick={() => {
-                    toast({
-                      title: "Model Selected",
-                      description: `You've chosen ${userChoice} for forecasting`,
-                    });
-                  }}
-                  className="flex-1"
-                  disabled={!userChoice}
-                >
-                  <TrendingUp className="h-4 w-4 mr-2" />
-                  Use {userChoice}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setRecommendation(null)}
-                  className="flex-1"
-                >
-                  Analyze Again
-                </Button>
-              </div>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => {
+                  toast({
+                    title: "Model Selected",
+                    description: `You've chosen ${userChoice} for forecasting`,
+                  });
+                }}
+                className="flex-1"
+                disabled={!userChoice}
+              >
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Use {userChoice}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setRecommendation(null)}
+                className="flex-1"
+              >
+                Analyze Again
+              </Button>
             </div>
           </div>
         )}

@@ -11,9 +11,9 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
   const isTogglingAIManualRef = useRef<boolean>(false);
 
-  // FIXED: Apply preferences during initial model creation with better cache handling
+  // FIXED: Apply preferences during initial model creation with enhanced cache handling and reasoning
   const createModelsWithPreferences = useCallback((): ModelConfig[] => {
-    console.log('🏗️ CREATING MODELS WITH PREFERENCES');
+    console.log('🏗️ CREATING MODELS WITH PREFERENCES AND REASONING');
     
     const defaultModels = getDefaultModels();
     
@@ -27,7 +27,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
       const skuData = data.filter(d => d.sku === selectedSKU);
       const currentDataHash = generateDataHash(skuData);
       
-      console.log(`📋 Creating models for ${selectedSKU} with preferences:`, preferences);
+      console.log(`📋 Creating models with preferences and reasoning for ${selectedSKU}:`, preferences);
       
       return defaultModels.map(model => {
         const cached = getCachedParameters(selectedSKU, model.id);
@@ -36,28 +36,33 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
         
         console.log(`🔍 ${preferenceKey}: preference=${preference}, cached=${!!cached}, cacheValid=${cached ? isCacheValid(selectedSKU, model.id, currentDataHash) : false}`);
         
-        // FIXED: If preference is AI (true) and we have cached parameters, use them regardless of cache validity
-        // This ensures that newly optimized parameters are immediately applied
+        // ENHANCED: If preference is AI (true) and we have cached parameters with reasoning, use them
         if (preference === true && cached) {
-          console.log(`✅ Applying AI for ${preferenceKey} (using cached parameters)`);
+          console.log(`✅ Applying AI with reasoning for ${preferenceKey}`);
           return {
             ...model,
             optimizedParameters: cached.parameters,
-            optimizationConfidence: cached.confidence
+            optimizationConfidence: cached.confidence,
+            optimizationReasoning: cached.reasoning,
+            optimizationFactors: cached.factors,
+            expectedAccuracy: cached.expectedAccuracy
           };
         } 
-        // FIXED: If preference is explicitly false (manual), don't use cached parameters
+        // ENHANCED: If preference is explicitly false (manual), clear all AI-related fields
         else if (preference === false) {
           console.log(`🛠️ Using manual for ${preferenceKey} (preference set to false)`);
           return {
             ...model,
             optimizedParameters: undefined,
-            optimizationConfidence: undefined
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined
           };
         }
-        // FIXED: If no preference is set but we have valid cached parameters, use them and set preference to AI
+        // ENHANCED: If no preference is set but we have valid cached parameters with reasoning, use them
         else if (!preference && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
-          console.log(`🤖 Auto-applying AI for ${preferenceKey} (valid cache found, setting preference)`);
+          console.log(`🤖 Auto-applying AI with reasoning for ${preferenceKey}`);
           
           // Auto-set preference to AI when we have valid cached parameters
           const updatedPreferences = { ...preferences };
@@ -67,28 +72,34 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
           return {
             ...model,
             optimizedParameters: cached.parameters,
-            optimizationConfidence: cached.confidence
+            optimizationConfidence: cached.confidence,
+            optimizationReasoning: cached.reasoning,
+            optimizationFactors: cached.factors,
+            expectedAccuracy: cached.expectedAccuracy
           };
         }
-        // Default to manual
+        // Default to manual with clean state
         else {
           console.log(`🛠️ Default to manual for ${preferenceKey}`);
           return {
             ...model,
             optimizedParameters: undefined,
-            optimizationConfidence: undefined
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined
           };
         }
       });
     } catch (error) {
-      console.error('❌ Error creating models with preferences:', error);
+      console.error('❌ Error creating models with preferences and reasoning:', error);
       return defaultModels;
     }
   }, [selectedSKU, data, loadManualAIPreferences, saveManualAIPreferences, generateDataHash, getCachedParameters, isCacheValid]);
 
   // Initialize models with a reactive function
   const [models, setModels] = useState<ModelConfig[]>(() => {
-    console.log('🎯 INITIAL STATE CREATION');
+    console.log('🎯 INITIAL STATE CREATION WITH REASONING');
     return getDefaultModels(); // Will be immediately updated by the effect
   });
 
@@ -115,7 +126,10 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
             ...model, 
             parameters: { ...model.parameters, [parameter]: value },
             optimizedParameters: undefined,
-            optimizationConfidence: undefined
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined
           }
         : model
     ));
@@ -144,7 +158,10 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
           ? { 
               ...model, 
               optimizedParameters: cached.parameters,
-              optimizationConfidence: cached.confidence
+              optimizationConfidence: cached.confidence,
+              optimizationReasoning: cached.reasoning,
+              optimizationFactors: cached.factors,
+              expectedAccuracy: cached.expectedAccuracy
             }
           : model
       ));
@@ -175,7 +192,10 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
         ? { 
             ...model, 
             optimizedParameters: undefined,
-            optimizationConfidence: undefined
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined
           }
         : model
     ));

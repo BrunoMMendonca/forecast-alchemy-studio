@@ -1,3 +1,4 @@
+
 export interface GrokOptimizationRequest {
   modelType: string;
   historicalData: number[];
@@ -12,6 +13,12 @@ export interface GrokOptimizationRequest {
     volatility: number;
     cycles: number[];
   };
+  businessContext?: {
+    costOfError?: 'low' | 'medium' | 'high';
+    forecastHorizon?: 'short' | 'medium' | 'long';
+    updateFrequency?: 'daily' | 'weekly' | 'monthly';
+    interpretabilityNeeds?: 'low' | 'medium' | 'high';
+  };
 }
 
 export interface GrokOptimizationResponse {
@@ -19,6 +26,12 @@ export interface GrokOptimizationResponse {
   expectedAccuracy: number;
   confidence: number;
   reasoning: string;
+  factors?: {
+    stability: number;
+    interpretability: number;
+    complexity: number;
+    businessImpact: string;
+  };
 }
 
 export interface GrokModelRecommendation {
@@ -29,7 +42,17 @@ export interface GrokModelRecommendation {
     model: string;
     score: number;
     reason: string;
+    accuracy: number;
+    stability: number;
+    interpretability: number;
+    businessFit: number;
   }>;
+  decisionFactors: {
+    accuracyWeight: number;
+    stabilityWeight: number;
+    interpretabilityWeight: number;
+    businessWeight: number;
+  };
 }
 
 // Enhanced data statistics calculation with cycle detection
@@ -93,7 +116,15 @@ export const optimizeParametersWithGrok = async (
   const dataPoints = request.historicalData.slice(-100);
   const dataStats = calculateDataStats(request.historicalData);
   
-  const prompt = `Analyze this time series data and optimize parameters for ${request.modelType} forecasting model.
+  const businessContextText = request.businessContext ? `
+BUSINESS CONTEXT:
+- Cost of Forecast Error: ${request.businessContext.costOfError || 'medium'} (affects parameter conservativeness)
+- Forecast Horizon: ${request.businessContext.forecastHorizon || 'medium'} term planning
+- Update Frequency: ${request.businessContext.updateFrequency || 'weekly'} model updates
+- Interpretability Needs: ${request.businessContext.interpretabilityNeeds || 'medium'} (simpler models preferred if high)
+` : '';
+
+  const prompt = `Analyze this time series data and optimize parameters for ${request.modelType} forecasting model using MULTI-CRITERIA DECISION MAKING.
 
 COMPREHENSIVE HISTORICAL DATA (last 100 points): ${dataPoints.join(', ')}
 
@@ -107,6 +138,8 @@ ENHANCED DATA STATISTICS:
 - Seasonal Period: ${request.seasonalPeriod || 'unknown'}
 - Data Length: ${request.historicalData.length} points
 
+${businessContextText}
+
 CURRENT PARAMETERS: ${JSON.stringify(request.currentParameters)}
 TARGET METRIC: ${request.targetMetric} (we want to MAXIMIZE accuracy, which means MINIMIZE MAPE)
 
@@ -116,27 +149,34 @@ PARAMETER CONSTRAINTS for ${request.modelType}:
 - holt_winters: alpha (0.05-0.95), beta (0.05-0.95), gamma (0.05-0.95) - Gamma smooths seasonality
 - moving_average: window (2-20) - Consider detected cycles: ${dataStats.cycles.join(', ') || 'none detected'}
 
-OPTIMIZATION STRATEGY:
-1. For HIGH volatility (>0.3): More responsive parameters (alpha: 0.4-0.8, smaller windows: 2-5)
-2. For MEDIUM volatility (0.15-0.3): Balanced parameters (alpha: 0.2-0.5, windows: 3-8)
-3. For LOW volatility (<0.15): Stable parameters (alpha: 0.1-0.3, larger windows: 6-12)
-4. For TRENDING data: Ensure beta is proportional to trend strength (0.1-0.4)
-5. For SEASONAL data: Use detected cycles for window sizing, gamma should reflect seasonal strength
-6. For MOVING AVERAGE: If cycles detected, prefer window sizes that are divisors or multiples of cycle length
+MULTI-CRITERIA OPTIMIZATION STRATEGY:
+1. PRIMARY: Accuracy (40% weight) - Minimize MAPE to maximize forecast precision
+2. STABILITY (25% weight) - Parameter robustness across different data periods
+3. INTERPRETABILITY (20% weight) - How easily stakeholders can understand the model
+4. BUSINESS IMPACT (15% weight) - Alignment with business context and error costs
 
-CRITICAL: Your goal is to MAXIMIZE ACCURACY (minimize MAPE). Consider that accuracy = 100 - MAPE.
-Test your parameter suggestions mentally against the data patterns you observe.
+For HIGH volatility (>0.3): Balance responsiveness with stability
+For MEDIUM volatility (0.15-0.3): Optimize for accuracy with moderate stability
+For LOW volatility (<0.15): Prioritize long-term stability and interpretability
+
+CRITICAL: Consider ALL four criteria in your optimization decision. Explain the trade-offs you're making between accuracy, stability, interpretability, and business impact.
 
 Respond in JSON format only:
 {
   "optimizedParameters": {"param1": value1, "param2": value2},
   "expectedAccuracy": percentage_between_60_and_95,
   "confidence": percentage_between_60_and_95,
-  "reasoning": "detailed explanation focusing on why these parameters will maximize accuracy based on the specific data patterns observed"
+  "reasoning": "detailed explanation covering all four decision criteria and the specific trade-offs made",
+  "factors": {
+    "stability": percentage_score_0_to_100,
+    "interpretability": percentage_score_0_to_100,
+    "complexity": percentage_score_0_to_100,
+    "businessImpact": "brief description of expected business impact"
+  }
 }`;
 
   try {
-    console.log(`🤖 Enhanced optimization request to Grok for ${request.modelType} (target: ${request.targetMetric})`);
+    console.log(`🤖 Enhanced multi-criteria optimization request to Grok for ${request.modelType}`);
     
     const response = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
@@ -148,7 +188,7 @@ Respond in JSON format only:
         messages: [
           {
             role: 'system',
-            content: 'You are an expert time series forecasting analyst. Your goal is to maximize forecast accuracy by selecting optimal parameters based on comprehensive data analysis. Focus on patterns, cycles, and statistical properties to make data-driven recommendations.'
+            content: 'You are an expert time series forecasting analyst with deep understanding of business requirements. Your goal is to balance multiple criteria: accuracy, stability, interpretability, and business impact. Always provide detailed reasoning covering all decision factors and trade-offs.'
           },
           {
             role: 'user',
@@ -157,7 +197,7 @@ Respond in JSON format only:
         ],
         model: 'grok-3',
         temperature: 0.05, // Lower temperature for more consistent optimization
-        max_tokens: 1200
+        max_tokens: 1500
       }),
     });
 
@@ -168,7 +208,7 @@ Respond in JSON format only:
     const data = await response.json();
     const content = data.choices[0].message.content;
     
-    console.log(`🤖 Enhanced Grok response received for ${request.modelType}`);
+    console.log(`🤖 Enhanced multi-criteria Grok response received for ${request.modelType}`);
     
     // Try to parse JSON from the response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -180,14 +220,15 @@ Respond in JSON format only:
         throw new Error('Invalid response format from Grok API');
       }
       
-      console.log(`✅ Enhanced optimization result: ${JSON.stringify(result.optimizedParameters)}`);
+      console.log(`✅ Multi-criteria optimization result: ${JSON.stringify(result.optimizedParameters)}`);
       console.log(`📊 Expected accuracy: ${result.expectedAccuracy}%, Confidence: ${result.confidence}%`);
+      console.log(`🎯 Factors:`, result.factors);
       return result;
     } else {
       throw new Error('Unable to parse optimization response - no valid JSON found');
     }
   } catch (error) {
-    console.error(`❌ Enhanced optimization error for ${request.modelType}:`, error);
+    console.error(`❌ Enhanced multi-criteria optimization error for ${request.modelType}:`, error);
     throw error;
   }
 };
@@ -195,39 +236,74 @@ Respond in JSON format only:
 export const getModelRecommendation = async (
   historicalData: number[],
   dataFrequency: string,
-  apiKey: string
+  apiKey: string,
+  businessContext?: {
+    costOfError?: 'low' | 'medium' | 'high';
+    forecastHorizon?: 'short' | 'medium' | 'long';
+    interpretabilityNeeds?: 'low' | 'medium' | 'high';
+  }
 ): Promise<GrokModelRecommendation> => {
-  const prompt = `Analyze this time series data and recommend the best forecasting model.
+  const dataStats = calculateDataStats(historicalData);
+  
+  const businessContextText = businessContext ? `
+BUSINESS CONTEXT:
+- Cost of Forecast Error: ${businessContext.costOfError || 'medium'} (high = favor stable models, low = favor accurate models)
+- Forecast Horizon: ${businessContext.forecastHorizon || 'medium'} term (affects model complexity preference)
+- Interpretability Needs: ${businessContext.interpretabilityNeeds || 'medium'} (high = favor simpler models)
+` : '';
+
+  const prompt = `Analyze this time series data and recommend the best forecasting model using MULTI-CRITERIA DECISION MAKING.
 
 Data: ${historicalData.slice(-30).join(', ')} (last 30 points)
 Frequency: ${dataFrequency}
 Data length: ${historicalData.length} points
 
+DATA ANALYSIS:
+- Volatility: ${dataStats.volatility} (trend: ${dataStats.trend})
+- Seasonality: ${dataStats.seasonality} (cycles: ${dataStats.cycles.join(', ') || 'none'})
+- Mean: ${dataStats.mean}, Std: ${dataStats.std}
+
+${businessContextText}
+
 Available models:
-1. Simple Moving Average - Good for stable data with minimal trend
-2. Simple Exponential Smoothing - Good for stable data without trend (alpha parameter)
-3. Double Exponential Smoothing (Holt) - Good for data with trend but no seasonality (alpha, beta parameters)
-4. Linear Trend - Good for data with consistent linear growth/decline
-5. Seasonal Moving Average - Good for data with seasonal patterns
-6. Holt-Winters (Triple Exponential) - Best for data with trend AND seasonality (alpha, beta, gamma parameters)
-7. Seasonal Naive - Simple baseline for seasonal data
+1. Simple Moving Average - High interpretability, medium accuracy for stable data
+2. Simple Exponential Smoothing - Good balance, moderate interpretability (alpha parameter)
+3. Double Exponential Smoothing (Holt) - Better for trends, moderate complexity (alpha, beta)
+4. Linear Trend - High interpretability for linear growth, limited flexibility
+5. Seasonal Moving Average - Good for seasonal data, high interpretability
+6. Holt-Winters (Triple Exponential) - Best for complex patterns, lower interpretability (alpha, beta, gamma)
+7. Seasonal Naive - Baseline for seasonal data, highest interpretability
 
-Analyze:
-- Trend presence and strength
-- Seasonal patterns
-- Data volatility
-- Stationarity
+DECISION CRITERIA WEIGHTS (adapt based on context):
+- Accuracy: 40% (forecast precision)
+- Stability: 25% (robustness across time periods)
+- Interpretability: 20% (stakeholder understanding)
+- Business Fit: 15% (alignment with business needs)
 
-Recommend the best model and rank alternatives.
+For each model, score all four criteria (0-100) and calculate weighted score. Provide detailed reasoning for rankings considering the trade-offs between accuracy, complexity, and business requirements.
 
 Respond in JSON format:
 {
   "recommendedModel": "model_name",
   "confidence": percentage,
-  "reasoning": "detailed explanation",
+  "reasoning": "comprehensive explanation covering all decision criteria and trade-offs",
   "alternativeModels": [
-    {"model": "name", "score": percentage, "reason": "why it's good"}
-  ]
+    {
+      "model": "name", 
+      "score": weighted_percentage, 
+      "reason": "criteria-based explanation",
+      "accuracy": score_0_to_100,
+      "stability": score_0_to_100,
+      "interpretability": score_0_to_100,
+      "businessFit": score_0_to_100
+    }
+  ],
+  "decisionFactors": {
+    "accuracyWeight": 40,
+    "stabilityWeight": 25,
+    "interpretabilityWeight": 20,
+    "businessWeight": 15
+  }
 }`;
 
   try {
@@ -241,7 +317,7 @@ Respond in JSON format:
         messages: [
           {
             role: 'system',
-            content: 'You are an expert time series analyst. Analyze data patterns and recommend optimal forecasting models.'
+            content: 'You are an expert time series analyst with deep business acumen. Analyze data patterns and recommend optimal forecasting models considering accuracy, stability, interpretability, and business impact. Always provide multi-criteria reasoning with specific scores and trade-off explanations.'
           },
           {
             role: 'user',
@@ -250,7 +326,7 @@ Respond in JSON format:
         ],
         model: 'grok-3',
         temperature: 0.2,
-        max_tokens: 1000
+        max_tokens: 1500
       }),
     });
 

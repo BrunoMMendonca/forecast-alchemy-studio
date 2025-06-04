@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Bot, User } from 'lucide-react';
 import { ModelConfig } from '@/types/forecast';
+import { ReasoningDisplay } from './ReasoningDisplay';
 
 interface ParameterControlProps {
   model: ModelConfig;
@@ -90,6 +91,20 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
           )}
         </div>
       ))}
+
+      {/* Show AI reasoning if available */}
+      {hasOptimizedParams && model.optimizationReasoning && (
+        <div className="mt-4">
+          <ReasoningDisplay
+            reasoning={model.optimizationReasoning}
+            confidence={model.optimizationConfidence || 0}
+            method="ai_optimal"
+            expectedAccuracy={model.expectedAccuracy}
+            factors={model.optimizationFactors}
+            compact={true}
+          />
+        </div>
+      )}
     </div>
   );
 };

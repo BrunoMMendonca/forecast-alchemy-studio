@@ -1,20 +1,42 @@
 
-import React from 'react';
-
 export interface ModelConfig {
   id: string;
   name: string;
   description: string;
-  icon: React.ReactNode;
   enabled: boolean;
   parameters?: Record<string, number>;
-  isSeasonal?: boolean;
   optimizedParameters?: Record<string, number>;
   optimizationConfidence?: number;
+  optimizationReasoning?: string;
+  optimizationFactors?: {
+    stability: number;
+    interpretability: number;
+    complexity: number;
+    businessImpact: string;
+  };
+  expectedAccuracy?: number;
+  icon: React.ReactNode;
+  isSeasonal?: boolean;
 }
 
-export interface ForecastAlgorithms {
-  generateMovingAverage: (salesData: any[], window: number, periods: number) => number[];
-  generateExponentialSmoothing: (salesData: any[], alpha: number, periods: number) => number[];
-  generateLinearTrend: (salesData: any[], periods: number) => number[];
+export interface ForecastPrediction {
+  date: string;
+  value: number;
+}
+
+export interface ForecastResult {
+  model: string;
+  sku: string;
+  predictions: ForecastPrediction[];
+  accuracy: number;
+  parameters: Record<string, number>;
+  mape: number;
+  mae: number;
+  rmse: number;
+}
+
+export interface SeasonalConfig {
+  enabled: boolean;
+  period: number;
+  strength: number;
 }
