@@ -1,5 +1,8 @@
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { SalesData } from '@/types/sales';
+import { ModelConfig } from '@/types/forecast';
+import { useToast } from '@/hooks/use-toast';
+import { optimizeModelLocally } from '@/utils/localOptimization';
 
 interface NavigationOptimizationState {
   datasetFingerprint: string;
