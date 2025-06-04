@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { SalesData, ForecastResult } from '@/pages/Index';
+import { SalesData, ForecastResult } from '@/types/sales';
 import { useToast } from '@/hooks/use-toast';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useForecastCache } from '@/hooks/useForecastCache';

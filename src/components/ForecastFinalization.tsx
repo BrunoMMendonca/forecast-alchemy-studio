@@ -1,657 +1,279 @@
-
 import React, { useState, useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Download, Edit3, Save, Trash2, Eye, TrendingUp, CheckCircle } from 'lucide-react';
-import { SalesData, ForecastResult } from '@/pages/Index';
-import { useToast } from '@/hooks/use-toast';
-import { exportForecastResults, generateSOPSummary, ExportOptions } from '@/utils/exportUtils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Download, Edit3, Save, X, TrendingUp } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+import { exportToCSV } from '@/utils/exportUtils';
+import { SalesData, ForecastResult, EditableForecast } from '@/types/sales';
+
+interface ForecastComparison {
+  model: string;
+  originalValue: number;
+  forecastValue: number;
+  difference: number;
+  percentageChange: number;
+}
 
 interface ForecastFinalizationProps {
-  historicalData: SalesData[];
-  cleanedData: SalesData[];
-  forecastResults: ForecastResult[];
+  results: ForecastResult[];
+  data: SalesData[];
+  selectedSKU: string;
 }
 
-interface EditableForecast {
-  date: string;
-  value: number;
-  isEdited: boolean;
-}
-
-export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
-  historicalData,
-  cleanedData,
-  forecastResults
-}) => {
-  const [selectedSKU, setSelectedSKU] = useState<string>('');
-  const [editMode, setEditMode] = useState(false);
+export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({ results, data, selectedSKU }) => {
+  const [selectedModel, setSelectedModel] = useState<string>(results[0]?.model || '');
   const [editableForecasts, setEditableForecasts] = useState<Record<string, EditableForecast[]>>({});
-  const [finalizedModels, setFinalizedModels] = useState<Record<string, string>>({});
-  const [showExportSection, setShowExportSection] = useState(false);
-  const [exportMode, setExportMode] = useState<'all_models' | 'single_forecast'>('single_forecast');
-  const [selectedModel, setSelectedModel] = useState<string>('auto_select_best');
-  const { toast } = useToast();
+  const [isEditing, setIsEditing] = useState(false);
 
-  const skus = useMemo(() => {
-    return Array.from(new Set(forecastResults.map(r => r.sku))).sort();
-  }, [forecastResults]);
-
-  const models = useMemo(() => {
-    return Array.from(new Set(forecastResults.map(r => r.model))).sort();
-  }, [forecastResults]);
-
-  // Auto-select first SKU when results change
+  // Initialize editable forecasts when results change
   React.useEffect(() => {
-    if (skus.length > 0 && !selectedSKU) {
-      setSelectedSKU(skus[0]);
+    if (results.length > 0) {
+      // Set initial selected model to the first result
+      setSelectedModel(results[0].model);
+
+      // Initialize editable forecasts for each model
+      const initialEditableForecasts: Record<string, EditableForecast[]> = {};
+      results.forEach(result => {
+        initialEditableForecasts[result.model] = result.predictions.map(p => ({
+          date: p.date.toISOString().split('T')[0], // Convert Date to string
+          value: p.value,
+          isEdited: false
+        }));
+      });
+      setEditableForecasts(initialEditableForecasts);
     }
-  }, [skus, selectedSKU]);
+  }, [results]);
 
-  // Initialize editable forecasts and auto-select best models
-  React.useEffect(() => {
-    const newEditableForecasts: Record<string, EditableForecast[]> = {};
-    const newFinalizedModels: Record<string, string> = {};
-    
-    skus.forEach(sku => {
-      const skuResults = forecastResults.filter(r => r.sku === sku);
-      
-      if (skuResults.length > 0) {
-        const bestResult = skuResults.reduce((best, current) => 
-          (current.accuracy || 0) > (best.accuracy || 0) ? current : best
-        );
-        
-        if (bestResult && bestResult.predictions) {
-          newEditableForecasts[sku] = bestResult.predictions.map(p => ({
-            date: p.date,
-            value: p.value,
-            isEdited: false
-          }));
-          newFinalizedModels[sku] = bestResult.model;
-        }
-      }
+  const currentForecast = useMemo(() => {
+    return results.find(r => r.model === selectedModel);
+  }, [selectedModel, results]);
+
+  const skuData = useMemo(() => {
+    return data.filter(d => d.sku === selectedSKU);
+  }, [data, selectedSKU]);
+
+  const forecastComparison = useMemo<ForecastComparison[]>(() => {
+    if (!currentForecast) return [];
+
+    return currentForecast.predictions.map((forecast, index) => {
+      const lastSales = skuData[skuData.length - currentForecast.predictions.length + index]?.sales || 0;
+      const difference = forecast.value - lastSales;
+      const percentageChange = lastSales !== 0 ? (difference / lastSales) * 100 : 0;
+
+      return {
+        model: currentForecast.model,
+        originalValue: lastSales,
+        forecastValue: forecast.value,
+        difference: difference,
+        percentageChange: percentageChange,
+      };
     });
+  }, [currentForecast, skuData]);
+
+  const handleModelChange = (newModelName: string) => {
+    console.log(`🔄 Switching to model: ${newModelName}`);
+    setSelectedModel(newModelName);
     
-    setEditableForecasts(newEditableForecasts);
-    setFinalizedModels(newFinalizedModels);
-  }, [forecastResults, skus]);
-
-  const chartData = useMemo(() => {
-    if (!selectedSKU) return [];
-
-    const skuHistorical = cleanedData
-      .filter(d => d.sku === selectedSKU)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .map(d => ({
-        date: d.date,
-        historical: d.sales,
-        type: 'historical'
-      }));
-
-    const skuForecasts = editableForecasts[selectedSKU] || [];
-    const forecastData = skuForecasts.map(f => ({
-      date: f.date,
-      forecast: f.value,
-      type: 'forecast',
-      isEdited: f.isEdited
-    }));
-
-    return [...skuHistorical, ...forecastData];
-  }, [cleanedData, selectedSKU, editableForecasts]);
-
-  const selectedSKUResults = forecastResults.filter(r => r.sku === selectedSKU);
-  
-  const bestModel = selectedSKUResults.length > 0 
-    ? selectedSKUResults.reduce((best, current) => 
-        (current.accuracy || 0) > (best.accuracy || 0) ? current : best
-      )
-    : null;
-
-  const handleModelSelection = (sku: string, model: string) => {
-    setFinalizedModels(prev => ({
-      ...prev,
-      [sku]: model
-    }));
-
-    // Update editable forecasts to match the selected model
-    const selectedResult = forecastResults.find(r => r.sku === sku && r.model === model);
-    if (selectedResult) {
+    // Reset editable forecasts for new model
+    const modelResult = results.find(r => r.model === newModelName);
+    if (modelResult) {
       setEditableForecasts(prev => ({
         ...prev,
-        [sku]: selectedResult.predictions.map(p => ({
-          date: p.date,
+        [newModelName]: modelResult.predictions.map(p => ({
+          date: p.date.toISOString().split('T')[0], // Convert Date to string
           value: p.value,
           isEdited: false
         }))
       }));
     }
-
-    toast({
-      title: "Model Selected",
-      description: `${model} selected for ${sku}`,
-    });
   };
 
-  const handleEditForecast = (index: number, newValue: number) => {
-    if (!selectedSKU) return;
-    
-    setEditableForecasts(prev => ({
-      ...prev,
-      [selectedSKU]: prev[selectedSKU].map((forecast, i) => 
-        i === index 
-          ? { ...forecast, value: newValue, isEdited: true }
-          : forecast
-      )
-    }));
-  };
-
-  const handleRemoveForecastPoint = (index: number) => {
-    if (!selectedSKU) return;
-    
-    setEditableForecasts(prev => ({
-      ...prev,
-      [selectedSKU]: prev[selectedSKU].filter((_, i) => i !== index)
-    }));
-    
-    toast({
-      title: "Forecast Point Removed",
-      description: "The selected forecast point has been removed",
-    });
-  };
-
-  const handleAddForecastPoint = () => {
-    if (!selectedSKU || !editableForecasts[selectedSKU]) return;
-    
-    const lastForecast = editableForecasts[selectedSKU][editableForecasts[selectedSKU].length - 1];
-    if (!lastForecast) return;
-    
-    const lastDate = new Date(lastForecast.date);
-    const newDate = new Date(lastDate);
-    newDate.setMonth(newDate.getMonth() + 1);
-    
-    const newForecast: EditableForecast = {
-      date: newDate.toISOString().split('T')[0],
-      value: lastForecast.value,
-      isEdited: true
-    };
-    
-    setEditableForecasts(prev => ({
-      ...prev,
-      [selectedSKU]: [...prev[selectedSKU], newForecast]
-    }));
-    
-    toast({
-      title: "Forecast Point Added",
-      description: "A new forecast point has been added",
-    });
-  };
-
-  const handleFinalizeForecast = () => {
-    const unfinalized = skus.filter(sku => !finalizedModels[sku]);
-    if (unfinalized.length > 0) {
-      toast({
-        title: "Complete Model Selection",
-        description: `Please select models for: ${unfinalized.join(', ')}`,
-        variant: "destructive",
+  const handleValueChange = (date: string, value: number) => {
+    setEditableForecasts(prev => {
+      const updatedModelForecasts = prev[selectedModel].map(item => {
+        if (item.date === date) {
+          return { ...item, value, isEdited: true };
+        }
+        return item;
       });
-      return;
-    }
-
-    setShowExportSection(true);
-    toast({
-      title: "Forecast Finalized",
-      description: "Ready to proceed with export options",
+      return { ...prev, [selectedModel]: updatedModelForecasts };
     });
   };
 
-  const handleExport = (format: 'csv' | 'json') => {
-    if (forecastResults.length === 0) return;
+  const handleToggleEdit = () => {
+    setIsEditing(!isEditing);
+  };
 
-    const exportOptions: ExportOptions = {
-      format,
-      mode: exportMode,
-      selectedModel: exportMode === 'single_forecast' && selectedModel !== 'auto_select_best' ? selectedModel : undefined,
-      includeAccuracy: true,
-      includeConfidenceIntervals: false
-    };
+  const handleRevertValue = (date: string) => {
+    setEditableForecasts(prev => {
+      const modelResult = results.find(r => r.model === selectedModel);
+      if (!modelResult) return prev;
 
-    exportForecastResults(forecastResults, exportOptions);
-    
-    toast({
-      title: "Export Complete",
-      description: `Forecast data exported as ${format.toUpperCase()}`,
+      const originalValue = modelResult.predictions.find(p => p.date.toISOString().split('T')[0] === date)?.value || 0;
+
+      const updatedModelForecasts = prev[selectedModel].map(item => {
+        if (item.date === date) {
+          return { ...item, value: originalValue, isEdited: false };
+        }
+        return item;
+      });
+      return { ...prev, [selectedModel]: updatedModelForecasts };
     });
   };
 
-  const sopSummary = generateSOPSummary(forecastResults);
+  const handleSaveChanges = () => {
+    // Implement save logic here (e.g., send data to API)
+    toast({
+      title: "Forecasts Saved",
+      description: "Your finalized forecasts have been successfully saved.",
+    });
+    setIsEditing(false);
+  };
 
-  if (forecastResults.length === 0) {
-    return (
-      <div className="text-center py-8 text-slate-500">
-        <TrendingUp className="h-12 w-12 mx-auto mb-4 text-slate-300" />
-        <p>No forecast results to finalize.</p>
-        <p className="text-sm">Generate forecasts first to proceed with finalization.</p>
-      </div>
-    );
+  const handleDownloadCSV = () => {
+    if (!currentForecast) return;
+
+    const csvData = [
+      ["Date", "Original Value", "Forecast Value", "Difference", "Percentage Change"],
+      ...forecastComparison.map(item => [
+        item.model,
+        item.originalValue,
+        item.forecastValue,
+        item.difference,
+        item.percentageChange.toFixed(2) + "%",
+      ]),
+    ];
+
+    exportToCSV(csvData, `forecast_comparison_${selectedSKU}_${selectedModel}.csv`);
+  };
+
+  if (!currentForecast) {
+    return <div>No forecast results available for the selected SKU.</div>;
   }
 
   return (
-    <div className="space-y-8">
-      {/* Step 1: Model Selection & Review */}
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
-            <span className="text-sm font-semibold text-blue-600">1</span>
-          </div>
-          <h2 className="text-xl font-semibold text-slate-800">Model Selection & Review</h2>
-        </div>
-
-        {/* Controls */}
-        <div className="flex flex-wrap items-center gap-4 justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Label>SKU:</Label>
-              <Select value={selectedSKU} onValueChange={setSelectedSKU}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Select SKU" />
-                </SelectTrigger>
-                <SelectContent>
-                  {skus.map(sku => (
-                    <SelectItem key={sku} value={sku}>{sku}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <Button
-              variant={editMode ? "default" : "outline"}
-              onClick={() => setEditMode(!editMode)}
-            >
-              <Edit3 className="h-4 w-4 mr-2" />
-              {editMode ? 'Save Changes' : 'Edit Forecast'}
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary">
-              Selected: {finalizedModels[selectedSKU] || 'None'}
-            </Badge>
-            {bestModel?.accuracy && (
-              <Badge variant="outline">
-                {bestModel.accuracy.toFixed(1)}% Accuracy
-              </Badge>
-            )}
-          </div>
-        </div>
-
-        {/* Model Selection for Current SKU */}
-        {selectedSKU && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Select Best Model for {selectedSKU}</CardTitle>
-              <CardDescription>
-                Choose the forecasting model that best fits your needs
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {selectedSKUResults.map((result) => (
-                  <div
-                    key={result.model}
-                    className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                      finalizedModels[selectedSKU] === result.model
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                    onClick={() => handleModelSelection(selectedSKU, result.model)}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium">{result.model}</h4>
-                      {finalizedModels[selectedSKU] === result.model && (
-                        <CheckCircle className="h-5 w-5 text-blue-500" />
-                      )}
-                    </div>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span>Accuracy:</span>
-                        <Badge variant={result.accuracy && result.accuracy > 80 ? 'default' : 'secondary'}>
-                          {result.accuracy?.toFixed(1) || 'N/A'}%
-                        </Badge>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Predictions:</span>
-                        <span>{result.predictions.length} periods</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Visualization */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-blue-600" />
-              Historical vs Forecast - {selectedSKU}
-            </CardTitle>
-            <CardDescription>
-              Review your selected forecast before finalizing
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-96">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis 
-                    dataKey="date" 
-                    stroke="#64748b"
-                    fontSize={12}
-                    tickFormatter={(value) => {
-                      try {
-                        return new Date(value).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric' 
-                        });
-                      } catch {
-                        return value;
-                      }
-                    }}
-                  />
-                  <YAxis 
-                    stroke="#64748b"
-                    fontSize={12}
-                    tickFormatter={(value) => value.toLocaleString()}
-                  />
-                  <Tooltip 
-                    formatter={(value: number, name: string) => [
-                      value.toLocaleString(), 
-                      name === 'historical' ? 'Historical Sales' : 'Forecast'
-                    ]}
-                    labelFormatter={(label) => {
-                      try {
-                        return new Date(label).toLocaleDateString();
-                      } catch {
-                        return label;
-                      }
-                    }}
-                  />
-                  <Legend />
-                  
-                  <Line
-                    type="monotone"
-                    dataKey="historical"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    dot={false}
-                    name="Historical Sales"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="forecast"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    strokeDasharray="5 5"
-                    dot={{ fill: '#10b981', strokeWidth: 2, r: 3 }}
-                    name="Forecast"
-                  />
-                  
-                  {chartData.length > 0 && cleanedData.filter(d => d.sku === selectedSKU).length > 0 && (
-                    <ReferenceLine 
-                      x={cleanedData.filter(d => d.sku === selectedSKU).slice(-1)[0]?.date} 
-                      stroke="#64748b" 
-                      strokeDasharray="2 2"
-                    />
-                  )}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Edit Forecast Table */}
-        {editMode && selectedSKU && editableForecasts[selectedSKU] && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Edit Forecast Values</CardTitle>
-              <CardDescription>
-                Modify individual forecast points or add/remove periods
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-60 overflow-y-auto">
-                  {editableForecasts[selectedSKU].map((forecast, index) => (
-                    <div key={index} className="flex items-center gap-2 p-2 border rounded">
-                      <div className="flex-1">
-                        <Label className="text-xs text-slate-500">{forecast.date}</Label>
-                        <Input
-                          type="number"
-                          value={forecast.value}
-                          onChange={(e) => handleEditForecast(index, parseFloat(e.target.value) || 0)}
-                          className="h-8"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        {forecast.isEdited && (
-                          <Badge variant="outline" className="text-xs">
-                            Edited
-                          </Badge>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Finalize Forecasts</CardTitle>
+          <CardDescription>
+            Review and finalize your sales forecasts for {selectedSKU}.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue={selectedModel} className="w-full">
+            <TabsList>
+              {results.map(result => (
+                <TabsTrigger key={result.model} value={result.model} onClick={() => handleModelChange(result.model)}>
+                  {result.model}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            {results.map(result => (
+              <TabsContent key={result.model} value={result.model}>
+                <div className="grid gap-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">
+                      {result.model} Forecasts
+                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="secondary">
+                        Accuracy: {result.accuracy.toFixed(1)}%
+                      </Badge>
+                      <Button variant="outline" size="sm" onClick={handleToggleEdit}>
+                        {isEditing ? (
+                          <>
+                            <X className="h-4 w-4 mr-2" />
+                            Cancel Edit
+                          </>
+                        ) : (
+                          <>
+                            <Edit3 className="h-4 w-4 mr-2" />
+                            Edit Forecasts
+                          </>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveForecastPoint(index)}
-                          className="h-6 w-6 p-0"
-                        >
-                          <Trash2 className="h-3 w-3" />
+                      </Button>
+                      {isEditing && (
+                        <Button variant="secondary" size="sm" onClick={handleSaveChanges}>
+                          <Save className="h-4 w-4 mr-2" />
+                          Save Changes
                         </Button>
-                      </div>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={handleDownloadCSV}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Download CSV
+                      </Button>
                     </div>
-                  ))}
-                </div>
-                
-                <Button onClick={handleAddForecastPoint} variant="outline" className="w-full">
-                  Add Forecast Period
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Model Selection Summary */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Model Selection Summary</CardTitle>
-            <CardDescription>
-              Review your model selections for all SKUs
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-2">SKU</th>
-                    <th className="text-left p-2">Selected Model</th>
-                    <th className="text-left p-2">Accuracy</th>
-                    <th className="text-center p-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {skus.map((sku) => {
-                    const selectedModel = finalizedModels[sku];
-                    const modelResult = forecastResults.find(r => r.sku === sku && r.model === selectedModel);
-                    return (
-                      <tr key={sku} className="border-b hover:bg-slate-50">
-                        <td className="p-2 font-medium">{sku}</td>
-                        <td className="p-2">{selectedModel || 'Not selected'}</td>
-                        <td className="p-2">
-                          {modelResult?.accuracy ? (
-                            <Badge variant={modelResult.accuracy > 80 ? 'default' : 'secondary'}>
-                              {modelResult.accuracy.toFixed(1)}%
-                            </Badge>
-                          ) : (
-                            'N/A'
-                          )}
-                        </td>
-                        <td className="p-2 text-center">
-                          {selectedModel ? (
-                            <CheckCircle className="h-4 w-4 text-green-500 mx-auto" />
-                          ) : (
-                            <div className="h-4 w-4 border-2 border-slate-300 rounded mx-auto" />
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Finalize Button */}
-        <div className="flex justify-center">
-          <Button 
-            onClick={handleFinalizeForecast}
-            size="lg"
-            className="px-8"
-            disabled={skus.some(sku => !finalizedModels[sku])}
-          >
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Finalize Model Selection
-          </Button>
-        </div>
-      </div>
-
-      {/* Separator */}
-      {showExportSection && (
-        <div className="my-8">
-          <Separator />
-        </div>
-      )}
-
-      {/* Step 2: Export & Documentation */}
-      {showExportSection && (
-        <div className="space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-8 h-8 bg-green-100 rounded-full">
-              <span className="text-sm font-semibold text-green-600">2</span>
-            </div>
-            <h2 className="text-xl font-semibold text-slate-800">Export & Documentation</h2>
-          </div>
-
-          {/* Export Options */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Export Forecast</CardTitle>
-              <CardDescription>
-                Choose your export format and scope for S&OP or analysis
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Export Mode</Label>
-                  <Select value={exportMode} onValueChange={(value: 'all_models' | 'single_forecast') => setExportMode(value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="single_forecast">Single Forecast (S&OP)</SelectItem>
-                      <SelectItem value="all_models">All Models Comparison</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {exportMode === 'single_forecast' && (
-                  <div className="space-y-2">
-                    <Label>Model Selection</Label>
-                    <Select value={selectedModel} onValueChange={setSelectedModel}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Auto-select best" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="auto_select_best">Auto-select Best Model</SelectItem>
-                        {models.map(model => (
-                          <SelectItem key={model} value={model}>{model}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                   </div>
-                )}
-              </div>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[100px]">Date</TableHead>
+                          <TableHead>Original Value</TableHead>
+                          <TableHead>Forecast Value</TableHead>
+                          <TableHead>Difference</TableHead>
+                          <TableHead>Percentage Change</TableHead>
+                          {isEditing && <TableHead className="text-right">Actions</TableHead>}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {forecastComparison.map((item, index) => {
+                          const forecastDate = currentForecast.predictions[index].date.toISOString().split('T')[0];
+                          const editableValue = editableForecasts[selectedModel].find(ef => ef.date === forecastDate)?.value || item.forecastValue;
+                          const isEdited = editableForecasts[selectedModel].find(ef => ef.date === forecastDate)?.isEdited || false;
 
-              <div className="flex gap-2">
-                <Button onClick={() => handleExport('csv')} className="flex-1">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export CSV
-                </Button>
-                <Button onClick={() => handleExport('json')} variant="outline" className="flex-1">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export JSON
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* S&OP Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle>S&OP Summary</CardTitle>
-              <CardDescription>
-                Overview of finalized forecasts for Sales & Operations Planning
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">SKU</th>
-                      <th className="text-left p-2">Selected Model</th>
-                      <th className="text-left p-2">Accuracy</th>
-                      <th className="text-right p-2">Total Forecast</th>
-                      <th className="text-right p-2">Avg per Period</th>
-                      <th className="text-center p-2">Periods</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sopSummary.map((summary, index) => (
-                      <tr key={index} className="border-b hover:bg-slate-50">
-                        <td className="p-2 font-medium">{summary.sku}</td>
-                        <td className="p-2">{finalizedModels[summary.sku] || summary.recommendedModel}</td>
-                        <td className="p-2">
-                          <Badge variant={summary.accuracy > 80 ? 'default' : 'secondary'}>
-                            {summary.accuracy.toFixed(1)}%
-                          </Badge>
-                        </td>
-                        <td className="p-2 text-right font-mono">
-                          {summary.totalForecast.toLocaleString()}
-                        </td>
-                        <td className="p-2 text-right font-mono">
-                          {summary.avgPeriodForecast.toFixed(0)}
-                        </td>
-                        <td className="p-2 text-center">{summary.forecastPeriods}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+                          return (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium">{forecastDate}</TableCell>
+                              <TableCell>{item.originalValue}</TableCell>
+                              <TableCell>
+                                {isEditing ? (
+                                  <div className="flex items-center space-x-2">
+                                    <Input
+                                      type="number"
+                                      value={editableValue}
+                                      onChange={(e) => handleValueChange(forecastDate, parseFloat(e.target.value))}
+                                      className="w-24 h-8"
+                                    />
+                                    {isEdited && (
+                                      <Badge variant="outline">Edited</Badge>
+                                    )}
+                                  </div>
+                                ) : (
+                                  item.forecastValue
+                                )}
+                              </TableCell>
+                              <TableCell>{item.difference}</TableCell>
+                              <TableCell>{item.percentageChange.toFixed(2)}%</TableCell>
+                              {isEditing && (
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleRevertValue(forecastDate)}
+                                  >
+                                    <X className="h-4 w-4 mr-2" />
+                                    Revert
+                                  </Button>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </TabsContent>
+            ))}
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { SalesData } from '@/pages/Index';
+import { SalesData } from '@/types/sales';
 
 export const generateMovingAverage = (salesData: SalesData[], window: number, periods: number): number[] => {
   const values = salesData.map(d => d.sales);

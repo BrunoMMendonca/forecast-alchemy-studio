@@ -1,20 +1,21 @@
-
-import React from 'react';
+import React, { useState, useMemo } from 'react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { Edit3, Save, X } from 'lucide-react';
-import { SalesData } from '@/pages/Index';
+import { Badge } from '@/components/ui/badge';
+import { Pencil, Check, X, AlertTriangle } from 'lucide-react';
+import { SalesData } from '@/types/sales';
 
 interface OutlierDataPoint extends SalesData {
-  isOutlier: boolean;
-  zScore: number;
-  index: number;
-  key: string;
-  originalSales: number;
+  date: string;
+  sales: number;
+  sku: string;
+  isOutlier?: boolean;
   note?: string;
+  zScore?: number;
+  percentileRank?: number;
+  severity?: 'mild' | 'moderate' | 'extreme';
 }
 
 interface OutlierDataTableProps {

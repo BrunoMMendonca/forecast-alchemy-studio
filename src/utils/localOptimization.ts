@@ -1,5 +1,5 @@
 
-import { SalesData } from '@/pages/Index';
+import { SalesData } from '@/types/sales';
 import { adaptiveGridSearchOptimization, enhancedParameterValidation } from '@/utils/adaptiveOptimization';
 import { ENHANCED_VALIDATION_CONFIG, ValidationConfig } from '@/utils/enhancedValidation';
 

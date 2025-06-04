@@ -4,7 +4,7 @@ import { adaptiveGridSearchOptimization, enhancedParameterValidation } from '@/u
 import { ENHANCED_VALIDATION_CONFIG } from '@/utils/enhancedValidation';
 import { optimizationLogger } from '@/utils/optimizationLogger';
 import { ModelConfig } from '@/types/forecast';
-import { SalesData } from '@/pages/Index';
+import { SalesData } from '@/types/sales';
 import { detectDateFrequency } from '@/utils/dateUtils';
 import { OptimizationResult } from '@/types/batchOptimization';
 
@@ -92,7 +92,7 @@ export const optimizeSingleModel = async (
         historicalData: skuData.map(d => d.sales),
         currentParameters: model.parameters,
         seasonalPeriod: frequency.seasonalPeriod,
-        targetMetric: 'accuracy' // Changed from 'mape' to 'accuracy'
+        targetMetric: 'accuracy'
       }, GROK_API_KEY);
 
       optimizationLogger.logStep({
@@ -112,8 +112,8 @@ export const optimizeSingleModel = async (
         grokResult.confidence,
         {
           ...ENHANCED_VALIDATION_CONFIG,
-          tolerance: 1.0, // Require at least 1% improvement
-          minConfidenceForAcceptance: 70 // Higher confidence threshold
+          tolerance: 1.0,
+          minConfidenceForAcceptance: 70
         }
       );
 
@@ -128,18 +128,15 @@ export const optimizeSingleModel = async (
           confidence: validationResult.confidence
         });
 
+        // CRITICAL FIX: Return AI result with proper method naming
         aiResult = {
           parameters: validationResult.parameters,
           confidence: validationResult.confidence,
-          method: validationResult.method
+          method: validationResult.method === 'ai_optimal' ? 'ai_optimal' : 'ai_success'
         };
 
-        // Update progress counter
-        progressUpdater.setProgress(prev => prev ? { 
-          ...prev, 
-          aiOptimized: prev.aiOptimized + 1,
-          aiAcceptedByConfidence: prev.aiAcceptedByConfidence + (validationResult.method === 'ai_optimal' ? 1 : 0)
-        } : null);
+        console.log(`🤖 AI OPTIMIZATION ACCEPTED for ${sku}:${model.id} - Method: ${aiResult.method}`);
+
       } else {
         optimizationLogger.logStep({
           sku,
@@ -147,7 +144,12 @@ export const optimizeSingleModel = async (
           step: 'ai_rejected',
           message: 'AI optimization REJECTED - insufficient improvement with aligned metrics'
         });
-        progressUpdater.setProgress(prev => prev ? { ...prev, aiRejected: prev.aiRejected + 1 } : null);
+        
+        // CRITICAL FIX: Update rejected counter through progress updater
+        progressUpdater.setProgress(prev => prev ? { 
+          ...prev, 
+          aiRejected: (prev.aiRejected || 0) + 1 
+        } : null);
       }
     } catch (error) {
       optimizationLogger.logStep({
@@ -167,7 +169,7 @@ export const optimizeSingleModel = async (
     });
   }
 
-  // Step 2: Try adaptive grid search with AI guidance
+  // Step 2: Try adaptive grid search if AI didn't work
   if (!aiResult) {
     optimizationLogger.logStep({
       sku,
@@ -179,11 +181,11 @@ export const optimizeSingleModel = async (
     const gridSearchResult = adaptiveGridSearchOptimization(
       model.id,
       skuData,
-      undefined, // Don't use AI parameters for grid search if AI was rejected
+      undefined,
       {
         ...ENHANCED_VALIDATION_CONFIG,
-        tolerance: 1.0, // Consistent tolerance requirement
-        useWalkForward: true // Ensure proper time-series validation
+        tolerance: 1.0,
+        useWalkForward: true
       }
     );
     
@@ -201,10 +203,11 @@ export const optimizeSingleModel = async (
       gridResult = {
         parameters: gridSearchResult.parameters,
         confidence: gridSearchResult.confidence,
-        method: gridSearchResult.method
+        method: gridSearchResult.method === 'adaptive_grid' ? 'grid_search' : gridSearchResult.method
       };
 
-      progressUpdater.setProgress(prev => prev ? { ...prev, gridOptimized: prev.gridOptimized + 1 } : null);
+      console.log(`🔍 GRID SEARCH SUCCESS for ${sku}:${model.id} - Method: ${gridResult.method}`);
+
     } else {
       optimizationLogger.logStep({
         sku,
@@ -215,24 +218,12 @@ export const optimizeSingleModel = async (
     }
   }
 
-  // Step 3: Return the best result with detailed logging
+  // Step 3: Return the best result
   if (aiResult) {
-    optimizationLogger.logStep({
-      sku,
-      modelId: model.id,
-      step: 'complete',
-      message: `Using AI optimized parameters - confidence: ${aiResult.confidence}%`,
-      parameters: aiResult.parameters
-    });
+    console.log(`✅ RETURNING AI RESULT for ${sku}:${model.id} - Method: ${aiResult.method}`);
     return aiResult;
   } else if (gridResult) {
-    optimizationLogger.logStep({
-      sku,
-      modelId: model.id,
-      step: 'complete',
-      message: `Using grid search parameters - confidence: ${gridResult.confidence}%`,
-      parameters: gridResult.parameters
-    });
+    console.log(`✅ RETURNING GRID RESULT for ${sku}:${model.id} - Method: ${gridResult.method}`);
     return gridResult;
   } else {
     optimizationLogger.logStep({
