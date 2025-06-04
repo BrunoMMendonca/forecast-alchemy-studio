@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -170,7 +169,10 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           return updated;
         });
         
-        // DON'T regenerate forecasts during optimization to prevent SKU switching
+        // RESTORED: Force forecast regeneration for currently selected SKU to show AI toggle
+        if (sku === selectedSKU) {
+          setTimeout(() => generateForecastsForSelectedSKU(), 100);
+        }
       },
       getSKUsNeedingOptimization
     );
