@@ -1,5 +1,4 @@
-
-import { SalesData } from '@/pages/Index';
+import { SalesData } from '@/types/sales';
 
 export interface CleaningRecord {
   sku: string;

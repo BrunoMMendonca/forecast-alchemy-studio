@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { optimizationLogger } from '@/utils/optimizationLogger';
 import { ModelConfig } from '@/types/forecast';
-import { SalesData } from '@/pages/Index';
+import { SalesData } from '@/types/sales';
 import { BatchOptimizationProgress } from '@/types/batchOptimization';
 import { optimizeSingleModel } from '@/utils/singleModelOptimization';
 
@@ -45,6 +45,20 @@ export const useBatchOptimization = () => {
     // Start logging session
     optimizationLogger.startSession(totalSKUs);
 
+    // CRITICAL FIX: Create a function to update progress with real-time counters
+    const updateProgressCounters = () => {
+      setProgress(prev => prev ? {
+        ...prev,
+        skipped: skippedCount,
+        optimized: optimizedCount,
+        aiOptimized: aiOptimizedCount,
+        gridOptimized: gridOptimizedCount,
+        aiRejected: aiRejectedCount,
+        aiAcceptedByTolerance: aiAcceptedByToleranceCount,
+        aiAcceptedByConfidence: aiAcceptedByConfidenceCount
+      } : null);
+    };
+
     try {
       for (let i = 0; i < skusToOptimize.length; i++) {
         const { sku, models: modelsToOptimize } = skusToOptimize[i];
@@ -77,19 +91,27 @@ export const useBatchOptimization = () => {
             onParametersOptimized(sku, model.id, result.parameters, result.confidence);
             optimizedCount++;
             
-            // Update counters based on method
+            // CRITICAL FIX: Update counters based on method and immediately update UI
             if (result.method.startsWith('ai_')) {
               aiOptimizedCount++;
+              console.log(`🤖 AI OPTIMIZATION SUCCESS: ${sku}:${modelId} - Total AI: ${aiOptimizedCount}`);
+              
               if (result.method === 'ai_confidence') {
                 aiAcceptedByConfidenceCount++;
               } else if (result.method === 'ai_tolerance') {
                 aiAcceptedByToleranceCount++;
               }
-            } else if (result.method === 'grid_search') {
+            } else if (result.method === 'grid_search' || result.method === 'adaptive_grid') {
               gridOptimizedCount++;
+              console.log(`🔍 GRID OPTIMIZATION SUCCESS: ${sku}:${modelId} - Total Grid: ${gridOptimizedCount}`);
             }
+            
+            // CRITICAL FIX: Update progress immediately after each optimization
+            updateProgressCounters();
+            
           } else {
             skippedCount++;
+            updateProgressCounters();
           }
         }
       }
@@ -130,7 +152,6 @@ export const useBatchOptimization = () => {
       console.error('Enhanced batch optimization error:', error);
     } finally {
       setIsOptimizing(false);
-      // DON'T clear progress here - let it stay visible with final results
       optimizationLogger.endSession();
     }
   };

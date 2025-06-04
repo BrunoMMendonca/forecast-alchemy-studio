@@ -1,8 +1,9 @@
+
 import React, { useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Zap } from 'lucide-react';
-import { SalesData } from '@/pages/Index';
+import { SalesData } from '@/types/sales';
 import { useToast } from '@/hooks/use-toast';
 import { exportCleaningData, parseCleaningCSV, applyImportChanges, ImportPreview } from '@/utils/csvUtils';
 import { ImportPreviewDialog } from '@/components/ImportPreviewDialog';

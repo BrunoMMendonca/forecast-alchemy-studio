@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { SalesData, ForecastResult } from '@/pages/Index';
+import { SalesData, ForecastResult } from '@/types/sales';
 import { useToast } from '@/hooks/use-toast';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useForecastCache } from '@/hooks/useForecastCache';
@@ -10,6 +10,7 @@ import { generateForecastsForSKU } from '@/utils/forecastGenerator';
 import { ModelSelection } from './ModelSelection';
 import { ProductSelector } from './ProductSelector';
 import { OptimizationLogger } from './OptimizationLogger';
+import { Progress } from '@/components/ui/progress';
 import { optimizationLogger } from '@/utils/optimizationLogger';
 
 interface ForecastModelsProps {
@@ -327,12 +328,10 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
               <p className="text-sm text-blue-600 mb-2">
                 Processing {progress.currentSKU} - {progress.currentModel} ({progress.completedSKUs + 1}/{progress.totalSKUs})
               </p>
-              <div className="mt-2 bg-blue-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${((progress.completedSKUs) / progress.totalSKUs) * 100}%` }}
-                />
-              </div>
+              <Progress 
+                value={((progress.completedSKUs) / progress.totalSKUs) * 100} 
+                className="mt-2 h-3"
+              />
             </>
           ) : (
             <div>

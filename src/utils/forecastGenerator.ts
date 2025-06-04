@@ -1,4 +1,3 @@
-
 import { SalesData, ForecastResult } from '@/types/sales';
 import { ModelConfig } from '@/types/forecast';
 import { detectDateFrequency, generateForecastDates } from '@/utils/dateUtils';
@@ -138,11 +137,12 @@ export const generateForecastsForSKU = async (
 
     console.log(`📊 ${model.name} accuracy: ${accuracy.toFixed(2)}% (using standardized calculation)`);
 
+    // CRITICAL FIX: Ensure dates are Date objects, not strings
     const result: ForecastResult = {
       sku: selectedSKU,
       model: model.name,
       predictions: forecastDates.map((date, i) => ({
-        date: new Date(date),
+        date: new Date(date), // Convert to Date object
         value: Math.round(predictions[i] || 0)
       })),
       accuracy

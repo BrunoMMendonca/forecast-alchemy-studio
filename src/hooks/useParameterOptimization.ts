@@ -1,9 +1,8 @@
-
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { optimizeParametersWithGrok } from '@/utils/grokApiUtils';
 import { ModelConfig } from '@/types/forecast';
-import { SalesData } from '@/pages/Index';
+import { SalesData } from '@/types/sales';
 
 // Replace with your actual Grok API key from X.AI
 const GROK_API_KEY = 'xai-003DWefvygdxNiCFZlEUAvBIBHCiW4wPmJSOzet8xcOKqJq2nYMwbImiRqfgkoNoYP1sLCPOKPTC4HDf';
