@@ -30,6 +30,13 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const isUsingOptimized = hasOptimizedParams;
   const optimizationMethod = model.optimizationMethod;
 
+  // Debug logging
+  console.log(`ParameterControl for ${model.id}:`, {
+    hasOptimizedParams,
+    optimizationMethod,
+    confidence: model.optimizationConfidence
+  });
+
   const getOptimizationBadge = () => {
     if (!hasOptimizedParams) {
       return (
@@ -40,6 +47,9 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
       );
     }
 
+    // Check the optimization method explicitly
+    console.log(`Badge determination for ${model.id}: method=${optimizationMethod}`);
+    
     switch (optimizationMethod) {
       case 'ai_optimal':
       case 'ai_tolerance':
@@ -65,6 +75,8 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
           </Badge>
         );
       default:
+        // If no method is specified but we have optimized params, assume AI
+        console.log(`No method specified for ${model.id}, defaulting to AI badge`);
         return (
           <Badge variant="default" className="text-white bg-purple-600">
             <Bot className="h-3 w-3 mr-1" />
@@ -75,8 +87,6 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   };
 
   const getToggleButton = () => {
-    const isAIMethod = optimizationMethod?.startsWith('ai_') || (!optimizationMethod && hasOptimizedParams);
-    
     if (hasOptimizedParams) {
       return (
         <Button
