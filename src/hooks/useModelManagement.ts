@@ -38,7 +38,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
         
         // ENHANCED: If preference is AI (true) and we have cached parameters with reasoning, use them
         if (preference === true && cached) {
-          console.log(`✅ Applying AI with reasoning for ${preferenceKey}`);
+          console.log(`✅ Applying AI with full reasoning for ${preferenceKey}`);
           return {
             ...model,
             optimizedParameters: cached.parameters,
@@ -62,7 +62,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
         }
         // ENHANCED: If no preference is set but we have valid cached parameters with reasoning, use them
         else if (!preference && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
-          console.log(`🤖 Auto-applying AI with reasoning for ${preferenceKey}`);
+          console.log(`🤖 Auto-applying AI with full reasoning for ${preferenceKey}`);
           
           // Auto-set preference to AI when we have valid cached parameters
           const updatedPreferences = { ...preferences };

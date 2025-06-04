@@ -142,10 +142,12 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
       data, 
       enabledModels, 
       queuedSKUs,
-      (sku, modelId, parameters, confidence) => {
+      (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy) => {
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
-        setCachedParameters(sku, modelId, parameters, dataHash, confidence);
+        
+        // Store complete optimization result in cache
+        setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, factors, expectedAccuracy);
         
         console.log(`QUEUE OPTIMIZATION: Setting ${sku}:${modelId} to AI (confidence: ${confidence})`);
         
@@ -154,14 +156,17 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         preferences[preferenceKey] = true;
         saveManualAIPreferences(preferences);
         
-        console.log(`QUEUE OPTIMIZATION: Updating models state for ${sku}:${modelId} with optimized parameters`);
+        console.log(`QUEUE OPTIMIZATION: Updating models state for ${sku}:${modelId} with optimized parameters and reasoning`);
         setModels(prev => {
           const updated = prev.map(model => 
             model.id === modelId 
               ? { 
                   ...model, 
                   optimizedParameters: parameters,
-                  optimizationConfidence: confidence
+                  optimizationConfidence: confidence,
+                  optimizationReasoning: reasoning,
+                  optimizationFactors: factors,
+                  expectedAccuracy: expectedAccuracy
                 }
               : model
           );

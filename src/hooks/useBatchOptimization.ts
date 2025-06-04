@@ -17,7 +17,20 @@ export const useBatchOptimization = () => {
     data: SalesData[],
     models: ModelConfig[],
     queuedSKUs: string[],
-    onParametersOptimized: (sku: string, modelId: string, parameters: Record<string, number>, confidence?: number) => void,
+    onParametersOptimized: (
+      sku: string, 
+      modelId: string, 
+      parameters: Record<string, number>, 
+      confidence?: number,
+      reasoning?: string,
+      factors?: {
+        stability: number;
+        interpretability: number;
+        complexity: number;
+        businessImpact: string;
+      },
+      expectedAccuracy?: number
+    ) => void,
     onSKUCompleted: (sku: string) => void,
     getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[]
   ) => {
@@ -114,7 +127,16 @@ export const useBatchOptimization = () => {
 
           const result = await optimizeSingleModel(model, skuData, sku, { setProgress });
           if (result) {
-            onParametersOptimized(sku, model.id, result.parameters, result.confidence);
+            // Pass the complete optimization result including reasoning
+            onParametersOptimized(
+              sku, 
+              model.id, 
+              result.parameters, 
+              result.confidence,
+              result.reasoning,
+              result.factors,
+              result.expectedAccuracy
+            );
             optimizedCount++;
             
             // Update counters based on method
@@ -182,7 +204,20 @@ export const useBatchOptimization = () => {
   const optimizeAllSKUs = async (
     data: SalesData[],
     models: ModelConfig[],
-    onParametersOptimized: (sku: string, modelId: string, parameters: Record<string, number>, confidence?: number) => void,
+    onParametersOptimized: (
+      sku: string, 
+      modelId: string, 
+      parameters: Record<string, number>, 
+      confidence?: number,
+      reasoning?: string,
+      factors?: {
+        stability: number;
+        interpretability: number;
+        complexity: number;
+        businessImpact: string;
+      },
+      expectedAccuracy?: number
+    ) => void,
     getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[]
   ) => {
     const skusToOptimize = getSKUsNeedingOptimization(data, models);

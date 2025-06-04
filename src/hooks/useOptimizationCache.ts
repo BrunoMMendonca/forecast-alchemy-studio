@@ -212,7 +212,15 @@ export const useOptimizationCache = () => {
     modelId: string, 
     parameters: Record<string, number>,
     dataHash: string,
-    confidence?: number
+    confidence?: number,
+    reasoning?: string,
+    factors?: {
+      stability: number;
+      interpretability: number;
+      complexity: number;
+      businessImpact: string;
+    },
+    expectedAccuracy?: number
   ) => {
     setCache(prev => ({
       ...prev,
@@ -222,12 +230,15 @@ export const useOptimizationCache = () => {
           parameters,
           timestamp: Date.now(),
           dataHash,
-          confidence
+          confidence,
+          reasoning,
+          factors,
+          expectedAccuracy
         }
       }
     }));
     
-    console.log(`FIXED CACHE: Cached parameters for ${sku}:${modelId}`);
+    console.log(`FIXED CACHE: Cached parameters with reasoning for ${sku}:${modelId}`);
   }, []);
 
   const isCacheValid = useCallback((sku: string, modelId: string, currentDataHash: string): boolean => {
