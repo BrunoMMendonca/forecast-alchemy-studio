@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -124,6 +125,10 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     if (!isOptimizing && optimizationCompleted) {
       hasTriggeredOptimizationRef.current = false;
       console.log('🏁 AUTO-TRIGGER: Optimization completed, resetting trigger flag');
+      
+      // Force UI update when optimization completes
+      console.log('🔄 OPTIMIZATION COMPLETE: Forcing UI update');
+      setForceUpdateTrigger(prev => prev + 1);
     }
   }, [isOptimizing, optimizationCompleted]);
 
@@ -137,6 +142,14 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
       }
     }
   }, [optimizationQueue?.getSKUsInQueue().length]);
+
+  // Watch for cache changes and force UI update for current SKU
+  React.useEffect(() => {
+    if (selectedSKU && cache[selectedSKU]) {
+      console.log('🔄 CACHE UPDATED: Forcing UI update for', selectedSKU);
+      setForceUpdateTrigger(prev => prev + 1);
+    }
+  }, [cache, selectedSKU]);
 
   // Auto-select first SKU when data changes
   React.useEffect(() => {
@@ -156,7 +169,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
       setTimeout(() => generateForecastsForSelectedSKU(), 50);
       lastSKURef.current = selectedSKU;
     }
-  }, [selectedSKU, data.length, createModelsWithPreferences]);
+  }, [selectedSKU, data.length, createModelsWithPreferences, forceUpdateTrigger]);
 
   // Force re-render when optimization updates occur
   React.useEffect(() => {
@@ -234,15 +247,21 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
           return updated;
         });
         
-        // Force UI update for the current SKU
+        // Force UI update for the current SKU immediately
         if (sku === selectedSKU) {
-          console.log(`🎯 QUEUE: FORCING UI UPDATE for selected SKU: ${sku}`);
+          console.log(`🎯 QUEUE: IMMEDIATE UI UPDATE for selected SKU: ${sku}`);
           setForceUpdateTrigger(prev => prev + 1);
         }
       },
       (sku) => {
         // Remove completed SKU from queue
         optimizationQueue.removeSKUsFromQueue([sku]);
+        
+        // Force UI update when current SKU is completed
+        if (sku === selectedSKU) {
+          console.log(`🎯 QUEUE: SKU COMPLETED UI UPDATE for: ${sku}`);
+          setForceUpdateTrigger(prev => prev + 1);
+        }
       },
       getSKUsNeedingOptimization
     );
@@ -252,6 +271,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     
     // Final force update to ensure UI reflects all changes
     setTimeout(() => {
+      console.log('🔄 FINAL UI UPDATE: After optimization completion');
       setForceUpdateTrigger(prev => prev + 1);
     }, 200);
   };
