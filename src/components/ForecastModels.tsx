@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
@@ -18,15 +18,19 @@ interface ForecastModelsProps {
   onForecastGeneration: (results: ForecastResult[], selectedSKU: string) => void;
   selectedSKU: string;
   onSKUChange: (sku: string) => void;
+  shouldStartOptimization?: boolean;
+  onOptimizationStarted?: () => void;
 }
 
-export const ForecastModels: React.FC<ForecastModelsProps> = ({ 
+export const ForecastModels = forwardRef<any, ForecastModelsProps>(({ 
   data, 
   forecastPeriods,
   onForecastGeneration,
   selectedSKU,
-  onSKUChange
-}) => {
+  onSKUChange,
+  shouldStartOptimization = false,
+  onOptimizationStarted
+}, ref) => {
   const { toast } = useToast();
   const lastDataHashRef = useRef<string>('');
   const lastSKURef = useRef<string>('');
@@ -71,6 +75,11 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     saveManualAIPreferences
   } = useModelManagement(selectedSKU, data);
 
+  // Expose methods to parent component
+  useImperativeHandle(ref, () => ({
+    startOptimization: handleInitialOptimization
+  }));
+
   // Auto-select first SKU when data changes
   React.useEffect(() => {
     const skus = Array.from(new Set(data.map(d => d.sku))).sort();
@@ -90,6 +99,15 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       lastSKURef.current = selectedSKU;
     }
   }, [selectedSKU, data.length, createModelsWithPreferences]);
+
+  // FIXED: Handle external optimization trigger
+  React.useEffect(() => {
+    if (shouldStartOptimization && data.length > 0 && !isOptimizing) {
+      console.log('🚀 EXTERNAL TRIGGER: Starting optimization from parent component');
+      handleInitialOptimization();
+      onOptimizationStarted?.();
+    }
+  }, [shouldStartOptimization, data.length, isOptimizing]);
 
   // Main optimization effect - only runs on actual data changes
   React.useEffect(() => {
@@ -148,13 +166,11 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         
         console.log(`OPTIMIZATION CALLBACK: Setting ${sku}:${modelId} to AI (confidence: ${confidence})`);
         
-        // FIXED: Update preferences to AI for optimized models immediately
         const preferences = loadManualAIPreferences();
         const preferenceKey = `${sku}:${modelId}`;
         preferences[preferenceKey] = true;
         saveManualAIPreferences(preferences);
         
-        // FIXED: Immediately update models state with optimized parameters for ANY SKU
         console.log(`OPTIMIZATION: Updating models state for ${sku}:${modelId} with optimized parameters`);
         setModels(prev => {
           const updated = prev.map(model => 
@@ -169,7 +185,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           return updated;
         });
         
-        // FIXED: Force forecast regeneration for currently selected SKU when it gets optimized
         if (sku === selectedSKU) {
           console.log(`🎯 IMMEDIATE FORECAST REGENERATION for selected SKU: ${sku}`);
           setTimeout(() => generateForecastsForSelectedSKU(), 100);
@@ -356,4 +371,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       />
     </div>
   );
-};
+});
+
+ForecastModels.displayName = 'ForecastModels';

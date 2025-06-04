@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
 import { OutlierDetection } from '@/components/OutlierDetection';
@@ -32,6 +33,8 @@ const Index = () => {
   const [selectedSKUForResults, setSelectedSKUForResults] = useState<string>('');
   const [forecastPeriods, setForecastPeriods] = useState(12);
   const [currentStep, setCurrentStep] = useState(0);
+  const [shouldStartOptimization, setShouldStartOptimization] = useState(false);
+  const forecastModelsRef = useRef<any>(null);
 
   const steps = [
     { id: 'upload', title: 'Upload Data', icon: Upload },
@@ -55,14 +58,21 @@ const Index = () => {
   }, []);
 
   const handleDataUpload = (data: SalesData[]) => {
+    console.log('📤 Data uploaded, starting immediate optimization');
     setSalesData(data);
     setCleanedData(data);
     setCurrentStep(1);
+    
+    // FIXED: Start optimization immediately after data upload
+    setShouldStartOptimization(true);
   };
 
   const handleDataCleaning = (cleaned: SalesData[]) => {
-    console.log('Updating cleaned data:', cleaned.length, 'records');
+    console.log('🧹 Data cleaned, updating cleaned data and triggering re-optimization');
     setCleanedData(cleaned);
+    
+    // FIXED: Mark that optimization should restart when data is cleaned
+    setShouldStartOptimization(true);
   };
 
   const handleForecastGeneration = (results: ForecastResult[], selectedSKU?: string) => {
@@ -141,6 +151,22 @@ const Index = () => {
           </div>
         </div>
 
+        {/* FIXED: Hidden ForecastModels component for background optimization */}
+        {salesData.length > 0 && (
+          <div style={{ display: 'none' }}>
+            <ForecastModels 
+              ref={forecastModelsRef}
+              data={cleanedData}
+              forecastPeriods={forecastPeriods}
+              onForecastGeneration={handleForecastGeneration}
+              selectedSKU={selectedSKUForResults}
+              onSKUChange={setSelectedSKUForResults}
+              shouldStartOptimization={shouldStartOptimization}
+              onOptimizationStarted={() => setShouldStartOptimization(false)}
+            />
+          </div>
+        )}
+
         {/* Main Content */}
         <div className="w-full">
           {currentStep === 0 && (
@@ -173,7 +199,7 @@ const Index = () => {
                   Data Visualization
                 </CardTitle>
                 <CardDescription>
-                  Explore your historical sales data across different SKUs
+                  Explore your historical sales data across different SKUs (Optimization running in background)
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -197,7 +223,7 @@ const Index = () => {
                   Outlier Detection & Cleaning
                 </CardTitle>
                 <CardDescription>
-                  Identify and remove outliers from your data to improve forecast accuracy
+                  Identify and remove outliers from your data to improve forecast accuracy (Optimization continues in background)
                 </CardDescription>
               </CardHeader>
               <CardContent>
