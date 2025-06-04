@@ -279,6 +279,25 @@ export const useOptimizationCache = () => {
 
   const batchValidateCache = useCallback(() => ({}), []);
 
+  // Clear all cache and reset state
+  const clearAllCache = useCallback(() => {
+    console.log('🗑️ CACHE CLEAR: Clearing all optimization cache and state');
+    
+    // Clear memory state
+    setCache({});
+    setCacheStats({ hits: 0, misses: 0, skipped: 0 });
+    setOptimizationState(null);
+    
+    // Clear localStorage
+    try {
+      localStorage.removeItem(CACHE_KEY);
+      localStorage.removeItem(OPTIMIZATION_STATE_KEY);
+      console.log('🗑️ CACHE CLEAR: Cleared localStorage');
+    } catch (error) {
+      console.error('🗑️ CACHE CLEAR: Failed to clear localStorage:', error);
+    }
+  }, []);
+
   return {
     cache,
     cacheStats,
@@ -288,6 +307,7 @@ export const useOptimizationCache = () => {
     isCacheValid,
     getSKUsNeedingOptimization,
     clearCacheForSKU,
+    clearAllCache,
     batchValidateCache,
     isOptimizationComplete,
     markOptimizationComplete,

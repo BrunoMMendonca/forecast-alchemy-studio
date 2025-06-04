@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 
 const MANUAL_AI_PREFERENCE_KEY = 'manual_ai_preferences';
@@ -24,8 +23,19 @@ export const useManualAIPreferences = () => {
     }
   }, []);
 
+  // Clear all manual/AI preferences
+  const clearManualAIPreferences = useCallback(() => {
+    try {
+      localStorage.removeItem(MANUAL_AI_PREFERENCE_KEY);
+      console.log('🗑️ PREFERENCES CLEAR: Cleared all manual/AI preferences');
+    } catch (error) {
+      console.error('🗑️ PREFERENCES CLEAR: Failed to clear preferences:', error);
+    }
+  }, []);
+
   return {
     loadManualAIPreferences,
-    saveManualAIPreferences
+    saveManualAIPreferences,
+    clearManualAIPreferences
   };
 };

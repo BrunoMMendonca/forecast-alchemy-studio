@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart3, TrendingUp, Upload, Zap, Eye } from 'lucide-react';
 import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
+import { useOptimizationCache } from '@/hooks/useOptimizationCache';
+import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 import { useToast } from '@/hooks/use-toast';
 
 export interface SalesData {
@@ -40,6 +42,10 @@ const Index = () => {
 
   // Add optimization queue
   const { addSKUsToQueue, removeSKUsFromQueue, getSKUsInQueue, queueSize, clearQueue } = useOptimizationQueue();
+  
+  // Add cache clearing capabilities
+  const { clearAllCache } = useOptimizationCache();
+  const { clearManualAIPreferences } = useManualAIPreferences();
 
   const steps = [
     { id: 'upload', title: 'Upload Data', icon: Upload },
@@ -63,7 +69,11 @@ const Index = () => {
   }, []);
 
   const handleDataUpload = (data: SalesData[]) => {
-    console.log('📤 Data uploaded, clearing old queue and marking all SKUs for optimization');
+    console.log('📤 Data uploaded, clearing all caches and marking all SKUs for optimization');
+    
+    // Clear all existing caches and preferences to prevent stale data
+    clearAllCache();
+    clearManualAIPreferences();
     
     // Clear existing queue to avoid conflicts with old SKUs
     clearQueue();
@@ -71,6 +81,10 @@ const Index = () => {
     setSalesData(data);
     setCleanedData(data);
     setCurrentStep(1);
+    
+    // Clear any existing forecast results to prevent confusion
+    setForecastResults([]);
+    setSelectedSKUForResults('');
     
     // Mark all SKUs for optimization
     const skus = Array.from(new Set(data.map(d => d.sku)));

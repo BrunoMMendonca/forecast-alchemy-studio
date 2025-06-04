@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -113,15 +112,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     }
   }, [selectedSKU, data.length, createModelsWithPreferences]);
 
-  // Handle external optimization trigger
-  React.useEffect(() => {
-    if (shouldStartOptimization && data.length > 0 && !isOptimizing && optimizationQueue) {
-      console.log('🚀 EXTERNAL TRIGGER: Starting queue optimization from parent component');
-      handleQueueOptimization();
-      onOptimizationStarted?.();
-    }
-  }, [shouldStartOptimization, data.length, isOptimizing]);
-
   // Force re-render when optimization updates occur
   React.useEffect(() => {
     if (forceUpdateTrigger > 0) {
@@ -129,6 +119,21 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
       setTimeout(() => generateForecastsForSelectedSKU(), 100);
     }
   }, [forceUpdateTrigger]);
+
+  // Reset models when cache is cleared (when data changes significantly)
+  React.useEffect(() => {
+    if (selectedSKU && data.length > 0) {
+      // Check if this is a completely new dataset by looking at cache state
+      const currentDataHash = generateDataHash(data.filter(d => d.sku === selectedSKU));
+      const hasAnyCache = Object.keys(cache).length > 0;
+      
+      // If we have no cache at all, this indicates a fresh start (cache was cleared)
+      if (!hasAnyCache) {
+        console.log('🔄 CACHE CLEARED: Resetting models to default state');
+        setForceUpdateTrigger(prev => prev + 1);
+      }
+    }
+  }, [cache, selectedSKU, data.length, generateDataHash]);
 
   const handleQueueOptimization = async () => {
     if (!optimizationQueue) {
