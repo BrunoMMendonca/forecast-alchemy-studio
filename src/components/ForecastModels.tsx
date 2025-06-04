@@ -181,25 +181,17 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // Apply preferences immediately when SKU changes or component mounts
+  // Apply preferences immediately when SKU changes or component mounts - BUT NOT on force updates
   React.useEffect(() => {
-    if (selectedSKU && data.length > 0) {
+    if (selectedSKU && data.length > 0 && forceUpdateTrigger === 0) {
       const modelsWithPreferences = createModelsWithPreferences();
-      console.log(`EFFECT: Setting models with preferences for ${selectedSKU}`);
+      console.log(`EFFECT: Setting models with preferences for ${selectedSKU} (initial load only)`);
       setModels(modelsWithPreferences);
       
       setTimeout(() => generateForecastsForSelectedSKU(), 50);
       lastSKURef.current = selectedSKU;
     }
-  }, [selectedSKU, data.length, createModelsWithPreferences, forceUpdateTrigger]);
-
-  // Force re-render when optimization updates occur
-  React.useEffect(() => {
-    if (forceUpdateTrigger > 0) {
-      console.log('🔄 FORCE UPDATE: Regenerating forecasts after optimization state change');
-      setTimeout(() => generateForecastsForSelectedSKU(), 100);
-    }
-  }, [forceUpdateTrigger]);
+  }, [selectedSKU, data.length, createModelsWithPreferences]);
 
   // Reset models when cache is cleared (when data changes significantly)
   React.useEffect(() => {
