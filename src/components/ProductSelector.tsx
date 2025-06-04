@@ -1,8 +1,9 @@
+
 import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { SalesData } from '@/types/sales';
+import { SalesData } from '@/pages/Index';
 
 interface ProductSelectorProps {
   data: SalesData[];

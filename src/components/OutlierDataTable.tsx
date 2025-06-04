@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Edit3, Save, X } from 'lucide-react';
-import { SalesData } from '@/types/sales';
+import { SalesData } from '@/pages/Index';
 
 interface OutlierDataPoint extends SalesData {
   isOutlier: boolean;

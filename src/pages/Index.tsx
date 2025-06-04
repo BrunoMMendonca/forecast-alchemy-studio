@@ -89,6 +89,7 @@ const Index = () => {
 
               <div className="space-y-6">
                 <ForecastControls
+                  forecastPeriods={forecastPeriods}
                   onForecastPeriodsChange={setForecastPeriods}
                 />
 
