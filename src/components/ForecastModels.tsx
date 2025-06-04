@@ -49,6 +49,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     cache,
     cacheStats,
     generateDataHash,
+    getCachedParameters,
     setCachedParameters,
     getSKUsNeedingOptimization
   } = useOptimizationCache();
