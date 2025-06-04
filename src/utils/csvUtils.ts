@@ -1,3 +1,4 @@
+
 import { parseISO, format } from 'date-fns';
 import { SalesData } from '@/types/sales';
 
@@ -8,11 +9,17 @@ export const parseCSVData = async (file: File): Promise<SalesData[]> => {
       try {
         const csvText = event.target?.result as string;
         const lines = csvText.split('\n').filter(line => line.trim());
+        
+        if (lines.length < 2) {
+          reject(new Error('CSV file must contain at least a header and one data row'));
+          return;
+        }
+        
         const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
         
-        const skuIndex = headers.findIndex(h => h.includes('sku'));
-        const dateIndex = headers.findIndex(h => h.includes('date'));
-        const salesIndex = headers.findIndex(h => h.includes('sales') || h.includes('qty') || h.includes('quantity'));
+        const skuIndex = headers.findIndex(h => h.includes('sku') || h.includes('product'));
+        const dateIndex = headers.findIndex(h => h.includes('date') || h.includes('time'));
+        const salesIndex = headers.findIndex(h => h.includes('sales') || h.includes('qty') || h.includes('quantity') || h.includes('amount'));
         
         if (skuIndex === -1 || dateIndex === -1 || salesIndex === -1) {
           reject(new Error('CSV must contain SKU, Date, and Sales columns'));
@@ -22,17 +29,22 @@ export const parseCSVData = async (file: File): Promise<SalesData[]> => {
         const data: SalesData[] = [];
         for (let i = 1; i < lines.length; i++) {
           const values = lines[i].split(',').map(v => v.trim());
-          if (values.length >= 3) {
-            data.push({
-              sku: values[skuIndex],
-              date: values[dateIndex],
-              sales: parseFloat(values[salesIndex]) || 0
-            });
+          if (values.length >= Math.max(skuIndex, dateIndex, salesIndex) + 1) {
+            const salesValue = parseFloat(values[salesIndex]) || 0;
+            if (salesValue >= 0) { // Only include non-negative sales values
+              data.push({
+                sku: values[skuIndex],
+                date: values[dateIndex],
+                sales: salesValue
+              });
+            }
           }
         }
         
+        console.log('Parsed CSV data:', data.length, 'records');
         resolve(data);
       } catch (error) {
+        console.error('CSV parsing error:', error);
         reject(error);
       }
     };
