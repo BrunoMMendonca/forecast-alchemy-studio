@@ -1,12 +1,10 @@
-
 import React, { useState, useMemo } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Pencil, Check, X, AlertTriangle, Edit3, Save } from 'lucide-react';
+import { Pencil, Check, X, AlertTriangle } from 'lucide-react';
 import { SalesData } from '@/types/sales';
 
 interface OutlierDataPoint extends SalesData {
@@ -18,8 +16,6 @@ interface OutlierDataPoint extends SalesData {
   zScore?: number;
   percentileRank?: number;
   severity?: 'mild' | 'moderate' | 'extreme';
-  key: string;
-  originalSales: number;
 }
 
 interface OutlierDataTableProps {
@@ -82,7 +78,7 @@ export const OutlierDataTable: React.FC<OutlierDataTableProps> = ({
                     </span>
                   </div>
                   <Badge variant={badgeVariant} className={`text-xs ${dataPoint.isOutlier ? 'text-white' : 'text-green-800'}`}>
-                    Z-Score: {dataPoint.zScore?.toFixed(2)}
+                    Z-Score: {dataPoint.zScore.toFixed(2)}
                   </Badge>
                   {!dataPoint.isOutlier && (
                     <Badge variant="secondary" className="text-xs text-green-800 bg-green-100">

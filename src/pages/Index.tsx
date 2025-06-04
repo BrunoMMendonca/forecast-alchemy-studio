@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DataVisualization } from '@/components/DataVisualization';
 import { FileUpload } from '@/components/FileUpload';
 import { ForecastModels } from '@/components/ForecastModels';
+import { ForecastControls } from '@/components/ForecastControls';
 import { ForecastResults } from '@/components/ForecastResults';
 import { ForecastFinalization } from '@/components/ForecastFinalization';
 import { OutlierDetection } from '@/components/OutlierDetection';
@@ -71,17 +72,18 @@ const Index = () => {
         </TabsList>
 
         <TabsContent value="upload" className="space-y-6">
-          <FileUpload onDataUpload={handleDataUpdate} />
+          <FileUpload onDataLoaded={handleDataUpdate} />
           {data.length > 0 && (
-            <DataVisualization data={data} />
+            <DataVisualization data={data} selectedSKU={selectedSKU} />
           )}
         </TabsContent>
 
         <TabsContent value="outliers">
           <OutlierDetection 
             data={data} 
-            cleanedData={data}
-            onDataCleaning={setData}
+            onDataUpdate={setData}
+            selectedSKU={selectedSKU}
+            onSKUChange={setSelectedSKU}
           />
         </TabsContent>
 
@@ -93,11 +95,16 @@ const Index = () => {
             selectedSKU={selectedSKU}
             onSKUChange={setSelectedSKU}
           />
+          
+          <ForecastControls 
+            onForecastPeriodsChange={setForecastPeriods}
+          />
         </TabsContent>
 
         <TabsContent value="results">
           <ForecastResults 
             results={forecastResults}
+            data={data}
             selectedSKU={selectedSKU}
           />
         </TabsContent>

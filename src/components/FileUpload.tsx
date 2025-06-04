@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Upload, FileText, CheckCircle, RefreshCw } from 'lucide-react';
-import { SalesData } from '@/types/sales';
+import { SalesData } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 
 interface FileUploadProps {

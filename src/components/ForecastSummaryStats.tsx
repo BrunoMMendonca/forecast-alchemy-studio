@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ForecastResult } from '@/types/sales';
+import { ForecastResult } from '@/pages/Index';
 
 interface ForecastSummaryStatsProps {
   results: ForecastResult[];
