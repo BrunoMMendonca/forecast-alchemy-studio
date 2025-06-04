@@ -180,15 +180,8 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     markOptimizationCompleted(data, '/');
     console.log('FIXED: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE');
     
-    // After optimization completes, refresh the current SKU's models and forecasts
-    setTimeout(() => {
-      console.log('POST-OPTIMIZATION: Refreshing current SKU models and forecasts');
-      if (selectedSKU) {
-        const refreshedModels = createModelsWithPreferences();
-        setModels(refreshedModels);
-        generateForecastsForSelectedSKU();
-      }
-    }, 100);
+    // REMOVED: Don't refresh models after optimization - this was resetting to manual
+    // The preferences are already set during optimization, no need to recreate models
   };
 
   const generateForecastsForSelectedSKU = async () => {
