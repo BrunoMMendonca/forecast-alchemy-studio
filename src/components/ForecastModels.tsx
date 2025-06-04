@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -148,13 +149,14 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         
         console.log(`OPTIMIZATION CALLBACK: Setting ${sku}:${modelId} to AI (confidence: ${confidence})`);
         
+        // Update preferences to AI for optimized models
         const preferences = loadManualAIPreferences();
         const preferenceKey = `${sku}:${modelId}`;
         preferences[preferenceKey] = true;
         saveManualAIPreferences(preferences);
         
-        // CRITICAL FIX: Always update models state for any SKU to ensure proper state sync
-        console.log(`CRITICAL FIX: Updating models state for ${sku}:${modelId} with optimized parameters`);
+        // Update models state for any SKU to ensure proper state sync
+        console.log(`OPTIMIZATION: Updating models state for ${sku}:${modelId} with optimized parameters`);
         setModels(prev => {
           const updated = prev.map(model => 
             model.id === modelId 
@@ -165,17 +167,10 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
                 }
               : model
           );
-          console.log(`CRITICAL FIX: Models state updated for ${modelId}:`, {
-            hasOptimized: !!updated.find(m => m.id === modelId)?.optimizedParameters,
-            confidence: updated.find(m => m.id === modelId)?.optimizationConfidence
-          });
           return updated;
         });
         
-        // Only force forecast regeneration for currently selected SKU
-        if (sku === selectedSKU) {
-          setTimeout(() => generateForecastsForSelectedSKU(), 100);
-        }
+        // DON'T regenerate forecasts during optimization to prevent SKU switching
       },
       getSKUsNeedingOptimization
     );
@@ -183,15 +178,15 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     markOptimizationCompleted(data, '/');
     console.log('FIXED: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE');
     
-    // ADDITIONAL FIX: Force a complete refresh of models with preferences after optimization
+    // After optimization completes, refresh the current SKU's models and forecasts
     setTimeout(() => {
-      console.log('ADDITIONAL FIX: Refreshing models with latest preferences after optimization');
-      const refreshedModels = createModelsWithPreferences();
-      setModels(refreshedModels);
+      console.log('POST-OPTIMIZATION: Refreshing current SKU models and forecasts');
       if (selectedSKU) {
+        const refreshedModels = createModelsWithPreferences();
+        setModels(refreshedModels);
         generateForecastsForSelectedSKU();
       }
-    }, 200);
+    }, 100);
   };
 
   const generateForecastsForSelectedSKU = async () => {
