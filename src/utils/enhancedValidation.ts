@@ -1,3 +1,4 @@
+import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/types/sales';
 
 export interface ValidationResult {

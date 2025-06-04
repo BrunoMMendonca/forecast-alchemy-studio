@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 import { SalesData } from '@/types/sales';
 
 export interface CleaningRecord {
@@ -58,7 +59,7 @@ export const exportCleaningData = (
   });
 
   // Create CSV content
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+  const timestamp = format(new Date(), 'yyyy-MM-dd-HH-mm-ss');
   const headers = [
     '# Data Cleaning Export',
     `# Exported: ${new Date().toLocaleString()}`,

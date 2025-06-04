@@ -1,5 +1,7 @@
 
+import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/types/sales';
+import { detectDateFrequency } from '@/utils/dateUtils';
 import { adaptiveGridSearchOptimization, enhancedParameterValidation } from '@/utils/adaptiveOptimization';
 import { ENHANCED_VALIDATION_CONFIG, ValidationConfig } from '@/utils/enhancedValidation';
 
@@ -63,3 +65,5 @@ export const validateOptimizedParameters = (
     method: result.method === 'ai_optimal' ? 'ai_high_confidence' : result.method
   };
 };
+
+export const optimizeModelLocally = gridSearchOptimization;
