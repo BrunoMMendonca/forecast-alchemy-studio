@@ -11,7 +11,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
   const isTogglingAIManualRef = useRef<boolean>(false);
 
-  // IMMEDIATE FIX: Apply preferences during initial model creation
+  // FIXED: Apply preferences during initial model creation with better cache handling
   const createModelsWithPreferences = useCallback((): ModelConfig[] => {
     console.log('🏗️ CREATING MODELS WITH PREFERENCES');
     
@@ -34,17 +34,45 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
         const preferenceKey = `${selectedSKU}:${model.id}`;
         const preference = preferences[preferenceKey];
         
-        console.log(`🔍 ${preferenceKey}: preference=${preference}, cached=${!!cached}`);
+        console.log(`🔍 ${preferenceKey}: preference=${preference}, cached=${!!cached}, cacheValid=${cached ? isCacheValid(selectedSKU, model.id, currentDataHash) : false}`);
         
-        if (preference === true && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
-          console.log(`✅ Applying AI for ${preferenceKey}`);
+        // FIXED: If preference is AI (true) and we have cached parameters, use them regardless of cache validity
+        // This ensures that newly optimized parameters are immediately applied
+        if (preference === true && cached) {
+          console.log(`✅ Applying AI for ${preferenceKey} (using cached parameters)`);
           return {
             ...model,
             optimizedParameters: cached.parameters,
             optimizationConfidence: cached.confidence
           };
-        } else {
-          console.log(`🛠️ Using manual for ${preferenceKey}`);
+        } 
+        // FIXED: If preference is explicitly false (manual), don't use cached parameters
+        else if (preference === false) {
+          console.log(`🛠️ Using manual for ${preferenceKey} (preference set to false)`);
+          return {
+            ...model,
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined
+          };
+        }
+        // FIXED: If no preference is set but we have valid cached parameters, use them and set preference to AI
+        else if (!preference && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
+          console.log(`🤖 Auto-applying AI for ${preferenceKey} (valid cache found, setting preference)`);
+          
+          // Auto-set preference to AI when we have valid cached parameters
+          const updatedPreferences = { ...preferences };
+          updatedPreferences[preferenceKey] = true;
+          saveManualAIPreferences(updatedPreferences);
+          
+          return {
+            ...model,
+            optimizedParameters: cached.parameters,
+            optimizationConfidence: cached.confidence
+          };
+        }
+        // Default to manual
+        else {
+          console.log(`🛠️ Default to manual for ${preferenceKey}`);
           return {
             ...model,
             optimizedParameters: undefined,
@@ -56,9 +84,9 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
       console.error('❌ Error creating models with preferences:', error);
       return defaultModels;
     }
-  }, [selectedSKU, data, loadManualAIPreferences, generateDataHash, getCachedParameters, isCacheValid]);
+  }, [selectedSKU, data, loadManualAIPreferences, saveManualAIPreferences, generateDataHash, getCachedParameters, isCacheValid]);
 
-  // IMMEDIATE FIX: Initialize models with a reactive function
+  // Initialize models with a reactive function
   const [models, setModels] = useState<ModelConfig[]>(() => {
     console.log('🎯 INITIAL STATE CREATION');
     return getDefaultModels(); // Will be immediately updated by the effect

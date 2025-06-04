@@ -148,13 +148,13 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         
         console.log(`OPTIMIZATION CALLBACK: Setting ${sku}:${modelId} to AI (confidence: ${confidence})`);
         
-        // Update preferences to AI for optimized models
+        // FIXED: Update preferences to AI for optimized models immediately
         const preferences = loadManualAIPreferences();
         const preferenceKey = `${sku}:${modelId}`;
         preferences[preferenceKey] = true;
         saveManualAIPreferences(preferences);
         
-        // Update models state for any SKU to ensure proper state sync
+        // FIXED: Immediately update models state with optimized parameters for ANY SKU
         console.log(`OPTIMIZATION: Updating models state for ${sku}:${modelId} with optimized parameters`);
         setModels(prev => {
           const updated = prev.map(model => 
@@ -169,8 +169,9 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
           return updated;
         });
         
-        // RESTORED: Force forecast regeneration for currently selected SKU to show AI toggle
+        // FIXED: Force forecast regeneration for currently selected SKU when it gets optimized
         if (sku === selectedSKU) {
+          console.log(`🎯 IMMEDIATE FORECAST REGENERATION for selected SKU: ${sku}`);
           setTimeout(() => generateForecastsForSelectedSKU(), 100);
         }
       },
@@ -179,9 +180,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 
     markOptimizationCompleted(data, '/');
     console.log('FIXED: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE');
-    
-    // REMOVED: Don't refresh models after optimization - this was resetting to manual
-    // The preferences are already set during optimization, no need to recreate models
   };
 
   const generateForecastsForSelectedSKU = async () => {
