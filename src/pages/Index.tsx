@@ -91,8 +91,11 @@ const Index = () => {
     console.log('📤 Adding new SKUs to queue:', skus);
     addSKUsToQueue(skus, 'csv_upload');
     
-    // Start optimization
-    setShouldStartOptimization(true);
+    // Start optimization with a small delay to allow state updates
+    setTimeout(() => {
+      setShouldStartOptimization(true);
+      console.log('📤 Setting shouldStartOptimization to true');
+    }, 500);
   };
 
   const handleDataCleaning = (cleaned: SalesData[], changedSKUs?: string[]) => {
@@ -109,7 +112,10 @@ const Index = () => {
       
       if (validChangedSKUs.length > 0) {
         addSKUsToQueue(validChangedSKUs, 'data_cleaning');
-        setShouldStartOptimization(true);
+        setTimeout(() => {
+          setShouldStartOptimization(true);
+          console.log('🧹 Setting shouldStartOptimization to true for data cleaning');
+        }, 500);
         
         // Show toast notification about optimization being triggered
         toast({
@@ -132,7 +138,10 @@ const Index = () => {
     if (validImportedSKUs.length > 0) {
       console.log('📥 Valid imported SKUs:', validImportedSKUs);
       addSKUsToQueue(validImportedSKUs, 'csv_import');
-      setShouldStartOptimization(true);
+      setTimeout(() => {
+        setShouldStartOptimization(true);
+        console.log('📥 Setting shouldStartOptimization to true for import');
+      }, 500);
       
       // Show toast notification about optimization being triggered
       toast({
@@ -167,6 +176,11 @@ const Index = () => {
 
   const handleProceedToForecasting = () => {
     setCurrentStep(3);
+  };
+
+  const handleOptimizationStarted = () => {
+    console.log('🏁 Optimization started, resetting shouldStartOptimization flag');
+    setShouldStartOptimization(false);
   };
 
   return (
@@ -236,7 +250,7 @@ const Index = () => {
               selectedSKU={selectedSKUForResults}
               onSKUChange={setSelectedSKUForResults}
               shouldStartOptimization={shouldStartOptimization}
-              onOptimizationStarted={() => setShouldStartOptimization(false)}
+              onOptimizationStarted={handleOptimizationStarted}
               optimizationQueue={{
                 getSKUsInQueue,
                 removeSKUsFromQueue

@@ -43,6 +43,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   const lastSKURef = useRef<string>('');
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
   const [forceUpdateTrigger, setForceUpdateTrigger] = useState(0);
+  const hasTriggeredOptimizationRef = useRef(false);
   
   const {
     cache,
@@ -91,6 +92,51 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   useImperativeHandle(ref, () => ({
     startOptimization: handleQueueOptimization
   }));
+
+  // AUTO-TRIGGER: Watch for shouldStartOptimization prop
+  React.useEffect(() => {
+    if (shouldStartOptimization && !isOptimizing && !hasTriggeredOptimizationRef.current) {
+      console.log('🚀 AUTO-TRIGGER: shouldStartOptimization is true, starting optimization...');
+      hasTriggeredOptimizationRef.current = true;
+      handleQueueOptimization();
+      if (onOptimizationStarted) {
+        onOptimizationStarted();
+      }
+    }
+  }, [shouldStartOptimization, isOptimizing]);
+
+  // AUTO-TRIGGER: Watch for new items in queue
+  React.useEffect(() => {
+    if (optimizationQueue) {
+      const queuedSKUs = optimizationQueue.getSKUsInQueue();
+      if (queuedSKUs.length > 0 && !isOptimizing && !hasTriggeredOptimizationRef.current) {
+        console.log('🚀 AUTO-TRIGGER: Queue has items and optimization not running, starting...', queuedSKUs);
+        hasTriggeredOptimizationRef.current = true;
+        setTimeout(() => {
+          handleQueueOptimization();
+        }, 1000); // Small delay to allow UI to update
+      }
+    }
+  }, [optimizationQueue?.getSKUsInQueue().length, isOptimizing]);
+
+  // Reset trigger flag when optimization completes
+  React.useEffect(() => {
+    if (!isOptimizing && optimizationCompleted) {
+      hasTriggeredOptimizationRef.current = false;
+      console.log('🏁 AUTO-TRIGGER: Optimization completed, resetting trigger flag');
+    }
+  }, [isOptimizing, optimizationCompleted]);
+
+  // Reset trigger flag when queue is empty
+  React.useEffect(() => {
+    if (optimizationQueue) {
+      const queuedSKUs = optimizationQueue.getSKUsInQueue();
+      if (queuedSKUs.length === 0) {
+        hasTriggeredOptimizationRef.current = false;
+        console.log('🏁 AUTO-TRIGGER: Queue is empty, resetting trigger flag');
+      }
+    }
+  }, [optimizationQueue?.getSKUsInQueue().length]);
 
   // Auto-select first SKU when data changes
   React.useEffect(() => {
@@ -319,7 +365,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
                       SKU Queued for Optimization: {selectedSKU}
                     </span>
                     <Badge variant="outline" className="text-xs border-amber-300 text-amber-700">
-                      Pending
+                      {hasTriggeredOptimizationRef.current ? 'Starting...' : 'Pending'}
                     </Badge>
                   </div>
                 </>
