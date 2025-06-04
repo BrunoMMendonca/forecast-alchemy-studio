@@ -1,115 +1,112 @@
-
-import React, { useState, useEffect } from 'react';
-import { SalesData, ForecastResult } from '@/types/sales';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DataVisualization } from '@/components/DataVisualization';
-import { FileUpload } from '@/components/FileUpload';
+import React, { useState, useCallback } from 'react';
+import { SalesData } from '@/types/sales';
+import { ModelConfig } from '@/types/forecast';
 import { ForecastModels } from '@/components/ForecastModels';
 import { ForecastResults } from '@/components/ForecastResults';
-import { ForecastFinalization } from '@/components/ForecastFinalization';
-import { OutlierDetection } from '@/components/OutlierDetection';
+import { ForecastControls } from '@/components/ForecastControls';
+import { UploadData } from '@/components/UploadData';
+import { DetectOutliers } from '@/components/DetectOutliers';
+import { FinalizeData } from '@/components/FinalizeData';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+
+export interface ForecastResult {
+  sku: string;
+  model: string;
+  predictions: { date: Date; value: number }[];
+  accuracy: number;
+}
 
 const Index = () => {
   const [data, setData] = useState<SalesData[]>([]);
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
-  const [forecastPeriods, setForecastPeriods] = useState(12);
+  const [forecastPeriods, setForecastPeriods] = useState<number>(12);
   const [selectedSKU, setSelectedSKU] = useState<string>('');
+  const [models, setModels] = useState<ModelConfig[]>([]);
+  const [activeTab, setActiveTab] = React.useState("upload")
 
-  // Auto-select first SKU when data changes
-  useEffect(() => {
-    const skus = Array.from(new Set(data.map(d => d.sku))).sort();
-    if (skus.length > 0 && !selectedSKU) {
-      setSelectedSKU(skus[0]);
-    }
-  }, [data, selectedSKU]);
-
-  const handleForecastGeneration = (results: ForecastResult[], sku: string) => {
-    console.log(`📊 Received ${results.length} forecast results for ${sku}`);
-    setForecastResults(results);
-  };
-
-  const handleDataUpdate = (newData: SalesData[]) => {
-    console.log(`📊 Data updated with ${newData.length} rows`);
-    setData(newData);
-    
-    // Clear forecast results when data changes
+  const handleDataUpload = (uploadedData: SalesData[]) => {
+    setData(uploadedData);
     setForecastResults([]);
-    
-    // Auto-select first SKU if no SKU is selected
-    const skus = Array.from(new Set(newData.map(d => d.sku))).sort();
-    if (skus.length > 0) {
-      setSelectedSKU(skus[0]);
-    }
+    setSelectedSKU('');
   };
+
+  const handleForecastGeneration = useCallback((results: ForecastResult[], sku: string) => {
+    console.log(`Received forecast results for SKU ${sku}:`, results);
+    setForecastResults(prevResults => {
+      // Filter out any existing results for the same SKU and model
+      const filteredResults = prevResults.filter(existingResult =>
+        !(existingResult.sku === sku && results.some(newResult => newResult.model === existingResult.model))
+      );
+  
+      // Add the new results
+      const updatedResults = [...filteredResults, ...results];
+      console.log('Updated forecast results:', updatedResults);
+      return updatedResults;
+    });
+  }, []);
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold text-slate-800 mb-2">
-          AI-Enhanced Sales Forecasting
-        </h1>
-        <p className="text-slate-600 text-lg">
-          Upload your sales data and generate accurate forecasts using multiple AI-optimized models
-        </p>
+    <div className="min-h-screen bg-slate-50">
+      <div className="bg-white py-6 shadow-md rounded-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h1 className="text-2xl font-semibold text-slate-900">Forecasting Tool</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Upload sales data, detect outliers, and generate forecasts using various models.
+          </p>
+        </div>
       </div>
 
-      <Tabs defaultValue="upload" className="w-full">
-        <TabsList className="grid w-full grid-cols-5 mb-6">
-          <TabsTrigger value="upload">Upload Data</TabsTrigger>
-          <TabsTrigger value="outliers" disabled={data.length === 0}>
-            Detect Outliers
-          </TabsTrigger>
-          <TabsTrigger value="models" disabled={data.length === 0}>
-            Select Models
-          </TabsTrigger>
-          <TabsTrigger value="results" disabled={forecastResults.length === 0}>
-            View Results
-          </TabsTrigger>
-          <TabsTrigger value="finalize" disabled={forecastResults.length === 0}>
-            Finalize Forecasts
-          </TabsTrigger>
-        </TabsList>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Tabs defaultvalue="upload" className="w-full">
+          <TabsList>
+            <TabsTrigger value="upload" onClick={() => setActiveTab("upload")}>Upload</TabsTrigger>
+            <TabsTrigger value="outliers" onClick={() => setActiveTab("outliers")}>Outliers</TabsTrigger>
+            <TabsTrigger value="forecast" onClick={() => setActiveTab("forecast")}>Forecast</TabsTrigger>
+            <TabsTrigger value="finalize" onClick={() => setActiveTab("finalize")}>Finalize</TabsTrigger>
+          </TabsList>
+          <TabsContent value="upload">
+            <div className="space-y-6">
+              <UploadData onDataUpload={handleDataUpload} />
+            </div>
+          </TabsContent>
+          <TabsContent value="outliers">
+            <div className="space-y-6">
+              <DetectOutliers data={data} setData={setData} />
+            </div>
+          </TabsContent>
+          <TabsContent value="forecast">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="space-y-6">
+                <ForecastModels
+                  data={data}
+                  forecastPeriods={forecastPeriods}
+                  onForecastGeneration={handleForecastGeneration}
+                  selectedSKU={selectedSKU}
+                  onSKUChange={setSelectedSKU}
+                />
+              </div>
 
-        <TabsContent value="upload" className="space-y-6">
-          <FileUpload onDataUpload={handleDataUpdate} />
-          {data.length > 0 && (
-            <DataVisualization data={data} />
-          )}
-        </TabsContent>
+              <div className="space-y-6">
+                <ForecastControls
+                  forecastPeriods={forecastPeriods}
+                  onForecastPeriodsChange={setForecastPeriods}
+                />
 
-        <TabsContent value="outliers">
-          <OutlierDetection 
-            data={data} 
-            cleanedData={data}
-            onDataCleaning={setData}
-          />
-        </TabsContent>
-
-        <TabsContent value="models" className="space-y-6">
-          <ForecastModels
-            data={data}
-            forecastPeriods={forecastPeriods}
-            onForecastGeneration={handleForecastGeneration}
-            selectedSKU={selectedSKU}
-            onSKUChange={setSelectedSKU}
-          />
-        </TabsContent>
-
-        <TabsContent value="results">
-          <ForecastResults 
-            results={forecastResults}
-            selectedSKU={selectedSKU}
-          />
-        </TabsContent>
-
-        <TabsContent value="finalize">
-          <ForecastFinalization 
-            results={forecastResults}
-            data={data}
-            selectedSKU={selectedSKU}
-          />
-        </TabsContent>
-      </Tabs>
+                <ForecastResults 
+                  results={forecastResults} 
+                  selectedSKU={selectedSKU}
+                  enabledModels={models} // Pass current models to filter results
+                />
+              </div>
+            </div>
+          </TabsContent>
+          <TabsContent value="finalize">
+            <div className="space-y-6">
+              <FinalizeData data={data} forecastResults={forecastResults} />
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 };

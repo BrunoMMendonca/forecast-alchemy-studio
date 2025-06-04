@@ -1,6 +1,7 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
-import { SalesData } from '@/types/sales';
+import { SalesData } from '@/pages/Index';
 
 interface OptimizedParameters {
   parameters: Record<string, number>;

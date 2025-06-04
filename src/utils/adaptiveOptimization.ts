@@ -1,5 +1,5 @@
 
-import { SalesData } from '@/types/sales';
+import { SalesData } from '@/pages/Index';
 import { generateMovingAverage, generateSimpleExponentialSmoothing, generateDoubleExponentialSmoothing } from './forecastAlgorithms';
 import { ValidationConfig, ValidationResult, walkForwardValidation, timeSeriesCrossValidation, ENHANCED_VALIDATION_CONFIG } from './enhancedValidation';
 

@@ -1,25 +1,20 @@
 
-import React, { useState, useMemo } from 'react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Pencil, Check, X, AlertTriangle, Edit3, Save } from 'lucide-react';
-import { SalesData } from '@/types/sales';
+import { Textarea } from '@/components/ui/textarea';
+import { Edit3, Save, X } from 'lucide-react';
+import { SalesData } from '@/pages/Index';
 
 interface OutlierDataPoint extends SalesData {
-  date: string;
-  sales: number;
-  sku: string;
-  isOutlier?: boolean;
-  note?: string;
-  zScore?: number;
-  percentileRank?: number;
-  severity?: 'mild' | 'moderate' | 'extreme';
+  isOutlier: boolean;
+  zScore: number;
+  index: number;
   key: string;
   originalSales: number;
+  note?: string;
 }
 
 interface OutlierDataTableProps {
@@ -82,7 +77,7 @@ export const OutlierDataTable: React.FC<OutlierDataTableProps> = ({
                     </span>
                   </div>
                   <Badge variant={badgeVariant} className={`text-xs ${dataPoint.isOutlier ? 'text-white' : 'text-green-800'}`}>
-                    Z-Score: {dataPoint.zScore?.toFixed(2)}
+                    Z-Score: {dataPoint.zScore.toFixed(2)}
                   </Badge>
                   {!dataPoint.isOutlier && (
                     <Badge variant="secondary" className="text-xs text-green-800 bg-green-100">

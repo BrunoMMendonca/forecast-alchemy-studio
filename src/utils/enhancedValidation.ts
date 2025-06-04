@@ -1,4 +1,5 @@
-import { SalesData } from '@/types/sales';
+
+import { SalesData } from '@/pages/Index';
 
 export interface ValidationResult {
   accuracy: number;
