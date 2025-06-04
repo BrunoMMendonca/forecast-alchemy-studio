@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { optimizationLogger } from '@/utils/optimizationLogger';
@@ -29,17 +30,38 @@ export const useBatchOptimization = () => {
       return;
     }
 
+    // Validate that queued SKUs exist in current data
+    const currentSKUs = Array.from(new Set(data.map(d => d.sku)));
+    const validQueuedSKUs = queuedSKUs.filter(sku => currentSKUs.includes(sku));
+    
+    if (validQueuedSKUs.length < queuedSKUs.length) {
+      const invalidSKUs = queuedSKUs.filter(sku => !currentSKUs.includes(sku));
+      console.warn('📋 QUEUE: Removing invalid SKUs from queue:', invalidSKUs);
+      
+      // Remove invalid SKUs from queue
+      invalidSKUs.forEach(sku => onSKUCompleted(sku));
+    }
+
+    if (validQueuedSKUs.length === 0) {
+      console.log('📋 QUEUE: No valid SKUs found in queue after validation');
+      toast({
+        title: "No Valid SKUs",
+        description: "All queued SKUs are no longer present in the current data",
+      });
+      return;
+    }
+
     // Filter to only optimize SKUs that are in the queue and need optimization
     const skusNeedingOptimization = getSKUsNeedingOptimization(data, models);
-    const skusToOptimize = skusNeedingOptimization.filter(({ sku }) => queuedSKUs.includes(sku));
+    const skusToOptimize = skusNeedingOptimization.filter(({ sku }) => validQueuedSKUs.includes(sku));
     
     if (skusToOptimize.length === 0) {
-      console.log('📋 QUEUE: All queued SKUs already have optimized parameters');
-      // Remove all queued SKUs since they're already optimized
-      queuedSKUs.forEach(sku => onSKUCompleted(sku));
+      console.log('📋 QUEUE: All valid queued SKUs already have optimized parameters');
+      // Remove all valid queued SKUs since they're already optimized
+      validQueuedSKUs.forEach(sku => onSKUCompleted(sku));
       toast({
         title: "Optimization Complete",
-        description: "All queued SKUs are already optimized",
+        description: "All valid queued SKUs are already optimized",
       });
       return;
     }
@@ -59,7 +81,7 @@ export const useBatchOptimization = () => {
     // Start logging session
     optimizationLogger.startSession(totalSKUs);
 
-    console.log(`📋 QUEUE: Starting optimization for ${totalSKUs} queued SKUs`, skusToOptimize.map(s => s.sku));
+    console.log(`📋 QUEUE: Starting optimization for ${totalSKUs} valid queued SKUs`, skusToOptimize.map(s => s.sku));
 
     try {
       for (let i = 0; i < skusToOptimize.length; i++) {

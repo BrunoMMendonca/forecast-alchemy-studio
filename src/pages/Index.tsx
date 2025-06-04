@@ -37,7 +37,7 @@ const Index = () => {
   const forecastModelsRef = useRef<any>(null);
 
   // Add optimization queue
-  const { addSKUsToQueue, removeSKUsFromQueue, getSKUsInQueue, queueSize } = useOptimizationQueue();
+  const { addSKUsToQueue, removeSKUsFromQueue, getSKUsInQueue, queueSize, clearQueue } = useOptimizationQueue();
 
   const steps = [
     { id: 'upload', title: 'Upload Data', icon: Upload },
@@ -61,13 +61,18 @@ const Index = () => {
   }, []);
 
   const handleDataUpload = (data: SalesData[]) => {
-    console.log('📤 Data uploaded, marking all SKUs for optimization');
+    console.log('📤 Data uploaded, clearing old queue and marking all SKUs for optimization');
+    
+    // Clear existing queue to avoid conflicts with old SKUs
+    clearQueue();
+    
     setSalesData(data);
     setCleanedData(data);
     setCurrentStep(1);
     
     // Mark all SKUs for optimization
     const skus = Array.from(new Set(data.map(d => d.sku)));
+    console.log('📤 Adding new SKUs to queue:', skus);
     addSKUsToQueue(skus, 'csv_upload');
     
     // Start optimization
@@ -81,15 +86,34 @@ const Index = () => {
     // If specific SKUs were changed, mark only those for optimization
     if (changedSKUs && changedSKUs.length > 0) {
       console.log('🧹 Marking changed SKUs for re-optimization:', changedSKUs);
-      addSKUsToQueue(changedSKUs, 'data_cleaning');
-      setShouldStartOptimization(true);
+      
+      // Validate that changed SKUs exist in current data
+      const currentSKUs = Array.from(new Set(cleaned.map(d => d.sku)));
+      const validChangedSKUs = changedSKUs.filter(sku => currentSKUs.includes(sku));
+      
+      if (validChangedSKUs.length > 0) {
+        addSKUsToQueue(validChangedSKUs, 'data_cleaning');
+        setShouldStartOptimization(true);
+      } else {
+        console.warn('🧹 No valid SKUs found in changed SKUs list');
+      }
     }
   };
 
   const handleImportDataCleaning = (importedSKUs: string[]) => {
-    console.log('📥 CSV import detected, marking imported SKUs for optimization:', importedSKUs);
-    addSKUsToQueue(importedSKUs, 'csv_import');
-    setShouldStartOptimization(true);
+    console.log('📥 CSV import detected, validating and marking imported SKUs for optimization:', importedSKUs);
+    
+    // Validate that imported SKUs exist in current data
+    const currentSKUs = Array.from(new Set(cleanedData.map(d => d.sku)));
+    const validImportedSKUs = importedSKUs.filter(sku => currentSKUs.includes(sku));
+    
+    if (validImportedSKUs.length > 0) {
+      console.log('📥 Valid imported SKUs:', validImportedSKUs);
+      addSKUsToQueue(validImportedSKUs, 'csv_import');
+      setShouldStartOptimization(true);
+    } else {
+      console.warn('📥 No valid SKUs found in imported data');
+    }
   };
 
   const handleForecastGeneration = (results: ForecastResult[], selectedSKU?: string) => {
