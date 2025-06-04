@@ -146,7 +146,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         const dataHash = generateDataHash(skuData);
         setCachedParameters(sku, modelId, parameters, dataHash, confidence);
         
-        // FIXED: Set preferences to AI for optimized models
         console.log(`OPTIMIZATION CALLBACK: Setting ${sku}:${modelId} to AI (confidence: ${confidence})`);
         
         const preferences = loadManualAIPreferences();
@@ -154,27 +153,27 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         preferences[preferenceKey] = true;
         saveManualAIPreferences(preferences);
         
-        // CRITICAL FIX: Update models state immediately for currently selected SKU
-        if (sku === selectedSKU) {
-          console.log(`CRITICAL FIX: Immediately updating UI for ${sku}:${modelId} with optimized parameters`);
-          setModels(prev => {
-            const updated = prev.map(model => 
-              model.id === modelId 
-                ? { 
-                    ...model, 
-                    optimizedParameters: parameters,
-                    optimizationConfidence: confidence
-                  }
-                : model
-            );
-            console.log(`CRITICAL FIX: Models state updated for ${modelId}:`, {
-              hasOptimized: !!updated.find(m => m.id === modelId)?.optimizedParameters,
-              confidence: updated.find(m => m.id === modelId)?.optimizationConfidence
-            });
-            return updated;
+        // CRITICAL FIX: Always update models state for any SKU to ensure proper state sync
+        console.log(`CRITICAL FIX: Updating models state for ${sku}:${modelId} with optimized parameters`);
+        setModels(prev => {
+          const updated = prev.map(model => 
+            model.id === modelId 
+              ? { 
+                  ...model, 
+                  optimizedParameters: parameters,
+                  optimizationConfidence: confidence
+                }
+              : model
+          );
+          console.log(`CRITICAL FIX: Models state updated for ${modelId}:`, {
+            hasOptimized: !!updated.find(m => m.id === modelId)?.optimizedParameters,
+            confidence: updated.find(m => m.id === modelId)?.optimizationConfidence
           });
-          
-          // Force forecast regeneration to sync everything
+          return updated;
+        });
+        
+        // Only force forecast regeneration for currently selected SKU
+        if (sku === selectedSKU) {
           setTimeout(() => generateForecastsForSelectedSKU(), 100);
         }
       },
@@ -183,6 +182,16 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
 
     markOptimizationCompleted(data, '/');
     console.log('FIXED: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE');
+    
+    // ADDITIONAL FIX: Force a complete refresh of models with preferences after optimization
+    setTimeout(() => {
+      console.log('ADDITIONAL FIX: Refreshing models with latest preferences after optimization');
+      const refreshedModels = createModelsWithPreferences();
+      setModels(refreshedModels);
+      if (selectedSKU) {
+        generateForecastsForSelectedSKU();
+      }
+    }, 200);
   };
 
   const generateForecastsForSelectedSKU = async () => {
