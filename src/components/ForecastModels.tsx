@@ -79,36 +79,29 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // FIXED: Apply preferences immediately when SKU changes or component mounts
+  // Apply preferences immediately when SKU changes or component mounts
   React.useEffect(() => {
     if (selectedSKU && data.length > 0) {
-      // Always apply preferences when SKU changes or component mounts
       const modelsWithPreferences = createModelsWithPreferences();
       console.log(`EFFECT: Setting models with preferences for ${selectedSKU}`);
       setModels(modelsWithPreferences);
       
-      // Generate forecasts after a short delay to ensure state is updated
       setTimeout(() => generateForecastsForSelectedSKU(), 50);
-      
-      // Update the last SKU ref
       lastSKURef.current = selectedSKU;
     }
   }, [selectedSKU, data.length, createModelsWithPreferences]);
 
-  // FIXED: Main optimization effect - only runs on actual data changes
+  // Main optimization effect - only runs on actual data changes
   React.useEffect(() => {
     if (data.length === 0) return;
 
-    // CRITICAL: Skip optimization if we're toggling AI/Manual modes
     if (isTogglingAIManualRef.current) {
       console.log('FIXED: ❌ SKIPPING OPTIMIZATION - AI/Manual toggle in progress');
       return;
     }
 
-    // Generate hash INSIDE the effect to avoid constant recalculation
     const currentDataHash = generateStableFingerprint(data);
     
-    // Only proceed if data actually changed
     if (lastDataHashRef.current === currentDataHash) {
       console.log('FIXED: ❌ Same data hash - no optimization needed');
       return;
@@ -121,7 +114,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     
     console.log(`FIXED: Data changed - trigger #${triggerCount}, hash: ${currentDataHash}`);
 
-    // Check navigation state - this is the single source of truth
     const shouldRunOptimization = shouldOptimize(data, '/');
     
     if (!shouldRunOptimization) {
@@ -132,7 +124,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         description: "Optimization already completed for this dataset",
       });
       
-      return; // Don't run optimization, preferences will be applied by the other effect
+      return;
     }
 
     console.log('FIXED: ✅ NAVIGATION STATE APPROVED OPTIMIZATION - Starting process');
@@ -144,7 +136,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
     
     console.log('FIXED: 🚀 STARTING OPTIMIZATION PROCESS');
     
-    // Mark optimization as started
     markOptimizationStarted(data, '/');
     
     await optimizeAllSKUs(
@@ -155,16 +146,15 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
         const dataHash = generateDataHash(skuData);
         setCachedParameters(sku, modelId, parameters, dataHash, confidence);
         
-        // IMMEDIATE FIX: Set preferences to AI ONLY for models that were actually optimized
+        // FIXED: Set preferences to AI for optimized models
         console.log(`OPTIMIZATION CALLBACK: Setting ${sku}:${modelId} to AI (confidence: ${confidence})`);
         
-        // Update preferences for this specific SKU/model combination
         const preferences = loadManualAIPreferences();
         const preferenceKey = `${sku}:${modelId}`;
-        preferences[preferenceKey] = true; // Set to AI when optimization completes
+        preferences[preferenceKey] = true;
         saveManualAIPreferences(preferences);
         
-        // CRITICAL FIX: Update models state immediately if this is for the currently selected SKU
+        // CRITICAL FIX: Update models state immediately for currently selected SKU
         if (sku === selectedSKU) {
           console.log(`CRITICAL FIX: Immediately updating UI for ${sku}:${modelId} with optimized parameters`);
           setModels(prev => {
@@ -184,16 +174,14 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
             return updated;
           });
           
-          // Force a forecast generation to ensure everything is in sync
+          // Force forecast regeneration to sync everything
           setTimeout(() => generateForecastsForSelectedSKU(), 100);
         }
       },
       getSKUsNeedingOptimization
     );
 
-    // Mark optimization as completed
     markOptimizationCompleted(data, '/');
-
     console.log('FIXED: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE');
   };
 
@@ -206,7 +194,7 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
       const results = await generateForecastsForSKU(
         selectedSKU,
         data,
-        models, // Pass all models - the function will filter enabled ones
+        models,
         forecastPeriods,
         getCachedForecast,
         setCachedForecast,
@@ -229,7 +217,6 @@ export const ForecastModels: React.FC<ForecastModelsProps> = ({
   const handleToggleModel = (modelId: string) => {
     console.log(`🔄 Toggling model ${modelId}`);
     toggleModel(modelId);
-    // Immediately generate forecasts after model toggle to ensure right panel updates
     setTimeout(() => {
       console.log(`🔄 Regenerating forecasts after toggling ${modelId}`);
       generateForecastsForSelectedSKU();
