@@ -129,7 +129,8 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
             optimizationConfidence: undefined,
             optimizationReasoning: undefined,
             optimizationFactors: undefined,
-            expectedAccuracy: undefined
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
           }
         : model
     ));
@@ -146,13 +147,13 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
     
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = true; // Mark as AI
+    preferences[preferenceKey] = 'ai'; // Mark as AI
     saveManualAIPreferences(preferences);
 
     console.log(`PREFERENCE: Updated ${preferenceKey} to AI`);
 
     const cached = getCachedParameters(selectedSKU, modelId);
-    if (cached) {
+    if (cached && cached.method?.startsWith('ai_')) {
       setModels(prev => prev.map(model => 
         model.id === modelId 
           ? { 
@@ -161,19 +162,49 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
               optimizationConfidence: cached.confidence,
               optimizationReasoning: cached.reasoning,
               optimizationFactors: cached.factors,
-              expectedAccuracy: cached.expectedAccuracy
+              expectedAccuracy: cached.expectedAccuracy,
+              optimizationMethod: cached.method
             }
           : model
       ));
-      
-      setTimeout(() => {
-        // Clear the flag after operations complete
-        isTogglingAIManualRef.current = false;
-      }, 100);
-    } else {
-      // Clear flag if no cached parameters
-      isTogglingAIManualRef.current = false;
     }
+    
+    setTimeout(() => {
+      isTogglingAIManualRef.current = false;
+    }, 100);
+  };
+
+  const useGridOptimization = (modelId: string) => {
+    // Set flag to prevent optimization during Grid toggle
+    isTogglingAIManualRef.current = true;
+    
+    const preferences = loadManualAIPreferences();
+    const preferenceKey = `${selectedSKU}:${modelId}`;
+    preferences[preferenceKey] = 'grid'; // Mark as Grid
+    saveManualAIPreferences(preferences);
+
+    console.log(`PREFERENCE: Updated ${preferenceKey} to Grid`);
+
+    const cached = getCachedParameters(selectedSKU, modelId);
+    if (cached && cached.method === 'grid_search') {
+      setModels(prev => prev.map(model => 
+        model.id === modelId 
+          ? { 
+              ...model, 
+              optimizedParameters: cached.parameters,
+              optimizationConfidence: cached.confidence,
+              optimizationReasoning: cached.reasoning,
+              optimizationFactors: cached.factors,
+              expectedAccuracy: cached.expectedAccuracy,
+              optimizationMethod: cached.method
+            }
+          : model
+      ));
+    }
+    
+    setTimeout(() => {
+      isTogglingAIManualRef.current = false;
+    }, 100);
   };
 
   const resetToManual = (modelId: string) => {
@@ -195,7 +226,8 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
             optimizationConfidence: undefined,
             optimizationReasoning: undefined,
             optimizationFactors: undefined,
-            expectedAccuracy: undefined
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
           }
         : model
     ));
@@ -213,6 +245,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
     toggleModel,
     updateParameter,
     useAIOptimization,
+    useGridOptimization,
     resetToManual,
     isTogglingAIManualRef,
     loadManualAIPreferences,

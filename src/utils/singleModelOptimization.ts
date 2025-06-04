@@ -62,7 +62,8 @@ export const optimizeSingleModel = async (
   model: ModelConfig,
   skuData: SalesData[],
   sku: string,
-  progressUpdater: ProgressUpdater
+  progressUpdater: ProgressUpdater,
+  forceGridSearch: boolean = false
 ): Promise<EnhancedOptimizationResult | undefined> => {
   if (!model.parameters || Object.keys(model.parameters).length === 0) {
     optimizationLogger.logStep({
@@ -90,15 +91,15 @@ export const optimizeSingleModel = async (
     sku,
     modelId: model.id,
     step: 'start',
-    message: 'Starting enhanced multi-criteria optimization',
+    message: `Starting optimization${forceGridSearch ? ' (forced grid search)' : ' (multi-criteria)'}`,
     parameters: model.parameters
   });
   
   let aiResult = null;
   let gridResult = null;
 
-  // Step 1: Validate API key and try AI optimization with business context
-  if (isValidApiKey(GROK_API_KEY)) {
+  // Step 1: Skip AI if grid search is forced, otherwise try AI optimization
+  if (!forceGridSearch && isValidApiKey(GROK_API_KEY)) {
     try {
       optimizationLogger.logStep({
         sku,
@@ -192,6 +193,13 @@ export const optimizeSingleModel = async (
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
+  } else if (forceGridSearch) {
+    optimizationLogger.logStep({
+      sku,
+      modelId: model.id,
+      step: 'ai_attempt',
+      message: 'Skipping AI optimization - grid search forced by user'
+    });
   } else {
     optimizationLogger.logStep({
       sku,
@@ -201,19 +209,19 @@ export const optimizeSingleModel = async (
     });
   }
 
-  // Step 2: Try adaptive grid search with enhanced reasoning
-  if (!aiResult) {
+  // Step 2: Try grid search if AI failed or was skipped
+  if (!aiResult || forceGridSearch) {
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
       step: 'grid_search',
-      message: 'Starting adaptive grid search with multi-criteria validation'
+      message: `Starting ${forceGridSearch ? 'user-requested' : 'adaptive'} grid search with multi-criteria validation`
     });
 
     const gridSearchResult = adaptiveGridSearchOptimization(
       model.id,
       skuData,
-      undefined, // Don't use AI parameters for grid search if AI was rejected
+      undefined, // Don't use AI parameters for forced grid search
       {
         ...ENHANCED_VALIDATION_CONFIG,
         tolerance: 1.0, // Consistent tolerance requirement
@@ -226,7 +234,7 @@ export const optimizeSingleModel = async (
         sku,
         modelId: model.id,
         step: 'complete',
-        message: `Adaptive grid search completed - method: ${gridSearchResult.method}, accuracy: ${gridSearchResult.accuracy.toFixed(2)}%`,
+        message: `Grid search completed - method: ${gridSearchResult.method}, accuracy: ${gridSearchResult.accuracy.toFixed(2)}%`,
         parameters: gridSearchResult.parameters,
         accuracy: gridSearchResult.accuracy,
         confidence: gridSearchResult.confidence
@@ -235,7 +243,7 @@ export const optimizeSingleModel = async (
       gridResult = {
         parameters: gridSearchResult.parameters,
         confidence: gridSearchResult.confidence,
-        method: gridSearchResult.method,
+        method: 'grid_search', // Ensure it's always grid_search for user-initiated grid optimization
         reasoning: `Grid search optimization found parameters that improve accuracy by ${(gridSearchResult.accuracy - 60).toFixed(1)}%. Selected for balanced performance across validation periods.`,
         factors: {
           stability: 75,
@@ -251,13 +259,13 @@ export const optimizeSingleModel = async (
         sku,
         modelId: model.id,
         step: 'error',
-        message: 'Adaptive grid search failed to find better parameters'
+        message: 'Grid search failed to find better parameters'
       });
     }
   }
 
   // Step 3: Return the best result with comprehensive reasoning
-  if (aiResult) {
+  if (aiResult && !forceGridSearch) {
     optimizationLogger.logStep({
       sku,
       modelId: model.id,

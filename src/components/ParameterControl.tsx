@@ -12,6 +12,7 @@ interface ParameterControlProps {
   model: ModelConfig;
   onParameterUpdate: (parameter: string, value: number) => void;
   onUseAI?: () => void;
+  onUseGrid?: () => void;
   onResetToManual?: () => void;
 }
 
@@ -19,6 +20,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   model,
   onParameterUpdate,
   onUseAI,
+  onUseGrid,
   onResetToManual
 }) => {
   if (!model.parameters || Object.keys(model.parameters).length === 0) {
@@ -86,30 +88,69 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     }
   };
 
-  const getToggleButton = () => {
-    if (hasOptimizedParams) {
+  const getActionButtons = () => {
+    if (!hasOptimizedParams) {
+      // Manual state - show AI and Grid options
       return (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onResetToManual}
-          className="h-6 text-xs"
-        >
-          <User className="h-3 w-3 mr-1" />
-          Use Manual
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onUseAI}
+            className="h-6 text-xs text-purple-600 border-purple-200"
+          >
+            <Bot className="h-3 w-3 mr-1" />
+            Use AI
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onUseGrid}
+            className="h-6 text-xs text-blue-600 border-blue-200"
+          >
+            <Grid3x3 className="h-3 w-3 mr-1" />
+            Use Grid
+          </Button>
+        </div>
       );
     } else {
+      // Optimized state - show alternative options and manual reset
+      const currentMethod = optimizationMethod;
+      
       return (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onUseAI}
-          className="h-6 text-xs text-purple-600 border-purple-200"
-        >
-          <Bot className="h-3 w-3 mr-1" />
-          Use AI
-        </Button>
+        <div className="flex gap-2">
+          {currentMethod !== 'ai_optimal' && currentMethod !== 'ai_tolerance' && currentMethod !== 'ai_confidence' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onUseAI}
+              className="h-6 text-xs text-purple-600 border-purple-200"
+            >
+              <Bot className="h-3 w-3 mr-1" />
+              Try AI
+            </Button>
+          )}
+          {currentMethod !== 'grid_search' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onUseGrid}
+              className="h-6 text-xs text-blue-600 border-blue-200"
+            >
+              <Grid3x3 className="h-3 w-3 mr-1" />
+              Try Grid
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onResetToManual}
+            className="h-6 text-xs"
+          >
+            <User className="h-3 w-3 mr-1" />
+            Use Manual
+          </Button>
+        </div>
       );
     }
   };
@@ -118,7 +159,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     <div className="space-y-3 pl-8">
       <div className="flex items-center gap-2 mb-3">
         {getOptimizationBadge()}
-        {getToggleButton()}
+        {getActionButtons()}
         {optimizationMethod === 'grid_search' && model.optimizationConfidence && (
           <Badge variant="secondary" className="text-xs">
             {model.optimizationConfidence.toFixed(0)}% accuracy
