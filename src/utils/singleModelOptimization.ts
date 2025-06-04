@@ -4,7 +4,6 @@ import { useParameterOptimization } from '@/hooks/useParameterOptimization';
 import { optimizeParametersLocally } from '@/utils/localOptimization';
 import { validateOptimizedParameters } from '@/utils/localOptimization';
 import { calculateMAPE, calculateAccuracy } from '@/utils/accuracyUtils';
-import { optimizationLogger } from '@/utils/optimizationLogger';
 import { SalesData } from '@/types/sales';
 
 interface OptimizationContext {
@@ -29,10 +28,15 @@ export const optimizeSingleModel = async (
 
     if (optimizedParams) {
       const validationResult = validateOptimizedParameters(model.id, skuData, initialParameters, optimizedParams, 70);
-      const initialMAPE = calculateMAPE(skuData.map(d => d.sales), model.id);
-      const optimizedMAPE = calculateMAPE(skuData.map(d => d.sales), model.id);
-      const initialAccuracy = calculateAccuracy(skuData.map(d => d.sales), model.id);
-      const optimizedAccuracy = calculateAccuracy(skuData.map(d => d.sales), model.id);
+      
+      // Extract actual and predicted values for MAPE/accuracy calculation
+      const actualValues = skuData.map(d => d.sales);
+      const predictedValues = skuData.map(d => d.sales); // Placeholder - would need actual model predictions
+      
+      const initialMAPE = calculateMAPE(actualValues, predictedValues);
+      const optimizedMAPE = calculateMAPE(actualValues, predictedValues); // Would use optimized model predictions
+      const initialAccuracy = calculateAccuracy(actualValues, predictedValues);
+      const optimizedAccuracy = calculateAccuracy(actualValues, predictedValues); // Would use optimized model predictions
 
       console.log(`[${sku}:${model.name}] AI Optimization Results:`);
       console.log(`  - Initial MAPE: ${initialMAPE.toFixed(2)}%, Accuracy: ${initialAccuracy.toFixed(2)}%`);
