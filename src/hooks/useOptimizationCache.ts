@@ -15,6 +15,7 @@ interface OptimizedParameters {
     businessImpact: string;
   };
   expectedAccuracy?: number;
+  method?: string;
 }
 
 interface OptimizationCache {
@@ -220,7 +221,8 @@ export const useOptimizationCache = () => {
       complexity: number;
       businessImpact: string;
     },
-    expectedAccuracy?: number
+    expectedAccuracy?: number,
+    method?: string
   ) => {
     setCache(prev => ({
       ...prev,
@@ -233,12 +235,13 @@ export const useOptimizationCache = () => {
           confidence,
           reasoning,
           factors,
-          expectedAccuracy
+          expectedAccuracy,
+          method
         }
       }
     }));
     
-    console.log(`FIXED CACHE: Cached parameters with reasoning for ${sku}:${modelId}`);
+    console.log(`FIXED CACHE: Cached parameters with method ${method} for ${sku}:${modelId}`);
   }, []);
 
   const isCacheValid = useCallback((sku: string, modelId: string, currentDataHash: string): boolean => {
@@ -306,9 +309,31 @@ export const useOptimizationCache = () => {
     setCachedParameters,
     isCacheValid,
     getSKUsNeedingOptimization,
-    clearCacheForSKU,
-    clearAllCache,
-    batchValidateCache,
+    clearCacheForSKU: useCallback((sku: string) => {
+      setCache(prev => {
+        const newCache = { ...prev };
+        delete newCache[sku];
+        return newCache;
+      });
+    }, []),
+    clearAllCache: useCallback(() => {
+      console.log('🗑️ CACHE CLEAR: Clearing all optimization cache and state');
+      
+      // Clear memory state
+      setCache({});
+      setCacheStats({ hits: 0, misses: 0, skipped: 0 });
+      setOptimizationState(null);
+      
+      // Clear localStorage
+      try {
+        localStorage.removeItem(CACHE_KEY);
+        localStorage.removeItem(OPTIMIZATION_STATE_KEY);
+        console.log('🗑️ CACHE CLEAR: Cleared localStorage');
+      } catch (error) {
+        console.error('🗑️ CACHE CLEAR: Failed to clear localStorage:', error);
+      }
+    }, []),
+    batchValidateCache: useCallback(() => ({}), []),
     isOptimizationComplete,
     markOptimizationComplete,
     startOptimizationSession,

@@ -29,7 +29,8 @@ export const useBatchOptimization = () => {
         complexity: number;
         businessImpact: string;
       },
-      expectedAccuracy?: number
+      expectedAccuracy?: number,
+      method?: string
     ) => void,
     onSKUCompleted: (sku: string) => void,
     getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[]
@@ -127,7 +128,7 @@ export const useBatchOptimization = () => {
 
           const result = await optimizeSingleModel(model, skuData, sku, { setProgress });
           if (result) {
-            // Pass the complete optimization result including reasoning
+            // Pass the complete optimization result including method
             onParametersOptimized(
               sku, 
               model.id, 
@@ -135,7 +136,8 @@ export const useBatchOptimization = () => {
               result.confidence,
               result.reasoning,
               result.factors,
-              result.expectedAccuracy
+              result.expectedAccuracy,
+              result.method
             );
             optimizedCount++;
             
@@ -216,7 +218,8 @@ export const useBatchOptimization = () => {
         complexity: number;
         businessImpact: string;
       },
-      expectedAccuracy?: number
+      expectedAccuracy?: number,
+      method?: string
     ) => void,
     getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[]
   ) => {

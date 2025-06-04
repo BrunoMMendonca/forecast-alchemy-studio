@@ -152,14 +152,15 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
       setModels(prev => prev.map(model => {
         const cached = getCachedParameters(selectedSKU, model.id);
         if (cached) {
-          console.log(`✅ CACHE UPDATE: Applying AI optimization to ${model.id} for ${selectedSKU}`);
+          console.log(`✅ CACHE UPDATE: Applying ${cached.method || 'unknown'} optimization to ${model.id} for ${selectedSKU}`);
           return {
             ...model,
             optimizedParameters: cached.parameters,
             optimizationConfidence: cached.confidence,
             optimizationReasoning: cached.reasoning,
             optimizationFactors: cached.factors,
-            expectedAccuracy: cached.expectedAccuracy
+            expectedAccuracy: cached.expectedAccuracy,
+            optimizationMethod: cached.method
           };
         }
         return model;
@@ -230,21 +231,22 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
       data, 
       enabledModels, 
       queuedSKUs,
-      (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy) => {
+      (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method) => {
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
         
-        // Store complete optimization result in cache
-        setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, factors, expectedAccuracy);
+        // Store complete optimization result in cache including method
+        setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, factors, expectedAccuracy, method);
         
-        console.log(`QUEUE OPTIMIZATION: Setting ${sku}:${modelId} to AI (confidence: ${confidence})`);
+        console.log(`QUEUE OPTIMIZATION: Setting ${sku}:${modelId} to ${method} (confidence: ${confidence})`);
         
         const preferences = loadManualAIPreferences();
         const preferenceKey = `${sku}:${modelId}`;
-        preferences[preferenceKey] = true;
+        // Only set AI preference if it's actually an AI method
+        preferences[preferenceKey] = method?.startsWith('ai_') || false;
         saveManualAIPreferences(preferences);
         
-        console.log(`QUEUE OPTIMIZATION: Updating models state for ${sku}:${modelId} with optimized parameters and reasoning`);
+        console.log(`QUEUE OPTIMIZATION: Updating models state for ${sku}:${modelId} with ${method} parameters and reasoning`);
         setModels(prev => {
           const updated = prev.map(model => 
             model.id === modelId 
@@ -254,7 +256,8 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
                   optimizationConfidence: confidence,
                   optimizationReasoning: reasoning,
                   optimizationFactors: factors,
-                  expectedAccuracy: expectedAccuracy
+                  expectedAccuracy: expectedAccuracy,
+                  optimizationMethod: method
                 }
               : model
           );

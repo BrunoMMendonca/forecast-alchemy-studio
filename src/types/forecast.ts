@@ -15,6 +15,7 @@ export interface ModelConfig {
     businessImpact: string;
   };
   expectedAccuracy?: number;
+  optimizationMethod?: string; // 'ai_optimal', 'ai_tolerance', 'ai_confidence', 'grid_search', 'fallback'
   icon: React.ReactNode;
   isSeasonal?: boolean;
 }

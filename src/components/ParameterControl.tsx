@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Bot, User } from 'lucide-react';
+import { Bot, User, Grid3x3, Shield } from 'lucide-react';
 import { ModelConfig } from '@/types/forecast';
 import { ReasoningDisplay } from './ReasoningDisplay';
 
@@ -27,43 +27,92 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 
   const hasOptimizedParams = !!model.optimizedParameters;
   const displayParams = model.optimizedParameters || model.parameters;
-  const isUsingAI = hasOptimizedParams;
+  const isUsingOptimized = hasOptimizedParams;
+  const optimizationMethod = model.optimizationMethod;
+
+  const getOptimizationBadge = () => {
+    if (!hasOptimizedParams) {
+      return (
+        <Badge variant="outline" className="text-slate-600">
+          <User className="h-3 w-3 mr-1" />
+          Manual
+        </Badge>
+      );
+    }
+
+    switch (optimizationMethod) {
+      case 'ai_optimal':
+      case 'ai_tolerance':
+      case 'ai_confidence':
+        return (
+          <Badge variant="default" className="text-white bg-purple-600">
+            <Bot className="h-3 w-3 mr-1" />
+            AI Optimized
+          </Badge>
+        );
+      case 'grid_search':
+        return (
+          <Badge variant="default" className="text-white bg-blue-600">
+            <Grid3x3 className="h-3 w-3 mr-1" />
+            Grid Optimized
+          </Badge>
+        );
+      case 'fallback':
+        return (
+          <Badge variant="outline" className="text-slate-600 border-slate-300">
+            <Shield className="h-3 w-3 mr-1" />
+            Fallback
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="default" className="text-white bg-purple-600">
+            <Bot className="h-3 w-3 mr-1" />
+            AI Optimized
+          </Badge>
+        );
+    }
+  };
+
+  const getToggleButton = () => {
+    const isAIMethod = optimizationMethod?.startsWith('ai_') || (!optimizationMethod && hasOptimizedParams);
+    
+    if (hasOptimizedParams) {
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onResetToManual}
+          className="h-6 text-xs"
+        >
+          <User className="h-3 w-3 mr-1" />
+          Use Manual
+        </Button>
+      );
+    } else {
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onUseAI}
+          className="h-6 text-xs text-purple-600 border-purple-200"
+        >
+          <Bot className="h-3 w-3 mr-1" />
+          Use AI
+        </Button>
+      );
+    }
+  };
 
   return (
     <div className="space-y-3 pl-8">
       <div className="flex items-center gap-2 mb-3">
-        {hasOptimizedParams ? (
-          <>
-            <Badge variant="default" className="text-white bg-purple-600">
-              <Bot className="h-3 w-3 mr-1" />
-              AI Optimized
-            </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onResetToManual}
-              className="h-6 text-xs"
-            >
-              <User className="h-3 w-3 mr-1" />
-              Use Manual
-            </Button>
-          </>
-        ) : (
-          <>
-            <Badge variant="outline" className="text-slate-600">
-              <User className="h-3 w-3 mr-1" />
-              Manual
-            </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onUseAI}
-              className="h-6 text-xs text-purple-600 border-purple-200"
-            >
-              <Bot className="h-3 w-3 mr-1" />
-              Use AI
-            </Button>
-          </>
+        {getOptimizationBadge()}
+        {getToggleButton()}
+        {optimizationMethod === 'grid_search' && model.optimizationConfidence && (
+          <Badge variant="secondary" className="text-xs">
+            {model.optimizationConfidence.toFixed(0)}% accuracy
+          </Badge>
         )}
       </div>
 
@@ -78,7 +127,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
             step={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
             min={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
             max={param === 'alpha' || param === 'beta' || param === 'gamma' ? 1 : 30}
-            disabled={isUsingAI}
+            disabled={isUsingOptimized}
           />
           <span className="text-xs text-slate-500">
             {param === 'window' && 'periods'}
@@ -92,13 +141,13 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
         </div>
       ))}
 
-      {/* Show AI reasoning if available */}
+      {/* Show reasoning if available */}
       {hasOptimizedParams && model.optimizationReasoning && (
         <div className="mt-4">
           <ReasoningDisplay
             reasoning={model.optimizationReasoning}
             confidence={model.optimizationConfidence || 0}
-            method="ai_optimal"
+            method={optimizationMethod || 'unknown'}
             expectedAccuracy={model.expectedAccuracy}
             factors={model.optimizationFactors}
             compact={true}

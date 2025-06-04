@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Brain, ChevronDown, ChevronUp, Info, Target, Zap } from 'lucide-react';
+import { Brain, ChevronDown, ChevronUp, Info, Grid3x3, Shield, Bot } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface ReasoningDisplayProps {
@@ -27,7 +27,7 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
   method,
   expectedAccuracy,
   factors,
-  title = "AI Reasoning",
+  title = "Optimization Reasoning",
   compact = false
 }) => {
   const [isOpen, setIsOpen] = useState(!compact);
@@ -39,9 +39,21 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
   };
 
   const getMethodIcon = (method: string) => {
-    if (method.includes('ai')) return <Brain className="h-4 w-4" />;
-    if (method.includes('grid')) return <Target className="h-4 w-4" />;
-    return <Zap className="h-4 w-4" />;
+    if (method.startsWith('ai_')) return <Bot className="h-4 w-4" />;
+    if (method === 'grid_search') return <Grid3x3 className="h-4 w-4" />;
+    if (method === 'fallback') return <Shield className="h-4 w-4" />;
+    return <Brain className="h-4 w-4" />;
+  };
+
+  const getMethodLabel = (method: string) => {
+    switch (method) {
+      case 'ai_optimal': return 'AI Optimal';
+      case 'ai_tolerance': return 'AI Tolerance';
+      case 'ai_confidence': return 'AI Confidence';
+      case 'grid_search': return 'Grid Search';
+      case 'fallback': return 'Fallback';
+      default: return method.replace('_', ' ');
+    }
   };
 
   if (compact) {
@@ -52,7 +64,7 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
             <Button variant="ghost" className="w-full justify-between p-0 h-auto font-normal">
               <div className="flex items-center gap-2">
                 <Info className="h-4 w-4 text-blue-600" />
-                <span className="text-sm font-medium">View AI Reasoning</span>
+                <span className="text-sm font-medium">View Reasoning</span>
                 <Badge variant="outline" className={`text-xs ${getConfidenceColor(confidence)}`}>
                   {confidence}% confident
                 </Badge>
@@ -65,7 +77,7 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
               <div className="flex items-center gap-2 text-sm">
                 {getMethodIcon(method)}
                 <span className="font-medium">Method:</span>
-                <span className="capitalize">{method.replace('_', ' ')}</span>
+                <span className="capitalize">{getMethodLabel(method)}</span>
                 {expectedAccuracy && (
                   <>
                     <span className="text-slate-400">•</span>
@@ -85,13 +97,13 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
     <Card className="border-blue-200 bg-blue-50/30">
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <Brain className="h-4 w-4 text-blue-600" />
+          {getMethodIcon(method)}
           {title}
         </CardTitle>
         <CardDescription className="flex items-center gap-2">
           <div className="flex items-center gap-1">
             {getMethodIcon(method)}
-            <span className="capitalize">{method.replace('_', ' ')}</span>
+            <span className="capitalize">{getMethodLabel(method)}</span>
           </div>
           <Badge variant="outline" className={getConfidenceColor(confidence)}>
             {confidence}% confidence
