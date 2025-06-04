@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -8,6 +7,14 @@ interface OptimizedParameters {
   timestamp: number;
   dataHash: string;
   confidence?: number;
+  reasoning?: string;
+  factors?: {
+    stability: number;
+    interpretability: number;
+    complexity: number;
+    businessImpact: string;
+  };
+  expectedAccuracy?: number;
 }
 
 interface OptimizationCache {
