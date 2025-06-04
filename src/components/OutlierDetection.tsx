@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, Zap } from 'lucide-react';
+import { AlertTriangle, Zap, Clock } from 'lucide-react';
 import { SalesData } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 import { exportCleaningData, parseCleaningCSV, applyImportChanges, ImportPreview } from '@/utils/csvUtils';
@@ -17,6 +17,7 @@ interface OutlierDetectionProps {
   cleanedData: SalesData[];
   onDataCleaning: (cleanedData: SalesData[], changedSKUs?: string[]) => void;
   onImportDataCleaning?: (importedSKUs: string[]) => void;
+  queueSize?: number;
 }
 
 interface OutlierDataPoint extends SalesData {
@@ -32,7 +33,8 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
   data, 
   cleanedData, 
   onDataCleaning, 
-  onImportDataCleaning 
+  onImportDataCleaning,
+  queueSize = 0
 }) => {
   const [selectedSKU, setSelectedSKU] = useState<string>('');
   const [threshold, setThreshold] = useState([2.5]);
@@ -46,16 +48,16 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const skus = useMemo(() => {
-    return Array.from(new Set(data.map(d => d.sku))).sort();
-  }, [data]);
-
   // Auto-select first SKU when data changes
   React.useEffect(() => {
     if (skus.length > 0 && !selectedSKU) {
       setSelectedSKU(skus[0]);
     }
   }, [skus, selectedSKU]);
+
+  const skus = useMemo(() => {
+    return Array.from(new Set(data.map(d => d.sku))).sort();
+  }, [data]);
 
   const outlierData = useMemo((): OutlierDataPoint[] => {
     if (cleanedData.length === 0 || !selectedSKU) return [];
@@ -251,7 +253,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
   };
 
   const handleEditOutlier = (key: string) => {
-    console.log('Edit button clicked for key:', key);
+    console.log('🧹 EDIT: Starting edit for key:', key);
     
     const parts = key.split('_');
     if (parts.length < 3) {
@@ -262,10 +264,10 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
     const date = parts[parts.length - 2];
     const sku = parts.slice(0, -2).join('_');
     
-    console.log('Parsed key:', { sku, date });
+    console.log('🧹 EDIT: Parsed key:', { sku, date });
     
     const currentItem = cleanedData.find(item => item.sku === sku && item.date === date);
-    console.log('Found item:', currentItem);
+    console.log('🧹 EDIT: Found item:', currentItem);
     
     if (currentItem) {
       setEditingOutliers({ 
@@ -275,7 +277,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
           note: currentItem.note || ''
         }
       });
-      console.log('Set editing state for key:', key);
+      console.log('🧹 EDIT: Set editing state for key:', key);
     } else {
       console.error('Could not find item for editing:', { sku, date });
     }
@@ -294,6 +296,8 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
     const date = parts[parts.length - 2];
     const sku = parts.slice(0, -2).join('_');
 
+    console.log('🧹 EDIT: Saving changes for SKU:', sku, 'Date:', date, 'New value:', editData.value);
+
     const updatedData = cleanedData.map(item => {
       if (item.sku === sku && item.date === date) {
         return { 
@@ -306,7 +310,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
     });
     
     // Notify parent with the changed SKU
-    console.log('🧹 EDIT: SKU modified during manual editing:', sku);
+    console.log('🧹 EDIT: SKU modified during manual editing, triggering optimization:', sku);
     onDataCleaning(updatedData, [sku]);
     
     setEditingOutliers(prev => {
@@ -363,6 +367,24 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Optimization Status Alert */}
+      {queueSize > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center space-x-2">
+            <Clock className="h-4 w-4 text-blue-600" />
+            <span className="text-blue-800 font-medium">
+              Background Optimization Active
+            </span>
+            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+              {queueSize} SKU{queueSize !== 1 ? 's' : ''} in queue
+            </Badge>
+          </div>
+          <p className="text-blue-700 text-sm mt-1">
+            Any data changes will trigger re-optimization for affected SKUs to ensure models use the latest clean data.
+          </p>
+        </div>
+      )}
+
       {/* Export/Import Section */}
       <OutlierExportImport
         onExport={handleExportCleaning}

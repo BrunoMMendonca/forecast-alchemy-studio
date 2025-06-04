@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart3, TrendingUp, Upload, Zap, Eye } from 'lucide-react';
 import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
+import { useToast } from '@/hooks/use-toast';
 
 export interface SalesData {
   date: string;
@@ -35,6 +36,7 @@ const Index = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [shouldStartOptimization, setShouldStartOptimization] = useState(false);
   const forecastModelsRef = useRef<any>(null);
+  const { toast } = useToast();
 
   // Add optimization queue
   const { addSKUsToQueue, removeSKUsFromQueue, getSKUsInQueue, queueSize, clearQueue } = useOptimizationQueue();
@@ -94,6 +96,12 @@ const Index = () => {
       if (validChangedSKUs.length > 0) {
         addSKUsToQueue(validChangedSKUs, 'data_cleaning');
         setShouldStartOptimization(true);
+        
+        // Show toast notification about optimization being triggered
+        toast({
+          title: "Optimization Triggered",
+          description: `${validChangedSKUs.length} SKU${validChangedSKUs.length > 1 ? 's' : ''} queued for re-optimization due to data changes`,
+        });
       } else {
         console.warn('🧹 No valid SKUs found in changed SKUs list');
       }
@@ -111,6 +119,12 @@ const Index = () => {
       console.log('📥 Valid imported SKUs:', validImportedSKUs);
       addSKUsToQueue(validImportedSKUs, 'csv_import');
       setShouldStartOptimization(true);
+      
+      // Show toast notification about optimization being triggered
+      toast({
+        title: "Import Optimization Triggered",
+        description: `${validImportedSKUs.length} SKU${validImportedSKUs.length > 1 ? 's' : ''} queued for optimization after import`,
+      });
     } else {
       console.warn('📥 No valid SKUs found in imported data');
     }
@@ -282,6 +296,7 @@ const Index = () => {
                   cleanedData={cleanedData}
                   onDataCleaning={handleDataCleaning}
                   onImportDataCleaning={handleImportDataCleaning}
+                  queueSize={queueSize}
                 />
               </CardContent>
             </Card>
