@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { optimizationLogger } from '@/utils/optimizationLogger';
@@ -13,19 +12,34 @@ export const useBatchOptimization = () => {
   const [optimizationCompleted, setOptimizationCompleted] = useState(false);
   const { toast } = useToast();
 
-  const optimizeAllSKUs = async (
+  const optimizeQueuedSKUs = async (
     data: SalesData[],
     models: ModelConfig[],
+    queuedSKUs: string[],
     onParametersOptimized: (sku: string, modelId: string, parameters: Record<string, number>, confidence?: number) => void,
+    onSKUCompleted: (sku: string) => void,
     getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[]
   ) => {
-    const skusToOptimize = getSKUsNeedingOptimization(data, models);
+    if (queuedSKUs.length === 0) {
+      console.log('📋 QUEUE: No SKUs in queue for optimization');
+      toast({
+        title: "No Optimization Needed",
+        description: "No SKUs are queued for optimization",
+      });
+      return;
+    }
+
+    // Filter to only optimize SKUs that are in the queue and need optimization
+    const skusNeedingOptimization = getSKUsNeedingOptimization(data, models);
+    const skusToOptimize = skusNeedingOptimization.filter(({ sku }) => queuedSKUs.includes(sku));
     
     if (skusToOptimize.length === 0) {
-      console.log('No SKUs need optimization - all parameters are cached');
+      console.log('📋 QUEUE: All queued SKUs already have optimized parameters');
+      // Remove all queued SKUs since they're already optimized
+      queuedSKUs.forEach(sku => onSKUCompleted(sku));
       toast({
-        title: "Optimization Skipped",
-        description: "All parameters are already optimized and cached",
+        title: "Optimization Complete",
+        description: "All queued SKUs are already optimized",
       });
       return;
     }
@@ -44,6 +58,8 @@ export const useBatchOptimization = () => {
     
     // Start logging session
     optimizationLogger.startSession(totalSKUs);
+
+    console.log(`📋 QUEUE: Starting optimization for ${totalSKUs} queued SKUs`, skusToOptimize.map(s => s.sku));
 
     try {
       for (let i = 0; i < skusToOptimize.length; i++) {
@@ -65,6 +81,8 @@ export const useBatchOptimization = () => {
           aiAcceptedByTolerance: aiAcceptedByToleranceCount,
           aiAcceptedByConfidence: aiAcceptedByConfidenceCount
         });
+
+        console.log(`📋 QUEUE: Optimizing SKU ${i + 1}/${totalSKUs}: ${sku}`);
 
         for (const modelId of modelsToOptimize) {
           const model = models.find(m => m.id === modelId);
@@ -92,15 +110,19 @@ export const useBatchOptimization = () => {
             skippedCount++;
           }
         }
+
+        // Remove completed SKU from queue
+        console.log(`📋 QUEUE: Completed optimization for SKU: ${sku}`);
+        onSKUCompleted(sku);
       }
 
       const aiAcceptanceRate = aiOptimizedCount > 0 ? 
         ((aiOptimizedCount / (aiOptimizedCount + aiRejectedCount)) * 100).toFixed(1) : '0';
 
-      const successMessage = `Enhanced Optimization Complete! AI: ${aiOptimizedCount} (${aiAcceptanceRate}% accepted), Grid: ${gridOptimizedCount}, Rejected: ${aiRejectedCount}`;
+      const successMessage = `Queue Optimization Complete! AI: ${aiOptimizedCount} (${aiAcceptanceRate}% accepted), Grid: ${gridOptimizedCount}, Rejected: ${aiRejectedCount}`;
 
       toast({
-        title: "Enhanced Optimization Complete",
+        title: "Queue Optimization Complete",
         description: successMessage,
       });
 
@@ -124,15 +146,32 @@ export const useBatchOptimization = () => {
     } catch (error) {
       toast({
         title: "Optimization Error",
-        description: "Failed to complete enhanced batch optimization",
+        description: "Failed to complete queue optimization",
         variant: "destructive",
       });
-      console.error('Enhanced batch optimization error:', error);
+      console.error('Queue optimization error:', error);
     } finally {
       setIsOptimizing(false);
-      // DON'T clear progress here - let it stay visible with final results
       optimizationLogger.endSession();
     }
+  };
+
+  // Keep the old method for backward compatibility
+  const optimizeAllSKUs = async (
+    data: SalesData[],
+    models: ModelConfig[],
+    onParametersOptimized: (sku: string, modelId: string, parameters: Record<string, number>, confidence?: number) => void,
+    getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[]
+  ) => {
+    const skusToOptimize = getSKUsNeedingOptimization(data, models);
+    return optimizeQueuedSKUs(
+      data,
+      models,
+      skusToOptimize.map(s => s.sku),
+      onParametersOptimized,
+      () => {}, // No queue management in legacy mode
+      getSKUsNeedingOptimization
+    );
   };
 
   const clearProgress = () => {
@@ -145,6 +184,7 @@ export const useBatchOptimization = () => {
     progress,
     optimizationCompleted,
     optimizeAllSKUs,
+    optimizeQueuedSKUs,
     optimizeSingleModel: (model: ModelConfig, skuData: SalesData[], sku: string) => 
       optimizeSingleModel(model, skuData, sku, { setProgress }),
     clearProgress

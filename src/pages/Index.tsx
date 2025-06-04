@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -10,6 +9,7 @@ import { GlobalForecastParameters } from '@/components/GlobalForecastParameters'
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart3, TrendingUp, Upload, Zap, Eye } from 'lucide-react';
+import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
 
 export interface SalesData {
   date: string;
@@ -36,6 +36,9 @@ const Index = () => {
   const [shouldStartOptimization, setShouldStartOptimization] = useState(false);
   const forecastModelsRef = useRef<any>(null);
 
+  // Add optimization queue
+  const { addSKUsToQueue, removeSKUsFromQueue, getSKUsInQueue, queueSize } = useOptimizationQueue();
+
   const steps = [
     { id: 'upload', title: 'Upload Data', icon: Upload },
     { id: 'visualize', title: 'Visualize', icon: BarChart3 },
@@ -58,20 +61,34 @@ const Index = () => {
   }, []);
 
   const handleDataUpload = (data: SalesData[]) => {
-    console.log('📤 Data uploaded, starting immediate optimization');
+    console.log('📤 Data uploaded, marking all SKUs for optimization');
     setSalesData(data);
     setCleanedData(data);
     setCurrentStep(1);
     
-    // FIXED: Start optimization immediately after data upload
+    // Mark all SKUs for optimization
+    const skus = Array.from(new Set(data.map(d => d.sku)));
+    addSKUsToQueue(skus, 'csv_upload');
+    
+    // Start optimization
     setShouldStartOptimization(true);
   };
 
-  const handleDataCleaning = (cleaned: SalesData[]) => {
-    console.log('🧹 Data cleaned, updating cleaned data and triggering re-optimization');
+  const handleDataCleaning = (cleaned: SalesData[], changedSKUs?: string[]) => {
+    console.log('🧹 Data cleaned, updating cleaned data');
     setCleanedData(cleaned);
     
-    // FIXED: Mark that optimization should restart when data is cleaned
+    // If specific SKUs were changed, mark only those for optimization
+    if (changedSKUs && changedSKUs.length > 0) {
+      console.log('🧹 Marking changed SKUs for re-optimization:', changedSKUs);
+      addSKUsToQueue(changedSKUs, 'data_cleaning');
+      setShouldStartOptimization(true);
+    }
+  };
+
+  const handleImportDataCleaning = (importedSKUs: string[]) => {
+    console.log('📥 CSV import detected, marking imported SKUs for optimization:', importedSKUs);
+    addSKUsToQueue(importedSKUs, 'csv_import');
     setShouldStartOptimization(true);
   };
 
@@ -111,6 +128,11 @@ const Index = () => {
           <p className="text-xl text-slate-600 max-w-2xl mx-auto">
             Upload your historical sales data, leverage AI for optimization, and generate enterprise-ready forecasts for S&OP planning.
           </p>
+          {queueSize > 0 && (
+            <div className="mt-4 text-sm text-blue-600 bg-blue-50 rounded-lg px-4 py-2 inline-block">
+              📋 {queueSize} SKU{queueSize !== 1 ? 's' : ''} queued for optimization
+            </div>
+          )}
         </div>
 
         {/* Progress Steps */}
@@ -151,7 +173,7 @@ const Index = () => {
           </div>
         </div>
 
-        {/* FIXED: Hidden ForecastModels component for background optimization */}
+        {/* Hidden ForecastModels component for background optimization */}
         {salesData.length > 0 && (
           <div style={{ display: 'none' }}>
             <ForecastModels 
@@ -163,6 +185,10 @@ const Index = () => {
               onSKUChange={setSelectedSKUForResults}
               shouldStartOptimization={shouldStartOptimization}
               onOptimizationStarted={() => setShouldStartOptimization(false)}
+              optimizationQueue={{
+                getSKUsInQueue,
+                removeSKUsFromQueue
+              }}
             />
           </div>
         )}
@@ -231,6 +257,7 @@ const Index = () => {
                   data={salesData}
                   cleanedData={cleanedData}
                   onDataCleaning={handleDataCleaning}
+                  onImportDataCleaning={handleImportDataCleaning}
                 />
               </CardContent>
             </Card>
@@ -261,6 +288,10 @@ const Index = () => {
                       onForecastGeneration={handleForecastGeneration}
                       selectedSKU={selectedSKUForResults}
                       onSKUChange={setSelectedSKUForResults}
+                      optimizationQueue={{
+                        getSKUsInQueue,
+                        removeSKUsFromQueue
+                      }}
                     />
                   </CardContent>
                 </Card>

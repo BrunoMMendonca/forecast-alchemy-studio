@@ -20,6 +20,10 @@ interface ForecastModelsProps {
   onSKUChange: (sku: string) => void;
   shouldStartOptimization?: boolean;
   onOptimizationStarted?: () => void;
+  optimizationQueue?: {
+    getSKUsInQueue: () => string[];
+    removeSKUsFromQueue: (skus: string[]) => void;
+  };
 }
 
 export const ForecastModels = forwardRef<any, ForecastModelsProps>(({ 
@@ -29,7 +33,8 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   selectedSKU,
   onSKUChange,
   shouldStartOptimization = false,
-  onOptimizationStarted
+  onOptimizationStarted,
+  optimizationQueue
 }, ref) => {
   const { toast } = useToast();
   const lastDataHashRef = useRef<string>('');
@@ -50,7 +55,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     generateParametersHash
   } = useForecastCache();
   
-  const { isOptimizing, progress, optimizationCompleted, optimizeAllSKUs, clearProgress } = useBatchOptimization();
+  const { isOptimizing, progress, optimizationCompleted, optimizeQueuedSKUs, clearProgress } = useBatchOptimization();
 
   const {
     shouldOptimize,
@@ -77,7 +82,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
-    startOptimization: handleInitialOptimization
+    startOptimization: handleQueueOptimization
   }));
 
   // Auto-select first SKU when data changes
@@ -100,78 +105,50 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     }
   }, [selectedSKU, data.length, createModelsWithPreferences]);
 
-  // FIXED: Handle external optimization trigger
+  // Handle external optimization trigger
   React.useEffect(() => {
-    if (shouldStartOptimization && data.length > 0 && !isOptimizing) {
-      console.log('🚀 EXTERNAL TRIGGER: Starting optimization from parent component');
-      handleInitialOptimization();
+    if (shouldStartOptimization && data.length > 0 && !isOptimizing && optimizationQueue) {
+      console.log('🚀 EXTERNAL TRIGGER: Starting queue optimization from parent component');
+      handleQueueOptimization();
       onOptimizationStarted?.();
     }
   }, [shouldStartOptimization, data.length, isOptimizing]);
 
-  // Main optimization effect - only runs on actual data changes
-  React.useEffect(() => {
-    if (data.length === 0) return;
-
-    if (isTogglingAIManualRef.current) {
-      console.log('FIXED: ❌ SKIPPING OPTIMIZATION - AI/Manual toggle in progress');
+  const handleQueueOptimization = async () => {
+    if (!optimizationQueue) {
+      console.warn('❌ QUEUE: No optimization queue provided');
       return;
     }
 
-    const currentDataHash = generateStableFingerprint(data);
-    
-    if (lastDataHashRef.current === currentDataHash) {
-      console.log('FIXED: ❌ Same data hash - no optimization needed');
-      return;
-    }
-    
-    lastDataHashRef.current = currentDataHash;
-    
-    incrementTriggerCount();
-    const triggerCount = getTriggerCount();
-    
-    console.log(`FIXED: Data changed - trigger #${triggerCount}, hash: ${currentDataHash}`);
-
-    const shouldRunOptimization = shouldOptimize(data, '/');
-    
-    if (!shouldRunOptimization) {
-      console.log('FIXED: ❌ OPTIMIZATION BLOCKED BY NAVIGATION STATE - Using cached results');
-      
-      toast({
-        title: "Using Cached Results",
-        description: "Optimization already completed for this dataset",
-      });
-      
+    const queuedSKUs = optimizationQueue.getSKUsInQueue();
+    if (queuedSKUs.length === 0) {
+      console.log('📋 QUEUE: No SKUs in queue for optimization');
       return;
     }
 
-    console.log('FIXED: ✅ NAVIGATION STATE APPROVED OPTIMIZATION - Starting process');
-    handleInitialOptimization();
-  }, [data]);
-
-  const handleInitialOptimization = async () => {
     const enabledModels = models.filter(m => m.enabled);
     
-    console.log('FIXED: 🚀 STARTING OPTIMIZATION PROCESS');
+    console.log('🚀 QUEUE: Starting optimization for queued SKUs:', queuedSKUs);
     
     markOptimizationStarted(data, '/');
     
-    await optimizeAllSKUs(
+    await optimizeQueuedSKUs(
       data, 
       enabledModels, 
+      queuedSKUs,
       (sku, modelId, parameters, confidence) => {
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
         setCachedParameters(sku, modelId, parameters, dataHash, confidence);
         
-        console.log(`OPTIMIZATION CALLBACK: Setting ${sku}:${modelId} to AI (confidence: ${confidence})`);
+        console.log(`QUEUE OPTIMIZATION: Setting ${sku}:${modelId} to AI (confidence: ${confidence})`);
         
         const preferences = loadManualAIPreferences();
         const preferenceKey = `${sku}:${modelId}`;
         preferences[preferenceKey] = true;
         saveManualAIPreferences(preferences);
         
-        console.log(`OPTIMIZATION: Updating models state for ${sku}:${modelId} with optimized parameters`);
+        console.log(`QUEUE OPTIMIZATION: Updating models state for ${sku}:${modelId} with optimized parameters`);
         setModels(prev => {
           const updated = prev.map(model => 
             model.id === modelId 
@@ -186,15 +163,19 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         });
         
         if (sku === selectedSKU) {
-          console.log(`🎯 IMMEDIATE FORECAST REGENERATION for selected SKU: ${sku}`);
+          console.log(`🎯 QUEUE: IMMEDIATE FORECAST REGENERATION for selected SKU: ${sku}`);
           setTimeout(() => generateForecastsForSelectedSKU(), 100);
         }
+      },
+      (sku) => {
+        // Remove completed SKU from queue
+        optimizationQueue.removeSKUsFromQueue([sku]);
       },
       getSKUsNeedingOptimization
     );
 
     markOptimizationCompleted(data, '/');
-    console.log('FIXED: ✅ OPTIMIZATION COMPLETE - MARKED AS DONE');
+    console.log('✅ QUEUE: OPTIMIZATION COMPLETE');
   };
 
   const generateForecastsForSelectedSKU = async () => {
@@ -282,7 +263,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
                 </div>
               )}
               <span className={`text-sm font-medium ${optimizationCompleted ? 'text-green-800' : 'text-blue-800'}`}>
-                {isOptimizing ? 'Enhanced AI Optimization in Progress...' : 'Enhanced Optimization Complete!'}
+                {isOptimizing ? 'Queue AI Optimization in Progress...' : 'Queue Optimization Complete!'}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -322,7 +303,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
           ) : (
             <div>
               <p className="text-sm text-green-600 mb-2">
-                Successfully processed {progress.totalSKUs} SKU{progress.totalSKUs > 1 ? 's' : ''}
+                Successfully processed {progress.totalSKUs} SKU{progress.totalSKUs > 1 ? 's' : ''} from queue
               </p>
               {progress.aiOptimized > 0 && (
                 <p className="text-xs text-green-500 mb-1">
@@ -354,9 +335,10 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         onResetToManual={handleResetToManual}
       />
 
-      {navigationState && (
+      {navigationState && optimizationQueue && (
         <div className="text-xs text-slate-500 bg-slate-50 rounded p-2">
-          Navigation Optimization: {navigationState.optimizationCompleted ? '✅ Complete' : '⏳ Pending'} 
+          Queue Optimization: {navigationState.optimizationCompleted ? '✅ Complete' : '⏳ Pending'} 
+          | Queue Size: {optimizationQueue.getSKUsInQueue().length}
           | Trigger Count: {getTriggerCount()} 
           | Cache: {cacheStats.hits} hits, {cacheStats.misses} misses
           | Fingerprint: {navigationState.datasetFingerprint}

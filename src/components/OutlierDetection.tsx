@@ -15,7 +15,8 @@ import { OutlierDataTable } from '@/components/OutlierDataTable';
 interface OutlierDetectionProps {
   data: SalesData[];
   cleanedData: SalesData[];
-  onDataCleaning: (cleanedData: SalesData[]) => void;
+  onDataCleaning: (cleanedData: SalesData[], changedSKUs?: string[]) => void;
+  onImportDataCleaning?: (importedSKUs: string[]) => void;
 }
 
 interface OutlierDataPoint extends SalesData {
@@ -27,7 +28,12 @@ interface OutlierDataPoint extends SalesData {
   note?: string;
 }
 
-export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleanedData, onDataCleaning }) => {
+export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ 
+  data, 
+  cleanedData, 
+  onDataCleaning, 
+  onImportDataCleaning 
+}) => {
   const [selectedSKU, setSelectedSKU] = useState<string>('');
   const [threshold, setThreshold] = useState([2.5]);
   const [editingOutliers, setEditingOutliers] = useState<{ [key: string]: { value: number; note: string } }>({});
@@ -206,7 +212,21 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleane
   const handleConfirmImport = () => {
     try {
       const updatedData = applyImportChanges(cleanedData, importPreviews);
+      
+      // Extract SKUs that were modified during import
+      const modifiedSKUs = Array.from(new Set(
+        importPreviews
+          .filter(p => p.action === 'modify' || p.action === 'add_note')
+          .map(p => p.sku)
+      ));
+      
       onDataCleaning(updatedData);
+      
+      // Notify parent about imported SKUs for optimization
+      if (onImportDataCleaning && modifiedSKUs.length > 0) {
+        console.log('📥 IMPORT: Notifying parent about modified SKUs:', modifiedSKUs);
+        onImportDataCleaning(modifiedSKUs);
+      }
       
       const modifications = importPreviews.filter(p => p.action === 'modify');
       const noteAdditions = importPreviews.filter(p => p.action === 'add_note');
@@ -285,7 +305,9 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({ data, cleane
       return item;
     });
     
-    onDataCleaning(updatedData);
+    // Notify parent with the changed SKU
+    console.log('🧹 EDIT: SKU modified during manual editing:', sku);
+    onDataCleaning(updatedData, [sku]);
     
     setEditingOutliers(prev => {
       const updated = { ...prev };
