@@ -1,9 +1,8 @@
-
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { optimizationLogger } from '@/utils/optimizationLogger';
 import { ModelConfig } from '@/types/forecast';
-import { SalesData } from '@/pages/Index';
+import { SalesData } from '@/types/sales';
 import { BatchOptimizationProgress } from '@/types/batchOptimization';
 import { optimizeSingleModel } from '@/utils/singleModelOptimization';
 
