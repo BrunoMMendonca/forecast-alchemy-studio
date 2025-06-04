@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -42,6 +43,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   const lastDataHashRef = useRef<string>('');
   const lastSKURef = useRef<string>('');
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
+  const [forceUpdateTrigger, setForceUpdateTrigger] = useState(0);
   
   const {
     cache,
@@ -120,6 +122,14 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     }
   }, [shouldStartOptimization, data.length, isOptimizing]);
 
+  // Force re-render when optimization updates occur
+  React.useEffect(() => {
+    if (forceUpdateTrigger > 0) {
+      console.log('🔄 FORCE UPDATE: Regenerating forecasts after optimization state change');
+      setTimeout(() => generateForecastsForSelectedSKU(), 100);
+    }
+  }, [forceUpdateTrigger]);
+
   const handleQueueOptimization = async () => {
     if (!optimizationQueue) {
       console.warn('❌ QUEUE: No optimization queue provided');
@@ -173,9 +183,10 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
           return updated;
         });
         
+        // Force UI update for the current SKU
         if (sku === selectedSKU) {
-          console.log(`🎯 QUEUE: IMMEDIATE FORECAST REGENERATION for selected SKU: ${sku}`);
-          setTimeout(() => generateForecastsForSelectedSKU(), 100);
+          console.log(`🎯 QUEUE: FORCING UI UPDATE for selected SKU: ${sku}`);
+          setForceUpdateTrigger(prev => prev + 1);
         }
       },
       (sku) => {
@@ -187,13 +198,22 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 
     markOptimizationCompleted(data, '/');
     console.log('✅ QUEUE: OPTIMIZATION COMPLETE');
+    
+    // Final force update to ensure UI reflects all changes
+    setTimeout(() => {
+      setForceUpdateTrigger(prev => prev + 1);
+    }, 200);
   };
 
   const generateForecastsForSelectedSKU = async () => {
     if (!selectedSKU) return;
 
     try {
-      console.log(`🎯 Generating forecasts for ${selectedSKU} with models:`, models.map(m => ({ id: m.id, enabled: m.enabled })));
+      console.log(`🎯 Generating forecasts for ${selectedSKU} with models:`, models.map(m => ({ 
+        id: m.id, 
+        enabled: m.enabled,
+        hasReasoning: !!m.optimizationReasoning 
+      })));
       
       const results = await generateForecastsForSKU(
         selectedSKU,
@@ -413,6 +433,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
           | Fingerprint: {navigationState.datasetFingerprint}
           | AI/Manual Toggle: {isTogglingAIManualRef.current ? '🔄 Active' : '✅ Idle'}
           | Last SKU: {lastSKURef.current}
+          | Force Updates: {forceUpdateTrigger}
         </div>
       )}
 
