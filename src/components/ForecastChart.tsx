@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +18,18 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
   const filteredHistoricalData = historicalData.filter(item => item.sku === selectedSKU);
   const filteredForecastResults = forecastResults.filter(item => item.sku === selectedSKU);
 
-  const data = [...filteredHistoricalData, ...filteredForecastResults].sort((a, b) => {
+  // Transform forecast results to match historical data format
+  const forecastData = filteredForecastResults.flatMap(result =>
+    result.predictions.map(prediction => ({
+      sku: result.sku,
+      date: prediction.date.toISOString().split('T')[0],
+      sales: prediction.value,
+      model: result.model,
+      color: result.color || '#ff7300'
+    }))
+  );
+
+  const data = [...filteredHistoricalData, ...forecastData].sort((a, b) => {
     const dateA = new Date(a.date).getTime();
     const dateB = new Date(b.date).getTime();
     return dateA - dateB;
@@ -31,7 +43,7 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length > 0) {
       const dataItem = payload[0].payload;
-      const isForecast = (dataItem as ForecastResult).model !== undefined;
+      const isForecast = dataItem.model !== undefined;
       const salesValue = payload[0].value;
 
       return (
@@ -43,7 +55,7 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
             </p>
             {isForecast && (
               <p className="text-xs text-gray-500">
-                Model: {(dataItem as ForecastResult).model}
+                Model: {dataItem.model}
               </p>
             )}
           </CardContent>
@@ -73,7 +85,7 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
                 key={result.model}
                 type="monotone"
                 dataKey="sales"
-                stroke={result.color}
+                stroke={result.color || '#ff7300'}
                 name={`${result.model} Forecast`}
               />
             ))}

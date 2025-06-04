@@ -1,6 +1,46 @@
 import { parseISO, format } from 'date-fns';
 import { SalesData } from '@/types/sales';
 
+export const parseCSVData = async (file: File): Promise<SalesData[]> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const csvText = event.target?.result as string;
+        const lines = csvText.split('\n').filter(line => line.trim());
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        
+        const skuIndex = headers.findIndex(h => h.includes('sku'));
+        const dateIndex = headers.findIndex(h => h.includes('date'));
+        const salesIndex = headers.findIndex(h => h.includes('sales') || h.includes('qty') || h.includes('quantity'));
+        
+        if (skuIndex === -1 || dateIndex === -1 || salesIndex === -1) {
+          reject(new Error('CSV must contain SKU, Date, and Sales columns'));
+          return;
+        }
+        
+        const data: SalesData[] = [];
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map(v => v.trim());
+          if (values.length >= 3) {
+            data.push({
+              sku: values[skuIndex],
+              date: values[dateIndex],
+              sales: parseFloat(values[salesIndex]) || 0
+            });
+          }
+        }
+        
+        resolve(data);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsText(file);
+  });
+};
+
 export interface CleaningRecord {
   sku: string;
   date: string;

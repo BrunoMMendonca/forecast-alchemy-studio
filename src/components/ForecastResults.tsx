@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { ForecastResult } from '@/types/sales';
@@ -8,7 +9,7 @@ import { ForecastChart } from './ForecastChart';
 interface ForecastResultsProps {
   results: ForecastResult[];
   selectedSKU: string;
-  enabledModels?: ModelConfig[]; // Add this to filter results by enabled models
+  enabledModels?: ModelConfig[];
 }
 
 export const ForecastResults: React.FC<ForecastResultsProps> = ({ 
@@ -35,27 +36,6 @@ export const ForecastResults: React.FC<ForecastResultsProps> = ({
     return filtered;
   }, [results, selectedSKU, enabledModels]);
 
-  const chartData = useMemo(() => {
-    if (!selectedSKU || filteredResults.length === 0) return [];
-
-    const allDates = Array.from(new Set(
-      filteredResults.flatMap(r => r.predictions.map(p => p.date))
-    )).sort();
-
-    return allDates.map(date => {
-      const dataPoint: any = { date };
-      
-      filteredResults.forEach(result => {
-        const prediction = result.predictions.find(p => p.date === date);
-        if (prediction) {
-          dataPoint[result.model] = prediction.value;
-        }
-      });
-      
-      return dataPoint;
-    });
-  }, [filteredResults, selectedSKU]);
-
   if (results.length === 0) {
     return (
       <div className="text-center py-8 text-slate-500">
@@ -78,12 +58,12 @@ export const ForecastResults: React.FC<ForecastResultsProps> = ({
 
   return (
     <div className="space-y-6">
-      <ModelAccuracyCards selectedSKUResults={filteredResults} />
+      <ModelAccuracyCards results={filteredResults} selectedSKU={selectedSKU} />
 
       <ForecastChart
-        chartData={chartData}
+        historicalData={[]}
+        forecastResults={filteredResults}
         selectedSKU={selectedSKU}
-        selectedSKUResults={filteredResults}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { SalesData } from '@/types/sales';
+import { SalesData, ChartData } from '@/types/sales';
 import { OutlierDetection } from './OutlierDetection';
 import { OutlierControls } from './OutlierControls';
 import { OutlierChart } from './OutlierChart';
@@ -24,6 +24,13 @@ export const DetectOutliers: React.FC<DetectOutliersProps> = ({ data, setData })
     const skus = Array.from(new Set(data.map(d => d.sku)));
     setSelectedSKUs(skus);
   }, [data]);
+
+  // Convert SalesData to ChartData for the chart component
+  const chartData: ChartData[] = data.map(item => ({
+    ...item,
+    originalSales: item.sales,
+    cleanedSales: item.sales
+  }));
 
   return (
     <div className="space-y-6">
@@ -54,7 +61,7 @@ export const DetectOutliers: React.FC<DetectOutliersProps> = ({ data, setData })
         </TabsList>
 
         <TabsContent value="chart">
-          <OutlierChart data={data} />
+          <OutlierChart data={chartData} />
         </TabsContent>
 
         <TabsContent value="table">

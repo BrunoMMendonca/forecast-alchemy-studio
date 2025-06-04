@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ForecastResult } from '@/types/sales';
@@ -50,7 +51,7 @@ export const ForecastSummaryStats: React.FC<ForecastSummaryStatsProps> = ({
                   <ul>
                     {Object.entries(result.parameters).map(([key, value]) => (
                       <li key={key}>
-                        {key}: {value.toFixed(2)}
+                        {key}: {typeof value === 'number' ? value.toFixed(2) : value}
                       </li>
                     ))}
                   </ul>

@@ -1,7 +1,8 @@
+
 import { ModelConfig } from '@/types/forecast';
 import { useParameterOptimization } from '@/hooks/useParameterOptimization';
 import { optimizeParametersLocally } from '@/utils/localOptimization';
-import { validateOptimizedParameters } from '@/utils/enhancedValidation';
+import { validateOptimizedParameters } from '@/utils/localOptimization';
 import { calculateMAPE, calculateAccuracy } from '@/utils/accuracyUtils';
 import { optimizationLogger } from '@/utils/optimizationLogger';
 import { SalesData } from '@/types/sales';
@@ -22,71 +23,70 @@ export const optimizeSingleModel = async (
   // 1. Attempt Enhanced AI Optimization (Grok API)
   try {
     setProgress(prev => prev ? { ...prev, currentModel: `${model.name} (AI)` } : null);
-    optimizationLogger.log(`[${sku}:${model.name}] Attempting enhanced AI optimization...`);
+    console.log(`[${sku}:${model.name}] Attempting enhanced AI optimization...`);
 
     const optimizedParams = await optimizeModelParameters(model, skuData, { seasonalPeriod: 12 });
 
     if (optimizedParams) {
-      const validationResult = validateOptimizedParameters(skuData, initialParameters, optimizedParams, model.id);
-      const initialMAPE = calculateMAPE(skuData.map(d => d.sales), model.id, initialParameters);
-      const optimizedMAPE = calculateMAPE(skuData.map(d => d.sales), model.id, optimizedParams);
-      const initialAccuracy = calculateAccuracy(skuData.map(d => d.sales), model.id, initialParameters);
-      const optimizedAccuracy = calculateAccuracy(skuData.map(d => d.sales), model.id, optimizedParams);
+      const validationResult = validateOptimizedParameters(model.id, skuData, initialParameters, optimizedParams, 70);
+      const initialMAPE = calculateMAPE(skuData.map(d => d.sales), model.id);
+      const optimizedMAPE = calculateMAPE(skuData.map(d => d.sales), model.id);
+      const initialAccuracy = calculateAccuracy(skuData.map(d => d.sales), model.id);
+      const optimizedAccuracy = calculateAccuracy(skuData.map(d => d.sales), model.id);
 
-      optimizationLogger.log(`[${sku}:${model.name}] AI Optimization Results:`);
-      optimizationLogger.log(`  - Initial MAPE: ${initialMAPE.toFixed(2)}%, Accuracy: ${initialAccuracy.toFixed(2)}%`);
-      optimizationLogger.log(`  - Optimized MAPE: ${optimizedMAPE.toFixed(2)}%, Accuracy: ${optimizedAccuracy.toFixed(2)}%`);
-      optimizationLogger.log(`  - Validation: ${validationResult.message}`);
+      console.log(`[${sku}:${model.name}] AI Optimization Results:`);
+      console.log(`  - Initial MAPE: ${initialMAPE.toFixed(2)}%, Accuracy: ${initialAccuracy.toFixed(2)}%`);
+      console.log(`  - Optimized MAPE: ${optimizedMAPE.toFixed(2)}%, Accuracy: ${optimizedAccuracy.toFixed(2)}%`);
+      console.log(`  - Validation: ${validationResult?.method || 'No result'}`);
 
       if (optimizedAccuracy > initialAccuracy * 1.01) {
-        optimizationLogger.log(`[${sku}:${model.name}] AI Optimization: ✅ ACCEPTED (Accuracy improved by >1%)`);
+        console.log(`[${sku}:${model.name}] AI Optimization: ✅ ACCEPTED (Accuracy improved by >1%)`);
         return { 
           parameters: optimizedParams, 
           confidence: optimizedAccuracy, 
           method: 'ai_confidence' 
         };
-      } else if (validationResult.isValid && optimizedMAPE < initialMAPE * 1.1) {
-        optimizationLogger.log(`[${sku}:${model.name}] AI Optimization: ✅ ACCEPTED (Within tolerance)`);
+      } else if (validationResult && optimizedMAPE < initialMAPE * 1.1) {
+        console.log(`[${sku}:${model.name}] AI Optimization: ✅ ACCEPTED (Within tolerance)`);
         return { 
           parameters: optimizedParams, 
           confidence: optimizedAccuracy,
           method: 'ai_tolerance'
         };
       } else {
-        optimizationLogger.log(`[${sku}:${model.name}] AI Optimization: ❌ REJECTED (No significant improvement)`);
-        optimizationLogger.log(`  - Initial parameters retained`);
-        optimizationLogger.log(`  - Reason: ${validationResult.message}`);
+        console.log(`[${sku}:${model.name}] AI Optimization: ❌ REJECTED (No significant improvement)`);
+        console.log(`  - Initial parameters retained`);
         return null;
       }
     } else {
-      optimizationLogger.log(`[${sku}:${model.name}] AI Optimization: ❌ SKIPPED (No parameters returned)`);
+      console.log(`[${sku}:${model.name}] AI Optimization: ❌ SKIPPED (No parameters returned)`);
       return null;
     }
   } catch (aiError) {
     console.error(`AI Optimization failed for ${sku}:${model.name}:`, aiError);
-    optimizationLogger.log(`[${sku}:${model.name}] AI Optimization: ❌ FAILED (${(aiError as Error).message})`);
+    console.log(`[${sku}:${model.name}] AI Optimization: ❌ FAILED (${(aiError as Error).message})`);
   }
 
   // 2. Fallback to Local Optimization (Grid Search)
   try {
     setProgress(prev => prev ? { ...prev, currentModel: `${model.name} (Grid)` } : null);
-    optimizationLogger.log(`[${sku}:${model.name}] Falling back to local (grid search) optimization...`);
+    console.log(`[${sku}:${model.name}] Falling back to local (grid search) optimization...`);
 
     const localOptimizationResult = await optimizeParametersLocally(model, skuData);
 
     if (localOptimizationResult) {
-      optimizationLogger.log(`[${sku}:${model.name}] Local Optimization: ✅ SUCCESS`);
+      console.log(`[${sku}:${model.name}] Local Optimization: ✅ SUCCESS`);
       return { 
         parameters: localOptimizationResult, 
         method: 'grid_search' 
       };
     } else {
-      optimizationLogger.log(`[${sku}:${model.name}] Local Optimization: ❌ FAILED (No parameters found)`);
+      console.log(`[${sku}:${model.name}] Local Optimization: ❌ FAILED (No parameters found)`);
       return null;
     }
   } catch (localError) {
     console.error(`Local Optimization failed for ${sku}:${model.name}:`, localError);
-    optimizationLogger.log(`[${sku}:${model.name}] Local Optimization: ❌ FAILED (${(localError as Error).message})`);
+    console.log(`[${sku}:${model.name}] Local Optimization: ❌ FAILED (${(localError as Error).message})`);
     return null;
   }
 };
