@@ -1,6 +1,5 @@
 
-import { ModelConfig } from '@/types/forecast';
-import { SalesData } from '@/types/sales';
+import { SalesData } from '@/pages/Index';
 import { adaptiveGridSearchOptimization, enhancedParameterValidation } from '@/utils/adaptiveOptimization';
 import { ENHANCED_VALIDATION_CONFIG, ValidationConfig } from '@/utils/enhancedValidation';
 
@@ -63,13 +62,4 @@ export const validateOptimizedParameters = (
     confidence: result.confidence,
     method: result.method === 'ai_optimal' ? 'ai_high_confidence' : result.method
   };
-};
-
-// Add the missing export for backward compatibility
-export const optimizeParametersLocally = async (
-  model: ModelConfig,
-  data: SalesData[]
-): Promise<Record<string, number> | null> => {
-  const result = gridSearchOptimization(model.id, data);
-  return result ? result.parameters : null;
 };

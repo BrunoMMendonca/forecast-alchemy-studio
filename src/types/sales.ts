@@ -12,11 +12,6 @@ export interface ForecastResult {
   model: string;
   predictions: { date: Date; value: number }[];
   accuracy: number;
-  mape?: number;
-  parameters?: Record<string, number>;
-  confidence?: number;
-  optimizedParameters?: Record<string, number>;
-  color?: string;
 }
 
 export interface EditableForecast {
@@ -31,14 +26,4 @@ export interface OutlierDataPoint {
   sales: number;
   isOutlier: boolean;
   zScore: number;
-}
-
-export interface ChartData {
-  sku: string;
-  date: string;
-  sales: number;
-  originalSales: number;
-  cleanedSales: number;
-  isOutlier?: boolean;
-  note?: string;
 }

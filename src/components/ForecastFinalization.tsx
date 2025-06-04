@@ -103,7 +103,7 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
 
   return (
     <div className="space-y-6">
-      <ForecastSummaryStats results={forecastResults} selectedSKU={skus[0] || ''} />
+      <ForecastSummaryStats results={forecastResults} skus={skus} />
 
       <Card>
         <CardHeader>

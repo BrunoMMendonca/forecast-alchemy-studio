@@ -1,5 +1,6 @@
+
 import { useState, useCallback, useEffect } from 'react';
-import { ForecastResult } from '@/types/sales';
+import { ForecastResult } from '@/pages/Index';
 
 interface CachedForecast {
   result: ForecastResult;

@@ -1,57 +1,5 @@
 
-import { parseISO, format } from 'date-fns';
-import { SalesData } from '@/types/sales';
-
-export const parseCSVData = async (file: File): Promise<SalesData[]> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const csvText = event.target?.result as string;
-        const lines = csvText.split('\n').filter(line => line.trim());
-        
-        if (lines.length < 2) {
-          reject(new Error('CSV file must contain at least a header and one data row'));
-          return;
-        }
-        
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-        
-        const skuIndex = headers.findIndex(h => h.includes('sku') || h.includes('product'));
-        const dateIndex = headers.findIndex(h => h.includes('date') || h.includes('time'));
-        const salesIndex = headers.findIndex(h => h.includes('sales') || h.includes('qty') || h.includes('quantity') || h.includes('amount'));
-        
-        if (skuIndex === -1 || dateIndex === -1 || salesIndex === -1) {
-          reject(new Error('CSV must contain SKU, Date, and Sales columns'));
-          return;
-        }
-        
-        const data: SalesData[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',').map(v => v.trim());
-          if (values.length >= Math.max(skuIndex, dateIndex, salesIndex) + 1) {
-            const salesValue = parseFloat(values[salesIndex]) || 0;
-            if (salesValue >= 0) { // Only include non-negative sales values
-              data.push({
-                sku: values[skuIndex],
-                date: values[dateIndex],
-                sales: salesValue
-              });
-            }
-          }
-        }
-        
-        console.log('Parsed CSV data:', data.length, 'records');
-        resolve(data);
-      } catch (error) {
-        console.error('CSV parsing error:', error);
-        reject(error);
-      }
-    };
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsText(file);
-  });
-};
+import { SalesData } from '@/pages/Index';
 
 export interface CleaningRecord {
   sku: string;
