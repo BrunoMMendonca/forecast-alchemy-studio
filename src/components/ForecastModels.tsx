@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -143,13 +142,35 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     }
   }, [optimizationQueue?.getSKUsInQueue().length]);
 
-  // Watch for cache changes and force UI update for current SKU
+  // CRITICAL FIX: Watch for cache changes and immediately update models state
   React.useEffect(() => {
     if (selectedSKU && cache[selectedSKU]) {
-      console.log('🔄 CACHE UPDATED: Forcing UI update for', selectedSKU);
-      setForceUpdateTrigger(prev => prev + 1);
+      console.log('🔄 CACHE UPDATED: Immediately updating models state for', selectedSKU);
+      
+      // Update models state with cached optimization results
+      setModels(prev => prev.map(model => {
+        const cached = getCachedParameters(selectedSKU, model.id);
+        if (cached) {
+          console.log(`✅ CACHE UPDATE: Applying AI optimization to ${model.id} for ${selectedSKU}`);
+          return {
+            ...model,
+            optimizedParameters: cached.parameters,
+            optimizationConfidence: cached.confidence,
+            optimizationReasoning: cached.reasoning,
+            optimizationFactors: cached.factors,
+            expectedAccuracy: cached.expectedAccuracy
+          };
+        }
+        return model;
+      }));
+      
+      // Force forecast regeneration after models update
+      setTimeout(() => {
+        console.log('🔄 CACHE UPDATE: Regenerating forecasts with updated models');
+        generateForecastsForSelectedSKU();
+      }, 100);
     }
-  }, [cache, selectedSKU]);
+  }, [cache, selectedSKU, getCachedParameters]);
 
   // Auto-select first SKU when data changes
   React.useEffect(() => {
