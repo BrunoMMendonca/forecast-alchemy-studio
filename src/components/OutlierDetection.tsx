@@ -48,16 +48,16 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  const skus = useMemo(() => {
+    return Array.from(new Set(data.map(d => d.sku))).sort();
+  }, [data]);
+
   // Auto-select first SKU when data changes
   React.useEffect(() => {
     if (skus.length > 0 && !selectedSKU) {
       setSelectedSKU(skus[0]);
     }
   }, [skus, selectedSKU]);
-
-  const skus = useMemo(() => {
-    return Array.from(new Set(data.map(d => d.sku))).sort();
-  }, [data]);
 
   const outlierData = useMemo((): OutlierDataPoint[] => {
     if (cleanedData.length === 0 || !selectedSKU) return [];
