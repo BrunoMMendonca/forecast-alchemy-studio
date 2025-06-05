@@ -14,7 +14,11 @@ const DEFAULT_SETTINGS: GlobalForecastSettings = {
   businessContext: DEFAULT_BUSINESS_CONTEXT
 };
 
-export const useGlobalForecastSettings = () => {
+interface UseGlobalForecastSettingsProps {
+  onSettingsChange?: (changedSetting: 'forecastPeriods' | 'businessContext') => void;
+}
+
+export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps) => {
   const [forecastPeriods, setForecastPeriodsState] = useState<number>(DEFAULT_SETTINGS.forecastPeriods);
   const [businessContext, setBusinessContextState] = useState<BusinessContext>(DEFAULT_SETTINGS.businessContext);
 
@@ -48,20 +52,40 @@ export const useGlobalForecastSettings = () => {
   }, []);
 
   const setForecastPeriods = useCallback((periods: number) => {
+    const oldPeriods = forecastPeriods;
     setForecastPeriodsState(periods);
     saveSettings(periods, businessContext);
-  }, [businessContext, saveSettings]);
+    
+    // Trigger re-optimization if the value actually changed
+    if (oldPeriods !== periods && props?.onSettingsChange) {
+      console.log('🔄 Forecast periods changed, triggering re-optimization');
+      props.onSettingsChange('forecastPeriods');
+    }
+  }, [forecastPeriods, businessContext, saveSettings, props]);
 
   const setBusinessContext = useCallback((context: BusinessContext) => {
+    const oldContext = businessContext;
     setBusinessContextState(context);
     saveSettings(forecastPeriods, context);
-  }, [forecastPeriods, saveSettings]);
+    
+    // Trigger re-optimization if the value actually changed
+    if (JSON.stringify(oldContext) !== JSON.stringify(context) && props?.onSettingsChange) {
+      console.log('🔄 Business context changed, triggering re-optimization');
+      props.onSettingsChange('businessContext');
+    }
+  }, [forecastPeriods, businessContext, saveSettings, props]);
 
   const resetToDefaults = useCallback(() => {
     setForecastPeriodsState(DEFAULT_SETTINGS.forecastPeriods);
     setBusinessContextState(DEFAULT_SETTINGS.businessContext);
     saveSettings(DEFAULT_SETTINGS.forecastPeriods, DEFAULT_SETTINGS.businessContext);
-  }, [saveSettings]);
+    
+    // Trigger re-optimization for reset
+    if (props?.onSettingsChange) {
+      console.log('🔄 Settings reset to defaults, triggering re-optimization');
+      props.onSettingsChange('forecastPeriods');
+    }
+  }, [saveSettings, props]);
 
   return {
     forecastPeriods,

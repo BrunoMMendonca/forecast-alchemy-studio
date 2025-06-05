@@ -42,20 +42,49 @@ const Index = () => {
   const forecastModelsRef = useRef<any>(null);
   const { toast } = useToast();
 
-  // Use persistent global forecast settings
-  const {
-    forecastPeriods,
-    setForecastPeriods,
-    businessContext,
-    setBusinessContext
-  } = useGlobalForecastSettings();
-
   // Add optimization queue
   const { addSKUsToQueue, removeSKUsFromQueue, getSKUsInQueue, queueSize, clearQueue } = useOptimizationQueue();
   
   // Add cache clearing capabilities
   const { clearAllCache } = useOptimizationCache();
   const { clearManualAIPreferences } = useManualAIPreferences();
+
+  // Handle global settings changes that trigger re-optimization
+  const handleGlobalSettingsChange = (changedSetting: 'forecastPeriods' | 'businessContext') => {
+    if (cleanedData.length > 0) {
+      const allSKUs = Array.from(new Set(cleanedData.map(d => d.sku)));
+      console.log(`⚙️ Global setting '${changedSetting}' changed, marking ${allSKUs.length} SKUs for re-optimization`);
+      
+      // Clear existing caches since parameters have changed
+      clearAllCache();
+      clearManualAIPreferences();
+      
+      // Add all SKUs to optimization queue
+      addSKUsToQueue(allSKUs, 'csv_upload'); // Using csv_upload as the reason for global re-optimization
+      
+      // Start optimization
+      setTimeout(() => {
+        setShouldStartOptimization(true);
+        console.log('⚙️ Setting shouldStartOptimization to true for global settings change');
+      }, 500);
+      
+      // Show toast notification
+      toast({
+        title: "Global Settings Changed",
+        description: `${allSKUs.length} SKU${allSKUs.length > 1 ? 's' : ''} queued for re-optimization due to ${changedSetting === 'forecastPeriods' ? 'forecast periods' : 'business context'} change`,
+      });
+    }
+  };
+
+  // Use persistent global forecast settings with change handler
+  const {
+    forecastPeriods,
+    setForecastPeriods,
+    businessContext,
+    setBusinessContext
+  } = useGlobalForecastSettings({
+    onSettingsChange: handleGlobalSettingsChange
+  });
 
   // Listen for the proceed to forecasting event
   useEffect(() => {
