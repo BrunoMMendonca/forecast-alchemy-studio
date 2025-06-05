@@ -105,14 +105,23 @@ const Index = () => {
     setForecastResults([]);
     setSelectedSKUForResults('');
     
-    // Mark all SKUs for optimization when user reaches forecasting step
-    const skus = Array.from(new Set(data.map(d => d.sku)));
-    console.log('📤 Adding new SKUs to queue for future optimization:', skus);
-    addSKUsToQueue(skus, 'csv_upload');
+    // Extract SKUs in the order they appear in the data (preserve first occurrence order)
+    const skusInOrder: string[] = [];
+    const seenSKUs = new Set<string>();
+    
+    for (const item of data) {
+      if (!seenSKUs.has(item.sku)) {
+        skusInOrder.push(item.sku);
+        seenSKUs.add(item.sku);
+      }
+    }
+    
+    console.log(`📤 Adding ${skusInOrder.length} SKUs to queue in order:`, skusInOrder);
+    addSKUsToQueue(skusInOrder, 'csv_upload');
     
     toast({
       title: "Data Uploaded",
-      description: `${skus.length} SKU${skus.length > 1 ? 's' : ''} ready for optimization`,
+      description: `${skusInOrder.length} SKU${skusInOrder.length > 1 ? 's' : ''} ready for optimization`,
     });
   };
 
