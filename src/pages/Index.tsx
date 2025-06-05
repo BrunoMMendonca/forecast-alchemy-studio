@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -191,7 +192,8 @@ const Index = () => {
           <p className="text-xl text-slate-600 max-w-2xl mx-auto">
             Upload your historical sales data, leverage AI for optimization, and generate enterprise-ready forecasts for S&OP planning.
           </p>
-          {queueSize > 0 && (
+          {/* Only show queue status if there's actual data loaded and SKUs in queue */}
+          {salesData.length > 0 && queueSize > 0 && (
             <div className="mt-4 text-sm text-blue-600 bg-blue-50 rounded-lg px-4 py-2 inline-block">
               📋 {queueSize} SKU{queueSize !== 1 ? 's' : ''} queued for optimization
             </div>
