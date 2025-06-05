@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -51,6 +52,10 @@ export const useBatchOptimization = () => {
       return;
     }
 
+    // Sort queued SKUs to ensure consistent processing order (first to last)
+    const sortedQueuedSKUs = [...queuedSKUs].sort();
+    console.log('🔄 BATCH: Processing SKUs in order:', sortedQueuedSKUs);
+
     const skusNeedingOptimization = getSKUsNeedingOptimization(data, models);
     const totalModelsToOptimize = skusNeedingOptimization.reduce((acc, curr) => acc + curr.models.length, 0);
 
@@ -59,11 +64,12 @@ export const useBatchOptimization = () => {
       return;
     }
 
-    startOptimization(totalModelsToOptimize, queuedSKUs.length);
+    startOptimization(totalModelsToOptimize, sortedQueuedSKUs.length);
 
     let completedSKUs = 0;
 
-    for (const sku of queuedSKUs) {
+    // Process SKUs in sorted order (first to last)
+    for (const sku of sortedQueuedSKUs) {
       const skuData = data.filter(d => d.sku === sku);
       
       if (skuData.length === 0) {
@@ -71,6 +77,7 @@ export const useBatchOptimization = () => {
         continue;
       }
 
+      console.log(`🚀 BATCH: Starting optimization for SKU ${sku} (${completedSKUs + 1}/${sortedQueuedSKUs.length})`);
       setProgress(prev => prev ? { ...prev, currentSKU: sku } : null);
 
       const modelsToOptimize = models.filter(m => m.enabled && m.parameters && Object.keys(m.parameters).length > 0);
@@ -106,7 +113,7 @@ export const useBatchOptimization = () => {
       }
       
       completedSKUs++;
-      console.log(`🏁 SKU OPTIMIZATION COMPLETE: ${sku}`);
+      console.log(`🏁 SKU OPTIMIZATION COMPLETE: ${sku} (${completedSKUs}/${sortedQueuedSKUs.length})`);
       setProgress(prev => prev ? { 
         ...prev, 
         completed: prev.completed + modelsToOptimize.length,
