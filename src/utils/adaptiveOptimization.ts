@@ -136,10 +136,10 @@ export const adaptiveGridSearchOptimization = (
   aiParameters?: Record<string, number>, // Not used for improvement comparison, just for logging
   config: ValidationConfig = ENHANCED_VALIDATION_CONFIG
 ): OptimizationResult => {
-  console.log(`🔍 GRID SEARCH: Starting reliable grid search for ${modelId}`);
+  console.log(`🔍 GRID: Starting reliable grid search for ${modelId}`);
   
   if (data.length < config.minValidationSize * 2) {
-    console.log(`❌ GRID SEARCH: Insufficient data, using default parameters`);
+    console.log(`❌ GRID: Insufficient data, using default parameters`);
     return createGridSearchResult(modelId, data);
   }
 
@@ -148,25 +148,25 @@ export const adaptiveGridSearchOptimization = (
     const searchGrid = getParameterRanges(modelId, level);
     
     if (!searchGrid || Object.keys(searchGrid).length === 0) {
-      console.log(`❌ GRID SEARCH: No parameter grid for ${modelId} level ${level}`);
+      console.log(`❌ GRID: No parameter grid for ${modelId} level ${level}`);
       continue;
     }
 
-    console.log(`🧮 GRID SEARCH: Trying level ${level} optimization for ${modelId}`);
+    console.log(`🧮 GRID: Trying level ${level} optimization for ${modelId}`);
     
     try {
       const result = runGridSearchLevel(modelId, data, searchGrid, config, level);
       if (result) {
-        console.log(`✅ GRID SEARCH: Level ${level} succeeded for ${modelId}`);
+        console.log(`✅ GRID: Level ${level} succeeded for ${modelId}`);
         return result;
       }
     } catch (error) {
-      console.warn(`⚠️ GRID SEARCH: Level ${level} failed for ${modelId}:`, error);
+      console.warn(`⚠️ GRID: Level ${level} failed for ${modelId}:`, error);
     }
   }
 
   // Absolute fallback - return original parameters as grid_search method
-  console.log(`🛡️ GRID SEARCH: Using absolute fallback for ${modelId}`);
+  console.log(`🛡️ GRID: Using absolute fallback for ${modelId}`);
   return createGridSearchResult(modelId, data);
 };
 
@@ -190,7 +190,7 @@ const runGridSearchLevel = (
   };
 
   const combinations = generateCombinations(paramValues);
-  console.log(`🧮 GRID SEARCH Level ${level}: Testing ${combinations.length} parameter combinations`);
+  console.log(`🧮 GRID Level ${level}: Testing ${combinations.length} parameter combinations`);
 
   let validResults = 0;
   
@@ -218,7 +218,7 @@ const runGridSearchLevel = (
     }
   }
 
-  console.log(`📊 GRID SEARCH Level ${level}: Found ${validResults} valid results`);
+  console.log(`📊 GRID Level ${level}: Found ${validResults} valid results`);
 
   if (results.length === 0) {
     return null;
@@ -240,7 +240,7 @@ const runGridSearchLevel = (
   const bestResult = sortedResults[0];
   const confidence = Math.max(60, Math.min(95, bestResult.validation.confidence));
   
-  console.log(`🏆 GRID SEARCH Level ${level}: Best parameters: ${JSON.stringify(bestResult.params)}, accuracy: ${bestResult.validation.accuracy.toFixed(1)}%`);
+  console.log(`🏆 GRID Level ${level}: Best parameters: ${JSON.stringify(bestResult.params)}, accuracy: ${bestResult.validation.accuracy.toFixed(1)}%`);
 
   return {
     parameters: bestResult.params,
@@ -255,7 +255,7 @@ const runGridSearchLevel = (
 const createGridSearchResult = (modelId: string, data: SalesData[]): OptimizationResult => {
   const defaultParams = getDefaultParameters(modelId);
   
-  console.log(`🛡️ GRID SEARCH: Creating grid search result with default parameters for ${modelId}`);
+  console.log(`🛡️ GRID: Creating grid search result with default parameters for ${modelId}`);
   
   return {
     parameters: defaultParams,

@@ -50,7 +50,7 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
       case 'ai_optimal': return 'AI Optimal';
       case 'ai_tolerance': return 'AI Tolerance';
       case 'ai_confidence': return 'AI Confidence';
-      case 'grid_search': return 'Grid Search';
+      case 'grid_search': return 'Grid';
       case 'fallback': return 'Fallback';
       default: return method.replace('_', ' ');
     }

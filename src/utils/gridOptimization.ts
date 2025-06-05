@@ -24,7 +24,7 @@ export const runGridOptimization = async (
   skuData: SalesData[],
   sku: string
 ): Promise<GridOptimizationResult> => {
-  console.log(`🔍 GRID SEARCH: Starting for ${sku}:${model.id}`);
+  console.log(`🔍 GRID: Starting for ${sku}:${model.id}`);
 
   const gridSearchResult = adaptiveGridSearchOptimization(
     model.id,
@@ -36,14 +36,14 @@ export const runGridOptimization = async (
     }
   );
 
-  console.log(`✅ GRID SEARCH: Success for ${sku}:${model.id} with accuracy ${gridSearchResult.accuracy.toFixed(1)}%`);
+  console.log(`✅ GRID: Success for ${sku}:${model.id} with accuracy ${gridSearchResult.accuracy.toFixed(1)}%`);
 
   return {
     parameters: gridSearchResult.parameters,
     confidence: Math.max(60, gridSearchResult.confidence || 75),
     method: 'grid_search',
     accuracy: gridSearchResult.accuracy,
-    reasoning: `Grid search systematically tested parameter combinations and selected the configuration with highest validation accuracy (${gridSearchResult.accuracy.toFixed(1)}%). This method provides reliable, data-driven parameter selection through comprehensive evaluation.`,
+    reasoning: `Grid systematically tested parameter combinations and selected the configuration with highest validation accuracy (${gridSearchResult.accuracy.toFixed(1)}%). This method provides reliable, data-driven parameter selection through comprehensive evaluation.`,
     factors: {
       stability: 85,
       interpretability: 90,
