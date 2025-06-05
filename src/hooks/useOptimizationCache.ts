@@ -83,7 +83,7 @@ export const useOptimizationCache = () => {
         setCache(filteredCache);
       }
     } catch (error) {
-      console.error('CACHE: Failed to load from localStorage:', error);
+      // Silent error handling
     }
   }, []);
 
@@ -93,7 +93,7 @@ export const useOptimizationCache = () => {
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
       } catch (error) {
-        console.error('CACHE: Failed to save cache to localStorage:', error);
+        // Silent error handling
       }
     }
   }, [cache]);
@@ -272,7 +272,7 @@ export const useOptimizationCache = () => {
     try {
       localStorage.removeItem(CACHE_KEY);
     } catch (error) {
-      console.error('Failed to clear localStorage:', error);
+      // Silent error handling
     }
   }, []);
 

@@ -25,7 +25,7 @@ export const useOptimizationQueue = () => {
         const parsed = JSON.parse(savedQueue);
         setQueue(parsed);
       } catch (error) {
-        console.error('Failed to parse optimization queue from localStorage:', error);
+        // Silent error handling
       }
     }
   }, []);
