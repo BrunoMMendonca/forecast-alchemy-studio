@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -8,7 +7,7 @@ import { useManualAIPreferences, PreferenceValue } from '@/hooks/useManualAIPref
 import { optimizeSingleModel } from '@/utils/singleModelOptimization';
 
 export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
-  const { generateDataHash, getCachedParameters, isCacheValid, cacheParameters } = useOptimizationCache();
+  const { generateDataHash, getCachedParameters, isCacheValid, setCachedParameters } = useOptimizationCache();
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
   const isTogglingAIManualRef = useRef<boolean>(false);
 
@@ -192,8 +191,19 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
           const result = await optimizeSingleModel(model, skuData, selectedSKU, progressUpdater, false);
           
           if (result && result.method?.startsWith('ai_')) {
-            // Cache the results
-            cacheParameters(selectedSKU, modelId, result);
+            // Cache the results using the correct function name
+            const dataHash = generateDataHash(skuData);
+            setCachedParameters(
+              selectedSKU, 
+              modelId, 
+              result.parameters, 
+              dataHash,
+              result.confidence,
+              result.reasoning,
+              result.factors,
+              result.expectedAccuracy,
+              result.method
+            );
             
             setModels(prev => prev.map(m => 
               m.id === modelId 
@@ -257,8 +267,19 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
           const result = await optimizeSingleModel(model, skuData, selectedSKU, progressUpdater, true); // Force grid search
           
           if (result) {
-            // Cache the results
-            cacheParameters(selectedSKU, modelId, result);
+            // Cache the results using the correct function name
+            const dataHash = generateDataHash(skuData);
+            setCachedParameters(
+              selectedSKU, 
+              modelId, 
+              result.parameters, 
+              dataHash,
+              result.confidence,
+              result.reasoning,
+              result.factors,
+              result.expectedAccuracy,
+              result.method
+            );
             
             setModels(prev => prev.map(m => 
               m.id === modelId 
