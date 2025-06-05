@@ -1,4 +1,3 @@
-
 export interface GrokOptimizationRequest {
   modelType: string;
   historicalData: number[];
@@ -110,7 +109,8 @@ const calculateDataStats = (data: number[]) => {
 
 export const optimizeParametersWithGrok = async (
   request: GrokOptimizationRequest,
-  apiKey: string
+  apiKey: string,
+  gridBaseline?: { parameters: Record<string, number>; accuracy: number } // NEW: Grid baseline
 ): Promise<GrokOptimizationResponse> => {
   // Provide more comprehensive data context (last 100 points instead of 50)
   const dataPoints = request.historicalData.slice(-100);
@@ -124,7 +124,16 @@ BUSINESS CONTEXT:
 - Interpretability Needs: ${request.businessContext.interpretabilityNeeds || 'medium'} (simpler models preferred if high)
 ` : '';
 
-  const prompt = `Analyze this time series data and optimize parameters for ${request.modelType} forecasting model using MULTI-CRITERIA DECISION MAKING.
+  // NEW: Grid baseline context
+  const gridBaselineText = gridBaseline ? `
+GRID SEARCH BASELINE (YOUR REFERENCE POINT):
+- Grid-optimized parameters: ${JSON.stringify(gridBaseline.parameters)}
+- Grid accuracy: ${gridBaseline.accuracy.toFixed(2)}%
+- YOUR GOAL: Improve upon these grid-searched parameters with AI-driven insights
+- MINIMUM IMPROVEMENT NEEDED: 2% accuracy gain to justify AI optimization
+` : '';
+
+  const prompt = `Analyze this time series data and IMPROVE UPON THE GRID-SEARCHED BASELINE parameters for ${request.modelType} forecasting model.
 
 COMPREHENSIVE HISTORICAL DATA (last 100 points): ${dataPoints.join(', ')}
 
@@ -140,8 +149,21 @@ ENHANCED DATA STATISTICS:
 
 ${businessContextText}
 
-CURRENT PARAMETERS: ${JSON.stringify(request.currentParameters)}
+${gridBaselineText}
+
+ORIGINAL PARAMETERS: ${JSON.stringify(request.currentParameters)}
 TARGET METRIC: ${request.targetMetric} (we want to MAXIMIZE accuracy, which means MINIMIZE MAPE)
+
+${gridBaseline ? 
+  `CRITICAL TASK: The grid search has already found good parameters. Your job is to use AI insights to REFINE and IMPROVE upon these grid results. You need to show at least 2% accuracy improvement to justify the AI optimization.
+
+Focus on:
+1. Fine-tuning the grid parameters based on data patterns
+2. Considering business context that grid search cannot
+3. Applying domain expertise about forecasting
+4. Making small, intelligent adjustments rather than dramatic changes` :
+  `STANDARD OPTIMIZATION: No grid baseline available, perform full parameter optimization.`
+}
 
 PARAMETER CONSTRAINTS for ${request.modelType}:
 - simple_exponential_smoothing: alpha (0.05-0.95) - Lower values (0.1-0.3) for stable data, higher (0.4-0.8) for volatile/trending data
@@ -150,7 +172,7 @@ PARAMETER CONSTRAINTS for ${request.modelType}:
 - moving_average: window (2-20) - Consider detected cycles: ${dataStats.cycles.join(', ') || 'none detected'}
 
 MULTI-CRITERIA OPTIMIZATION STRATEGY:
-1. PRIMARY: Accuracy (40% weight) - Minimize MAPE to maximize forecast precision
+1. PRIMARY: Accuracy (40% weight) - ${gridBaseline ? 'MUST beat grid accuracy by 2%+' : 'Minimize MAPE to maximize forecast precision'}
 2. STABILITY (25% weight) - Parameter robustness across different data periods
 3. INTERPRETABILITY (20% weight) - How easily stakeholders can understand the model
 4. BUSINESS IMPACT (15% weight) - Alignment with business context and error costs
@@ -159,14 +181,14 @@ For HIGH volatility (>0.3): Balance responsiveness with stability
 For MEDIUM volatility (0.15-0.3): Optimize for accuracy with moderate stability
 For LOW volatility (<0.15): Prioritize long-term stability and interpretability
 
-CRITICAL: Consider ALL four criteria in your optimization decision. Explain the trade-offs you're making between accuracy, stability, interpretability, and business impact.
+CRITICAL: ${gridBaseline ? 'You MUST justify why your parameters are better than the grid baseline. If you cannot achieve meaningful improvement, suggest staying with grid parameters.' : 'Consider ALL four criteria in your optimization decision. Explain the trade-offs you\'re making between accuracy, stability, interpretability, and business impact.'}
 
 Respond in JSON format only:
 {
   "optimizedParameters": {"param1": value1, "param2": value2},
   "expectedAccuracy": percentage_between_60_and_95,
   "confidence": percentage_between_60_and_95,
-  "reasoning": "detailed explanation covering all four decision criteria and the specific trade-offs made",
+  "reasoning": "${gridBaseline ? 'detailed explanation of how and why your parameters improve upon the grid baseline, with specific accuracy improvement justification' : 'detailed explanation covering all four decision criteria and the specific trade-offs made'}",
   "factors": {
     "stability": percentage_score_0_to_100,
     "interpretability": percentage_score_0_to_100,
@@ -176,7 +198,7 @@ Respond in JSON format only:
 }`;
 
   try {
-    console.log(`🤖 Enhanced multi-criteria optimization request to Grok for ${request.modelType}`);
+    console.log(`🤖 ${gridBaseline ? 'Grid-baseline-aware' : 'Enhanced multi-criteria'} optimization request to Grok for ${request.modelType}`);
     
     const response = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
@@ -188,7 +210,7 @@ Respond in JSON format only:
         messages: [
           {
             role: 'system',
-            content: 'You are an expert time series forecasting analyst with deep understanding of business requirements. Your goal is to balance multiple criteria: accuracy, stability, interpretability, and business impact. Always provide detailed reasoning covering all decision factors and trade-offs.'
+            content: `You are an expert time series forecasting analyst with deep understanding of business requirements. ${gridBaseline ? 'Your specialty is refining grid-searched parameters using AI insights. You only recommend changes if you can achieve meaningful improvement (2%+ accuracy gain).' : 'Your goal is to balance multiple criteria: accuracy, stability, interpretability, and business impact.'} Always provide detailed reasoning covering all decision factors and trade-offs.`
           },
           {
             role: 'user',
@@ -208,7 +230,7 @@ Respond in JSON format only:
     const data = await response.json();
     const content = data.choices[0].message.content;
     
-    console.log(`🤖 Enhanced multi-criteria Grok response received for ${request.modelType}`);
+    console.log(`🤖 ${gridBaseline ? 'Grid-baseline-aware' : 'Enhanced multi-criteria'} Grok response received for ${request.modelType}`);
     
     // Try to parse JSON from the response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -220,7 +242,7 @@ Respond in JSON format only:
         throw new Error('Invalid response format from Grok API');
       }
       
-      console.log(`✅ Multi-criteria optimization result: ${JSON.stringify(result.optimizedParameters)}`);
+      console.log(`✅ ${gridBaseline ? 'Grid-baseline-aware' : 'Multi-criteria'} optimization result: ${JSON.stringify(result.optimizedParameters)}`);
       console.log(`📊 Expected accuracy: ${result.expectedAccuracy}%, Confidence: ${result.confidence}%`);
       console.log(`🎯 Factors:`, result.factors);
       return result;
@@ -228,7 +250,7 @@ Respond in JSON format only:
       throw new Error('Unable to parse optimization response - no valid JSON found');
     }
   } catch (error) {
-    console.error(`❌ Enhanced multi-criteria optimization error for ${request.modelType}:`, error);
+    console.error(`❌ ${gridBaseline ? 'Grid-baseline-aware' : 'Enhanced multi-criteria'} optimization error for ${request.modelType}:`, error);
     throw error;
   }
 };

@@ -1,4 +1,3 @@
-
 import { optimizeParametersWithGrok } from '@/utils/grokApiUtils';
 import { adaptiveGridSearchOptimization, enhancedParameterValidation } from '@/utils/adaptiveOptimization';
 import { ENHANCED_VALIDATION_CONFIG } from '@/utils/enhancedValidation';
@@ -75,14 +74,15 @@ export const optimizeSingleModel = async (
     return await runGridOptimization(model, skuData, sku, progressUpdater);
   }
 
-  // Run both AI and Grid optimization for batch processing
-  const results = await runBothOptimizations(model, skuData, sku, progressUpdater);
+  // NEW FLOW: Run Grid first, then AI with Grid baseline
+  const results = await runGridFirstThenAI(model, skuData, sku, progressUpdater);
   
-  // Return the selected result (AI preferred if available, otherwise grid)
+  // Return the selected result (AI preferred if available and better, otherwise grid)
   return results.selectedResult;
 };
 
-const runBothOptimizations = async (
+// NEW: Grid-first optimization flow
+const runGridFirstThenAI = async (
   model: ModelConfig,
   skuData: SalesData[],
   sku: string,
@@ -92,22 +92,36 @@ const runBothOptimizations = async (
     sku,
     modelId: model.id,
     step: 'start',
-    message: 'Starting dual optimization (AI + Grid)',
+    message: 'Starting Grid-first optimization (Grid → AI)',
     parameters: model.parameters
+  });
+
+  // Step 1: ALWAYS run Grid optimization first to establish baseline
+  console.log(`🔍 GRID FIRST: Running Grid optimization as baseline for ${sku}:${model.id}`);
+  const gridResult = await runGridOptimization(model, skuData, sku, progressUpdater, false);
+  
+  optimizationLogger.logStep({
+    sku,
+    modelId: model.id,
+    step: 'grid_complete',
+    message: `Grid baseline established: ${gridResult.accuracy.toFixed(2)}% accuracy`,
+    parameters: gridResult.parameters
   });
 
   let aiResult = null;
   
-  // Step 1: Try AI optimization
+  // Step 2: Try AI optimization with Grid baseline (only if API key is valid)
   if (isValidApiKey(GROK_API_KEY)) {
     try {
       optimizationLogger.logStep({
         sku,
         modelId: model.id,
         step: 'ai_attempt',
-        message: 'Attempting AI optimization'
+        message: 'Attempting AI optimization with Grid baseline'
       });
 
+      console.log(`🤖 AI REFINEMENT: Using Grid baseline for ${sku}:${model.id}`);
+      
       const frequency = detectDateFrequency(skuData.map(d => d.date));
       
       const businessContext = {
@@ -117,6 +131,12 @@ const runBothOptimizations = async (
         interpretabilityNeeds: 'medium' as const
       };
 
+      // Pass Grid baseline to AI optimization
+      const gridBaseline = {
+        parameters: gridResult.parameters,
+        accuracy: gridResult.accuracy
+      };
+
       const grokResult = await optimizeParametersWithGrok({
         modelType: model.id,
         historicalData: skuData.map(d => d.sales),
@@ -124,8 +144,9 @@ const runBothOptimizations = async (
         seasonalPeriod: frequency.seasonalPeriod,
         targetMetric: 'accuracy',
         businessContext
-      }, GROK_API_KEY);
+      }, GROK_API_KEY, gridBaseline); // NEW: Pass Grid baseline
 
+      // Validate AI results against Grid baseline (not original parameters)
       const validationResult = enhancedParameterValidation(
         model.id,
         skuData,
@@ -134,9 +155,10 @@ const runBothOptimizations = async (
         grokResult.confidence,
         {
           ...ENHANCED_VALIDATION_CONFIG,
-          tolerance: 1.0,
-          minConfidenceForAcceptance: 70
-        }
+          tolerance: 2.0, // Higher threshold when comparing to Grid
+          minConfidenceForAcceptance: 75 // Higher confidence required
+        },
+        gridBaseline // NEW: Pass Grid baseline for comparison
       );
 
       if (validationResult) {
@@ -153,22 +175,42 @@ const runBothOptimizations = async (
           ...prev, 
           aiOptimized: prev.aiOptimized + 1
         } : null);
+
+        optimizationLogger.logStep({
+          sku,
+          modelId: model.id,
+          step: 'ai_success',
+          message: `AI optimization succeeded: ${validationResult.accuracy.toFixed(2)}% accuracy (vs Grid: ${gridResult.accuracy.toFixed(2)}%)`,
+          parameters: validationResult.parameters
+        });
       } else {
         progressUpdater.setProgress(prev => prev ? { ...prev, aiRejected: prev.aiRejected + 1 } : null);
+        
+        optimizationLogger.logStep({
+          sku,
+          modelId: model.id,
+          step: 'ai_rejected',
+          message: `AI optimization rejected: couldn't improve over Grid baseline (${gridResult.accuracy.toFixed(2)}%)`,
+          parameters: gridResult.parameters
+        });
       }
     } catch (error) {
       optimizationLogger.logStep({
         sku,
         modelId: model.id,
         step: 'error',
-        message: 'AI optimization failed',
+        message: 'AI optimization failed, using Grid baseline',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
+  } else {
+    optimizationLogger.logStep({
+      sku,
+      modelId: model.id,
+      step: 'ai_skipped',
+      message: 'AI optimization skipped: invalid API key, using Grid baseline'
+    });
   }
-
-  // Step 2: ALWAYS run Grid optimization (never fails now)
-  const gridResult = await runGridOptimization(model, skuData, sku, progressUpdater, false);
 
   // Step 3: Determine which result to return as default
   let selectedResult: EnhancedOptimizationResult;
@@ -179,17 +221,17 @@ const runBothOptimizations = async (
       sku,
       modelId: model.id,
       step: 'complete',
-      message: 'Using AI optimized parameters as default',
+      message: `Using AI optimized parameters (${aiResult.accuracy?.toFixed(2)}% vs Grid ${gridResult.accuracy.toFixed(2)}%)`,
       parameters: aiResult.parameters
     });
   } else {
-    // AI failed, use grid as fallback
+    // AI failed or didn't improve, use Grid as result
     selectedResult = gridResult;
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
       step: 'complete',
-      message: 'AI failed, using grid search parameters as fallback',
+      message: `Using Grid baseline parameters (AI couldn't improve: ${gridResult.accuracy.toFixed(2)}%)`,
       parameters: gridResult.parameters
     });
   }
@@ -251,7 +293,7 @@ const runGridOptimization = async (
   };
 };
 
-// New function to get specific optimization method results
+// New function to get specific optimization method results with Grid-first flow
 export const getOptimizationByMethod = async (
   model: ModelConfig,
   skuData: SalesData[],
@@ -261,6 +303,11 @@ export const getOptimizationByMethod = async (
   console.log(`🎯 GET OPTIMIZATION: ${method} for ${sku}:${model.id}`);
   const progressUpdater = { setProgress: () => {} };
 
+  if (method === 'grid') {
+    // Grid optimization stays the same
+    return await runGridOptimization(model, skuData, sku, progressUpdater, false);
+  }
+  
   if (method === 'ai') {
     if (!isValidApiKey(GROK_API_KEY)) {
       console.log(`❌ GET OPTIMIZATION: Invalid API key for AI`);
@@ -268,6 +315,10 @@ export const getOptimizationByMethod = async (
     }
 
     try {
+      // NEW: For manual AI requests, first get Grid baseline
+      console.log(`🔍 AI REQUEST: Getting Grid baseline first for ${sku}:${model.id}`);
+      const gridBaseline = await runGridOptimization(model, skuData, sku, progressUpdater, false);
+      
       const frequency = detectDateFrequency(skuData.map(d => d.date));
       
       const businessContext = {
@@ -277,6 +328,11 @@ export const getOptimizationByMethod = async (
         interpretabilityNeeds: 'medium' as const
       };
 
+      const gridBaselineData = {
+        parameters: gridBaseline.parameters,
+        accuracy: gridBaseline.accuracy
+      };
+
       const grokResult = await optimizeParametersWithGrok({
         modelType: model.id,
         historicalData: skuData.map(d => d.sales),
@@ -284,7 +340,7 @@ export const getOptimizationByMethod = async (
         seasonalPeriod: frequency.seasonalPeriod,
         targetMetric: 'accuracy',
         businessContext
-      }, GROK_API_KEY);
+      }, GROK_API_KEY, gridBaselineData); // NEW: Always pass Grid baseline
 
       const validationResult = enhancedParameterValidation(
         model.id,
@@ -294,13 +350,14 @@ export const getOptimizationByMethod = async (
         grokResult.confidence,
         {
           ...ENHANCED_VALIDATION_CONFIG,
-          tolerance: 1.0,
-          minConfidenceForAcceptance: 70
-        }
+          tolerance: 2.0, // Higher threshold vs Grid
+          minConfidenceForAcceptance: 75
+        },
+        gridBaselineData // NEW: Compare against Grid baseline
       );
 
       if (validationResult) {
-        console.log(`✅ GET OPTIMIZATION: AI success for ${sku}:${model.id}`);
+        console.log(`✅ GET OPTIMIZATION: AI success for ${sku}:${model.id} (improved over Grid)`);
         return {
           parameters: validationResult.parameters,
           confidence: validationResult.confidence,
@@ -309,12 +366,13 @@ export const getOptimizationByMethod = async (
           factors: grokResult.factors,
           expectedAccuracy: grokResult.expectedAccuracy
         };
+      } else {
+        console.log(`❌ GET OPTIMIZATION: AI couldn't improve over Grid baseline for ${sku}:${model.id}`);
+        return null;
       }
     } catch (error) {
       console.error('AI optimization failed:', error);
     }
-  } else if (method === 'grid') {
-    return await runGridOptimization(model, skuData, sku, progressUpdater, false);
   }
 
   console.log(`❌ GET OPTIMIZATION: Failed ${method} for ${sku}:${model.id}`);

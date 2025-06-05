@@ -1,4 +1,3 @@
-
 import { SalesData } from '@/pages/Index';
 import { generateMovingAverage, generateSimpleExponentialSmoothing, generateDoubleExponentialSmoothing } from './forecastAlgorithms';
 import { ValidationConfig, ValidationResult, walkForwardValidation, timeSeriesCrossValidation, ENHANCED_VALIDATION_CONFIG } from './enhancedValidation';
@@ -244,18 +243,23 @@ const getDefaultParameters = (modelId: string): Record<string, number> => {
   }
 };
 
-// Enhanced parameter validation with statistical significance
+// Enhanced parameter validation with Grid baseline comparison
 export const enhancedParameterValidation = (
   modelId: string,
   data: SalesData[],
   originalParameters: Record<string, number>,
   aiParameters: Record<string, number>,
   aiConfidence: number = 70,
-  config: ValidationConfig = ENHANCED_VALIDATION_CONFIG
+  config: ValidationConfig = ENHANCED_VALIDATION_CONFIG,
+  gridBaseline?: { parameters: Record<string, number>; accuracy: number } // NEW: Grid baseline for comparison
 ): OptimizationResult | null => {
   console.log(`🔬 Enhanced validation for ${modelId}`);
   console.log(`🔧 Original: ${JSON.stringify(originalParameters)}`);
   console.log(`🤖 AI: ${JSON.stringify(aiParameters)} (confidence: ${aiConfidence}%)`);
+  
+  if (gridBaseline) {
+    console.log(`🔍 Grid baseline: ${JSON.stringify(gridBaseline.parameters)} (accuracy: ${gridBaseline.accuracy.toFixed(2)}%)`);
+  }
   
   if (data.length < config.minValidationSize * 2) {
     console.log(`❌ Insufficient data for validation (${data.length} points)`);
@@ -263,15 +267,7 @@ export const enhancedParameterValidation = (
   }
 
   try {
-    // Test original parameters
-    const originalForecast = (trainData: SalesData[], periods: number) => 
-      generateForecastForModel(modelId, trainData, periods, originalParameters);
-    
-    const originalValidation = config.useWalkForward ? 
-      walkForwardValidation(data, originalForecast, config) :
-      timeSeriesCrossValidation(data, originalForecast, config);
-
-    // Test AI parameters (without rounding first)
+    // Test AI parameters
     const aiForecast = (trainData: SalesData[], periods: number) => 
       generateForecastForModel(modelId, trainData, periods, aiParameters);
     
@@ -279,14 +275,31 @@ export const enhancedParameterValidation = (
       walkForwardValidation(data, aiForecast, config) :
       timeSeriesCrossValidation(data, aiForecast, config);
 
-    console.log(`📊 Original accuracy: ${originalValidation.accuracy.toFixed(2)}% (MAPE: ${originalValidation.mape.toFixed(2)}%)`);
     console.log(`📊 AI accuracy: ${aiValidation.accuracy.toFixed(2)}% (MAPE: ${aiValidation.mape.toFixed(2)}%)`);
     
-    const improvementPercent = aiValidation.accuracy - originalValidation.accuracy;
-    console.log(`📊 Improvement: ${improvementPercent.toFixed(2)}%`);
+    // Compare against Grid baseline if available, otherwise use original
+    const baselineAccuracy = gridBaseline?.accuracy || 0;
+    const baselineParameters = gridBaseline?.parameters || originalParameters;
+    const comparisonLabel = gridBaseline ? 'Grid baseline' : 'Original';
+    
+    if (!gridBaseline) {
+      // Fallback to original comparison if no grid baseline
+      const originalForecast = (trainData: SalesData[], periods: number) => 
+        generateForecastForModel(modelId, trainData, periods, originalParameters);
+      
+      const originalValidation = config.useWalkForward ? 
+        walkForwardValidation(data, originalForecast, config) :
+        timeSeriesCrossValidation(data, originalForecast, config);
+      
+      console.log(`📊 Original accuracy: ${originalValidation.accuracy.toFixed(2)}% (MAPE: ${originalValidation.mape.toFixed(2)}%)`);
+      baselineAccuracy = originalValidation.accuracy;
+    }
+    
+    const improvementPercent = aiValidation.accuracy - baselineAccuracy;
+    console.log(`📊 Improvement over ${comparisonLabel}: ${improvementPercent.toFixed(2)}%`);
 
-    // Enhanced acceptance logic
-    const isSignificantImprovement = improvementPercent >= 1.0;
+    // Enhanced acceptance logic with Grid baseline consideration
+    const isSignificantImprovement = improvementPercent >= (gridBaseline ? 2.0 : 1.0); // Higher threshold vs Grid
     const isWithinTolerance = Math.abs(improvementPercent) <= config.tolerance;
     const isHighConfidenceAI = aiConfidence >= config.minConfidenceForAcceptance;
     const isMinorDegradation = improvementPercent >= -0.5 && improvementPercent < 0;
@@ -296,13 +309,13 @@ export const enhancedParameterValidation = (
 
     if (isSignificantImprovement) {
       shouldAccept = true;
-      acceptanceReason = 'significant improvement';
+      acceptanceReason = `significant improvement over ${comparisonLabel}`;
     } else if (isHighConfidenceAI && (isWithinTolerance || isMinorDegradation)) {
       shouldAccept = true;
-      acceptanceReason = 'high confidence with acceptable performance';
-    } else if (aiValidation.accuracy > originalValidation.accuracy) {
+      acceptanceReason = `high confidence with acceptable performance vs ${comparisonLabel}`;
+    } else if (aiValidation.accuracy > baselineAccuracy) {
       shouldAccept = true;
-      acceptanceReason = 'any improvement accepted';
+      acceptanceReason = `any improvement over ${comparisonLabel} accepted`;
     }
 
     if (shouldAccept) {
@@ -319,7 +332,7 @@ export const enhancedParameterValidation = (
         validationDetails: aiValidation
       };
     } else {
-      console.log(`❌ AI optimization REJECTED: improvement ${improvementPercent.toFixed(2)}% (threshold: ${config.tolerance}%, confidence: ${aiConfidence}%)`);
+      console.log(`❌ AI optimization REJECTED: improvement ${improvementPercent.toFixed(2)}% (threshold: ${gridBaseline ? '2.0' : '1.0'}%, confidence: ${aiConfidence}%)`);
       return null;
     }
   } catch (error) {
