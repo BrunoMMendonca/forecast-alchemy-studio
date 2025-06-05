@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -23,26 +22,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     return getDefaultModels();
   });
 
-  // Direct localStorage reader like the debugger uses
-  const readOptimizationCacheFromStorage = useCallback(() => {
-    try {
-      const stored = localStorage.getItem('forecast_optimization_cache');
-      return stored ? JSON.parse(stored) : {};
-    } catch {
-      return {};
-    }
-  }, []);
-
-  const readPreferencesFromStorage = useCallback(() => {
-    try {
-      const stored = localStorage.getItem('manual_ai_preferences');
-      return stored ? JSON.parse(stored) : {};
-    } catch {
-      return {};
-    }
-  }, []);
-
-  // Create models with current cache and preferences (like debugger does)
+  // Create models with current cache and preferences - always read fresh from localStorage
   const createModelsWithCurrentData = useCallback(() => {
     if (!selectedSKU || isTogglingAIManualRef.current) {
       return getDefaultModels();
@@ -50,8 +30,24 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
 
     console.log('🔄 CREATING MODELS: Reading fresh data from localStorage for', selectedSKU);
     
-    const optimizationCache = readOptimizationCacheFromStorage();
-    const preferences = readPreferencesFromStorage();
+    // Always read fresh from localStorage
+    let optimizationCache = {};
+    let preferences = {};
+    
+    try {
+      const storedCache = localStorage.getItem('forecast_optimization_cache');
+      optimizationCache = storedCache ? JSON.parse(storedCache) : {};
+    } catch {
+      optimizationCache = {};
+    }
+    
+    try {
+      const storedPrefs = localStorage.getItem('manual_ai_preferences');
+      preferences = storedPrefs ? JSON.parse(storedPrefs) : {};
+    } catch {
+      preferences = {};
+    }
+
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
 
@@ -60,9 +56,10 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
       const preference = preferences[preferenceKey] || 'ai';
       const cached = optimizationCache[selectedSKU]?.[model.id];
 
-      console.log(`📋 MODEL ${model.id}: preference=${preference}, hasCache=${!!cached}`);
+      console.log(`📋 MODEL ${model.id}: preference=${preference}, hasCache=${!!cached}, cacheVersion=${cacheVersion}`);
 
       if (preference === 'manual') {
+        console.log(`👤 MODEL ${model.id}: Using manual parameters`);
         return model;
       }
 
@@ -70,19 +67,23 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
       let selectedCache = null;
       if (preference === 'ai' && cached?.ai && cached.ai.dataHash === currentDataHash) {
         selectedCache = cached.ai;
+        console.log(`🤖 MODEL ${model.id}: Using AI cache`);
       } else if (preference === 'grid' && cached?.grid && cached.grid.dataHash === currentDataHash) {
         selectedCache = cached.grid;
+        console.log(`🔍 MODEL ${model.id}: Using Grid cache`);
       } else {
         // Fallback to any valid cache
         if (cached?.ai && cached.ai.dataHash === currentDataHash) {
           selectedCache = cached.ai;
+          console.log(`🤖 MODEL ${model.id}: Fallback to AI cache`);
         } else if (cached?.grid && cached.grid.dataHash === currentDataHash) {
           selectedCache = cached.grid;
+          console.log(`🔍 MODEL ${model.id}: Fallback to Grid cache`);
         }
       }
 
       if (selectedCache) {
-        console.log(`✅ USING CACHE: ${model.id} with method ${selectedCache.method}`);
+        console.log(`✅ USING CACHE: ${model.id} with method ${selectedCache.method}, params:`, selectedCache.parameters);
         return {
           ...model,
           optimizedParameters: selectedCache.parameters,
@@ -94,15 +95,21 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
         };
       }
 
+      console.log(`❌ NO CACHE: ${model.id} using default parameters`);
       return model;
     });
-  }, [selectedSKU, data, generateDataHash, readOptimizationCacheFromStorage, readPreferencesFromStorage]);
+  }, [selectedSKU, data, generateDataHash, cacheVersion]);
 
-  // Single effect that updates models when cache version changes (like debugger)
+  // Single effect that updates models when cache version changes
   useEffect(() => {
     if (selectedSKU && cacheVersion > 0) {
       console.log(`🔄 CACHE VERSION CHANGED: ${cacheVersion}, updating models for ${selectedSKU}`);
       const updatedModels = createModelsWithCurrentData();
+      console.log('🎯 SETTING NEW MODELS:', updatedModels.map(m => ({ 
+        id: m.id, 
+        hasOptimized: !!m.optimizedParameters,
+        method: m.optimizationMethod 
+      })));
       setModels(updatedModels);
     }
   }, [cacheVersion, selectedSKU, createModelsWithCurrentData]);
@@ -164,7 +171,14 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     setSelectedMethod(selectedSKU, modelId, 'ai');
     
     // Check cache first
-    const optimizationCache = readOptimizationCacheFromStorage();
+    let optimizationCache = {};
+    try {
+      const stored = localStorage.getItem('forecast_optimization_cache');
+      optimizationCache = stored ? JSON.parse(stored) : {};
+    } catch {
+      optimizationCache = {};
+    }
+    
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
     const cached = optimizationCache[selectedSKU]?.[modelId];
@@ -216,7 +230,14 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     setSelectedMethod(selectedSKU, modelId, 'grid');
     
     // Check cache first
-    const optimizationCache = readOptimizationCacheFromStorage();
+    let optimizationCache = {};
+    try {
+      const stored = localStorage.getItem('forecast_optimization_cache');
+      optimizationCache = stored ? JSON.parse(stored) : {};
+    } catch {
+      optimizationCache = {};
+    }
+    
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
     const cached = optimizationCache[selectedSKU]?.[modelId];
