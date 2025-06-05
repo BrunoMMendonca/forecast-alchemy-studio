@@ -31,15 +31,6 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const isAI = model.optimizationMethod === 'ai';
   const isGrid = model.optimizationMethod === 'grid_search';
 
-  console.log(`🔍 ParameterControl for ${model.id}:`, {
-    optimizationMethod: model.optimizationMethod,
-    isAI,
-    isGrid,
-    isManual,
-    hasOptimizedParams: !!model.optimizedParameters,
-    hasReasoning: !!model.optimizationReasoning
-  });
-
   const currentParameters = model.optimizedParameters || model.parameters;
 
   // Only show parameters section if model actually has parameters
@@ -94,7 +85,6 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    console.log(`🤖 AI clicked for ${model.id}`);
                     onUseAI();
                   }}
                 >
@@ -108,7 +98,6 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    console.log(`🔍 Grid clicked for ${model.id}`);
                     if (onUseGrid) onUseGrid();
                   }}
                 >
@@ -122,7 +111,6 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    console.log(`🔄 Manual clicked for ${model.id}`);
                     onResetToManual();
                   }}
                 >
