@@ -41,7 +41,7 @@ export const useBatchOptimization = () => {
       method?: string
     ) => void,
     onSKUCompleted: (sku: string) => void,
-    getSKUsNeedingOptimization: (sku: string, modelIds: string[]) => string[]
+    getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[]
   ) => {
     if (isOptimizing) {
       console.log('⚠️ BATCH: Optimization already in progress, skipping');
@@ -60,34 +60,44 @@ export const useBatchOptimization = () => {
     let rejectedCount = 0;
 
     try {
-      for (let i = 0; i < queuedSKUs.length; i++) {
+      // Get the actual SKUs and models that need optimization
+      const skusNeedingOptimization = getSKUsNeedingOptimization(data, models);
+      console.log('🔍 BATCH: SKUs needing optimization:', skusNeedingOptimization);
+
+      // Filter to only process queued SKUs that actually need optimization
+      const skusToProcess = skusNeedingOptimization.filter(item => 
+        queuedSKUs.includes(item.sku)
+      );
+
+      console.log(`🎯 BATCH: Processing ${skusToProcess.length} SKUs that need optimization:`, skusToProcess);
+
+      for (let i = 0; i < skusToProcess.length; i++) {
         if (abortControllerRef.current?.signal.aborted) {
           console.log('🛑 BATCH: Optimization aborted');
           break;
         }
 
-        const sku = queuedSKUs[i];
-        console.log(`🎯 BATCH: Processing SKU ${i + 1}/${queuedSKUs.length}: ${sku}`);
+        const { sku, models: modelIds } = skusToProcess[i];
+        console.log(`🎯 BATCH: Processing SKU ${i + 1}/${skusToProcess.length}: ${sku} with models:`, modelIds);
         
         setProgress({
           currentSKU: sku,
           completedSKUs: i,
-          totalSKUs: queuedSKUs.length,
+          totalSKUs: skusToProcess.length,
           currentModel: '',
           isComplete: false
         });
 
         const skuData = data.filter(d => d.sku === sku);
-        const enabledModelIds = models.filter(m => m.enabled).map(m => m.id);
-        const modelsNeedingOptimization = getSKUsNeedingOptimization(sku, enabledModelIds);
 
-        console.log(`📋 BATCH: ${sku} has ${modelsNeedingOptimization.length} models needing optimization:`, modelsNeedingOptimization);
-
-        for (const modelId of modelsNeedingOptimization) {
+        for (const modelId of modelIds) {
           if (abortControllerRef.current?.signal.aborted) break;
 
           const model = models.find(m => m.id === modelId);
-          if (!model) continue;
+          if (!model) {
+            console.warn(`⚠️ BATCH: Model ${modelId} not found in models list`);
+            continue;
+          }
 
           console.log(`🔧 BATCH: Optimizing ${sku}:${modelId}`);
           

@@ -1,4 +1,3 @@
-
 import { useState, useRef, useCallback } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -165,12 +164,7 @@ export const useForecastModelsLogic = (
           setForceUpdateTrigger(prev => prev + 1);
         }
       },
-      (sku: string, modelIds: string[]) => {
-        // This callback should return SKUs that still need optimization
-        // For simplicity, just return the current queuedSKUs since we're processing them
-        console.log(`🔍 CHECKING: SKUs needing optimization for ${sku} with models:`, modelIds);
-        return queuedSKUs;
-      }
+      getSKUsNeedingOptimization // Pass the correct function from optimization cache
     );
 
     markOptimizationCompleted(data, '/');
@@ -178,7 +172,7 @@ export const useForecastModelsLogic = (
     setTimeout(() => {
       setForceUpdateTrigger(prev => prev + 1);
     }, 200);
-  }, [optimizationQueue, models, data, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, selectedSKU, markOptimizationCompleted]);
+  }, [optimizationQueue, models, data, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, selectedSKU, markOptimizationCompleted, getSKUsNeedingOptimization]);
 
   const handleToggleModel = useCallback((modelId: string) => {
     toggleModel(modelId);
