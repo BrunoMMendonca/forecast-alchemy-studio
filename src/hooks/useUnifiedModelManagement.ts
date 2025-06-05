@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData, ForecastResult } from '@/pages/Index';
@@ -12,14 +11,18 @@ import { generateForecastsForSKU } from '@/utils/forecastGenerator';
 import { useToast } from '@/hooks/use-toast';
 
 // Helper function to validate SKU - centralized validation
-const isValidSKU = (sku: string): boolean => {
-  return typeof sku === 'string' && sku.trim().length > 0;
+const isValidSKU = (sku: any): boolean => {
+  const isValid = sku !== null && sku !== undefined && typeof sku === 'string' && sku.trim().length > 0;
+  console.log('🔧 useUnifiedModelManagement isValidSKU:', { sku: `"${sku}"`, type: typeof sku, isValid });
+  return isValid;
 };
 
 // Helper function to check if a model has parameters that can be optimized
 const modelHasParameters = (model: ModelConfig): boolean => {
   const params = model.optimizedParameters || model.parameters;
-  return params && Object.keys(params).length > 0;
+  const hasParams = params && Object.keys(params).length > 0;
+  console.log('🔧 modelHasParameters check for', model.id, ':', hasParams, 'params:', params);
+  return hasParams;
 };
 
 export const useUnifiedModelManagement = (
@@ -43,8 +46,12 @@ export const useUnifiedModelManagement = (
     selectedSKU: `"${selectedSKU}"`,
     isValidSKU: isValidSelectedSKU,
     selectedSKUType: typeof selectedSKU,
-    selectedSKULength: selectedSKU?.length
+    selectedSKULength: selectedSKU?.length,
+    willProceedWithCacheOps: isValidSelectedSKU
   });
+
+  // CRITICAL: If SKU is invalid, don't initialize cache hooks that might cause loops
+  const shouldInitializeCacheHooks = isValidSelectedSKU;
 
   const { 
     cache,
@@ -65,16 +72,29 @@ export const useUnifiedModelManagement = (
   } = useForecastCache();
 
   const [models, setModels] = useState<ModelConfig[]>(() => {
+    console.log('🔧 Initializing models with defaults');
     return getDefaultModels();
   });
 
   // Create a stable hash of model state to prevent unnecessary re-renders
   // ONLY include models that have parameters to prevent seasonal_naive from causing issues
   const modelsHash = useMemo(() => {
-    if (!isValidSelectedSKU) return 'invalid-sku';
+    if (!isValidSelectedSKU) {
+      console.log('🔧 modelsHash: Invalid SKU, returning early');
+      return 'invalid-sku';
+    }
     
-    const enabledModelsWithParams = models.filter(m => m.enabled && modelHasParameters(m));
-    if (enabledModelsWithParams.length === 0) return 'no-enabled-models-with-params';
+    const enabledModelsWithParams = models.filter(m => {
+      const enabled = m.enabled;
+      const hasParams = modelHasParameters(m);
+      console.log(`🔧 modelsHash filter - ${m.id}: enabled=${enabled}, hasParams=${hasParams}`);
+      return enabled && hasParams;
+    });
+    
+    if (enabledModelsWithParams.length === 0) {
+      console.log('🔧 modelsHash: No enabled models with parameters');
+      return 'no-enabled-models-with-params';
+    }
     
     const hashData = enabledModelsWithParams.map(m => ({
       id: m.id,
@@ -83,11 +103,21 @@ export const useUnifiedModelManagement = (
       method: m.optimizationMethod
     }));
     
-    return JSON.stringify(hashData);
+    const hash = JSON.stringify(hashData);
+    console.log('🔧 modelsHash generated:', hash.substring(0, 100) + '...');
+    return hash;
   }, [models, isValidSelectedSKU]);
 
   // Generate forecasts when models actually change (not just re-render)
   const generateForecasts = useCallback(async () => {
+    console.log('🚀 generateForecasts called - initial checks:', {
+      isValidSelectedSKU,
+      modelsLength: models.length,
+      inProgress: forecastGenerationInProgressRef.current,
+      lastHash: lastForecastGenerationHashRef.current.substring(0, 30),
+      currentHash: modelsHash.substring(0, 30)
+    });
+
     if (!isValidSelectedSKU || models.length === 0) {
       console.log('🚀 Skipping forecast generation - invalid SKU or no models');
       return;
@@ -144,6 +174,8 @@ export const useUnifiedModelManagement = (
 
   // Helper function to get the best available method for a model
   const getBestAvailableMethod = useCallback((sku: string, modelId: string, currentDataHash: string) => {
+    console.log('🔍 getBestAvailableMethod called:', { sku: `"${sku}"`, modelId, hashLength: currentDataHash?.length });
+
     // Early return if SKU is invalid or model doesn't have parameters
     if (!isValidSKU(sku)) {
       console.log('🔍 getBestAvailableMethod: Invalid SKU, returning manual');
@@ -156,6 +188,12 @@ export const useUnifiedModelManagement = (
       return 'manual';
     }
 
+    // Only check cache if we should initialize cache hooks
+    if (!shouldInitializeCacheHooks) {
+      console.log('🔍 getBestAvailableMethod: Cache hooks not initialized, returning manual');
+      return 'manual';
+    }
+
     const cached = cache[sku]?.[modelId];
     if (!cached) {
       console.log('🔍 getBestAvailableMethod: No cache for', sku, modelId, 'returning manual');
@@ -165,16 +203,27 @@ export const useUnifiedModelManagement = (
     const hasValidAI = cached.ai && cached.ai.dataHash === currentDataHash;
     const hasValidGrid = cached.grid && cached.grid.dataHash === currentDataHash;
 
+    console.log('🔍 getBestAvailableMethod cache check:', { hasValidAI, hasValidGrid });
+
     if (hasValidAI) return 'ai';
     if (hasValidGrid) return 'grid';
     return 'manual';
-  }, [cache]);
+  }, [cache, shouldInitializeCacheHooks]);
 
   // CONTROLLED cache version updates - only process when actually needed
   useEffect(() => {
+    console.log('🔄 Cache version effect triggered:', {
+      isValidSelectedSKU,
+      shouldInitializeCacheHooks,
+      cacheVersion,
+      lastProcessedVersion: lastProcessedCacheVersionRef.current,
+      selectedSKU: `"${selectedSKU}"`,
+      lastProcessedSKU: `"${lastProcessedSKURef.current}"`
+    });
+
     // Early return if no valid SKU - CRITICAL for preventing infinite loops
-    if (!isValidSelectedSKU) {
-      console.log('❌ useUnifiedModelManagement: Skipping cache update - invalid SKU');
+    if (!isValidSelectedSKU || !shouldInitializeCacheHooks) {
+      console.log('❌ useUnifiedModelManagement: Skipping cache update - invalid SKU or cache hooks not initialized');
       return;
     }
 
@@ -263,10 +312,18 @@ export const useUnifiedModelManagement = (
     
     // Reset forecast generation hash when models are updated from cache
     lastForecastGenerationHashRef.current = '';
-  }, [cacheVersion, selectedSKU, data, cache, loadManualAIPreferences, saveManualAIPreferences, generateDataHash, getBestAvailableMethod, isValidSelectedSKU]);
+  }, [cacheVersion, selectedSKU, data, cache, loadManualAIPreferences, saveManualAIPreferences, generateDataHash, getBestAvailableMethod, isValidSelectedSKU, shouldInitializeCacheHooks]);
 
   // CONTROLLED forecast generation - only when models hash actually changes
   useEffect(() => {
+    console.log('🔄 Forecast generation effect triggered:', {
+      isValidSelectedSKU,
+      modelsLength: models.length,
+      lastHash: lastForecastGenerationHashRef.current.substring(0, 30),
+      currentHash: modelsHash.substring(0, 30),
+      inProgress: forecastGenerationInProgressRef.current
+    });
+
     if (!isValidSelectedSKU || !models.length) {
       console.log('⏭️ Skipping forecast effect - invalid SKU or no models');
       return;
@@ -293,14 +350,21 @@ export const useUnifiedModelManagement = (
   }, [modelsHash, generateForecasts, isValidSelectedSKU]);
 
   const toggleModel = useCallback((modelId: string) => {
+    console.log('🔄 toggleModel called:', { modelId, isValidSelectedSKU });
+    if (!isValidSelectedSKU) {
+      console.log('❌ toggleModel: Invalid SKU, skipping');
+      return;
+    }
+
     setModels(prev => prev.map(model => 
       model.id === modelId ? { ...model, enabled: !model.enabled } : model
     ));
     // Reset forecast hash to trigger regeneration
     lastForecastGenerationHashRef.current = '';
-  }, []);
+  }, [isValidSelectedSKU]);
 
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
+    console.log('📝 updateParameter called:', { modelId, parameter, value, isValidSelectedSKU });
     // Early return if no valid SKU
     if (!isValidSelectedSKU) {
       console.log('❌ updateParameter: Invalid SKU, skipping');
