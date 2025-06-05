@@ -1,4 +1,3 @@
-
 // DEPRECATED: This file is being replaced by useUnifiedModelManagement.ts
 // TODO: Remove this file after confirming the unified hook works correctly
 
@@ -16,6 +15,8 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     generateDataHash, 
     setCachedParameters,
     setSelectedMethod,
+    getCachedParameters,
+    isCacheValid,
     cacheVersion
   } = useOptimizationCache();
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
@@ -31,7 +32,6 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
       return getDefaultModels();
     }
 
-    // Always read fresh from localStorage
     let optimizationCache = {};
     let preferences = {};
     
@@ -61,14 +61,12 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
         return model;
       }
 
-      // For AI/Grid preference, try to get the preferred method first
       let selectedCache = null;
       if (preference === 'ai' && cached?.ai && cached.ai.dataHash === currentDataHash) {
         selectedCache = cached.ai;
       } else if (preference === 'grid' && cached?.grid && cached.grid.dataHash === currentDataHash) {
         selectedCache = cached.grid;
       } else {
-        // Fallback to any valid cache
         if (cached?.ai && cached.ai.dataHash === currentDataHash) {
           selectedCache = cached.ai;
         } else if (cached?.grid && cached.grid.dataHash === currentDataHash) {
@@ -144,52 +142,74 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
   };
 
   const useAIOptimization = async (modelId: string) => {
+    console.log(`🤖 AI button clicked for ${modelId} (legacy hook)`);
     isTogglingAIManualRef.current = true;
-    
-    const preferences = loadManualAIPreferences();
-    const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = 'ai';
-    saveManualAIPreferences(preferences);
-    setSelectedMethod(selectedSKU, modelId, 'ai');
-    
-    // Check cache first
-    let optimizationCache = {};
-    try {
-      const stored = localStorage.getItem('forecast_optimization_cache');
-      optimizationCache = stored ? JSON.parse(stored) : {};
-    } catch {
-      optimizationCache = {};
-    }
     
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
-    const cached = optimizationCache[selectedSKU]?.[modelId];
     
-    if (cached?.ai && cached.ai.dataHash === currentDataHash) {
-      // Cache will trigger model update via cacheVersion
-    } else {
-      try {
-        const model = models.find(m => m.id === modelId);
-        if (model) {
-          const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
+    // CACHE-FIRST APPROACH: Check if we have valid cached AI results
+    const cachedAI = getCachedParameters(selectedSKU, modelId, 'ai');
+    if (cachedAI && isCacheValid(selectedSKU, modelId, currentDataHash, 'ai')) {
+      console.log(`✅ CACHE HIT: Using cached AI result for ${modelId} - no API call needed! (legacy)`);
+      
+      // Update preference to AI
+      const preferences = loadManualAIPreferences();
+      const preferenceKey = `${selectedSKU}:${modelId}`;
+      preferences[preferenceKey] = 'ai';
+      saveManualAIPreferences(preferences);
+      setSelectedMethod(selectedSKU, modelId, 'ai');
+      
+      // Cache will trigger model update via cacheVersion - but also apply immediately
+      setModels(prev => prev.map(model => 
+        model.id === modelId 
+          ? { 
+              ...model, 
+              optimizedParameters: cachedAI.parameters,
+              optimizationConfidence: cachedAI.confidence,
+              optimizationReasoning: cachedAI.reasoning,
+              optimizationFactors: cachedAI.factors,
+              expectedAccuracy: cachedAI.expectedAccuracy,
+              optimizationMethod: cachedAI.method
+            }
+          : model
+      ));
+      
+      isTogglingAIManualRef.current = false;
+      return;
+    }
+    
+    console.log(`🚀 CACHE MISS: No valid cached AI result, making fresh API call for ${modelId} (legacy)`);
+    
+    // Only call API if cache miss or invalid cache
+    try {
+      const model = models.find(m => m.id === modelId);
+      if (model) {
+        const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
+        
+        if (result) {
+          // Update preference to AI
+          const preferences = loadManualAIPreferences();
+          const preferenceKey = `${selectedSKU}:${modelId}`;
+          preferences[preferenceKey] = 'ai';
+          saveManualAIPreferences(preferences);
+          setSelectedMethod(selectedSKU, modelId, 'ai');
           
-          if (result) {
-            setCachedParameters(
-              selectedSKU, 
-              modelId, 
-              result.parameters, 
-              currentDataHash,
-              result.confidence,
-              result.reasoning,
-              result.factors,
-              result.expectedAccuracy,
-              result.method
-            );
-          }
+          setCachedParameters(
+            selectedSKU, 
+            modelId, 
+            result.parameters, 
+            currentDataHash,
+            result.confidence,
+            result.reasoning,
+            result.factors,
+            result.expectedAccuracy,
+            result.method
+          );
         }
-      } catch (error) {
-        console.error('AI optimization failed:', error);
       }
+    } catch (error) {
+      console.error('AI optimization failed:', error);
     }
     
     setTimeout(() => {
@@ -198,52 +218,74 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
   };
 
   const useGridOptimization = async (modelId: string) => {
+    console.log(`📊 Grid button clicked for ${modelId} (legacy hook)`);
     isTogglingAIManualRef.current = true;
-    
-    const preferences = loadManualAIPreferences();
-    const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = 'grid';
-    saveManualAIPreferences(preferences);
-    setSelectedMethod(selectedSKU, modelId, 'grid');
-    
-    // Check cache first
-    let optimizationCache = {};
-    try {
-      const stored = localStorage.getItem('forecast_optimization_cache');
-      optimizationCache = stored ? JSON.parse(stored) : {};
-    } catch {
-      optimizationCache = {};
-    }
     
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
-    const cached = optimizationCache[selectedSKU]?.[modelId];
     
-    if (cached?.grid && cached.grid.dataHash === currentDataHash) {
-      // Cache will trigger model update via cacheVersion
-    } else {
-      try {
-        const model = models.find(m => m.id === modelId);
-        if (model) {
-          const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
+    // CACHE-FIRST APPROACH: Check if we have valid cached Grid results
+    const cachedGrid = getCachedParameters(selectedSKU, modelId, 'grid');
+    if (cachedGrid && isCacheValid(selectedSKU, modelId, currentDataHash, 'grid')) {
+      console.log(`✅ CACHE HIT: Using cached Grid result for ${modelId} - no optimization needed! (legacy)`);
+      
+      // Update preference to Grid
+      const preferences = loadManualAIPreferences();
+      const preferenceKey = `${selectedSKU}:${modelId}`;
+      preferences[preferenceKey] = 'grid';
+      saveManualAIPreferences(preferences);
+      setSelectedMethod(selectedSKU, modelId, 'grid');
+      
+      // Apply cached Grid parameters immediately
+      setModels(prev => prev.map(model => 
+        model.id === modelId 
+          ? { 
+              ...model, 
+              optimizedParameters: cachedGrid.parameters,
+              optimizationConfidence: cachedGrid.confidence,
+              optimizationReasoning: cachedGrid.reasoning,
+              optimizationFactors: cachedGrid.factors,
+              expectedAccuracy: cachedGrid.expectedAccuracy,
+              optimizationMethod: cachedGrid.method
+            }
+          : model
+      ));
+      
+      isTogglingAIManualRef.current = false;
+      return;
+    }
+    
+    console.log(`🚀 CACHE MISS: No valid cached Grid result, running fresh optimization for ${modelId} (legacy)`);
+    
+    // Only run optimization if cache miss or invalid cache
+    try {
+      const model = models.find(m => m.id === modelId);
+      if (model) {
+        const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
+        
+        if (result) {
+          // Update preference to Grid
+          const preferences = loadManualAIPreferences();
+          const preferenceKey = `${selectedSKU}:${modelId}`;
+          preferences[preferenceKey] = 'grid';
+          saveManualAIPreferences(preferences);
+          setSelectedMethod(selectedSKU, modelId, 'grid');
           
-          if (result) {
-            setCachedParameters(
-              selectedSKU, 
-              modelId, 
-              result.parameters, 
-              currentDataHash,
-              result.confidence,
-              result.reasoning,
-              result.factors,
-              result.expectedAccuracy,
-              result.method
-            );
-          }
+          setCachedParameters(
+            selectedSKU, 
+            modelId, 
+            result.parameters, 
+            currentDataHash,
+            result.confidence,
+            result.reasoning,
+            result.factors,
+            result.expectedAccuracy,
+            result.method
+          );
         }
-      } catch (error) {
-        console.error('Grid optimization failed:', error);
       }
+    } catch (error) {
+      console.error('Grid optimization failed:', error);
     }
     
     setTimeout(() => {
