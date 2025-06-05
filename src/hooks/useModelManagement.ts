@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -14,71 +15,43 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     getCachedParameters, 
     setCachedParameters,
     setSelectedMethod,
-    cache,
-    cacheVersion // Add this to track cache changes
+    cacheVersion
   } = useOptimizationCache();
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
   const { createModelsWithPreferences } = useModelPreferences(selectedSKU, data);
   const isTogglingAIManualRef = useRef<boolean>(false);
   const lastSelectedSKURef = useRef<string>('');
-  const lastCacheVersionRef = useRef<number>(0);
 
   const [models, setModels] = useState<ModelConfig[]>(() => {
     console.log('🎯 INITIAL STATE CREATION WITH AI-DEFAULT');
     return getDefaultModels();
   });
 
+  // Function to refresh models by reading directly from localStorage (like cache debugger)
+  const refreshModels = useCallback(() => {
+    if (!selectedSKU || isTogglingAIManualRef.current) return;
+    
+    console.log('🔄 REFRESH MODELS: Reading optimization cache from localStorage for', selectedSKU);
+    const modelsWithPreferences = createModelsWithPreferences();
+    setModels(modelsWithPreferences);
+  }, [selectedSKU, createModelsWithPreferences]);
+
   // Effect to update models when SKU changes
   useEffect(() => {
     if (selectedSKU && selectedSKU !== lastSelectedSKURef.current) {
       console.log(`🔄 SKU CHANGED: ${lastSelectedSKURef.current} -> ${selectedSKU}, recreating models`);
-      const modelsWithPreferences = createModelsWithPreferences();
-      setModels(modelsWithPreferences);
+      refreshModels();
       lastSelectedSKURef.current = selectedSKU;
     }
-  }, [selectedSKU, createModelsWithPreferences]);
+  }, [selectedSKU, refreshModels]);
 
-  // NEW: React to cache version changes for real-time updates
+  // Single effect to handle cache version changes - this mirrors the cache debugger approach
   useEffect(() => {
-    if (selectedSKU && cacheVersion !== lastCacheVersionRef.current && !isTogglingAIManualRef.current) {
-      console.log(`🔄 CACHE VERSION CHANGED: ${lastCacheVersionRef.current} -> ${cacheVersion}, updating models for ${selectedSKU}`);
-      const modelsWithPreferences = createModelsWithPreferences();
-      setModels(modelsWithPreferences);
-      lastCacheVersionRef.current = cacheVersion;
+    if (selectedSKU && cacheVersion > 0) {
+      console.log(`🔄 CACHE VERSION CHANGED: ${cacheVersion}, refreshing models for ${selectedSKU}`);
+      refreshModels();
     }
-  }, [cacheVersion, selectedSKU, createModelsWithPreferences]);
-
-  // Enhanced effect to update models when cache changes (after optimization)
-  useEffect(() => {
-    if (selectedSKU && cache[selectedSKU] && !isTogglingAIManualRef.current) {
-      // Use a simple cache change detection
-      const currentCacheTime = Date.now();
-      if (currentCacheTime - lastCacheVersionRef.current > 100) { // Debounce rapid updates
-        console.log('🔄 CACHE UPDATED: Updating models state after optimization for', selectedSKU);
-        const modelsWithPreferences = createModelsWithPreferences();
-        setModels(modelsWithPreferences);
-        lastCacheVersionRef.current = currentCacheTime;
-      }
-    }
-  }, [cache, selectedSKU, createModelsWithPreferences]);
-
-  // Additional effect to force model refresh when new optimization results arrive
-  useEffect(() => {
-    if (selectedSKU && cache[selectedSKU]) {
-      const skuCache = cache[selectedSKU];
-      const hasOptimizationResults = Object.values(skuCache).some(modelCache => 
-        modelCache.ai || modelCache.grid
-      );
-      
-      if (hasOptimizationResults && !isTogglingAIManualRef.current) {
-        console.log('🚀 OPTIMIZATION RESULTS DETECTED: Force refreshing models for', selectedSKU);
-        setTimeout(() => {
-          const modelsWithPreferences = createModelsWithPreferences();
-          setModels(modelsWithPreferences);
-        }, 50);
-      }
-    }
-  }, [cache, selectedSKU, createModelsWithPreferences]);
+  }, [cacheVersion, selectedSKU, refreshModels]);
 
   const toggleModel = (modelId: string) => {
     setModels(prev => prev.map(model => 
@@ -204,19 +177,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
               result.method
             );
             
-            setModels(prev => prev.map(m => 
-              m.id === modelId 
-                ? { 
-                    ...m, 
-                    optimizedParameters: result.parameters,
-                    optimizationConfidence: result.confidence,
-                    optimizationReasoning: result.reasoning,
-                    optimizationFactors: result.factors,
-                    expectedAccuracy: result.expectedAccuracy,
-                    optimizationMethod: result.method
-                  }
-                : m
-            ));
+            // The cache version change will trigger refreshModels automatically
           } else {
             console.log(`❌ USE AI: AI optimization failed for ${preferenceKey}, trying Grid fallback`);
             preferences[preferenceKey] = 'grid';
@@ -325,19 +286,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
               result.method
             );
             
-            setModels(prev => prev.map(m => 
-              m.id === modelId 
-                ? { 
-                    ...m, 
-                    optimizedParameters: result.parameters,
-                    optimizationConfidence: result.confidence,
-                    optimizationReasoning: result.reasoning,
-                    optimizationFactors: result.factors,
-                    expectedAccuracy: result.expectedAccuracy,
-                    optimizationMethod: result.method
-                  }
-                : m
-            ));
+            // The cache version change will trigger refreshModels automatically
           } else {
             console.log(`❌ GRID: Fresh Grid optimization failed for ${preferenceKey}`);
           }
@@ -386,10 +335,9 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
   const refreshModelsWithPreferences = useCallback(() => {
     if (!isTogglingAIManualRef.current) {
       console.log('🔄 REFRESH: Manually refreshing models with preferences');
-      const modelsWithPreferences = createModelsWithPreferences();
-      setModels(modelsWithPreferences);
+      refreshModels();
     }
-  }, [createModelsWithPreferences]);
+  }, [refreshModels]);
 
   return {
     models,
