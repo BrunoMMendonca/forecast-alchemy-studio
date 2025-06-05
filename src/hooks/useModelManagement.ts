@@ -4,54 +4,117 @@ import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
 import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
-import { useManualAIPreferences, PreferenceValue } from '@/hooks/useManualAIPreferences';
-import { useModelPreferences } from '@/hooks/useModelPreferences';
+import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 import { getOptimizationByMethod } from '@/utils/singleModelOptimization';
 import { BusinessContext } from '@/types/businessContext';
 
 export const useModelManagement = (selectedSKU: string, data: SalesData[], businessContext?: BusinessContext) => {
   const { 
     generateDataHash, 
-    getCachedParameters, 
     setCachedParameters,
     setSelectedMethod,
     cacheVersion
   } = useOptimizationCache();
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
-  const { createModelsWithPreferences } = useModelPreferences(selectedSKU, data);
   const isTogglingAIManualRef = useRef<boolean>(false);
-  const lastSelectedSKURef = useRef<string>('');
 
   const [models, setModels] = useState<ModelConfig[]>(() => {
-    console.log('🎯 INITIAL STATE CREATION WITH AI-DEFAULT');
+    console.log('🎯 INITIAL STATE: Creating default models');
     return getDefaultModels();
   });
 
-  // Function to refresh models by reading directly from localStorage (like cache debugger)
-  const refreshModels = useCallback(() => {
-    if (!selectedSKU || isTogglingAIManualRef.current) return;
-    
-    console.log('🔄 REFRESH MODELS: Reading optimization cache from localStorage for', selectedSKU);
-    const modelsWithPreferences = createModelsWithPreferences();
-    setModels(modelsWithPreferences);
-  }, [selectedSKU, createModelsWithPreferences]);
-
-  // Effect to update models when SKU changes
-  useEffect(() => {
-    if (selectedSKU && selectedSKU !== lastSelectedSKURef.current) {
-      console.log(`🔄 SKU CHANGED: ${lastSelectedSKURef.current} -> ${selectedSKU}, recreating models`);
-      refreshModels();
-      lastSelectedSKURef.current = selectedSKU;
+  // Direct localStorage reader like the debugger uses
+  const readOptimizationCacheFromStorage = useCallback(() => {
+    try {
+      const stored = localStorage.getItem('forecast_optimization_cache');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
     }
-  }, [selectedSKU, refreshModels]);
+  }, []);
 
-  // Single effect to handle cache version changes - this mirrors the cache debugger approach
+  const readPreferencesFromStorage = useCallback(() => {
+    try {
+      const stored = localStorage.getItem('manual_ai_preferences');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  }, []);
+
+  // Create models with current cache and preferences (like debugger does)
+  const createModelsWithCurrentData = useCallback(() => {
+    if (!selectedSKU || isTogglingAIManualRef.current) {
+      return getDefaultModels();
+    }
+
+    console.log('🔄 CREATING MODELS: Reading fresh data from localStorage for', selectedSKU);
+    
+    const optimizationCache = readOptimizationCacheFromStorage();
+    const preferences = readPreferencesFromStorage();
+    const skuData = data.filter(d => d.sku === selectedSKU);
+    const currentDataHash = generateDataHash(skuData);
+
+    return getDefaultModels().map(model => {
+      const preferenceKey = `${selectedSKU}:${model.id}`;
+      const preference = preferences[preferenceKey] || 'ai';
+      const cached = optimizationCache[selectedSKU]?.[model.id];
+
+      console.log(`📋 MODEL ${model.id}: preference=${preference}, hasCache=${!!cached}`);
+
+      if (preference === 'manual') {
+        return model;
+      }
+
+      // For AI/Grid preference, try to get the preferred method first
+      let selectedCache = null;
+      if (preference === 'ai' && cached?.ai && cached.ai.dataHash === currentDataHash) {
+        selectedCache = cached.ai;
+      } else if (preference === 'grid' && cached?.grid && cached.grid.dataHash === currentDataHash) {
+        selectedCache = cached.grid;
+      } else {
+        // Fallback to any valid cache
+        if (cached?.ai && cached.ai.dataHash === currentDataHash) {
+          selectedCache = cached.ai;
+        } else if (cached?.grid && cached.grid.dataHash === currentDataHash) {
+          selectedCache = cached.grid;
+        }
+      }
+
+      if (selectedCache) {
+        console.log(`✅ USING CACHE: ${model.id} with method ${selectedCache.method}`);
+        return {
+          ...model,
+          optimizedParameters: selectedCache.parameters,
+          optimizationConfidence: selectedCache.confidence,
+          optimizationReasoning: selectedCache.reasoning,
+          optimizationFactors: selectedCache.factors,
+          expectedAccuracy: selectedCache.expectedAccuracy,
+          optimizationMethod: selectedCache.method
+        };
+      }
+
+      return model;
+    });
+  }, [selectedSKU, data, generateDataHash, readOptimizationCacheFromStorage, readPreferencesFromStorage]);
+
+  // Single effect that updates models when cache version changes (like debugger)
   useEffect(() => {
     if (selectedSKU && cacheVersion > 0) {
-      console.log(`🔄 CACHE VERSION CHANGED: ${cacheVersion}, refreshing models for ${selectedSKU}`);
-      refreshModels();
+      console.log(`🔄 CACHE VERSION CHANGED: ${cacheVersion}, updating models for ${selectedSKU}`);
+      const updatedModels = createModelsWithCurrentData();
+      setModels(updatedModels);
     }
-  }, [cacheVersion, selectedSKU, refreshModels]);
+  }, [cacheVersion, selectedSKU, createModelsWithCurrentData]);
+
+  // Effect for SKU changes
+  useEffect(() => {
+    if (selectedSKU) {
+      console.log(`🔄 SKU CHANGED: Updating models for ${selectedSKU}`);
+      const updatedModels = createModelsWithCurrentData();
+      setModels(updatedModels);
+    }
+  }, [selectedSKU, createModelsWithCurrentData]);
 
   const toggleModel = (modelId: string) => {
     setModels(prev => prev.map(model => 
@@ -96,100 +159,44 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
+    preferences[preferenceKey] = 'ai';
+    saveManualAIPreferences(preferences);
+    setSelectedMethod(selectedSKU, modelId, 'ai');
     
-    // First, try to get cached AI results
-    let cached = getCachedParameters(selectedSKU, modelId, 'ai');
+    // Check cache first
+    const optimizationCache = readOptimizationCacheFromStorage();
+    const skuData = data.filter(d => d.sku === selectedSKU);
+    const currentDataHash = generateDataHash(skuData);
+    const cached = optimizationCache[selectedSKU]?.[modelId];
     
-    // If no AI cache found, try fallback to Grid cache
-    if (!cached) {
-      console.log(`🔍 AI FALLBACK: No AI cache for ${preferenceKey}, checking Grid cache`);
-      cached = getCachedParameters(selectedSKU, modelId, 'grid');
-      if (cached) {
-        console.log(`✅ AI FALLBACK: Using Grid cache for ${preferenceKey}`);
-      }
-    }
-    
-    if (cached) {
-      console.log(`✅ USE AI: Using cached result for ${preferenceKey} (method: ${cached.method})`);
-      
-      // Set preference to AI regardless of cached method
-      preferences[preferenceKey] = 'ai';
-      saveManualAIPreferences(preferences);
-      setSelectedMethod(selectedSKU, modelId, 'ai');
-      
-      console.log(`🎯 PREFERENCE: Set ${preferenceKey} to AI (using cache)`);
-      
-      setModels(prev => prev.map(model => 
-        model.id === modelId 
-          ? { 
-              ...model, 
-              optimizedParameters: cached.parameters,
-              optimizationConfidence: cached.confidence,
-              optimizationReasoning: cached.reasoning,
-              optimizationFactors: cached.factors,
-              expectedAccuracy: cached.expectedAccuracy,
-              optimizationMethod: cached.method
-            }
-          : model
-      ));
+    if (cached?.ai && cached.ai.dataHash === currentDataHash) {
+      console.log(`✅ USE AI: Using cached AI result for ${preferenceKey}`);
+      // Cache will trigger model update via cacheVersion
     } else {
-      console.log(`🔄 USE AI: No cache found, running fresh AI optimization for ${preferenceKey}`);
-      
-      // Set preference to AI before optimization
-      preferences[preferenceKey] = 'ai';
-      saveManualAIPreferences(preferences);
-      setSelectedMethod(selectedSKU, modelId, 'ai');
-      
-      // Show pending state
-      setModels(prev => prev.map(model => 
-        model.id === modelId 
-          ? { 
-              ...model, 
-              optimizedParameters: undefined,
-              optimizationConfidence: undefined,
-              optimizationReasoning: 'AI optimization pending...',
-              optimizationFactors: undefined,
-              expectedAccuracy: undefined,
-              optimizationMethod: 'ai_optimization'
-            }
-          : model
-      ));
+      console.log(`🔄 USE AI: Running fresh AI optimization for ${preferenceKey}`);
       
       try {
         const model = models.find(m => m.id === modelId);
         if (model) {
-          const skuData = data.filter(d => d.sku === selectedSKU);
-          
           const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
           
           if (result) {
             console.log(`✅ USE AI: Fresh AI optimization succeeded for ${preferenceKey}`);
-            const dataHash = generateDataHash(skuData);
             setCachedParameters(
               selectedSKU, 
               modelId, 
               result.parameters, 
-              dataHash,
+              currentDataHash,
               result.confidence,
               result.reasoning,
               result.factors,
               result.expectedAccuracy,
               result.method
             );
-            
-            // The cache version change will trigger refreshModels automatically
-          } else {
-            console.log(`❌ USE AI: AI optimization failed for ${preferenceKey}, trying Grid fallback`);
-            preferences[preferenceKey] = 'grid';
-            saveManualAIPreferences(preferences);
-            await useGridOptimization(modelId);
           }
         }
       } catch (error) {
         console.error('AI optimization failed:', error);
-        preferences[preferenceKey] = 'grid';
-        saveManualAIPreferences(preferences);
-        await useGridOptimization(modelId);
       }
     }
     
@@ -204,91 +211,40 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
+    preferences[preferenceKey] = 'grid';
+    saveManualAIPreferences(preferences);
+    setSelectedMethod(selectedSKU, modelId, 'grid');
     
-    // Try to get cached Grid results first
-    let cached = getCachedParameters(selectedSKU, modelId, 'grid');
+    // Check cache first
+    const optimizationCache = readOptimizationCacheFromStorage();
+    const skuData = data.filter(d => d.sku === selectedSKU);
+    const currentDataHash = generateDataHash(skuData);
+    const cached = optimizationCache[selectedSKU]?.[modelId];
     
-    // If no Grid cache found, try fallback to AI cache
-    if (!cached) {
-      console.log(`🤖 GRID FALLBACK: No Grid cache for ${preferenceKey}, checking AI cache`);
-      cached = getCachedParameters(selectedSKU, modelId, 'ai');
-      if (cached) {
-        console.log(`✅ GRID FALLBACK: Using AI cache for ${preferenceKey}`);
-      }
-    }
-    
-    if (cached) {
-      console.log(`✅ GRID: Using cached result for ${preferenceKey} (method: ${cached.method})`);
-      
-      // Set preference to Grid regardless of cached method
-      preferences[preferenceKey] = 'grid';
-      saveManualAIPreferences(preferences);
-      setSelectedMethod(selectedSKU, modelId, 'grid');
-      
-      console.log(`🎯 PREFERENCE: Set ${preferenceKey} to Grid (using cache)`);
-      
-      setModels(prev => prev.map(model => 
-        model.id === modelId 
-          ? { 
-              ...model, 
-              optimizedParameters: cached.parameters,
-              optimizationConfidence: cached.confidence,
-              optimizationReasoning: cached.reasoning,
-              optimizationFactors: cached.factors,
-              expectedAccuracy: cached.expectedAccuracy,
-              optimizationMethod: cached.method
-            }
-          : model
-      ));
+    if (cached?.grid && cached.grid.dataHash === currentDataHash) {
+      console.log(`✅ GRID: Using cached Grid result for ${preferenceKey}`);
+      // Cache will trigger model update via cacheVersion
     } else {
-      console.log(`🔄 GRID: No cache found, running fresh Grid optimization for ${preferenceKey}`);
-      
-      // Set preference to Grid before optimization
-      preferences[preferenceKey] = 'grid';
-      saveManualAIPreferences(preferences);
-      setSelectedMethod(selectedSKU, modelId, 'grid');
-      
-      // Show pending state
-      setModels(prev => prev.map(model => 
-        model.id === modelId 
-          ? { 
-              ...model, 
-              optimizedParameters: undefined,
-              optimizationConfidence: undefined,
-              optimizationReasoning: 'Grid optimization pending...',
-              optimizationFactors: undefined,
-              expectedAccuracy: undefined,
-              optimizationMethod: 'grid_search'
-            }
-          : model
-      ));
+      console.log(`🔄 GRID: Running fresh Grid optimization for ${preferenceKey}`);
       
       try {
         const model = models.find(m => m.id === modelId);
         if (model) {
-          const skuData = data.filter(d => d.sku === selectedSKU);
-          
           const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
           
           if (result) {
             console.log(`✅ GRID: Fresh Grid optimization succeeded for ${preferenceKey}`);
-            const dataHash = generateDataHash(skuData);
-            
             setCachedParameters(
               selectedSKU, 
               modelId, 
               result.parameters, 
-              dataHash,
+              currentDataHash,
               result.confidence,
               result.reasoning,
               result.factors,
               result.expectedAccuracy,
               result.method
             );
-            
-            // The cache version change will trigger refreshModels automatically
-          } else {
-            console.log(`❌ GRID: Fresh Grid optimization failed for ${preferenceKey}`);
           }
         }
       } catch (error) {
@@ -311,8 +267,6 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     saveManualAIPreferences(preferences);
     setSelectedMethod(selectedSKU, modelId, 'manual');
 
-    console.log(`PREFERENCE: Updated ${preferenceKey} to manual (reset)`);
-
     setModels(prev => prev.map(model => 
       model.id === modelId 
         ? { 
@@ -334,15 +288,16 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
 
   const refreshModelsWithPreferences = useCallback(() => {
     if (!isTogglingAIManualRef.current) {
-      console.log('🔄 REFRESH: Manually refreshing models with preferences');
-      refreshModels();
+      console.log('🔄 REFRESH: Manually refreshing models');
+      const updatedModels = createModelsWithCurrentData();
+      setModels(updatedModels);
     }
-  }, [refreshModels]);
+  }, [createModelsWithCurrentData]);
 
   return {
     models,
     setModels,
-    createModelsWithPreferences,
+    createModelsWithPreferences: createModelsWithCurrentData,
     refreshModelsWithPreferences,
     toggleModel,
     updateParameter,
