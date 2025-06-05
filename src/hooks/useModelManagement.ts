@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -88,15 +89,29 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = 'ai';
-    saveManualAIPreferences(preferences);
-    setSelectedMethod(selectedSKU, modelId, 'ai');
-
-    console.log(`PREFERENCE: Updated ${preferenceKey} to AI`);
-
-    const cached = getCachedParameters(selectedSKU, modelId, 'ai');
+    
+    // First, try to get cached AI results
+    let cached = getCachedParameters(selectedSKU, modelId, 'ai');
+    
+    // If no AI cache found, try fallback to Grid cache
+    if (!cached) {
+      console.log(`🔍 AI FALLBACK: No AI cache for ${preferenceKey}, checking Grid cache`);
+      cached = getCachedParameters(selectedSKU, modelId, 'grid');
+      if (cached) {
+        console.log(`✅ AI FALLBACK: Using Grid cache for ${preferenceKey}`);
+      }
+    }
+    
     if (cached) {
-      console.log(`✅ USE AI: Using cached AI result for ${preferenceKey}`);
+      console.log(`✅ USE AI: Using cached result for ${preferenceKey} (method: ${cached.method})`);
+      
+      // Set preference to AI regardless of cached method
+      preferences[preferenceKey] = 'ai';
+      saveManualAIPreferences(preferences);
+      setSelectedMethod(selectedSKU, modelId, 'ai');
+      
+      console.log(`🎯 PREFERENCE: Set ${preferenceKey} to AI (using cache)`);
+      
       setModels(prev => prev.map(model => 
         model.id === modelId 
           ? { 
@@ -111,7 +126,28 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
           : model
       ));
     } else {
-      console.log(`🔄 USE AI: Running fresh AI optimization for ${preferenceKey}`);
+      console.log(`🔄 USE AI: No cache found, running fresh AI optimization for ${preferenceKey}`);
+      
+      // Set preference to AI before optimization
+      preferences[preferenceKey] = 'ai';
+      saveManualAIPreferences(preferences);
+      setSelectedMethod(selectedSKU, modelId, 'ai');
+      
+      // Show pending state
+      setModels(prev => prev.map(model => 
+        model.id === modelId 
+          ? { 
+              ...model, 
+              optimizedParameters: undefined,
+              optimizationConfidence: undefined,
+              optimizationReasoning: 'AI optimization pending...',
+              optimizationFactors: undefined,
+              expectedAccuracy: undefined,
+              optimizationMethod: 'ai_optimization'
+            }
+          : model
+      ));
+      
       try {
         const model = models.find(m => m.id === modelId);
         if (model) {
@@ -173,15 +209,29 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = 'grid';
-    saveManualAIPreferences(preferences);
-    setSelectedMethod(selectedSKU, modelId, 'grid');
-
-    console.log(`🔍 GRID: Set preference to 'grid' for ${preferenceKey}`);
-
-    const cached = getCachedParameters(selectedSKU, modelId, 'grid');
+    
+    // Try to get cached Grid results first
+    let cached = getCachedParameters(selectedSKU, modelId, 'grid');
+    
+    // If no Grid cache found, try fallback to AI cache
+    if (!cached) {
+      console.log(`🤖 GRID FALLBACK: No Grid cache for ${preferenceKey}, checking AI cache`);
+      cached = getCachedParameters(selectedSKU, modelId, 'ai');
+      if (cached) {
+        console.log(`✅ GRID FALLBACK: Using AI cache for ${preferenceKey}`);
+      }
+    }
+    
     if (cached) {
-      console.log(`🔍 GRID: Using cached Grid result for ${preferenceKey}`);
+      console.log(`✅ GRID: Using cached result for ${preferenceKey} (method: ${cached.method})`);
+      
+      // Set preference to Grid regardless of cached method
+      preferences[preferenceKey] = 'grid';
+      saveManualAIPreferences(preferences);
+      setSelectedMethod(selectedSKU, modelId, 'grid');
+      
+      console.log(`🎯 PREFERENCE: Set ${preferenceKey} to Grid (using cache)`);
+      
       setModels(prev => prev.map(model => 
         model.id === modelId 
           ? { 
@@ -196,7 +246,28 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
           : model
       ));
     } else {
-      console.log(`🔍 GRID: Running fresh Grid optimization for ${preferenceKey}`);
+      console.log(`🔄 GRID: No cache found, running fresh Grid optimization for ${preferenceKey}`);
+      
+      // Set preference to Grid before optimization
+      preferences[preferenceKey] = 'grid';
+      saveManualAIPreferences(preferences);
+      setSelectedMethod(selectedSKU, modelId, 'grid');
+      
+      // Show pending state
+      setModels(prev => prev.map(model => 
+        model.id === modelId 
+          ? { 
+              ...model, 
+              optimizedParameters: undefined,
+              optimizationConfidence: undefined,
+              optimizationReasoning: 'Grid optimization pending...',
+              optimizationFactors: undefined,
+              expectedAccuracy: undefined,
+              optimizationMethod: 'grid_search'
+            }
+          : model
+      ));
+      
       try {
         const model = models.find(m => m.id === modelId);
         if (model) {
@@ -205,7 +276,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
           const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
           
           if (result) {
-            console.log(`🔍 GRID: Fresh Grid optimization succeeded for ${preferenceKey}`);
+            console.log(`✅ GRID: Fresh Grid optimization succeeded for ${preferenceKey}`);
             const dataHash = generateDataHash(skuData);
             
             setCachedParameters(
@@ -234,7 +305,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
                 : m
             ));
           } else {
-            console.log(`🔍 GRID: Fresh Grid optimization failed for ${preferenceKey}`);
+            console.log(`❌ GRID: Fresh Grid optimization failed for ${preferenceKey}`);
           }
         }
       } catch (error) {

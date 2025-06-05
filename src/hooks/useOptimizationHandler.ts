@@ -76,8 +76,9 @@ export const useOptimizationHandler = (
         
         // Save to cache first
         setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
+        console.log(`💾 CACHE SAVE: Saved ${method} results for ${sku}:${modelId}`);
         
-        // Save preference based on optimization method
+        // Determine preference based on optimization method
         const preferences = loadManualAIPreferences();
         const preferenceKey = `${sku}:${modelId}`;
         let newPreference: PreferenceValue = 'ai'; // Default to AI
@@ -88,12 +89,13 @@ export const useOptimizationHandler = (
           newPreference = 'ai';
         }
         
+        // Save preference with immediate effect
         preferences[preferenceKey] = newPreference;
         saveManualAIPreferences(preferences);
         
-        console.log(`✅ PREFERENCE: Set ${preferenceKey} to ${newPreference} after optimization`);
+        console.log(`🎯 PREFERENCE SET: ${preferenceKey} = ${newPreference} (method: ${method})`);
         
-        // Update models state
+        // Update models state immediately with optimized parameters
         setModels(prev => prev.map(model => 
           model.id === modelId 
             ? { 
@@ -107,17 +109,20 @@ export const useOptimizationHandler = (
               }
             : model
         ));
+        
+        console.log(`🔄 MODEL STATE: Updated model ${modelId} with optimized parameters`);
       },
       (sku) => {
         console.log(`🏁 OPTIMIZATION COMPLETE: Finished optimizing ${sku}`);
         optimizationQueue.removeSKUsFromQueue([sku]);
         
-        // Trigger forecast generation for this SKU if it's the currently selected one
+        // Trigger forecast generation for the selected SKU immediately
         if (sku === selectedSKU && onOptimizationComplete) {
           console.log(`🎯 TRIGGERING FORECAST: Optimization complete for selected SKU ${sku}`);
+          // Add a small delay to ensure all state updates are complete
           setTimeout(() => {
             onOptimizationComplete();
-          }, 100);
+          }, 200);
         }
       },
       getSKUsNeedingOptimization
