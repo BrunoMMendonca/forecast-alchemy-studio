@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -6,7 +5,7 @@ import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronRight, Settings, Robot, Grid3X3, User } from 'lucide-react';
+import { ChevronDown, ChevronRight, Settings, Bot, Grid3X3, User } from 'lucide-react';
 import { ModelConfig } from '@/types/forecast';
 import { ReasoningDisplay } from './ReasoningDisplay';
 
@@ -98,7 +97,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     onUseAI();
                   }}
                 >
-                  <Robot className="h-3 w-3 mr-1" />
+                  <Bot className="h-3 w-3 mr-1" />
                   AI
                 </Badge>
 
