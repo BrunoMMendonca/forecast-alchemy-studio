@@ -1,8 +1,5 @@
-
 import React, { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Upload, FileText, CheckCircle, RefreshCw } from 'lucide-react';
 import { SalesData } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -188,20 +185,15 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         )}
       </div>
 
-      {/* File Input */}
-      <div className="space-y-2">
-        <Label htmlFor="file-upload">
-          {hasExistingData ? 'Upload New CSV File' : 'Upload CSV File'}
-        </Label>
-        <Input
-          id="file-upload"
-          type="file"
-          accept=".csv"
-          onChange={handleFileInput}
-          disabled={isProcessing}
-          className="cursor-pointer"
-        />
-      </div>
+      {/* Hidden File Input */}
+      <input
+        id="file-upload"
+        type="file"
+        accept=".csv"
+        onChange={handleFileInput}
+        disabled={isProcessing}
+        className="hidden"
+      />
 
       {/* Processing State */}
       {isProcessing && (
@@ -210,21 +202,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           <span>Processing file...</span>
         </div>
       )}
-
-      {/* Sample Format */}
-      <div className="bg-slate-100 rounded-lg p-4">
-        <h4 className="font-semibold text-slate-700 mb-2 flex items-center gap-2">
-          <FileText className="h-4 w-4" />
-          Expected CSV Format
-        </h4>
-        <div className="text-sm text-slate-600 font-mono bg-white p-2 rounded border">
-          Date,SKU,Sales<br/>
-          2024-01-01,PROD-001,150<br/>
-          2024-01-02,PROD-001,180<br/>
-          2024-01-01,PROD-002,220<br/>
-          ...
-        </div>
-      </div>
     </div>
   );
 };

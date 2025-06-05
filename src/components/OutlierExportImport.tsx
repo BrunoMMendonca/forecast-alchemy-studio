@@ -20,6 +20,14 @@ export const OutlierExportImport: React.FC<OutlierExportImportProps> = ({
       <div className="flex items-center gap-3">
         <Button 
           variant="outline" 
+          onClick={onImportClick}
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Import Cleaning Data
+        </Button>
+        
+        <Button 
+          variant="outline" 
           onClick={onExport}
           disabled={isExportDisabled}
         >
@@ -27,16 +35,8 @@ export const OutlierExportImport: React.FC<OutlierExportImportProps> = ({
           Export Cleaning Data
         </Button>
         
-        <Button 
-          variant="outline" 
-          onClick={onImportClick}
-        >
-          <Download className="h-4 w-4 mr-2" />
-          Import Cleaning Data
-        </Button>
-        
         <div className="text-sm text-slate-600">
-          Export your cleaning changes or import previously saved cleaning data
+          Import previously saved cleaning data or export your cleaning changes
         </div>
       </div>
     </div>

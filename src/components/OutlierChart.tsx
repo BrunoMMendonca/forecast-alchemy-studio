@@ -73,7 +73,7 @@ export const OutlierChart: React.FC<OutlierChartProps> = ({ data, selectedSKU })
               stroke="#94a3b8" 
               strokeWidth={2}
               name="Original Sales"
-              dot={{ r: 3 }}
+              dot={false}
               connectNulls={false}
             />
             <Line 
@@ -82,7 +82,7 @@ export const OutlierChart: React.FC<OutlierChartProps> = ({ data, selectedSKU })
               stroke="#3b82f6" 
               strokeWidth={2}
               name="Cleaned Sales"
-              dot={{ r: 3 }}
+              dot={false}
               connectNulls={false}
             />
           </LineChart>
