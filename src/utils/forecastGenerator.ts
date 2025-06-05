@@ -37,7 +37,6 @@ const calculateStandardizedAccuracy = (actual: number[], predicted: number[]): n
   const mape = (mapeSum / validCount) * 100;
   const accuracy = Math.max(0, 100 - mape);
   
-  console.log(`📊 Accuracy calculation: MAPE=${mape.toFixed(2)}%, Accuracy=${accuracy.toFixed(2)}%`);
   return accuracy;
 };
 
@@ -66,22 +65,17 @@ export const generateForecastsForSKU = async (
   const forecastDates = generateForecastDates(lastDate, forecastPeriods, frequency);
   const results: ForecastResult[] = [];
 
-  console.log(`🎯 Generating forecasts for ${selectedSKU} using standardized accuracy calculation`);
-
   for (const model of enabledModels) {
     const effectiveParameters = model.optimizedParameters || model.parameters;
     const parametersHash = generateParametersHash(model.parameters, model.optimizedParameters);
     
     const cachedForecast = getCachedForecast(selectedSKU, model.name, parametersHash, forecastPeriods);
     if (cachedForecast) {
-      console.log(`📋 Using cached forecast for ${selectedSKU}:${model.name}`);
       results.push(cachedForecast);
       continue;
     }
 
     let predictions: number[] = [];
-
-    console.log(`🔧 Generating ${model.name} with parameters:`, effectiveParameters);
 
     switch (model.id) {
       case 'moving_average':
@@ -136,8 +130,6 @@ export const generateForecastsForSKU = async (
     const syntheticPredicted = predictions.slice(0, recentActual.length);
     const accuracy = calculateStandardizedAccuracy(recentActual, syntheticPredicted);
 
-    console.log(`📊 ${model.name} accuracy: ${accuracy.toFixed(2)}% (using standardized calculation)`);
-
     const result: ForecastResult = {
       sku: selectedSKU,
       model: model.name,
@@ -152,6 +144,5 @@ export const generateForecastsForSKU = async (
     results.push(result);
   }
 
-  console.log(`✅ Generated ${results.length} forecasts for ${selectedSKU} with aligned accuracy metrics`);
   return results;
 };

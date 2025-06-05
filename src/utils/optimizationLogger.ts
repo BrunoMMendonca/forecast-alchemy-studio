@@ -76,13 +76,7 @@ class OptimizationLogger {
         break;
     }
 
-    // Only log essential optimization information
-    if (step.step === 'ai_success') {
-      console.log(`🤖 AI: ${step.sku}:${step.modelId}`);
-    } else if (step.step === 'grid_search') {
-      console.log(`🔍 Grid: ${step.sku}:${step.modelId}`);
-    }
-
+    // Only log essential optimization information - NO verbose console logging
     this.notifyListeners();
   }
 
