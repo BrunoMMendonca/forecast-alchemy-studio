@@ -27,7 +27,9 @@ export const optimizeSingleModel = async (
   sku: string,
   progressUpdater: ProgressUpdater,
   forceGridSearch: boolean = false,
-  businessContext?: BusinessContext
+  businessContext?: BusinessContext,
+  // New: callback for progressive method switching
+  onMethodComplete?: (method: 'grid' | 'ai', result: OptimizationResult | GridOptimizationResult) => void
 ): Promise<{
   selectedResult: OptimizationResult | GridOptimizationResult;
   bothResults?: { ai?: OptimizationResult; grid: GridOptimizationResult };
@@ -63,13 +65,16 @@ export const optimizeSingleModel = async (
 
   if (forceGridSearch) {
     const gridResult = await runGridOptimization(model, skuData, sku);
+    if (onMethodComplete) {
+      onMethodComplete('grid', gridResult);
+    }
     return { 
       selectedResult: gridResult,
       bothResults: { grid: gridResult }
     };
   }
 
-  const results = await runBothOptimizations(model, skuData, sku, progressUpdater, businessContext);
+  const results = await runBothOptimizations(model, skuData, sku, progressUpdater, businessContext, onMethodComplete);
   
   return {
     selectedResult: results.selectedResult,
@@ -82,7 +87,8 @@ const runBothOptimizations = async (
   skuData: SalesData[],
   sku: string,
   progressUpdater: ProgressUpdater,
-  businessContext?: BusinessContext
+  businessContext?: BusinessContext,
+  onMethodComplete?: (method: 'grid' | 'ai', result: OptimizationResult | GridOptimizationResult) => void
 ): Promise<MultiMethodResult> => {
   optimizationLogger.logStep({
     sku,
@@ -103,6 +109,11 @@ const runBothOptimizations = async (
     parameters: gridResult.parameters
   });
 
+  // Notify that grid optimization is complete
+  if (onMethodComplete) {
+    onMethodComplete('grid', gridResult);
+  }
+
   // Step 2: Try AI optimization
   const aiResult = await runAIOptimization(
     model, 
@@ -112,7 +123,7 @@ const runBothOptimizations = async (
     { parameters: gridResult.parameters, accuracy: gridResult.accuracy }
   );
 
-  // Step 3: Select result - AI if successful, otherwise Grid
+  // Step 3: Select result and notify if AI succeeded
   let selectedResult: OptimizationResult | GridOptimizationResult;
   
   if (aiResult) {
@@ -124,6 +135,12 @@ const runBothOptimizations = async (
       message: 'AI optimization succeeded',
       parameters: aiResult.parameters
     });
+    
+    // Notify that AI optimization is complete
+    if (onMethodComplete) {
+      onMethodComplete('ai', aiResult);
+    }
+    
     progressUpdater.setProgress(prev => prev ? { 
       ...prev, 
       aiOptimized: prev.aiOptimized + 1

@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData, ForecastResult } from '@/pages/Index';
@@ -104,6 +103,19 @@ export const useUnifiedModelManagement = (
     }
   }, [selectedSKU, data, modelsHash, forecastPeriods, getCachedForecast, setCachedForecast, generateParametersHash, onForecastGeneration, toast]);
 
+  // Helper function to get the best available method for a model
+  const getBestAvailableMethod = useCallback((sku: string, modelId: string, currentDataHash: string) => {
+    const cached = cache[sku]?.[modelId];
+    if (!cached) return 'manual';
+
+    const hasValidAI = cached.ai && cached.ai.dataHash === currentDataHash;
+    const hasValidGrid = cached.grid && cached.grid.dataHash === currentDataHash;
+
+    if (hasValidAI) return 'ai';
+    if (hasValidGrid) return 'grid';
+    return 'manual';
+  }, [cache]);
+
   // CONTROLLED cache version updates - only process when actually needed
   useEffect(() => {
     if (!selectedSKU) return;
@@ -127,43 +139,45 @@ export const useUnifiedModelManagement = (
 
     const updatedModels = getDefaultModels().map(model => {
       const preferenceKey = `${selectedSKU}:${model.id}`;
-      const preference = preferences[preferenceKey] || 'ai';
-      const cached = cache[selectedSKU]?.[model.id];
+      const storedPreference = preferences[preferenceKey] || 'manual';
+      
+      // Determine the best available method based on cache
+      const bestAvailableMethod = getBestAvailableMethod(selectedSKU, model.id, currentDataHash);
+      
+      // Use stored preference if it's available, otherwise use best available
+      const actualPreference = (() => {
+        const cached = cache[selectedSKU]?.[model.id];
+        if (!cached) return 'manual';
 
-      if (preference === 'manual') {
-        return model;
+        const hasValidAI = cached.ai && cached.ai.dataHash === currentDataHash;
+        const hasValidGrid = cached.grid && cached.grid.dataHash === currentDataHash;
+
+        // If stored preference is available, use it
+        if (storedPreference === 'ai' && hasValidAI) return 'ai';
+        if (storedPreference === 'grid' && hasValidGrid) return 'grid';
+        if (storedPreference === 'manual') return 'manual';
+
+        // Otherwise, use best available
+        return bestAvailableMethod;
+      })();
+
+      const cached = cache[selectedSKU]?.[model.id];
+      let selectedCache = null;
+
+      if (actualPreference === 'ai' && cached?.ai) {
+        selectedCache = cached.ai;
+      } else if (actualPreference === 'grid' && cached?.grid) {
+        selectedCache = cached.grid;
       }
 
-      // For AI/Grid preference, try to get the preferred method first
-      let selectedCache = null;
-      let actualPreference = preference;
-      
-      if (preference === 'ai' && cached?.ai && cached.ai.dataHash === currentDataHash) {
-        selectedCache = cached.ai;
-        actualPreference = 'ai';
-      } else if (preference === 'grid' && cached?.grid && cached.grid.dataHash === currentDataHash) {
-        selectedCache = cached.grid;
-        actualPreference = 'grid';
-      } else {
-        // Fallback to any valid cache and update preference to match
-        if (cached?.ai && cached.ai.dataHash === currentDataHash) {
-          selectedCache = cached.ai;
-          actualPreference = 'ai';
-          // Update preference to match what we're actually using
+      if (selectedCache && selectedCache.dataHash === currentDataHash) {
+        // Update preference to match what we're actually using
+        if (actualPreference !== storedPreference) {
           const updatedPreferences = { ...preferences };
-          updatedPreferences[preferenceKey] = 'ai';
-          saveManualAIPreferences(updatedPreferences);
-        } else if (cached?.grid && cached.grid.dataHash === currentDataHash) {
-          selectedCache = cached.grid;
-          actualPreference = 'grid';
-          // Update preference to match what we're actually using
-          const updatedPreferences = { ...preferences };
-          updatedPreferences[preferenceKey] = 'grid';
+          updatedPreferences[preferenceKey] = actualPreference;
           saveManualAIPreferences(updatedPreferences);
         }
-      }
 
-      if (selectedCache) {
         return {
           ...model,
           optimizedParameters: selectedCache.parameters,
@@ -182,7 +196,7 @@ export const useUnifiedModelManagement = (
     
     // Reset forecast generation hash when models are updated from cache
     lastForecastGenerationHashRef.current = '';
-  }, [cacheVersion, selectedSKU, data, cache, loadManualAIPreferences, saveManualAIPreferences, generateDataHash]);
+  }, [cacheVersion, selectedSKU, data, cache, loadManualAIPreferences, saveManualAIPreferences, generateDataHash, getBestAvailableMethod]);
 
   // CONTROLLED forecast generation - only when models hash actually changes
   useEffect(() => {
@@ -248,12 +262,6 @@ export const useUnifiedModelManagement = (
     console.log(`🤖 Starting AI optimization for ${modelId}`);
     isTogglingAIManualRef.current = true;
     
-    const preferences = loadManualAIPreferences();
-    const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = 'ai';
-    saveManualAIPreferences(preferences);
-    setSelectedMethod(selectedSKU, modelId, 'ai');
-    
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
     
@@ -263,9 +271,16 @@ export const useUnifiedModelManagement = (
         const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
         
         if (result) {
-          console.log(`🎯 AI optimization SUCCESS for ${modelId}, immediately updating state`);
+          console.log(`🎯 AI optimization SUCCESS for ${modelId}, switching to AI method`);
           
-          // First update cache
+          // Update preference to AI
+          const preferences = loadManualAIPreferences();
+          const preferenceKey = `${selectedSKU}:${modelId}`;
+          preferences[preferenceKey] = 'ai';
+          saveManualAIPreferences(preferences);
+          setSelectedMethod(selectedSKU, modelId, 'ai');
+          
+          // Update cache
           setCachedParameters(
             selectedSKU, 
             modelId, 
@@ -278,7 +293,7 @@ export const useUnifiedModelManagement = (
             result.method
           );
           
-          // Then FORCE an immediate model state update
+          // Force immediate model state update
           setModels(prev => {
             const newModels = prev.map(m => 
               m.id === modelId 
@@ -293,7 +308,6 @@ export const useUnifiedModelManagement = (
                   }
                 : m
             );
-            console.log(`🔄 Updated model state for ${modelId}:`, newModels.find(m => m.id === modelId));
             return newModels;
           });
           
@@ -316,12 +330,6 @@ export const useUnifiedModelManagement = (
     console.log(`📊 Starting Grid optimization for ${modelId}`);
     isTogglingAIManualRef.current = true;
     
-    const preferences = loadManualAIPreferences();
-    const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = 'grid';
-    saveManualAIPreferences(preferences);
-    setSelectedMethod(selectedSKU, modelId, 'grid');
-    
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
     
@@ -331,9 +339,16 @@ export const useUnifiedModelManagement = (
         const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
         
         if (result) {
-          console.log(`🎯 Grid optimization SUCCESS for ${modelId}, immediately updating state`);
+          console.log(`🎯 Grid optimization SUCCESS for ${modelId}, switching to Grid method`);
           
-          // First update cache
+          // Update preference to Grid
+          const preferences = loadManualAIPreferences();
+          const preferenceKey = `${selectedSKU}:${modelId}`;
+          preferences[preferenceKey] = 'grid';
+          saveManualAIPreferences(preferences);
+          setSelectedMethod(selectedSKU, modelId, 'grid');
+          
+          // Update cache
           setCachedParameters(
             selectedSKU, 
             modelId, 
@@ -346,7 +361,7 @@ export const useUnifiedModelManagement = (
             result.method
           );
           
-          // Then FORCE an immediate model state update
+          // Force immediate model state update
           setModels(prev => {
             const newModels = prev.map(m => 
               m.id === modelId 
@@ -361,7 +376,6 @@ export const useUnifiedModelManagement = (
                   }
                 : m
             );
-            console.log(`🔄 Updated model state for ${modelId}:`, newModels.find(m => m.id === modelId));
             return newModels;
           });
           
