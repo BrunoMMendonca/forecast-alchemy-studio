@@ -117,7 +117,7 @@ const runBothOptimizations = async (
   optimizationLogger.logStep({
     sku,
     modelId: model.id,
-    step: 'grid_complete',
+    step: 'complete',
     message: `Grid optimization complete: ${gridResult.accuracy.toFixed(2)}% accuracy`,
     parameters: gridResult.parameters
   });
@@ -196,7 +196,7 @@ const runBothOptimizations = async (
       optimizationLogger.logStep({
         sku,
         modelId: model.id,
-        step: 'ai_failed',
+        step: 'error',
         message: `AI optimization failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         error: error instanceof Error ? error.message : 'Unknown error'
       });
@@ -206,7 +206,7 @@ const runBothOptimizations = async (
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
-      step: 'ai_skipped',
+      step: 'validation',
       message: 'AI optimization skipped: invalid API key'
     });
   }
