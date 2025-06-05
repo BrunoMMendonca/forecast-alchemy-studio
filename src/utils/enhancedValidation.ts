@@ -20,13 +20,13 @@ export interface ValidationConfig {
 }
 
 export const ENHANCED_VALIDATION_CONFIG: ValidationConfig = {
-  tolerance: 1.0, // More strict - require meaningful improvement
-  minConfidenceForAcceptance: 75, // Lower threshold but require actual improvement
+  tolerance: 1.0,
+  minConfidenceForAcceptance: 75,
   useMultipleValidationSets: true,
-  roundAIParameters: false, // Don't round immediately
+  roundAIParameters: false,
   useWalkForward: true,
   minValidationSize: 6,
-  recentDataWeight: 1.5 // Weight recent data more heavily
+  recentDataWeight: 1.5
 };
 
 // Calculate multiple metrics for robust validation
@@ -44,7 +44,7 @@ export const calculateMetrics = (actual: number[], predicted: number[], recentWe
   const length = Math.min(actual.length, predicted.length);
   
   for (let i = 0; i < length; i++) {
-    const weight = i >= length - 3 ? recentWeight : 1.0; // Weight recent predictions more
+    const weight = i >= length - 3 ? recentWeight : 1.0;
     
     if (actual[i] !== 0) {
       const error = Math.abs(actual[i] - predicted[i]);
@@ -67,11 +67,29 @@ export const calculateMetrics = (actual: number[], predicted: number[], recentWe
   const rmse = Math.sqrt(rmseSum / totalWeight);
   const accuracy = Math.max(0, 100 - mape);
   
-  // Calculate confidence based on consistency and recent performance
-  const recentActual = actual.slice(-3);
-  const recentPredicted = predicted.slice(-3);
-  const recentMape = recentActual.length > 0 ? 
-    calculateMetrics(recentActual, recentPredicted, 1.0).mape : mape;
+  // Calculate confidence based on consistency and recent performance - FIXED: No recursion
+  let recentMape = mape;
+  if (actual.length >= 3 && predicted.length >= 3) {
+    const recentActualSlice = actual.slice(-3);
+    const recentPredictedSlice = predicted.slice(-3);
+    
+    // Direct calculation without recursion
+    let recentMapeSum = 0;
+    let recentValidCount = 0;
+    
+    for (let i = 0; i < Math.min(recentActualSlice.length, recentPredictedSlice.length); i++) {
+      if (recentActualSlice[i] !== 0) {
+        const error = Math.abs(recentActualSlice[i] - recentPredictedSlice[i]);
+        const percentError = error / Math.abs(recentActualSlice[i]);
+        recentMapeSum += percentError;
+        recentValidCount++;
+      }
+    }
+    
+    if (recentValidCount > 0) {
+      recentMape = (recentMapeSum / recentValidCount) * 100;
+    }
+  }
   
   const consistency = Math.max(0, 100 - Math.abs(mape - recentMape) * 2);
   const confidence = Math.min(95, (accuracy * 0.7) + (consistency * 0.3));
@@ -79,7 +97,7 @@ export const calculateMetrics = (actual: number[], predicted: number[], recentWe
   return { accuracy, mape, mae, rmse, confidence };
 };
 
-// Walk-forward validation for time series data
+// Walk-forward validation for time series data - FIXED: Added safety checks to prevent infinite recursion
 export const walkForwardValidation = (
   data: SalesData[],
   generateForecast: (trainData: SalesData[], forecastPeriods: number) => number[],
@@ -87,21 +105,56 @@ export const walkForwardValidation = (
 ): ValidationResult => {
   console.log(`🚶 Starting walk-forward validation with ${data.length} data points`);
   
+  // Enhanced safety checks
+  if (!data || data.length === 0) {
+    console.log(`❌ No data provided for validation`);
+    return { accuracy: 0, mape: 100, mae: Infinity, rmse: Infinity, confidence: 0 };
+  }
+  
   if (data.length < config.minValidationSize * 2) {
-    console.log(`❌ Insufficient data for walk-forward validation`);
+    console.log(`❌ Insufficient data for walk-forward validation: ${data.length} < ${config.minValidationSize * 2}`);
     return { accuracy: 0, mape: 100, mae: Infinity, rmse: Infinity, confidence: 0 };
   }
   
   const results: ValidationResult[] = [];
-  const minTrainSize = Math.floor(data.length * 0.6);
+  const minTrainSize = Math.max(config.minValidationSize, Math.floor(data.length * 0.6));
   const maxValidationSteps = Math.min(5, data.length - minTrainSize - 1);
+  
+  console.log(`🔢 Validation params: minTrainSize=${minTrainSize}, maxSteps=${maxValidationSteps}`);
+  
+  // Safety check to prevent infinite loops
+  if (maxValidationSteps <= 0) {
+    console.log(`❌ No valid steps possible for validation`);
+    return { accuracy: 0, mape: 100, mae: Infinity, rmse: Infinity, confidence: 0 };
+  }
   
   for (let step = 0; step < maxValidationSteps; step++) {
     const trainSize = minTrainSize + step;
-    const trainData = data.slice(0, trainSize);
-    const testData = data.slice(trainSize, trainSize + config.minValidationSize);
     
-    if (testData.length === 0) continue;
+    // Safety bounds checking
+    if (trainSize >= data.length) {
+      console.log(`⚠️ Train size ${trainSize} exceeds data length ${data.length}, stopping`);
+      break;
+    }
+    
+    const trainEndIndex = Math.min(trainSize, data.length);
+    const testStartIndex = trainEndIndex;
+    const testEndIndex = Math.min(testStartIndex + config.minValidationSize, data.length);
+    
+    // Ensure we don't go out of bounds
+    if (testStartIndex >= data.length || testEndIndex > data.length || testStartIndex >= testEndIndex) {
+      console.log(`⚠️ Invalid indices in step ${step}: train end=${trainEndIndex}, test start=${testStartIndex}, test end=${testEndIndex}`);
+      continue;
+    }
+    
+    // FIXED: Use safe slicing with explicit bounds
+    const trainData = data.slice(0, trainEndIndex);
+    const testData = data.slice(testStartIndex, testEndIndex);
+    
+    if (testData.length === 0) {
+      console.log(`⚠️ No test data in step ${step}`);
+      continue;
+    }
     
     try {
       console.log(`🔄 Walk-forward step ${step}: Training on ${trainData.length} points, testing on ${testData.length} points`);
@@ -117,7 +170,15 @@ export const walkForwardValidation = (
         continue;
       }
       
+      // FIXED: Add timeout protection for forecast generation
+      const startTime = Date.now();
       const predictions = generateForecast(trainData, testData.length);
+      const endTime = Date.now();
+      
+      if (endTime - startTime > 5000) { // 5 second timeout
+        console.warn(`⚠️ Forecast generation took too long in step ${step}: ${endTime - startTime}ms`);
+        continue;
+      }
       
       if (!predictions || predictions.length === 0) {
         console.warn(`⚠️ No predictions generated in step ${step}`);
@@ -143,6 +204,8 @@ export const walkForwardValidation = (
         console.error(`❌ Error message: ${error.message}`);
         console.error(`❌ Error stack: ${error.stack}`);
       }
+      // Continue to next step instead of breaking the entire validation
+      continue;
     }
   }
   
