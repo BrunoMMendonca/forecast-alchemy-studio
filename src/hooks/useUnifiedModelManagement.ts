@@ -20,6 +20,8 @@ export const useUnifiedModelManagement = (
 ) => {
   const { toast } = useToast();
   const isTogglingAIManualRef = useRef<boolean>(false);
+  const lastProcessedCacheVersionRef = useRef<number>(-1);
+  const lastProcessedSKURef = useRef<string>('');
 
   const { 
     cache,
@@ -75,11 +77,25 @@ export const useUnifiedModelManagement = (
     }
   }, [selectedSKU, data, models, forecastPeriods, getCachedForecast, setCachedForecast, generateParametersHash, onForecastGeneration, toast]);
 
-  // FIXED: Make this as reactive as progress updates - no blocking guards
+  // CONTROLLED cache version updates - only process when actually needed
   useEffect(() => {
     if (!selectedSKU) return;
 
-    console.log(`🔄 UNIFIED CACHE VERSION CHANGED: ${cacheVersion}, updating models for ${selectedSKU}`);
+    // Prevent unnecessary processing
+    const shouldProcess = (
+      cacheVersion !== lastProcessedCacheVersionRef.current || 
+      selectedSKU !== lastProcessedSKURef.current
+    );
+
+    if (!shouldProcess) {
+      console.log(`🔇 UNIFIED: Skipping cache update - already processed version ${cacheVersion} for ${selectedSKU}`);
+      return;
+    }
+
+    console.log(`🔄 UNIFIED CACHE PROCESSING: v${cacheVersion} for ${selectedSKU} (prev: v${lastProcessedCacheVersionRef.current})`);
+    
+    lastProcessedCacheVersionRef.current = cacheVersion;
+    lastProcessedSKURef.current = selectedSKU;
     
     const preferences = loadManualAIPreferences();
     const skuData = data.filter(d => d.sku === selectedSKU);
@@ -90,8 +106,6 @@ export const useUnifiedModelManagement = (
       const preference = preferences[preferenceKey] || 'ai';
       const cached = cache[selectedSKU]?.[model.id];
 
-      console.log(`📋 UNIFIED MODEL ${model.id}: preference=${preference}, hasCache=${!!cached}, cacheVersion=${cacheVersion}`);
-
       if (preference === 'manual') {
         console.log(`👤 UNIFIED MODEL ${model.id}: Using manual parameters`);
         return model;
@@ -101,18 +115,14 @@ export const useUnifiedModelManagement = (
       let selectedCache = null;
       if (preference === 'ai' && cached?.ai && cached.ai.dataHash === currentDataHash) {
         selectedCache = cached.ai;
-        console.log(`🤖 UNIFIED MODEL ${model.id}: Using AI cache`);
       } else if (preference === 'grid' && cached?.grid && cached.grid.dataHash === currentDataHash) {
         selectedCache = cached.grid;
-        console.log(`🔍 UNIFIED MODEL ${model.id}: Using Grid cache`);
       } else {
         // Fallback to any valid cache
         if (cached?.ai && cached.ai.dataHash === currentDataHash) {
           selectedCache = cached.ai;
-          console.log(`🤖 UNIFIED MODEL ${model.id}: Fallback to AI cache`);
         } else if (cached?.grid && cached.grid.dataHash === currentDataHash) {
           selectedCache = cached.grid;
-          console.log(`🔍 UNIFIED MODEL ${model.id}: Fallback to Grid cache`);
         }
       }
 
@@ -129,7 +139,6 @@ export const useUnifiedModelManagement = (
         };
       }
 
-      console.log(`❌ UNIFIED NO CACHE: ${model.id} using default parameters`);
       return model;
     });
 
@@ -142,21 +151,21 @@ export const useUnifiedModelManagement = (
     setModels(updatedModels);
   }, [cacheVersion, selectedSKU, data, cache, loadManualAIPreferences, generateDataHash]);
 
-  // Update models when SKU changes
+  // CONTROLLED forecast generation - only when models actually change and have enabled models
   useEffect(() => {
-    if (selectedSKU && data.length > 0) {
-      console.log(`🔄 UNIFIED SKU CHANGED: Updating models for ${selectedSKU}`);
-      // Trigger the same logic as cache version change
-      setModels(getDefaultModels());
-    }
-  }, [selectedSKU]);
+    if (!selectedSKU || !models.length) return;
+    
+    const enabledModels = models.filter(m => m.enabled);
+    if (enabledModels.length === 0) return;
 
-  // Generate forecasts when models change
-  useEffect(() => {
-    if (selectedSKU && models.length > 0 && models.some(m => m.enabled)) {
-      console.log(`🔄 UNIFIED: Models changed, regenerating forecasts for ${selectedSKU}`);
-      setTimeout(() => generateForecasts(), 50);
-    }
+    console.log(`🔄 UNIFIED: Models changed, scheduling forecast generation for ${selectedSKU}`);
+    
+    // Use a longer timeout to prevent rapid-fire updates
+    const timeoutId = setTimeout(() => {
+      generateForecasts();
+    }, 200);
+
+    return () => clearTimeout(timeoutId);
   }, [models, selectedSKU, generateForecasts]);
 
   const toggleModel = useCallback((modelId: string) => {
@@ -209,9 +218,6 @@ export const useUnifiedModelManagement = (
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
     
-    // Check if we already have valid AI cache (rely on cacheVersion system)
-    console.log(`🔄 UNIFIED USE AI: Running fresh AI optimization for ${preferenceKey}`);
-    
     try {
       const model = models.find(m => m.id === modelId);
       if (model) {
@@ -253,9 +259,6 @@ export const useUnifiedModelManagement = (
     
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
-    
-    // Run fresh optimization and let cacheVersion system handle updates
-    console.log(`🔄 UNIFIED GRID: Running fresh Grid optimization for ${preferenceKey}`);
     
     try {
       const model = models.find(m => m.id === modelId);

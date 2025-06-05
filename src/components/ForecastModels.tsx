@@ -2,7 +2,6 @@
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useUnifiedModelManagement } from '@/hooks/useUnifiedModelManagement';
-import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useOptimizationHandler } from '@/hooks/useOptimizationHandler';
 import { ModelSelection } from './ModelSelection';
 import { ProductSelector } from './ProductSelector';
@@ -36,9 +35,8 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
   const hasTriggeredOptimizationRef = useRef(false);
   const componentMountedRef = useRef(false);
+  const autoOptimizationDoneRef = useRef(false);
   
-  const { cache } = useOptimizationCache();
-
   // Use the unified model management hook
   const {
     models,
@@ -52,7 +50,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     selectedSKU,
     data,
     forecastPeriods,
-    undefined, // businessContext - will be added later if needed
+    undefined,
     onForecastGeneration
   );
 
@@ -63,21 +61,25 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     handleQueueOptimization
   } = useOptimizationHandler(data, selectedSKU, optimizationQueue, generateForecasts);
 
-  // Mark component as mounted
+  // Mark component as mounted and handle initial optimization
   useEffect(() => {
     componentMountedRef.current = true;
     console.log('📊 FORECAST MODELS: Component mounted');
     
-    // Auto-trigger optimization if there are queued items and component just mounted
-    if (optimizationQueue) {
+    // Only auto-trigger once per mount
+    if (optimizationQueue && !autoOptimizationDoneRef.current) {
       const queuedSKUs = optimizationQueue.getSKUsInQueue();
-      if (queuedSKUs.length > 0 && !isOptimizing && !hasTriggeredOptimizationRef.current) {
+      if (queuedSKUs.length > 0 && !isOptimizing) {
         console.log('🚀 FORECAST MODELS: Auto-starting optimization on mount for queued SKUs:', queuedSKUs);
-        hasTriggeredOptimizationRef.current = true;
+        autoOptimizationDoneRef.current = true;
+        
+        // Add delay to ensure all components are ready
         setTimeout(() => {
-          handleQueueOptimization();
-          if (onOptimizationStarted) {
-            onOptimizationStarted();
+          if (componentMountedRef.current) {
+            handleQueueOptimization();
+            if (onOptimizationStarted) {
+              onOptimizationStarted();
+            }
           }
         }, 1000);
       }
@@ -86,14 +88,14 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     return () => {
       componentMountedRef.current = false;
     };
-  }, []);
+  }, []); // Only run on mount
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
     startOptimization: handleQueueOptimization
   }));
 
-  // AUTO-TRIGGER: Watch for shouldStartOptimization prop (when provided by parent)
+  // CONTROLLED shouldStartOptimization trigger - only once per change
   useEffect(() => {
     if (shouldStartOptimization && !isOptimizing && !hasTriggeredOptimizationRef.current && componentMountedRef.current) {
       console.log('🚀 AUTO-TRIGGER: shouldStartOptimization is true, starting optimization...');
@@ -103,29 +105,25 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         onOptimizationStarted();
       }
     }
-  }, [shouldStartOptimization, isOptimizing, handleQueueOptimization, onOptimizationStarted]);
+  }, [shouldStartOptimization]);
 
-  // Reset trigger flag when optimization completes
+  // Reset trigger flags when optimization completes or queue is empty
   useEffect(() => {
     if (!isOptimizing) {
       hasTriggeredOptimizationRef.current = false;
     }
-  }, [isOptimizing]);
-
-  // Reset trigger flag when queue is empty
-  useEffect(() => {
-    if (optimizationQueue) {
-      const queuedSKUs = optimizationQueue.getSKUsInQueue();
-      if (queuedSKUs.length === 0) {
-        hasTriggeredOptimizationRef.current = false;
-      }
+    
+    if (optimizationQueue && optimizationQueue.getSKUsInQueue().length === 0) {
+      hasTriggeredOptimizationRef.current = false;
+      autoOptimizationDoneRef.current = false;
     }
-  }, [optimizationQueue?.getSKUsInQueue().length]);
+  }, [isOptimizing, optimizationQueue?.getSKUsInQueue().length]);
 
-  // Auto-select first SKU when data changes
+  // Auto-select first SKU when data changes (only if no SKU selected)
   useEffect(() => {
     const skus = Array.from(new Set(data.map(d => d.sku))).sort();
     if (skus.length > 0 && !selectedSKU) {
+      console.log('🎯 AUTO-SELECTING first SKU:', skus[0]);
       onSKUChange(skus[0]);
     }
   }, [data, selectedSKU, onSKUChange]);
