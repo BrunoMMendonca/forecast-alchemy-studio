@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -5,11 +6,11 @@ import { OutlierDetection } from '@/components/OutlierDetection';
 import { ForecastModels } from '@/components/ForecastModels';
 import { ForecastResults } from '@/components/ForecastResults';
 import { ForecastFinalization } from '@/components/ForecastFinalization';
-import { ForecastSettings } from '@/components/ForecastSettings';
+import { StepNavigation } from '@/components/StepNavigation';
+import { FloatingSettingsButton } from '@/components/FloatingSettingsButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { BarChart3, TrendingUp, Upload, Zap, Eye, Settings, ChevronDown, ChevronUp } from 'lucide-react';
+import { BarChart3, TrendingUp, Upload, Zap, Eye } from 'lucide-react';
 import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
@@ -50,14 +51,6 @@ const Index = () => {
   // Add cache clearing capabilities
   const { clearAllCache } = useOptimizationCache();
   const { clearManualAIPreferences } = useManualAIPreferences();
-
-  const steps = [
-    { id: 'upload', title: 'Upload Data', icon: Upload },
-    { id: 'visualize', title: 'Visualize', icon: BarChart3 },
-    { id: 'clean', title: 'Clean Data', icon: Zap },
-    { id: 'forecast', title: 'Generate Forecasts', icon: TrendingUp },
-    { id: 'finalize', title: 'Finalize & Export', icon: Eye },
-  ];
 
   // Listen for the proceed to forecasting event
   useEffect(() => {
@@ -165,15 +158,6 @@ const Index = () => {
     }
   };
 
-  const handleStepClick = (stepIndex: number) => {
-    // Allow navigation to any step if data is uploaded
-    if (stepIndex === 0 || salesData.length > 0) {
-      // Don't allow finalization step without forecasts
-      if (stepIndex === 4 && forecastResults.length === 0) return;
-      setCurrentStep(stepIndex);
-    }
-  };
-
   const handleOptimizationStarted = () => {
     console.log('🏁 Optimization started, resetting shouldStartOptimization flag');
     setShouldStartOptimization(false);
@@ -198,67 +182,22 @@ const Index = () => {
         </div>
 
         {/* Floating Settings Button */}
-        <div className="fixed top-6 right-6 z-50">
-          <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-            <DialogTrigger asChild>
-              <Button
-                size="icon"
-                className="h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                <Settings className="h-6 w-6 text-white" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Global Forecast Settings</DialogTitle>
-              </DialogHeader>
-              <ForecastSettings
-                forecastPeriods={forecastPeriods}
-                setForecastPeriods={setForecastPeriods}
-                businessContext={businessContext}
-                setBusinessContext={setBusinessContext}
-              />
-            </DialogContent>
-          </Dialog>
-        </div>
+        <FloatingSettingsButton
+          forecastPeriods={forecastPeriods}
+          setForecastPeriods={setForecastPeriods}
+          businessContext={businessContext}
+          setBusinessContext={setBusinessContext}
+          settingsOpen={settingsOpen}
+          setSettingsOpen={setSettingsOpen}
+        />
 
         {/* Progress Steps */}
-        <div className="flex justify-center mb-8">
-          <div className="flex space-x-4">
-            {steps.map((step, index) => {
-              const Icon = step.icon;
-              const isActive = index <= currentStep;
-              const isCurrent = index === currentStep;
-              const isClickable = index === 0 || salesData.length > 0;
-              
-              return (
-                <div key={step.id} className="flex items-center">
-                  <button
-                    onClick={() => handleStepClick(index)}
-                    disabled={!isClickable}
-                    className={`
-                      flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all duration-300
-                      ${isActive 
-                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg' 
-                        : 'bg-white border-slate-300 text-slate-400'
-                      }
-                      ${isCurrent ? 'ring-4 ring-blue-200' : ''}
-                      ${isClickable ? 'cursor-pointer hover:scale-105' : 'cursor-not-allowed opacity-50'}
-                    `}
-                  >
-                    <Icon size={20} />
-                  </button>
-                  <span className={`ml-2 font-medium ${isActive ? 'text-slate-800' : 'text-slate-400'}`}>
-                    {step.title}
-                  </span>
-                  {index < steps.length - 1 && (
-                    <div className={`w-8 h-0.5 ml-4 ${index < currentStep ? 'bg-blue-600' : 'bg-slate-300'}`} />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <StepNavigation
+          currentStep={currentStep}
+          salesDataLength={salesData.length}
+          forecastResultsLength={forecastResults.length}
+          onStepClick={setCurrentStep}
+        />
 
         {/* Hidden ForecastModels component for background optimization */}
         {salesData.length > 0 && (
