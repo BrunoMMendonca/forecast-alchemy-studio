@@ -11,8 +11,9 @@ import { useForecastCache } from '@/hooks/useForecastCache';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 
 export const CacheDebugger: React.FC = () => {
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [activeTab, setActiveTab] = useState('optimization');
+  const [lastUpdate, setLastUpdate] = useState(new Date().toLocaleTimeString());
   
   const { 
     cache: optimizationCache, 
@@ -24,21 +25,24 @@ export const CacheDebugger: React.FC = () => {
   const { clearForecastCacheForSKU } = useForecastCache();
   const { loadManualAIPreferences, clearManualAIPreferences } = useManualAIPreferences();
 
-  const preferences = loadManualAIPreferences();
+  // Load preferences once and update timestamp when cache changes
+  const [preferences, setPreferences] = useState(() => loadManualAIPreferences());
 
   // Auto-refresh every 2 seconds when enabled
   useEffect(() => {
     if (!autoRefresh) return;
     
     const interval = setInterval(() => {
-      setRefreshTrigger(prev => prev + 1);
+      setLastUpdate(new Date().toLocaleTimeString());
+      setPreferences(loadManualAIPreferences());
     }, 2000);
     
     return () => clearInterval(interval);
-  }, [autoRefresh]);
+  }, [autoRefresh, loadManualAIPreferences]);
 
   const handleRefresh = () => {
-    setRefreshTrigger(prev => prev + 1);
+    setLastUpdate(new Date().toLocaleTimeString());
+    setPreferences(loadManualAIPreferences());
   };
 
   const handleExportCache = () => {
@@ -69,7 +73,7 @@ export const CacheDebugger: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4" key={refreshTrigger}>
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Cache Debugger</h3>
         <div className="flex gap-2 items-center">
@@ -126,12 +130,12 @@ export const CacheDebugger: React.FC = () => {
             </div>
           </div>
           <div className="mt-2 text-xs text-gray-500">
-            Last updated: {new Date().toLocaleTimeString()}
+            Last updated: {lastUpdate}
           </div>
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="optimization" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="optimization">Optimization Cache</TabsTrigger>
           <TabsTrigger value="preferences">Preferences</TabsTrigger>
