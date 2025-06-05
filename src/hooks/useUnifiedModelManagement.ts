@@ -136,16 +136,30 @@ export const useUnifiedModelManagement = (
 
       // For AI/Grid preference, try to get the preferred method first
       let selectedCache = null;
+      let actualPreference = preference;
+      
       if (preference === 'ai' && cached?.ai && cached.ai.dataHash === currentDataHash) {
         selectedCache = cached.ai;
+        actualPreference = 'ai';
       } else if (preference === 'grid' && cached?.grid && cached.grid.dataHash === currentDataHash) {
         selectedCache = cached.grid;
+        actualPreference = 'grid';
       } else {
-        // Fallback to any valid cache
+        // Fallback to any valid cache and update preference to match
         if (cached?.ai && cached.ai.dataHash === currentDataHash) {
           selectedCache = cached.ai;
+          actualPreference = 'ai';
+          // Update preference to match what we're actually using
+          const updatedPreferences = { ...preferences };
+          updatedPreferences[preferenceKey] = 'ai';
+          saveManualAIPreferences(updatedPreferences);
         } else if (cached?.grid && cached.grid.dataHash === currentDataHash) {
           selectedCache = cached.grid;
+          actualPreference = 'grid';
+          // Update preference to match what we're actually using
+          const updatedPreferences = { ...preferences };
+          updatedPreferences[preferenceKey] = 'grid';
+          saveManualAIPreferences(updatedPreferences);
         }
       }
 
@@ -168,7 +182,7 @@ export const useUnifiedModelManagement = (
     
     // Reset forecast generation hash when models are updated from cache
     lastForecastGenerationHashRef.current = '';
-  }, [cacheVersion, selectedSKU, data, cache, loadManualAIPreferences, generateDataHash]);
+  }, [cacheVersion, selectedSKU, data, cache, loadManualAIPreferences, saveManualAIPreferences, generateDataHash]);
 
   // CONTROLLED forecast generation - only when models hash actually changes
   useEffect(() => {
@@ -259,6 +273,21 @@ export const useUnifiedModelManagement = (
             result.expectedAccuracy,
             result.method
           );
+          
+          // Immediately update the model state to show AI optimization
+          setModels(prev => prev.map(m => 
+            m.id === modelId 
+              ? { 
+                  ...m, 
+                  optimizedParameters: result.parameters,
+                  optimizationConfidence: result.confidence,
+                  optimizationReasoning: result.reasoning,
+                  optimizationFactors: result.factors,
+                  expectedAccuracy: result.expectedAccuracy,
+                  optimizationMethod: result.method
+                }
+              : m
+          ));
         }
       }
     } catch (error) {
@@ -299,6 +328,21 @@ export const useUnifiedModelManagement = (
             result.expectedAccuracy,
             result.method
           );
+          
+          // Immediately update the model state to show Grid optimization
+          setModels(prev => prev.map(m => 
+            m.id === modelId 
+              ? { 
+                  ...m, 
+                  optimizedParameters: result.parameters,
+                  optimizationConfidence: result.confidence,
+                  optimizationReasoning: result.reasoning,
+                  optimizationFactors: result.factors,
+                  expectedAccuracy: result.expectedAccuracy,
+                  optimizationMethod: result.method
+                }
+              : m
+          ));
         }
       }
     } catch (error) {
