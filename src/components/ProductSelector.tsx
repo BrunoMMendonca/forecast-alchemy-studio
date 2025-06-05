@@ -16,20 +16,31 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
   selectedSKU,
   onSKUChange
 }) => {
+  console.log('🎯 ProductSelector render - selectedSKU:', `"${selectedSKU}"`, 'type:', typeof selectedSKU);
+  
   const skus = Array.from(new Set(data.map(d => d.sku))).sort();
   
   const currentIndex = skus.indexOf(selectedSKU);
   
   const handlePrevSKU = () => {
     if (currentIndex > 0) {
-      onSKUChange(skus[currentIndex - 1]);
+      const newSKU = skus[currentIndex - 1];
+      console.log('🎯 ProductSelector changing to previous SKU:', newSKU);
+      onSKUChange(newSKU);
     }
   };
   
   const handleNextSKU = () => {
     if (currentIndex < skus.length - 1) {
-      onSKUChange(skus[currentIndex + 1]);
+      const newSKU = skus[currentIndex + 1];
+      console.log('🎯 ProductSelector changing to next SKU:', newSKU);
+      onSKUChange(newSKU);
     }
+  };
+
+  const handleSKUSelect = (sku: string) => {
+    console.log('🎯 ProductSelector SKU selected from dropdown:', sku);
+    onSKUChange(sku);
   };
 
   return (
@@ -46,7 +57,7 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <Select value={selectedSKU} onValueChange={onSKUChange}>
+        <Select value={selectedSKU} onValueChange={handleSKUSelect}>
           <SelectTrigger className="flex-1">
             <SelectValue placeholder="Choose a product to forecast" />
           </SelectTrigger>

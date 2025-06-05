@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -31,16 +30,27 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   onUseGrid,
   onResetToManual,
 }) => {
-  console.log('🔧 ParameterControl render for model:', model.id, 'SKU:', selectedSKU);
+  console.log('🔧 ParameterControl render for model:', model.id, 'SKU:', `"${selectedSKU}"`, 'SKU type:', typeof selectedSKU, 'SKU length:', selectedSKU?.length);
+  
+  // DEBUGGING: Log the props being passed to this component
+  console.log('🔧 ParameterControl props debug:', {
+    modelId: model.id,
+    selectedSKU: selectedSKU,
+    selectedSKUType: typeof selectedSKU,
+    selectedSKULength: selectedSKU?.length,
+    dataLength: data?.length,
+    hasOnParameterUpdate: !!onParameterUpdate,
+    hasOnUseAI: !!onUseAI
+  });
   
   // Early return if no SKU selected to prevent infinite loops
   if (!selectedSKU || selectedSKU.trim() === '') {
-    console.log('❌ No valid SKU selected, skipping ParameterControl render');
+    console.log('❌ No valid SKU selected, skipping ParameterControl render. SKU value:', `"${selectedSKU}"`);
     return null;
   }
   
   const [isExpanded, setIsExpanded] = useState(false);
-  const { getCachedParameters, isCacheValid, generateDataHash } = useOptimizationCache();
+  const { getCachedParameters, isCacheValid, generateDataHash, hasOptimizableParameters } = useOptimizationCache();
 
   const isManual = !model.optimizedParameters;
   const isAI = model.optimizationMethod === 'ai';
