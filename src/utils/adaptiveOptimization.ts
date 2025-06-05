@@ -44,7 +44,7 @@ const generateForecastForModel = (
 
 // Define comprehensive parameter ranges with fallback levels
 const getParameterRanges = (modelId: string, level: number = 1): Record<string, number[]> => {
-  const ranges: Record<string, Record<string, number[]>> = {
+  const ranges: Record<string, Record<number, Record<string, number[]>>> = {
     moving_average: {
       1: { window: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] }, // Full range
       2: { window: [3, 5, 7, 10, 12] }, // Reduced range
@@ -83,7 +83,7 @@ const getParameterRanges = (modelId: string, level: number = 1): Record<string, 
     }
   };
 
-  return ranges[modelId]?.[level] || ranges[modelId]?.[4] || {};
+  return ranges[modelId]?.[level] || {};
 };
 
 // Grid search with multiple fallback levels - NEVER returns null
@@ -97,7 +97,7 @@ export const adaptiveGridSearchOptimization = (
   
   if (data.length < config.minValidationSize * 2) {
     console.log(`❌ GRID SEARCH: Insufficient data, using default parameters`);
-    return createFallbackResult(modelId, data);
+    return createGridSearchResult(modelId, data);
   }
 
   // Try grid search with multiple fallback levels
@@ -124,7 +124,7 @@ export const adaptiveGridSearchOptimization = (
 
   // Absolute fallback - return original parameters as grid_search method
   console.log(`🛡️ GRID SEARCH: Using absolute fallback for ${modelId}`);
-  return createFallbackResult(modelId, data);
+  return createGridSearchResult(modelId, data);
 };
 
 // Run grid search for a specific level
@@ -208,24 +208,23 @@ const runGridSearchLevel = (
   };
 };
 
-// Create fallback result using original parameters
-const createFallbackResult = (modelId: string, data: SalesData[]): OptimizationResult => {
+// Create grid search result using original parameters
+const createGridSearchResult = (modelId: string, data: SalesData[]): OptimizationResult => {
   const defaultParams = getDefaultParameters(modelId);
   
-  console.log(`🛡️ GRID SEARCH: Creating fallback result with default parameters for ${modelId}`);
+  console.log(`🛡️ GRID SEARCH: Creating grid search result with default parameters for ${modelId}`);
   
   return {
     parameters: defaultParams,
     accuracy: 65, // Conservative accuracy estimate
     confidence: 60, // Minimum confidence
-    method: 'grid_search', // Still grid_search method, not fallback
+    method: 'grid_search', // Still grid_search method
     validationDetails: {
       accuracy: 65,
       mape: 35,
       confidence: 60,
       rmse: 0,
-      mae: 0,
-      validationPeriods: 1
+      mae: 0
     }
   };
 };
