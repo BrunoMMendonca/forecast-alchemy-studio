@@ -16,7 +16,8 @@ interface OptimizationQueue {
 export const useOptimizationHandler = (
   data: SalesData[],
   selectedSKU: string,
-  optimizationQueue?: OptimizationQueue
+  optimizationQueue?: OptimizationQueue,
+  onOptimizationComplete?: () => void
 ) => {
   const {
     generateDataHash,
@@ -62,7 +63,7 @@ export const useOptimizationHandler = (
       enabledModels,
       queuedSKUs,
       (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method) => {
-        console.log(`✅ OPTIMIZATION CALLBACK: Received results for ${sku}:${modelId}`);
+        console.log(`✅ OPTIMIZATION CALLBACK: Received results for ${sku}:${modelId} with method ${method}`);
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
         
@@ -73,9 +74,10 @@ export const useOptimizationHandler = (
           businessImpact: factors?.businessImpact || 'Unknown'
         };
         
+        // Save to cache first
         setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
         
-        // Set preference based on optimization method with AI->Grid fallback
+        // Save preference based on optimization method
         const preferences = loadManualAIPreferences();
         const preferenceKey = `${sku}:${modelId}`;
         let newPreference: PreferenceValue = 'ai'; // Default to AI
@@ -89,8 +91,9 @@ export const useOptimizationHandler = (
         preferences[preferenceKey] = newPreference;
         saveManualAIPreferences(preferences);
         
-        console.log(`PREFERENCE: Set ${preferenceKey} to ${newPreference} after optimization`);
+        console.log(`✅ PREFERENCE: Set ${preferenceKey} to ${newPreference} after optimization`);
         
+        // Update models state
         setModels(prev => prev.map(model => 
           model.id === modelId 
             ? { 
@@ -108,12 +111,20 @@ export const useOptimizationHandler = (
       (sku) => {
         console.log(`🏁 OPTIMIZATION COMPLETE: Finished optimizing ${sku}`);
         optimizationQueue.removeSKUsFromQueue([sku]);
+        
+        // Trigger forecast generation for this SKU if it's the currently selected one
+        if (sku === selectedSKU && onOptimizationComplete) {
+          console.log(`🎯 TRIGGERING FORECAST: Optimization complete for selected SKU ${sku}`);
+          setTimeout(() => {
+            onOptimizationComplete();
+          }, 100);
+        }
       },
       getSKUsNeedingOptimization
     );
 
     markOptimizationCompleted(data, '/');
-  }, [optimizationQueue, models, data, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization]);
+  }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete]);
 
   return {
     isOptimizing,
