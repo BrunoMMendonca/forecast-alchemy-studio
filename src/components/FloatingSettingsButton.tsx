@@ -2,8 +2,10 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Settings } from 'lucide-react';
 import { ForecastSettings } from '@/components/ForecastSettings';
+import { CacheDebugger } from '@/components/CacheDebugger';
 import { BusinessContext } from '@/types/businessContext';
 
 interface FloatingSettingsButtonProps {
@@ -34,16 +36,30 @@ export const FloatingSettingsButton: React.FC<FloatingSettingsButtonProps> = ({
             <Settings className="h-6 w-6 text-white" />
           </Button>
         </DialogTrigger>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Global Forecast Settings</DialogTitle>
           </DialogHeader>
-          <ForecastSettings
-            forecastPeriods={forecastPeriods}
-            setForecastPeriods={setForecastPeriods}
-            businessContext={businessContext}
-            setBusinessContext={setBusinessContext}
-          />
+          
+          <Tabs defaultValue="settings" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="settings">Settings</TabsTrigger>
+              <TabsTrigger value="cache">Cache Debug</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="settings" className="mt-4">
+              <ForecastSettings
+                forecastPeriods={forecastPeriods}
+                setForecastPeriods={setForecastPeriods}
+                businessContext={businessContext}
+                setBusinessContext={setBusinessContext}
+              />
+            </TabsContent>
+            
+            <TabsContent value="cache" className="mt-4">
+              <CacheDebugger />
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
     </div>
