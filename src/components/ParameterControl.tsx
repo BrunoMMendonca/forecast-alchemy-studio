@@ -127,7 +127,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
               className="h-6 text-xs text-purple-600 border-purple-200"
             >
               <Bot className="h-3 w-3 mr-1" />
-              Try AI
+              Use AI
             </Button>
           )}
           {currentMethod !== 'grid_search' && (
@@ -138,7 +138,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
               className="h-6 text-xs text-blue-600 border-blue-200"
             >
               <Grid3x3 className="h-3 w-3 mr-1" />
-              Try Grid
+              Use Grid
             </Button>
           )}
           <Button

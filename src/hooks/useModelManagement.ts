@@ -5,9 +5,10 @@ import { SalesData } from '@/pages/Index';
 import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences, PreferenceValue } from '@/hooks/useManualAIPreferences';
+import { optimizeSingleModel } from '@/utils/singleModelOptimization';
 
 export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
-  const { generateDataHash, getCachedParameters, isCacheValid } = useOptimizationCache();
+  const { generateDataHash, getCachedParameters, isCacheValid, cacheParameters } = useOptimizationCache();
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
   const isTogglingAIManualRef = useRef<boolean>(false);
 
@@ -154,7 +155,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
     }, 100);
   };
 
-  const useAIOptimization = (modelId: string) => {
+  const useAIOptimization = async (modelId: string) => {
     // Set flag to prevent optimization during AI toggle
     isTogglingAIManualRef.current = true;
     
@@ -180,6 +181,38 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
             }
           : model
       ));
+    } else {
+      // Trigger AI optimization if no cached results
+      try {
+        const model = models.find(m => m.id === modelId);
+        if (model) {
+          const skuData = data.filter(d => d.sku === selectedSKU);
+          const progressUpdater = { setProgress: () => {} }; // Dummy progress updater
+          
+          const result = await optimizeSingleModel(model, skuData, selectedSKU, progressUpdater, false);
+          
+          if (result && result.method?.startsWith('ai_')) {
+            // Cache the results
+            cacheParameters(selectedSKU, modelId, result);
+            
+            setModels(prev => prev.map(m => 
+              m.id === modelId 
+                ? { 
+                    ...m, 
+                    optimizedParameters: result.parameters,
+                    optimizationConfidence: result.confidence,
+                    optimizationReasoning: result.reasoning,
+                    optimizationFactors: result.factors,
+                    expectedAccuracy: result.expectedAccuracy,
+                    optimizationMethod: result.method
+                  }
+                : m
+            ));
+          }
+        }
+      } catch (error) {
+        console.error('AI optimization failed:', error);
+      }
     }
     
     setTimeout(() => {
@@ -187,7 +220,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
     }, 100);
   };
 
-  const useGridOptimization = (modelId: string) => {
+  const useGridOptimization = async (modelId: string) => {
     // Set flag to prevent optimization during Grid toggle
     isTogglingAIManualRef.current = true;
     
@@ -213,6 +246,38 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
             }
           : model
       ));
+    } else {
+      // Trigger grid optimization if no cached results
+      try {
+        const model = models.find(m => m.id === modelId);
+        if (model) {
+          const skuData = data.filter(d => d.sku === selectedSKU);
+          const progressUpdater = { setProgress: () => {} }; // Dummy progress updater
+          
+          const result = await optimizeSingleModel(model, skuData, selectedSKU, progressUpdater, true); // Force grid search
+          
+          if (result) {
+            // Cache the results
+            cacheParameters(selectedSKU, modelId, result);
+            
+            setModels(prev => prev.map(m => 
+              m.id === modelId 
+                ? { 
+                    ...m, 
+                    optimizedParameters: result.parameters,
+                    optimizationConfidence: result.confidence,
+                    optimizationReasoning: result.reasoning,
+                    optimizationFactors: result.factors,
+                    expectedAccuracy: result.expectedAccuracy,
+                    optimizationMethod: result.method
+                  }
+                : m
+            ));
+          }
+        }
+      } catch (error) {
+        console.error('Grid optimization failed:', error);
+      }
     }
     
     setTimeout(() => {
