@@ -11,6 +11,17 @@ import { useForecastCache } from '@/hooks/useForecastCache';
 import { generateForecastsForSKU } from '@/utils/forecastGenerator';
 import { useToast } from '@/hooks/use-toast';
 
+// Helper function to validate SKU - centralized validation
+const isValidSKU = (sku: string): boolean => {
+  return typeof sku === 'string' && sku.trim().length > 0;
+};
+
+// Helper function to check if a model has parameters that can be optimized
+const modelHasParameters = (model: ModelConfig): boolean => {
+  const params = model.optimizedParameters || model.parameters;
+  return params && Object.keys(params).length > 0;
+};
+
 export const useUnifiedModelManagement = (
   selectedSKU: string, 
   data: SalesData[], 
@@ -24,6 +35,16 @@ export const useUnifiedModelManagement = (
   const lastProcessedSKURef = useRef<string>('');
   const forecastGenerationInProgressRef = useRef<boolean>(false);
   const lastForecastGenerationHashRef = useRef<string>('');
+
+  // Early validation - don't proceed with any cache operations if SKU is invalid
+  const isValidSelectedSKU = isValidSKU(selectedSKU);
+
+  console.log('🔧 useUnifiedModelManagement init:', {
+    selectedSKU: `"${selectedSKU}"`,
+    isValidSKU: isValidSelectedSKU,
+    selectedSKUType: typeof selectedSKU,
+    selectedSKULength: selectedSKU?.length
+  });
 
   const { 
     cache,
@@ -47,18 +68,15 @@ export const useUnifiedModelManagement = (
     return getDefaultModels();
   });
 
-  // Helper function to check if a model has parameters that can be optimized
-  const modelHasParameters = useCallback((model: ModelConfig) => {
-    const params = model.optimizedParameters || model.parameters;
-    return params && Object.keys(params).length > 0;
-  }, []);
-
   // Create a stable hash of model state to prevent unnecessary re-renders
+  // ONLY include models that have parameters to prevent seasonal_naive from causing issues
   const modelsHash = useMemo(() => {
-    const enabledModels = models.filter(m => m.enabled);
-    if (enabledModels.length === 0) return 'no-enabled-models';
+    if (!isValidSelectedSKU) return 'invalid-sku';
     
-    const hashData = enabledModels.map(m => ({
+    const enabledModelsWithParams = models.filter(m => m.enabled && modelHasParameters(m));
+    if (enabledModelsWithParams.length === 0) return 'no-enabled-models-with-params';
+    
+    const hashData = enabledModelsWithParams.map(m => ({
       id: m.id,
       enabled: m.enabled,
       params: m.optimizedParameters || m.parameters,
@@ -66,26 +84,37 @@ export const useUnifiedModelManagement = (
     }));
     
     return JSON.stringify(hashData);
-  }, [models]);
+  }, [models, isValidSelectedSKU]);
 
   // Generate forecasts when models actually change (not just re-render)
   const generateForecasts = useCallback(async () => {
-    if (!selectedSKU || models.length === 0) return;
+    if (!isValidSelectedSKU || models.length === 0) {
+      console.log('🚀 Skipping forecast generation - invalid SKU or no models');
+      return;
+    }
+    
     if (forecastGenerationInProgressRef.current) {
+      console.log('🚀 Skipping forecast generation - already in progress');
       return;
     }
 
     // Check if we've already generated for this exact state
     if (lastForecastGenerationHashRef.current === modelsHash) {
+      console.log('🚀 Skipping forecast generation - already generated for this hash');
       return;
     }
 
     const enabledModels = models.filter(m => m.enabled);
-    if (enabledModels.length === 0) return;
+    if (enabledModels.length === 0) {
+      console.log('🚀 Skipping forecast generation - no enabled models');
+      return;
+    }
 
     try {
       forecastGenerationInProgressRef.current = true;
       lastForecastGenerationHashRef.current = modelsHash;
+      
+      console.log('🚀 Generating forecasts for SKU:', selectedSKU, 'with', enabledModels.length, 'models');
       
       const results = await generateForecastsForSKU(
         selectedSKU,
@@ -102,6 +131,7 @@ export const useUnifiedModelManagement = (
       }
 
     } catch (error) {
+      console.error('🚀 Forecast generation error:', error);
       toast({
         title: "Forecast Error",
         description: error instanceof Error ? error.message : "Failed to generate forecasts. Please try again.",
@@ -110,18 +140,27 @@ export const useUnifiedModelManagement = (
     } finally {
       forecastGenerationInProgressRef.current = false;
     }
-  }, [selectedSKU, data, modelsHash, forecastPeriods, getCachedForecast, setCachedForecast, generateParametersHash, onForecastGeneration, toast]);
+  }, [selectedSKU, data, modelsHash, forecastPeriods, getCachedForecast, setCachedForecast, generateParametersHash, onForecastGeneration, toast, isValidSelectedSKU]);
 
   // Helper function to get the best available method for a model
   const getBestAvailableMethod = useCallback((sku: string, modelId: string, currentDataHash: string) => {
-    // Early return if SKU is empty or model doesn't have parameters
-    if (!sku || sku.trim() === '') return 'manual';
+    // Early return if SKU is invalid or model doesn't have parameters
+    if (!isValidSKU(sku)) {
+      console.log('🔍 getBestAvailableMethod: Invalid SKU, returning manual');
+      return 'manual';
+    }
     
     const model = getDefaultModels().find(m => m.id === modelId);
-    if (!model || !modelHasParameters(model)) return 'manual';
+    if (!model || !modelHasParameters(model)) {
+      console.log('🔍 getBestAvailableMethod: Model has no parameters, returning manual for', modelId);
+      return 'manual';
+    }
 
     const cached = cache[sku]?.[modelId];
-    if (!cached) return 'manual';
+    if (!cached) {
+      console.log('🔍 getBestAvailableMethod: No cache for', sku, modelId, 'returning manual');
+      return 'manual';
+    }
 
     const hasValidAI = cached.ai && cached.ai.dataHash === currentDataHash;
     const hasValidGrid = cached.grid && cached.grid.dataHash === currentDataHash;
@@ -129,12 +168,15 @@ export const useUnifiedModelManagement = (
     if (hasValidAI) return 'ai';
     if (hasValidGrid) return 'grid';
     return 'manual';
-  }, [cache, modelHasParameters]);
+  }, [cache]);
 
   // CONTROLLED cache version updates - only process when actually needed
   useEffect(() => {
-    // Early return if no valid SKU
-    if (!selectedSKU || selectedSKU.trim() === '') return;
+    // Early return if no valid SKU - CRITICAL for preventing infinite loops
+    if (!isValidSelectedSKU) {
+      console.log('❌ useUnifiedModelManagement: Skipping cache update - invalid SKU');
+      return;
+    }
 
     // Prevent unnecessary processing
     const shouldProcess = (
@@ -143,8 +185,11 @@ export const useUnifiedModelManagement = (
     );
 
     if (!shouldProcess) {
+      console.log('⏭️ useUnifiedModelManagement: Skipping cache update - already processed');
       return;
     }
+    
+    console.log('🔄 useUnifiedModelManagement: Processing cache update for', selectedSKU, 'version', cacheVersion);
     
     lastProcessedCacheVersionRef.current = cacheVersion;
     lastProcessedSKURef.current = selectedSKU;
@@ -156,6 +201,7 @@ export const useUnifiedModelManagement = (
     const updatedModels = getDefaultModels().map(model => {
       // Skip cache operations for models without parameters
       if (!modelHasParameters(model)) {
+        console.log('⏭️ Skipping cache operations for', model.id, '- no parameters');
         return model;
       }
 
@@ -217,17 +263,24 @@ export const useUnifiedModelManagement = (
     
     // Reset forecast generation hash when models are updated from cache
     lastForecastGenerationHashRef.current = '';
-  }, [cacheVersion, selectedSKU, data, cache, loadManualAIPreferences, saveManualAIPreferences, generateDataHash, getBestAvailableMethod, modelHasParameters]);
+  }, [cacheVersion, selectedSKU, data, cache, loadManualAIPreferences, saveManualAIPreferences, generateDataHash, getBestAvailableMethod, isValidSelectedSKU]);
 
   // CONTROLLED forecast generation - only when models hash actually changes
   useEffect(() => {
-    if (!selectedSKU || !models.length) return;
+    if (!isValidSelectedSKU || !models.length) {
+      console.log('⏭️ Skipping forecast effect - invalid SKU or no models');
+      return;
+    }
     
     const enabledModels = models.filter(m => m.enabled);
-    if (enabledModels.length === 0) return;
+    if (enabledModels.length === 0) {
+      console.log('⏭️ Skipping forecast effect - no enabled models');
+      return;
+    }
 
     // Only generate if the hash has actually changed and we're not currently processing
     if (lastForecastGenerationHashRef.current !== modelsHash && !forecastGenerationInProgressRef.current) {
+      console.log('🔄 Models hash changed, scheduling forecast generation');
       // Use a timeout to debounce rapid changes
       const timeoutId = setTimeout(() => {
         if (lastForecastGenerationHashRef.current !== modelsHash) {
@@ -237,7 +290,7 @@ export const useUnifiedModelManagement = (
 
       return () => clearTimeout(timeoutId);
     }
-  }, [modelsHash, selectedSKU, generateForecasts]);
+  }, [modelsHash, generateForecasts, isValidSelectedSKU]);
 
   const toggleModel = useCallback((modelId: string) => {
     setModels(prev => prev.map(model => 
@@ -249,7 +302,10 @@ export const useUnifiedModelManagement = (
 
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
     // Early return if no valid SKU
-    if (!selectedSKU || selectedSKU.trim() === '') return;
+    if (!isValidSelectedSKU) {
+      console.log('❌ updateParameter: Invalid SKU, skipping');
+      return;
+    }
     
     isTogglingAIManualRef.current = true;
     
@@ -280,11 +336,14 @@ export const useUnifiedModelManagement = (
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
     }, 100);
-  }, [selectedSKU, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod]);
+  }, [selectedSKU, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, isValidSelectedSKU]);
 
   const useAIOptimization = useCallback(async (modelId: string) => {
     // Early return if no valid SKU
-    if (!selectedSKU || selectedSKU.trim() === '') return;
+    if (!isValidSelectedSKU) {
+      console.log('❌ useAIOptimization: Invalid SKU, skipping');
+      return;
+    }
     
     console.log(`🤖 AI button clicked for ${modelId}`);
     isTogglingAIManualRef.current = true;
@@ -390,11 +449,14 @@ export const useUnifiedModelManagement = (
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
     }, 100);
-  }, [selectedSKU, data, models, businessContext, generateDataHash, getCachedParameters, isCacheValid, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters, modelHasParameters]);
+  }, [selectedSKU, data, models, businessContext, generateDataHash, getCachedParameters, isCacheValid, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters, isValidSelectedSKU]);
 
   const useGridOptimization = useCallback(async (modelId: string) => {
     // Early return if no valid SKU
-    if (!selectedSKU || selectedSKU.trim() === '') return;
+    if (!isValidSelectedSKU) {
+      console.log('❌ useGridOptimization: Invalid SKU, skipping');
+      return;
+    }
     
     console.log(`📊 Grid button clicked for ${modelId}`);
     isTogglingAIManualRef.current = true;
@@ -500,11 +562,14 @@ export const useUnifiedModelManagement = (
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
     }, 100);
-  }, [selectedSKU, data, models, businessContext, generateDataHash, getCachedParameters, isCacheValid, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters, modelHasParameters]);
+  }, [selectedSKU, data, models, businessContext, generateDataHash, getCachedParameters, isCacheValid, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters, isValidSelectedSKU]);
 
   const resetToManual = useCallback((modelId: string) => {
     // Early return if no valid SKU
-    if (!selectedSKU || selectedSKU.trim() === '') return;
+    if (!isValidSelectedSKU) {
+      console.log('❌ resetToManual: Invalid SKU, skipping');
+      return;
+    }
     
     isTogglingAIManualRef.current = true;
     
@@ -534,7 +599,7 @@ export const useUnifiedModelManagement = (
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
     }, 100);
-  }, [selectedSKU, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod]);
+  }, [selectedSKU, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, isValidSelectedSKU]);
 
   return {
     models,

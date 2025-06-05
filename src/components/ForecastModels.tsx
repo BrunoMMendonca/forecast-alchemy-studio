@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useUnifiedModelManagement } from '@/hooks/useUnifiedModelManagement';
@@ -36,7 +37,25 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   const componentMountedRef = useRef(false);
   const autoOptimizationDoneRef = useRef(false);
   
-  // Use the unified model management hook
+  // Auto-select first SKU when data changes - FIXED to prevent empty strings
+  useEffect(() => {
+    const skus = Array.from(new Set(data.map(d => d.sku))).sort();
+    console.log('🔄 ForecastModels SKU auto-selection check:', {
+      availableSKUs: skus,
+      currentSelectedSKU: selectedSKU,
+      selectedSKUType: typeof selectedSKU,
+      selectedSKULength: selectedSKU?.length,
+      shouldAutoSelect: skus.length > 0 && (!selectedSKU || selectedSKU.trim() === '')
+    });
+    
+    // Only auto-select if we have SKUs and no valid selected SKU
+    if (skus.length > 0 && (!selectedSKU || selectedSKU.trim() === '')) {
+      console.log('✅ Auto-selecting first SKU:', skus[0]);
+      onSKUChange(skus[0]);
+    }
+  }, [data, selectedSKU, onSKUChange]);
+
+  // Use the unified model management hook - ONLY if we have a valid SKU
   const {
     models,
     toggleModel,
@@ -46,7 +65,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     resetToManual,
     generateForecasts
   } = useUnifiedModelManagement(
-    selectedSKU,
+    selectedSKU && selectedSKU.trim() ? selectedSKU : '', // Ensure we never pass empty strings
     data,
     forecastPeriods,
     undefined,
@@ -115,13 +134,22 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     }
   }, [isOptimizing, optimizationQueue?.getSKUsInQueue().length]);
 
-  // Auto-select first SKU when data changes (only if no SKU selected)
-  useEffect(() => {
-    const skus = Array.from(new Set(data.map(d => d.sku))).sort();
-    if (skus.length > 0 && !selectedSKU) {
-      onSKUChange(skus[0]);
-    }
-  }, [data, selectedSKU, onSKUChange]);
+  // Don't render anything if we don't have a valid SKU yet
+  if (!selectedSKU || selectedSKU.trim() === '') {
+    console.log('⏳ ForecastModels waiting for valid SKU selection...');
+    return (
+      <div className="space-y-6">
+        <ProductSelector
+          data={data}
+          selectedSKU={selectedSKU}
+          onSKUChange={onSKUChange}
+        />
+        <div className="text-center text-gray-500 py-8">
+          Please select a product to begin forecasting...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
