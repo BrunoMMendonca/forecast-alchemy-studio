@@ -41,10 +41,9 @@ export const useForecastCache = () => {
         });
         
         setForecastCache(filteredCache);
-        console.log('Loaded forecast cache from storage');
       }
     } catch (error) {
-      console.error('Failed to load forecast cache from localStorage:', error);
+      // Silent error handling
     }
   }, []);
 
@@ -53,7 +52,7 @@ export const useForecastCache = () => {
     try {
       localStorage.setItem(FORECAST_CACHE_KEY, JSON.stringify(forecastCache));
     } catch (error) {
-      console.error('Failed to save forecast cache to localStorage:', error);
+      // Silent error handling
     }
   }, [forecastCache]);
 
@@ -76,11 +75,9 @@ export const useForecastCache = () => {
     if (cached && 
         cached.parametersHash === parametersHash && 
         cached.forecastPeriods === forecastPeriods) {
-      console.log(`Forecast cache HIT for ${sku}:${modelName}`);
       return cached.result;
     }
     
-    console.log(`Forecast cache MISS for ${sku}:${modelName}`);
     return null;
   }, [forecastCache]);
 
@@ -101,8 +98,6 @@ export const useForecastCache = () => {
         }
       }
     }));
-    
-    console.log(`Cached forecast for ${result.sku}:${result.model}`);
   }, []);
 
   const clearForecastCacheForSKU = useCallback((sku: string) => {

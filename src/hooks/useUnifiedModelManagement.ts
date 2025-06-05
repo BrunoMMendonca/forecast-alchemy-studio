@@ -42,7 +42,6 @@ export const useUnifiedModelManagement = (
   } = useForecastCache();
 
   const [models, setModels] = useState<ModelConfig[]>(() => {
-    console.log('🎯 UNIFIED: Creating default models');
     return getDefaultModels();
   });
 
@@ -65,13 +64,11 @@ export const useUnifiedModelManagement = (
   const generateForecasts = useCallback(async () => {
     if (!selectedSKU || models.length === 0) return;
     if (forecastGenerationInProgressRef.current) {
-      console.log('🔄 UNIFIED: Forecast generation already in progress, skipping');
       return;
     }
 
     // Check if we've already generated for this exact state
     if (lastForecastGenerationHashRef.current === modelsHash) {
-      console.log('🔇 UNIFIED: Already generated forecasts for this exact model state, skipping');
       return;
     }
 
@@ -79,7 +76,6 @@ export const useUnifiedModelManagement = (
     if (enabledModels.length === 0) return;
 
     try {
-      console.log(`🎯 UNIFIED: Generating forecasts for ${selectedSKU} (hash: ${modelsHash.substring(0, 16)})`);
       forecastGenerationInProgressRef.current = true;
       lastForecastGenerationHashRef.current = modelsHash;
       
@@ -92,8 +88,6 @@ export const useUnifiedModelManagement = (
         setCachedForecast,
         generateParametersHash
       );
-
-      console.log(`✅ UNIFIED: Generated ${results.length} forecasts for ${selectedSKU}`);
       
       if (onForecastGeneration) {
         onForecastGeneration(results, selectedSKU);
@@ -105,7 +99,6 @@ export const useUnifiedModelManagement = (
         description: error instanceof Error ? error.message : "Failed to generate forecasts. Please try again.",
         variant: "destructive",
       });
-      console.error('UNIFIED: Forecast generation error:', error);
     } finally {
       forecastGenerationInProgressRef.current = false;
     }
@@ -122,11 +115,8 @@ export const useUnifiedModelManagement = (
     );
 
     if (!shouldProcess) {
-      console.log(`🔇 UNIFIED: Skipping cache update - already processed version ${cacheVersion} for ${selectedSKU}`);
       return;
     }
-
-    console.log(`🔄 UNIFIED CACHE PROCESSING: v${cacheVersion} for ${selectedSKU} (prev: v${lastProcessedCacheVersionRef.current})`);
     
     lastProcessedCacheVersionRef.current = cacheVersion;
     lastProcessedSKURef.current = selectedSKU;
@@ -141,7 +131,6 @@ export const useUnifiedModelManagement = (
       const cached = cache[selectedSKU]?.[model.id];
 
       if (preference === 'manual') {
-        console.log(`👤 UNIFIED MODEL ${model.id}: Using manual parameters`);
         return model;
       }
 
@@ -161,7 +150,6 @@ export const useUnifiedModelManagement = (
       }
 
       if (selectedCache) {
-        console.log(`✅ UNIFIED USING CACHE: ${model.id} with method ${selectedCache.method}`);
         return {
           ...model,
           optimizedParameters: selectedCache.parameters,
@@ -175,12 +163,6 @@ export const useUnifiedModelManagement = (
 
       return model;
     });
-
-    console.log('🎯 UNIFIED SETTING NEW MODELS:', updatedModels.map(m => ({ 
-      id: m.id, 
-      hasOptimized: !!m.optimizedParameters,
-      method: m.optimizationMethod 
-    })));
     
     setModels(updatedModels);
     
@@ -197,8 +179,6 @@ export const useUnifiedModelManagement = (
 
     // Only generate if the hash has actually changed and we're not currently processing
     if (lastForecastGenerationHashRef.current !== modelsHash && !forecastGenerationInProgressRef.current) {
-      console.log(`🔄 UNIFIED: Model hash changed (${modelsHash.substring(0, 16)}), scheduling forecast generation for ${selectedSKU}`);
-      
       // Use a timeout to debounce rapid changes
       const timeoutId = setTimeout(() => {
         if (lastForecastGenerationHashRef.current !== modelsHash) {
@@ -227,8 +207,6 @@ export const useUnifiedModelManagement = (
     saveManualAIPreferences(preferences);
     setSelectedMethod(selectedSKU, modelId, 'manual');
 
-    console.log(`UNIFIED PREFERENCE: Updated ${preferenceKey} to manual (parameter change)`);
-
     setModels(prev => prev.map(model => 
       model.id === modelId 
         ? { 
@@ -253,7 +231,6 @@ export const useUnifiedModelManagement = (
   }, [selectedSKU, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod]);
 
   const useAIOptimization = useCallback(async (modelId: string) => {
-    console.log(`🤖 UNIFIED USE AI: Starting AI optimization for ${selectedSKU}:${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -271,7 +248,6 @@ export const useUnifiedModelManagement = (
         const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
         
         if (result) {
-          console.log(`✅ UNIFIED USE AI: Fresh AI optimization succeeded for ${preferenceKey}`);
           setCachedParameters(
             selectedSKU, 
             modelId, 
@@ -286,7 +262,7 @@ export const useUnifiedModelManagement = (
         }
       }
     } catch (error) {
-      console.error('UNIFIED: AI optimization failed:', error);
+      console.error('AI optimization failed:', error);
     }
     
     setTimeout(() => {
@@ -295,7 +271,6 @@ export const useUnifiedModelManagement = (
   }, [selectedSKU, data, models, businessContext, generateDataHash, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters]);
 
   const useGridOptimization = useCallback(async (modelId: string) => {
-    console.log(`🔍 UNIFIED GRID: Starting Grid optimization for ${selectedSKU}:${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -313,7 +288,6 @@ export const useUnifiedModelManagement = (
         const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
         
         if (result) {
-          console.log(`✅ UNIFIED GRID: Fresh Grid optimization succeeded for ${preferenceKey}`);
           setCachedParameters(
             selectedSKU, 
             modelId, 
@@ -328,7 +302,7 @@ export const useUnifiedModelManagement = (
         }
       }
     } catch (error) {
-      console.error('UNIFIED: Grid optimization failed:', error);
+      console.error('Grid optimization failed:', error);
     }
     
     setTimeout(() => {
@@ -337,7 +311,6 @@ export const useUnifiedModelManagement = (
   }, [selectedSKU, data, models, businessContext, generateDataHash, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters]);
 
   const resetToManual = useCallback((modelId: string) => {
-    console.log(`👤 UNIFIED RESET TO MANUAL: ${selectedSKU}:${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();

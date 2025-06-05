@@ -30,10 +30,9 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
         const settings: GlobalForecastSettings = JSON.parse(stored);
         setForecastPeriodsState(settings.forecastPeriods || DEFAULT_SETTINGS.forecastPeriods);
         setBusinessContextState(settings.businessContext || DEFAULT_SETTINGS.businessContext);
-        console.log('📋 Loaded global forecast settings from localStorage:', settings);
       }
     } catch (error) {
-      console.error('Failed to load global forecast settings:', error);
+      // Silent error handling
     }
   }, []);
 
@@ -45,9 +44,8 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
         businessContext: context
       };
       localStorage.setItem(GLOBAL_SETTINGS_KEY, JSON.stringify(settings));
-      console.log('💾 Saved global forecast settings to localStorage:', settings);
     } catch (error) {
-      console.error('Failed to save global forecast settings:', error);
+      // Silent error handling
     }
   }, []);
 
@@ -58,7 +56,6 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
     
     // Trigger re-optimization if the value actually changed
     if (oldPeriods !== periods && props?.onSettingsChange) {
-      console.log('🔄 Forecast periods changed, triggering re-optimization');
       props.onSettingsChange('forecastPeriods');
     }
   }, [forecastPeriods, businessContext, saveSettings, props]);
@@ -70,7 +67,6 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
     
     // Trigger re-optimization if the value actually changed
     if (JSON.stringify(oldContext) !== JSON.stringify(context) && props?.onSettingsChange) {
-      console.log('🔄 Business context changed, triggering re-optimization');
       props.onSettingsChange('businessContext');
     }
   }, [forecastPeriods, businessContext, saveSettings, props]);
@@ -82,7 +78,6 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
     
     // Trigger re-optimization for reset
     if (props?.onSettingsChange) {
-      console.log('🔄 Settings reset to defaults, triggering re-optimization');
       props.onSettingsChange('forecastPeriods');
     }
   }, [saveSettings, props]);

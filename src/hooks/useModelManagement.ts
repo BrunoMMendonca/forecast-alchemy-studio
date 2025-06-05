@@ -1,3 +1,4 @@
+
 // DEPRECATED: This file is being replaced by useUnifiedModelManagement.ts
 // TODO: Remove this file after confirming the unified hook works correctly
 
@@ -21,7 +22,6 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
   const isTogglingAIManualRef = useRef<boolean>(false);
 
   const [models, setModels] = useState<ModelConfig[]>(() => {
-    console.log('🎯 INITIAL STATE: Creating default models');
     return getDefaultModels();
   });
 
@@ -31,8 +31,6 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
       return getDefaultModels();
     }
 
-    console.log('🔄 CREATING MODELS: Reading fresh data from localStorage for', selectedSKU);
-    
     // Always read fresh from localStorage
     let optimizationCache = {};
     let preferences = {};
@@ -59,10 +57,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
       const preference = preferences[preferenceKey] || 'ai';
       const cached = optimizationCache[selectedSKU]?.[model.id];
 
-      console.log(`📋 MODEL ${model.id}: preference=${preference}, hasCache=${!!cached}, cacheVersion=${cacheVersion}`);
-
       if (preference === 'manual') {
-        console.log(`👤 MODEL ${model.id}: Using manual parameters`);
         return model;
       }
 
@@ -70,23 +65,18 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
       let selectedCache = null;
       if (preference === 'ai' && cached?.ai && cached.ai.dataHash === currentDataHash) {
         selectedCache = cached.ai;
-        console.log(`🤖 MODEL ${model.id}: Using AI cache`);
       } else if (preference === 'grid' && cached?.grid && cached.grid.dataHash === currentDataHash) {
         selectedCache = cached.grid;
-        console.log(`🔍 MODEL ${model.id}: Using Grid cache`);
       } else {
         // Fallback to any valid cache
         if (cached?.ai && cached.ai.dataHash === currentDataHash) {
           selectedCache = cached.ai;
-          console.log(`🤖 MODEL ${model.id}: Fallback to AI cache`);
         } else if (cached?.grid && cached.grid.dataHash === currentDataHash) {
           selectedCache = cached.grid;
-          console.log(`🔍 MODEL ${model.id}: Fallback to Grid cache`);
         }
       }
 
       if (selectedCache) {
-        console.log(`✅ USING CACHE: ${model.id} with method ${selectedCache.method}, params:`, selectedCache.parameters);
         return {
           ...model,
           optimizedParameters: selectedCache.parameters,
@@ -98,7 +88,6 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
         };
       }
 
-      console.log(`❌ NO CACHE: ${model.id} using default parameters`);
       return model;
     });
   }, [selectedSKU, data, generateDataHash, cacheVersion]);
@@ -106,13 +95,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
   // Single effect that updates models when cache version changes
   useEffect(() => {
     if (selectedSKU && cacheVersion > 0) {
-      console.log(`🔄 CACHE VERSION CHANGED: ${cacheVersion}, updating models for ${selectedSKU}`);
       const updatedModels = createModelsWithCurrentData();
-      console.log('🎯 SETTING NEW MODELS:', updatedModels.map(m => ({ 
-        id: m.id, 
-        hasOptimized: !!m.optimizedParameters,
-        method: m.optimizationMethod 
-      })));
       setModels(updatedModels);
     }
   }, [cacheVersion, selectedSKU, createModelsWithCurrentData]);
@@ -120,7 +103,6 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
   // Effect for SKU changes
   useEffect(() => {
     if (selectedSKU) {
-      console.log(`🔄 SKU CHANGED: Updating models for ${selectedSKU}`);
       const updatedModels = createModelsWithCurrentData();
       setModels(updatedModels);
     }
@@ -140,8 +122,6 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     preferences[preferenceKey] = 'manual';
     saveManualAIPreferences(preferences);
     setSelectedMethod(selectedSKU, modelId, 'manual');
-
-    console.log(`PREFERENCE: Updated ${preferenceKey} to manual (parameter change)`);
 
     setModels(prev => prev.map(model => 
       model.id === modelId 
@@ -164,7 +144,6 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
   };
 
   const useAIOptimization = async (modelId: string) => {
-    console.log(`🤖 USE AI: Starting AI optimization for ${selectedSKU}:${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -187,18 +166,14 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     const cached = optimizationCache[selectedSKU]?.[modelId];
     
     if (cached?.ai && cached.ai.dataHash === currentDataHash) {
-      console.log(`✅ USE AI: Using cached AI result for ${preferenceKey}`);
       // Cache will trigger model update via cacheVersion
     } else {
-      console.log(`🔄 USE AI: Running fresh AI optimization for ${preferenceKey}`);
-      
       try {
         const model = models.find(m => m.id === modelId);
         if (model) {
           const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
           
           if (result) {
-            console.log(`✅ USE AI: Fresh AI optimization succeeded for ${preferenceKey}`);
             setCachedParameters(
               selectedSKU, 
               modelId, 
@@ -223,7 +198,6 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
   };
 
   const useGridOptimization = async (modelId: string) => {
-    console.log(`🔍 GRID: Starting Grid optimization for ${selectedSKU}:${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -246,18 +220,14 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     const cached = optimizationCache[selectedSKU]?.[modelId];
     
     if (cached?.grid && cached.grid.dataHash === currentDataHash) {
-      console.log(`✅ GRID: Using cached Grid result for ${preferenceKey}`);
       // Cache will trigger model update via cacheVersion
     } else {
-      console.log(`🔄 GRID: Running fresh Grid optimization for ${preferenceKey}`);
-      
       try {
         const model = models.find(m => m.id === modelId);
         if (model) {
           const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
           
           if (result) {
-            console.log(`✅ GRID: Fresh Grid optimization succeeded for ${preferenceKey}`);
             setCachedParameters(
               selectedSKU, 
               modelId, 
@@ -282,7 +252,6 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
   };
 
   const resetToManual = (modelId: string) => {
-    console.log(`👤 RESET TO MANUAL: ${selectedSKU}:${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -312,7 +281,6 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
 
   const refreshModelsWithPreferences = useCallback(() => {
     if (!isTogglingAIManualRef.current) {
-      console.log('🔄 REFRESH: Manually refreshing models');
       const updatedModels = createModelsWithCurrentData();
       setModels(updatedModels);
     }

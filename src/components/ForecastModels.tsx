@@ -64,13 +64,11 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   // Mark component as mounted and handle initial optimization
   useEffect(() => {
     componentMountedRef.current = true;
-    console.log('📊 FORECAST MODELS: Component mounted');
     
     // Only auto-trigger once per mount
     if (optimizationQueue && !autoOptimizationDoneRef.current) {
       const queuedSKUs = optimizationQueue.getSKUsInQueue();
       if (queuedSKUs.length > 0 && !isOptimizing) {
-        console.log('🚀 FORECAST MODELS: Auto-starting optimization on mount for queued SKUs:', queuedSKUs);
         autoOptimizationDoneRef.current = true;
         
         // Add delay to ensure all components are ready
@@ -98,7 +96,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   // CONTROLLED shouldStartOptimization trigger - only once per change
   useEffect(() => {
     if (shouldStartOptimization && !isOptimizing && !hasTriggeredOptimizationRef.current && componentMountedRef.current) {
-      console.log('🚀 AUTO-TRIGGER: shouldStartOptimization is true, starting optimization...');
       hasTriggeredOptimizationRef.current = true;
       handleQueueOptimization();
       if (onOptimizationStarted) {
@@ -123,7 +120,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   useEffect(() => {
     const skus = Array.from(new Set(data.map(d => d.sku))).sort();
     if (skus.length > 0 && !selectedSKU) {
-      console.log('🎯 AUTO-SELECTING first SKU:', skus[0]);
       onSKUChange(skus[0]);
     }
   }, [data, selectedSKU, onSKUChange]);
