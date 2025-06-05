@@ -1,4 +1,3 @@
-
 import { optimizeParametersWithGrok } from '@/utils/grokApiUtils';
 import { adaptiveGridSearchOptimization, enhancedParameterValidation } from '@/utils/adaptiveOptimization';
 import { ENHANCED_VALIDATION_CONFIG } from '@/utils/enhancedValidation';
@@ -237,8 +236,7 @@ const runGridOptimization = async (
       {
         ...ENHANCED_VALIDATION_CONFIG,
         tolerance: 2.0, // Increased tolerance for grid search
-        useWalkForward: true,
-        minDataPoints: 3
+        useWalkForward: true
       }
     );
     
