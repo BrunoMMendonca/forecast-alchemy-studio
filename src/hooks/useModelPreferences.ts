@@ -30,6 +30,7 @@ export const useModelPreferences = (selectedSKU: string, data: SalesData[]) => {
       const currentDataHash = generateDataHash(skuData);
       
       console.log(`📋 Creating models with preferences for ${selectedSKU}:`, preferences);
+      console.log(`📋 Current data hash: ${currentDataHash.substring(0, 50)}...`);
       
       return defaultModels.map(model => {
         const preferenceKey = `${selectedSKU}:${model.id}`;

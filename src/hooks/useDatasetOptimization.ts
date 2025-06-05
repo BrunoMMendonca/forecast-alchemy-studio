@@ -44,25 +44,34 @@ export const useDatasetOptimization = () => {
   }, [optimizationState]);
 
   const generateDatasetFingerprint = useCallback((data: SalesData[]): string => {
-    const sortedData = [...data].sort((a, b) => {
+    if (!data || data.length === 0) {
+      console.log('DATASET: Empty data, returning empty fingerprint');
+      return 'empty';
+    }
+
+    // Use the same sorting and format as useOptimizationCache
+    const sorted = [...data].sort((a, b) => {
       const skuCompare = a.sku.localeCompare(b.sku);
       if (skuCompare !== 0) return skuCompare;
       return a.date.localeCompare(b.date);
     });
     
-    const skus = Array.from(new Set(sortedData.map(d => d.sku))).sort();
-    const totalSales = Math.round(sortedData.reduce((sum, d) => sum + d.sales, 0));
-    const outliersCount = sortedData.filter(d => d.isOutlier).length;
-    const notesCount = sortedData.filter(d => d.note && d.note.trim()).length;
+    // Create consistent hash format matching useOptimizationCache
+    const salesValues = sorted.map(d => Math.round(d.sales * 1000) / 1000);
+    const outlierFlags = sorted.map(d => d.isOutlier ? '1' : '0').join('');
+    const noteFlags = sorted.map(d => d.note ? '1' : '0').join('');
     
-    const fingerprint = `${skus.length}-${sortedData.length}-${totalSales}-${outliersCount}-${notesCount}`;
-    return btoa(fingerprint).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+    // Use the same format as generateDataHash in useOptimizationCache
+    const fingerprint = `${sorted.length}-${salesValues.join('-')}-${outlierFlags}-${noteFlags}`;
+    
+    console.log('DATASET: Generated fingerprint:', fingerprint.substring(0, 100), '...');
+    return fingerprint;
   }, []);
 
   const isOptimizationComplete = useCallback((data: SalesData[]): boolean => {
     const currentFingerprint = generateDatasetFingerprint(data);
     
-    console.log(`DATASET: Checking optimization completion - current: ${currentFingerprint}, stored: ${optimizationState?.fingerprint}, completed: ${optimizationState?.completed}`);
+    console.log(`DATASET: Checking optimization completion - current: ${currentFingerprint.substring(0, 50)}..., stored: ${optimizationState?.fingerprint?.substring(0, 50)}..., completed: ${optimizationState?.completed}`);
     
     if (optimizationState && 
         optimizationState.fingerprint === currentFingerprint && 
@@ -84,7 +93,7 @@ export const useDatasetOptimization = () => {
     };
     
     setOptimizationState(newState);
-    console.log(`DATASET: ✅ MARKED OPTIMIZATION COMPLETE for fingerprint: ${fingerprint}`);
+    console.log(`DATASET: ✅ MARKED OPTIMIZATION COMPLETE for fingerprint: ${fingerprint.substring(0, 50)}...`);
   }, [generateDatasetFingerprint]);
 
   const clearOptimizationState = useCallback(() => {
