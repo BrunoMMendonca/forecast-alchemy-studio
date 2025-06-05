@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Settings, Brain, Target, Clock, BarChart3 } from 'lucide-react';
+import { Settings, Brain, Target, Clock, BarChart3, TrendingUp } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { BusinessContext, BUSINESS_CONTEXT_OPTIONS } from '@/types/businessContext';
 
@@ -104,28 +104,28 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
               </Select>
             </div>
 
-            {/* Forecast Horizon */}
+            {/* Planning Purpose */}
             <div className="space-y-2">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Label className="flex items-center gap-2 cursor-help">
-                    <Clock className="h-4 w-4" />
-                    Forecast Horizon
+                    <TrendingUp className="h-4 w-4" />
+                    Planning Purpose
                   </Label>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>How far into the future you're planning</p>
+                  <p>How you'll use these forecasts in your business planning</p>
                 </TooltipContent>
               </Tooltip>
               <Select
-                value={businessContext.forecastHorizon}
-                onValueChange={(value) => updateBusinessContext('forecastHorizon', value)}
+                value={businessContext.planningPurpose}
+                onValueChange={(value) => updateBusinessContext('planningPurpose', value)}
               >
                 <SelectTrigger className="w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {BUSINESS_CONTEXT_OPTIONS.forecastHorizon.map((option) => (
+                  {BUSINESS_CONTEXT_OPTIONS.planningPurpose.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       <div>
                         <div className="font-medium">{option.label}</div>

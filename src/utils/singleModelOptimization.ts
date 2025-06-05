@@ -1,4 +1,3 @@
-
 import { optimizeParametersWithGrok } from '@/utils/grokApiUtils';
 import { adaptiveGridSearchOptimization } from '@/utils/adaptiveOptimization';
 import { ENHANCED_VALIDATION_CONFIG } from '@/utils/enhancedValidation';
@@ -191,7 +190,7 @@ const runBothOptimizations = async (
       // Use provided business context or default
       const contextToUse = businessContext || {
         costOfError: 'medium' as const,
-        forecastHorizon: 'medium' as const,
+        planningPurpose: 'tactical' as const,
         updateFrequency: 'weekly' as const,
         interpretabilityNeeds: 'medium' as const
       };
@@ -323,7 +322,7 @@ export const getOptimizationByMethod = async (
       // Use provided business context or default
       const contextToUse = businessContext || {
         costOfError: 'medium' as const,
-        forecastHorizon: 'medium' as const,
+        planningPurpose: 'tactical' as const,
         updateFrequency: 'weekly' as const,
         interpretabilityNeeds: 'medium' as const
       };

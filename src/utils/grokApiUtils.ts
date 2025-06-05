@@ -1,3 +1,4 @@
+
 export interface GrokOptimizationRequest {
   modelType: string;
   historicalData: number[];
@@ -14,7 +15,7 @@ export interface GrokOptimizationRequest {
   };
   businessContext?: {
     costOfError?: 'low' | 'medium' | 'high';
-    forecastHorizon?: 'short' | 'medium' | 'long';
+    planningPurpose?: 'operational' | 'tactical' | 'strategic';
     updateFrequency?: 'daily' | 'weekly' | 'monthly';
     interpretabilityNeeds?: 'low' | 'medium' | 'high';
   };
@@ -119,7 +120,7 @@ export const optimizeParametersWithGrok = async (
   const businessContextText = request.businessContext ? `
 BUSINESS CONTEXT:
 - Cost of Forecast Error: ${request.businessContext.costOfError || 'medium'} (affects parameter conservativeness)
-- Forecast Horizon: ${request.businessContext.forecastHorizon || 'medium'} term planning
+- Planning Purpose: ${request.businessContext.planningPurpose || 'tactical'} planning
 - Update Frequency: ${request.businessContext.updateFrequency || 'weekly'} model updates
 - Interpretability Needs: ${request.businessContext.interpretabilityNeeds || 'medium'} (simpler models preferred if high)
 ` : '';
@@ -261,7 +262,7 @@ export const getModelRecommendation = async (
   apiKey: string,
   businessContext?: {
     costOfError?: 'low' | 'medium' | 'high';
-    forecastHorizon?: 'short' | 'medium' | 'long';
+    planningPurpose?: 'operational' | 'tactical' | 'strategic';
     interpretabilityNeeds?: 'low' | 'medium' | 'high';
   }
 ): Promise<GrokModelRecommendation> => {
@@ -270,7 +271,7 @@ export const getModelRecommendation = async (
   const businessContextText = businessContext ? `
 BUSINESS CONTEXT:
 - Cost of Forecast Error: ${businessContext.costOfError || 'medium'} (high = favor stable models, low = favor accurate models)
-- Forecast Horizon: ${businessContext.forecastHorizon || 'medium'} term (affects model complexity preference)
+- Planning Purpose: ${businessContext.planningPurpose || 'tactical'} planning (affects model complexity preference)
 - Interpretability Needs: ${businessContext.interpretabilityNeeds || 'medium'} (high = favor simpler models)
 ` : '';
 

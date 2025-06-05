@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
