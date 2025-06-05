@@ -32,10 +32,7 @@ export const optimizeSingleModel = async (
   selectedResult: OptimizationResult | GridOptimizationResult;
   bothResults?: { ai?: OptimizationResult; grid: GridOptimizationResult };
 }> => {
-  console.log(`🚀 OPTIMIZATION START: ${sku}:${model.id} (forceGrid: ${forceGridSearch})`);
-  
   if (!model.parameters || Object.keys(model.parameters).length === 0) {
-    console.log(`⚠️ No parameters to optimize for ${sku}:${model.id}`);
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
@@ -65,7 +62,6 @@ export const optimizeSingleModel = async (
   }
 
   if (forceGridSearch) {
-    console.log(`🔍 FORCE GRID: Running grid-only optimization for ${sku}:${model.id}`);
     const gridResult = await runGridOptimization(model, skuData, sku);
     return { 
       selectedResult: gridResult,
@@ -75,7 +71,6 @@ export const optimizeSingleModel = async (
 
   const results = await runBothOptimizations(model, skuData, sku, progressUpdater, businessContext);
   
-  console.log(`✅ OPTIMIZATION COMPLETE: ${sku}:${model.id} using ${results.selectedResult.method}`);
   return {
     selectedResult: results.selectedResult,
     bothResults: results.bothResults
@@ -89,8 +84,6 @@ const runBothOptimizations = async (
   progressUpdater: ProgressUpdater,
   businessContext?: BusinessContext
 ): Promise<MultiMethodResult> => {
-  console.log(`🔄 DUAL OPTIMIZATION: Starting Grid + AI for ${sku}:${model.id}`);
-  
   optimizationLogger.logStep({
     sku,
     modelId: model.id,
@@ -105,8 +98,8 @@ const runBothOptimizations = async (
   optimizationLogger.logStep({
     sku,
     modelId: model.id,
-    step: 'complete',
-    message: `Grid optimization complete: ${gridResult.accuracy.toFixed(2)}% accuracy`,
+    step: 'grid_search',
+    message: `Grid optimization complete`,
     parameters: gridResult.parameters
   });
 
@@ -124,14 +117,26 @@ const runBothOptimizations = async (
   
   if (aiResult) {
     selectedResult = aiResult;
-    console.log(`🎯 USING AI RESULT for ${sku}:${model.id}: AI succeeded`);
+    optimizationLogger.logStep({
+      sku,
+      modelId: model.id,
+      step: 'ai_success',
+      message: 'AI optimization succeeded',
+      parameters: aiResult.parameters
+    });
     progressUpdater.setProgress(prev => prev ? { 
       ...prev, 
       aiOptimized: prev.aiOptimized + 1
     } : null);
   } else {
     selectedResult = gridResult;
-    console.log(`🎯 USING GRID RESULT for ${sku}:${model.id}: AI failed`);
+    optimizationLogger.logStep({
+      sku,
+      modelId: model.id,
+      step: 'ai_rejected',
+      message: 'AI optimization failed, using Grid result',
+      parameters: gridResult.parameters
+    });
   }
 
   return {
@@ -152,8 +157,6 @@ export const getOptimizationByMethod = async (
   method: 'ai' | 'grid',
   businessContext?: BusinessContext
 ): Promise<OptimizationResult | GridOptimizationResult | null> => {
-  console.log(`🎯 GET OPTIMIZATION: ${method} for ${sku}:${model.id}`);
-
   if (method === 'grid') {
     return await runGridOptimization(model, skuData, sku);
   }
@@ -186,8 +189,6 @@ export const optimizeModelForSKU = async (
   error?: string;
 }> => {
   try {
-    console.log(`🚀 optimizeModelForSKU: Starting optimization for ${sku}:${model.id}`);
-    
     const progressUpdater = { setProgress: () => {} };
     const result = await optimizeSingleModel(model, skuData, sku, progressUpdater, false, businessContext);
     
@@ -201,7 +202,6 @@ export const optimizeModelForSKU = async (
       method: result.selectedResult.method
     };
   } catch (error) {
-    console.error(`❌ optimizeModelForSKU: Error for ${sku}:${model.id}:`, error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'

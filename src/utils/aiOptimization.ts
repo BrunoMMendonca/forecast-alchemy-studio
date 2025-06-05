@@ -30,7 +30,6 @@ export const isValidApiKey = (apiKey: string): boolean => {
          !apiKey.includes('placeholder') &&
          apiKey.startsWith('xai-');
   
-  console.log(`🔑 API Key validation: ${isValid ? 'VALID' : 'INVALID'}`);
   return isValid;
 };
 
@@ -42,13 +41,10 @@ export const runAIOptimization = async (
   gridContext?: { parameters: Record<string, number>; accuracy: number }
 ): Promise<OptimizationResult | null> => {
   if (!isValidApiKey(GROK_API_KEY)) {
-    console.log(`❌ AI OPTIMIZATION: Invalid API key for ${sku}:${model.id}`);
     return null;
   }
 
   try {
-    console.log(`🤖 AI OPTIMIZATION: Starting for ${sku}:${model.id}`);
-    
     const frequency = detectDateFrequency(skuData.map(d => d.date));
     
     const contextToUse = businessContext || {
@@ -58,8 +54,6 @@ export const runAIOptimization = async (
       interpretabilityNeeds: 'medium' as const
     };
 
-    console.log(`🤖 CALLING GROK API for ${sku}:${model.id} with business context:`, contextToUse);
-
     const grokResult = await optimizeParametersWithGrok({
       modelType: model.id,
       historicalData: skuData.map(d => d.sales),
@@ -68,12 +62,6 @@ export const runAIOptimization = async (
       targetMetric: 'accuracy',
       businessContext: contextToUse
     }, GROK_API_KEY, gridContext);
-
-    console.log(`🤖 GROK SUCCESS for ${sku}:${model.id}:`, {
-      hasParameters: !!grokResult.optimizedParameters,
-      confidence: grokResult.confidence,
-      expectedAccuracy: grokResult.expectedAccuracy
-    });
 
     return {
       parameters: grokResult.optimizedParameters,
@@ -86,7 +74,6 @@ export const runAIOptimization = async (
     };
 
   } catch (error) {
-    console.error(`❌ AI OPTIMIZATION ERROR for ${sku}:${model.id}:`, error);
     return null;
   }
 };

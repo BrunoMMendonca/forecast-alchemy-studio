@@ -1,3 +1,4 @@
+
 export interface OptimizationStep {
   id: string;
   timestamp: number;
@@ -75,25 +76,26 @@ class OptimizationLogger {
         break;
     }
 
-    console.log(`🔍 [${step.sku}:${step.modelId}] ${step.message}`, {
-      parameters: step.parameters,
-      accuracy: step.accuracy,
-      confidence: step.confidence
-    });
+    // Only log essential optimization information
+    if (step.step === 'ai_success') {
+      console.log(`🤖 AI: ${step.sku}:${step.modelId}`);
+    } else if (step.step === 'grid_search') {
+      console.log(`🔍 Grid: ${step.sku}:${step.modelId}`);
+    }
 
     this.notifyListeners();
   }
 
   logBatchStart(skus: string[]): void {
-    console.log(`🚀 BATCH START: Starting optimization for ${skus.length} SKUs:`, skus);
+    // Removed verbose logging
   }
 
   logSKUComplete(sku: string): void {
-    console.log(`✅ SKU COMPLETE: Finished optimization for ${sku}`);
+    // Removed verbose logging
   }
 
   logBatchComplete(totalOptimized: number): void {
-    console.log(`🏁 BATCH COMPLETE: Optimized ${totalOptimized} models total`);
+    // Removed verbose logging
   }
 
   getCurrentLog(): OptimizationLog | null {
