@@ -14,13 +14,14 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     getCachedParameters, 
     setCachedParameters,
     setSelectedMethod,
-    cache 
+    cache,
+    cacheVersion // Add this to track cache changes
   } = useOptimizationCache();
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
   const { createModelsWithPreferences } = useModelPreferences(selectedSKU, data);
   const isTogglingAIManualRef = useRef<boolean>(false);
   const lastSelectedSKURef = useRef<string>('');
-  const lastCacheUpdateRef = useRef<number>(0);
+  const lastCacheVersionRef = useRef<number>(0);
 
   const [models, setModels] = useState<ModelConfig[]>(() => {
     console.log('🎯 INITIAL STATE CREATION WITH AI-DEFAULT');
@@ -36,6 +37,16 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
       lastSelectedSKURef.current = selectedSKU;
     }
   }, [selectedSKU, createModelsWithPreferences]);
+
+  // NEW: React to cache version changes for real-time updates
+  useEffect(() => {
+    if (selectedSKU && cacheVersion !== lastCacheVersionRef.current && !isTogglingAIManualRef.current) {
+      console.log(`🔄 CACHE VERSION CHANGED: ${lastCacheVersionRef.current} -> ${cacheVersion}, updating models for ${selectedSKU}`);
+      const modelsWithPreferences = createModelsWithPreferences();
+      setModels(modelsWithPreferences);
+      lastCacheVersionRef.current = cacheVersion;
+    }
+  }, [cacheVersion, selectedSKU, createModelsWithPreferences]);
 
   // Enhanced effect to update models when cache changes (after optimization)
   useEffect(() => {
