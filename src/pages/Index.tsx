@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -37,9 +38,7 @@ const Index = () => {
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
   const [selectedSKUForResults, setSelectedSKUForResults] = useState<string>('');
   const [currentStep, setCurrentStep] = useState(0);
-  const [shouldStartOptimization, setShouldStartOptimization] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const forecastModelsRef = useRef<any>(null);
   const { toast } = useToast();
 
   // Add optimization queue
@@ -61,12 +60,6 @@ const Index = () => {
       
       // Add all SKUs to optimization queue
       addSKUsToQueue(allSKUs, 'csv_upload'); // Using csv_upload as the reason for global re-optimization
-      
-      // Start optimization
-      setTimeout(() => {
-        setShouldStartOptimization(true);
-        console.log('⚙️ Setting shouldStartOptimization to true for global settings change');
-      }, 500);
       
       // Show toast notification
       toast({
@@ -117,16 +110,15 @@ const Index = () => {
     setForecastResults([]);
     setSelectedSKUForResults('');
     
-    // Mark all SKUs for optimization
+    // Mark all SKUs for optimization when user reaches forecasting step
     const skus = Array.from(new Set(data.map(d => d.sku)));
-    console.log('📤 Adding new SKUs to queue:', skus);
+    console.log('📤 Adding new SKUs to queue for future optimization:', skus);
     addSKUsToQueue(skus, 'csv_upload');
     
-    // Start optimization with a small delay to allow state updates
-    setTimeout(() => {
-      setShouldStartOptimization(true);
-      console.log('📤 Setting shouldStartOptimization to true');
-    }, 500);
+    toast({
+      title: "Data Uploaded",
+      description: `${skus.length} SKU${skus.length > 1 ? 's' : ''} ready for optimization`,
+    });
   };
 
   const handleDataCleaning = (cleaned: SalesData[], changedSKUs?: string[]) => {
@@ -143,10 +135,6 @@ const Index = () => {
       
       if (validChangedSKUs.length > 0) {
         addSKUsToQueue(validChangedSKUs, 'data_cleaning');
-        setTimeout(() => {
-          setShouldStartOptimization(true);
-          console.log('🧹 Setting shouldStartOptimization to true for data cleaning');
-        }, 500);
         
         // Show toast notification about optimization being triggered
         toast({
@@ -169,10 +157,6 @@ const Index = () => {
     if (validImportedSKUs.length > 0) {
       console.log('📥 Valid imported SKUs:', validImportedSKUs);
       addSKUsToQueue(validImportedSKUs, 'csv_import');
-      setTimeout(() => {
-        setShouldStartOptimization(true);
-        console.log('📥 Setting shouldStartOptimization to true for import');
-      }, 500);
       
       // Show toast notification about optimization being triggered
       toast({
@@ -190,11 +174,6 @@ const Index = () => {
       setSelectedSKUForResults(selectedSKU);
       console.log('Generated forecasts for SKU:', selectedSKU);
     }
-  };
-
-  const handleOptimizationStarted = () => {
-    console.log('🏁 Optimization started, resetting shouldStartOptimization flag');
-    setShouldStartOptimization(false);
   };
 
   return (
@@ -233,26 +212,6 @@ const Index = () => {
           onStepClick={setCurrentStep}
         />
 
-        {/* Hidden ForecastModels component for background optimization */}
-        {salesData.length > 0 && (
-          <div style={{ display: 'none' }}>
-            <ForecastModels 
-              ref={forecastModelsRef}
-              data={cleanedData}
-              forecastPeriods={forecastPeriods}
-              onForecastGeneration={handleForecastGeneration}
-              selectedSKU={selectedSKUForResults}
-              onSKUChange={setSelectedSKUForResults}
-              shouldStartOptimization={shouldStartOptimization}
-              onOptimizationStarted={handleOptimizationStarted}
-              optimizationQueue={{
-                getSKUsInQueue,
-                removeSKUsFromQueue
-              }}
-            />
-          </div>
-        )}
-
         {/* Main Content */}
         <div className="w-full">
           {currentStep === 0 && (
@@ -285,7 +244,7 @@ const Index = () => {
                   Data Visualization
                 </CardTitle>
                 <CardDescription>
-                  Explore your historical sales data across different SKUs (Optimization running in background)
+                  Explore your historical sales data across different SKUs
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -309,7 +268,7 @@ const Index = () => {
                   Outlier Detection & Cleaning
                 </CardTitle>
                 <CardDescription>
-                  Identify and remove outliers from your data to improve forecast accuracy (Optimization continues in background)
+                  Identify and remove outliers from your data to improve forecast accuracy
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -343,6 +302,7 @@ const Index = () => {
                     onForecastGeneration={handleForecastGeneration}
                     selectedSKU={selectedSKUForResults}
                     onSKUChange={setSelectedSKUForResults}
+                    shouldStartOptimization={queueSize > 0}
                     optimizationQueue={{
                       getSKUsInQueue,
                       removeSKUsFromQueue
