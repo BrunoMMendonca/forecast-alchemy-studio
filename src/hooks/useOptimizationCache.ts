@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -46,10 +45,12 @@ export const useOptimizationCache = () => {
 
   // Load state from localStorage on mount
   useEffect(() => {
+    console.log('🗄️ CACHE: Loading from localStorage...');
     try {
       const stored = localStorage.getItem(CACHE_KEY);
       if (stored) {
         const parsedCache = JSON.parse(stored);
+        console.log('🗄️ CACHE: Found stored cache with', Object.keys(parsedCache).length, 'SKUs');
         const now = Date.now();
         const filteredCache: OptimizationCache = {};
         
@@ -67,6 +68,9 @@ export const useOptimizationCache = () => {
                 
                 filteredCache[sku][modelId][method] = entry;
                 filteredCache[sku][modelId].selected = method;
+                console.log(`🗄️ CACHE: Loaded ${sku}:${modelId}:${method}`);
+              } else {
+                console.log(`🗄️ CACHE: Expired ${sku}:${modelId}:${method}`);
               }
             } else {
               const hasValidEntries = (entry.ai && now - entry.ai.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000) ||
@@ -75,25 +79,31 @@ export const useOptimizationCache = () => {
               if (hasValidEntries) {
                 if (!filteredCache[sku]) filteredCache[sku] = {};
                 filteredCache[sku][modelId] = entry;
+                console.log(`🗄️ CACHE: Loaded ${sku}:${modelId} with multiple methods`);
               }
             }
           });
         });
         
         setCache(filteredCache);
+        console.log('🗄️ CACHE: Final loaded cache has', Object.keys(filteredCache).length, 'SKUs');
+      } else {
+        console.log('🗄️ CACHE: No stored cache found');
       }
     } catch (error) {
-      // Silent error handling
+      console.error('🗄️ CACHE: Error loading from localStorage:', error);
     }
   }, []);
 
   // Save cache to localStorage when it changes
   useEffect(() => {
     if (Object.keys(cache).length > 0) {
+      console.log('🗄️ CACHE: Saving to localStorage with', Object.keys(cache).length, 'SKUs');
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+        console.log('🗄️ CACHE: Successfully saved to localStorage');
       } catch (error) {
-        // Silent error handling
+        console.error('🗄️ CACHE: Error saving to localStorage:', error);
       }
     }
   }, [cache]);
@@ -104,7 +114,9 @@ export const useOptimizationCache = () => {
     const outlierFlags = sorted.map(d => d.isOutlier ? '1' : '0').join('');
     const noteFlags = sorted.map(d => d.note ? '1' : '0').join('');
     
-    return `${sorted.length}-${salesValues.substring(0, 50)}-${outlierFlags}-${noteFlags}`.substring(0, 100);
+    const hash = `${sorted.length}-${salesValues.substring(0, 50)}-${outlierFlags}-${noteFlags}`.substring(0, 100);
+    console.log('🗄️ CACHE: Generated data hash:', hash);
+    return hash;
   }, []);
 
   const getSKUsNeedingOptimization = useCallback((
@@ -147,8 +159,10 @@ export const useOptimizationCache = () => {
     modelId: string, 
     method?: 'ai' | 'grid'
   ): OptimizedParameters | null => {
+    console.log(`🗄️ CACHE: Looking for ${sku}:${modelId}:${method || 'any'}`);
     const cached = cache[sku]?.[modelId];
     if (!cached) {
+      console.log(`🗄️ CACHE: MISS - No cache entry for ${sku}:${modelId}`);
       setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
       return null;
     }
@@ -156,9 +170,11 @@ export const useOptimizationCache = () => {
     if (method) {
       const result = cached[method];
       if (result) {
+        console.log(`🗄️ CACHE: HIT - Found ${sku}:${modelId}:${method}`);
         setCacheStats(prev => ({ ...prev, hits: prev.hits + 1 }));
         return result;
       } else {
+        console.log(`🗄️ CACHE: MISS - No ${method} method for ${sku}:${modelId}`);
         setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
         return null;
       }
@@ -168,9 +184,11 @@ export const useOptimizationCache = () => {
     const result = cached[selectedMethod] || cached.ai || cached.grid;
     
     if (result) {
+      console.log(`🗄️ CACHE: HIT - Found ${sku}:${modelId}:${selectedMethod}`);
       setCacheStats(prev => ({ ...prev, hits: prev.hits + 1 }));
       return result;
     } else {
+      console.log(`🗄️ CACHE: MISS - No valid method for ${sku}:${modelId}`);
       setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
       return null;
     }
@@ -192,6 +210,7 @@ export const useOptimizationCache = () => {
     expectedAccuracy?: number,
     method?: string
   ) => {
+    console.log(`🗄️ CACHE: Setting ${sku}:${modelId} with method ${method}`);
     const optimizedParams: OptimizedParameters = {
       parameters,
       timestamp: Date.now(),
@@ -212,6 +231,8 @@ export const useOptimizationCache = () => {
       cacheMethod = method === 'grid_search' ? 'grid' : 'ai';
     }
 
+    console.log(`🗄️ CACHE: Storing as ${cacheMethod} method`);
+
     setCache(prev => {
       const newCache = JSON.parse(JSON.stringify(prev));
       
@@ -223,10 +244,12 @@ export const useOptimizationCache = () => {
         newCache[sku][modelId].selected = cacheMethod;
       }
       
+      console.log(`🗄️ CACHE: Successfully stored ${sku}:${modelId}:${cacheMethod}`);
       return newCache;
     });
 
-    setCacheVersion(prev => prev + 1);
+    // Don't increment version here - it causes too many re-renders
+    console.log('🗄️ CACHE: Cache updated, triggering save');
   }, []);
 
   const setSelectedMethod = useCallback((
@@ -234,6 +257,7 @@ export const useOptimizationCache = () => {
     modelId: string,
     method: 'ai' | 'grid' | 'manual'
   ) => {
+    console.log(`🗄️ CACHE: Setting selected method ${sku}:${modelId} to ${method}`);
     setCache(prev => {
       const newCache = JSON.parse(JSON.stringify(prev));
       
