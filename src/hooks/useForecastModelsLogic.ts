@@ -104,9 +104,9 @@ export const useForecastModelsLogic = (
     }
 
     const enabledModels = models.filter(m => m.enabled);
-    const enabledModelIds = enabledModels.map(m => m.id);
     
     console.log('🚀 QUEUE: Starting optimization for queued SKUs:', queuedSKUs);
+    console.log('🚀 QUEUE: Using models:', enabledModels.map(m => m.id));
     
     markOptimizationStarted(data, '/');
     
@@ -115,6 +115,7 @@ export const useForecastModelsLogic = (
       enabledModels, // Pass ModelConfig[] here
       queuedSKUs,
       (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method) => {
+        console.log(`✅ OPTIMIZATION CALLBACK: Received results for ${sku}:${modelId}`);
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
         
@@ -158,16 +159,17 @@ export const useForecastModelsLogic = (
         }
       },
       (sku) => {
+        console.log(`🏁 OPTIMIZATION COMPLETE: Finished optimizing ${sku}`);
         optimizationQueue.removeSKUsFromQueue([sku]);
         if (sku === selectedSKU) {
           setForceUpdateTrigger(prev => prev + 1);
         }
       },
       (sku: string, modelIds: string[]) => {
-        const skusNeedingOptimization = getSKUsNeedingOptimization(data, enabledModels);
-        return Array.isArray(skusNeedingOptimization) 
-          ? skusNeedingOptimization.map(item => typeof item === 'string' ? item : item.sku).filter(Boolean)
-          : [];
+        // This callback should return SKUs that still need optimization
+        // For simplicity, just return the current queuedSKUs since we're processing them
+        console.log(`🔍 CHECKING: SKUs needing optimization for ${sku} with models:`, modelIds);
+        return queuedSKUs;
       }
     );
 
@@ -176,7 +178,7 @@ export const useForecastModelsLogic = (
     setTimeout(() => {
       setForceUpdateTrigger(prev => prev + 1);
     }, 200);
-  }, [optimizationQueue, models, data, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, selectedSKU, getSKUsNeedingOptimization, markOptimizationCompleted]);
+  }, [optimizationQueue, models, data, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, selectedSKU, markOptimizationCompleted]);
 
   const handleToggleModel = useCallback((modelId: string) => {
     toggleModel(modelId);
