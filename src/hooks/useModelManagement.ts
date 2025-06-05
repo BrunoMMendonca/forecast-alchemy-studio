@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -21,6 +20,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
   const { createModelsWithPreferences } = useModelPreferences(selectedSKU, data);
   const isTogglingAIManualRef = useRef<boolean>(false);
   const lastSelectedSKURef = useRef<string>('');
+  const lastCacheUpdateRef = useRef<number>(0);
 
   const [models, setModels] = useState<ModelConfig[]>(() => {
     console.log('🎯 INITIAL STATE CREATION WITH AI-DEFAULT');
@@ -37,12 +37,35 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     }
   }, [selectedSKU, createModelsWithPreferences]);
 
-  // Effect to update models when cache changes (after optimization)
+  // Enhanced effect to update models when cache changes (after optimization)
   useEffect(() => {
     if (selectedSKU && cache[selectedSKU] && !isTogglingAIManualRef.current) {
-      console.log('🔄 CACHE UPDATED: Updating models state after optimization for', selectedSKU);
-      const modelsWithPreferences = createModelsWithPreferences();
-      setModels(modelsWithPreferences);
+      // Use a simple cache change detection
+      const currentCacheTime = Date.now();
+      if (currentCacheTime - lastCacheUpdateRef.current > 100) { // Debounce rapid updates
+        console.log('🔄 CACHE UPDATED: Updating models state after optimization for', selectedSKU);
+        const modelsWithPreferences = createModelsWithPreferences();
+        setModels(modelsWithPreferences);
+        lastCacheUpdateRef.current = currentCacheTime;
+      }
+    }
+  }, [cache, selectedSKU, createModelsWithPreferences]);
+
+  // Additional effect to force model refresh when new optimization results arrive
+  useEffect(() => {
+    if (selectedSKU && cache[selectedSKU]) {
+      const skuCache = cache[selectedSKU];
+      const hasOptimizationResults = Object.values(skuCache).some(modelCache => 
+        modelCache.ai || modelCache.grid
+      );
+      
+      if (hasOptimizationResults && !isTogglingAIManualRef.current) {
+        console.log('🚀 OPTIMIZATION RESULTS DETECTED: Force refreshing models for', selectedSKU);
+        setTimeout(() => {
+          const modelsWithPreferences = createModelsWithPreferences();
+          setModels(modelsWithPreferences);
+        }, 50);
+      }
     }
   }, [cache, selectedSKU, createModelsWithPreferences]);
 
