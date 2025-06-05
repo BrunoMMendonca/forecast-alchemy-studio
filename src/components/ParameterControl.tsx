@@ -31,6 +31,8 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   onUseGrid,
   onResetToManual,
 }) => {
+  console.log('🔧 ParameterControl render for model:', model.id, 'SKU:', selectedSKU);
+  
   const [isExpanded, setIsExpanded] = useState(false);
   const { getCachedParameters, isCacheValid, generateDataHash } = useOptimizationCache();
 
@@ -45,13 +47,27 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const currentDataHash = generateDataHash(skuData);
   
   const hasValidAICache = () => {
-    const cachedAI = getCachedParameters(selectedSKU, model.id, 'ai');
-    return cachedAI && isCacheValid(selectedSKU, model.id, currentDataHash, 'ai');
+    try {
+      const cachedAI = getCachedParameters(selectedSKU, model.id, 'ai');
+      const isValid = cachedAI && isCacheValid(selectedSKU, model.id, currentDataHash, 'ai');
+      console.log('🤖 AI cache check for', model.id, ':', !!cachedAI, 'valid:', isValid);
+      return isValid;
+    } catch (error) {
+      console.error('Error checking AI cache:', error);
+      return false;
+    }
   };
 
   const hasValidGridCache = () => {
-    const cachedGrid = getCachedParameters(selectedSKU, model.id, 'grid');
-    return cachedGrid && isCacheValid(selectedSKU, model.id, currentDataHash, 'grid');
+    try {
+      const cachedGrid = getCachedParameters(selectedSKU, model.id, 'grid');
+      const isValid = cachedGrid && isCacheValid(selectedSKU, model.id, currentDataHash, 'grid');
+      console.log('📊 Grid cache check for', model.id, ':', !!cachedGrid, 'valid:', isValid);
+      return isValid;
+    } catch (error) {
+      console.error('Error checking Grid cache:', error);
+      return false;
+    }
   };
 
   const aiCacheAvailable = hasValidAICache();
@@ -65,6 +81,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                                 (model.optimizationReasoning || model.optimizationFactors);
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
+    console.log('📝 Parameter change:', parameter, values[0]);
     onParameterUpdate(parameter, values[0]);
   }, [onParameterUpdate]);
 
@@ -86,8 +103,11 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 
   // If model has no parameters, don't render anything
   if (!hasParameters) {
+    console.log('❌ No parameters for model:', model.id);
     return null;
   }
+
+  console.log('✅ Rendering ParameterControl for model:', model.id);
 
   return (
     <Card className="w-full">
@@ -113,6 +133,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   }`}
                   onClick={(e) => {
                     e.stopPropagation();
+                    console.log('🤖 AI badge clicked, cache available:', aiCacheAvailable);
                     if (aiCacheAvailable) {
                       onUseAI();
                     }
@@ -132,6 +153,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   }`}
                   onClick={(e) => {
                     e.stopPropagation();
+                    console.log('📊 Grid badge clicked, cache available:', gridCacheAvailable);
                     if (gridCacheAvailable && onUseGrid) {
                       onUseGrid();
                     }
@@ -147,6 +169,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
                   onClick={(e) => {
                     e.stopPropagation();
+                    console.log('👤 Manual badge clicked');
                     onResetToManual();
                   }}
                 >
