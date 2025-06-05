@@ -36,7 +36,6 @@ const CACHE_EXPIRY_HOURS = 24;
 export const useOptimizationCache = () => {
   const [cache, setCache] = useState<OptimizationCache>({});
   const [cacheStats, setCacheStats] = useState({ hits: 0, misses: 0, skipped: 0 });
-  const [forceUpdate, setForceUpdate] = useState(0); // Add force update trigger
   
   const {
     generateDatasetFingerprint,
@@ -219,19 +218,20 @@ export const useOptimizationCache = () => {
       cacheMethod = method === 'grid_search' ? 'grid' : 'ai';
     }
 
+    console.log(`💾 CACHE UPDATE: Setting ${sku}:${modelId}:${cacheMethod}`);
+
     setCache(prev => {
-      const newCache = {
-        ...prev,
-        [sku]: {
-          ...prev[sku],
-          [modelId]: {
-            ...prev[sku]?.[modelId],
-            [cacheMethod]: optimizedParams,
-            // Only update selected if not already set
-            selected: prev[sku]?.[modelId]?.selected || cacheMethod
-          }
-        }
-      };
+      // Create completely new object to ensure React detects the change
+      const newCache = JSON.parse(JSON.stringify(prev));
+      
+      if (!newCache[sku]) newCache[sku] = {};
+      if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
+      
+      newCache[sku][modelId][cacheMethod] = optimizedParams;
+      // Only update selected if not already set
+      if (!newCache[sku][modelId].selected) {
+        newCache[sku][modelId].selected = cacheMethod;
+      }
       
       console.log(`💾 CACHE UPDATE: ${sku}:${modelId}:${cacheMethod} cached`, {
         hasAI: !!newCache[sku][modelId].ai,
@@ -241,9 +241,6 @@ export const useOptimizationCache = () => {
       
       return newCache;
     });
-
-    // Force components to re-render by updating the force update counter
-    setForceUpdate(prev => prev + 1);
   }, []);
 
   const setSelectedMethod = useCallback((
@@ -251,17 +248,17 @@ export const useOptimizationCache = () => {
     modelId: string,
     method: 'ai' | 'grid' | 'manual'
   ) => {
-    setCache(prev => ({
-      ...prev,
-      [sku]: {
-        ...prev[sku],
-        [modelId]: {
-          ...prev[sku]?.[modelId],
-          selected: method
-        }
-      }
-    }));
-    setForceUpdate(prev => prev + 1);
+    setCache(prev => {
+      // Create completely new object to ensure React detects the change
+      const newCache = JSON.parse(JSON.stringify(prev));
+      
+      if (!newCache[sku]) newCache[sku] = {};
+      if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
+      
+      newCache[sku][modelId].selected = method;
+      
+      return newCache;
+    });
   }, []);
 
   const isCacheValid = useCallback((sku: string, modelId: string, currentDataHash: string): boolean => {
@@ -273,18 +270,16 @@ export const useOptimizationCache = () => {
 
   const clearCacheForSKU = useCallback((sku: string) => {
     setCache(prev => {
-      const newCache = { ...prev };
+      const newCache = JSON.parse(JSON.stringify(prev));
       delete newCache[sku];
       return newCache;
     });
-    setForceUpdate(prev => prev + 1);
   }, []);
 
   const clearAllCache = useCallback(() => {
     console.log('🗑️ CACHE CLEAR: Clearing all optimization cache');
     setCache({});
     setCacheStats({ hits: 0, misses: 0, skipped: 0 });
-    setForceUpdate(prev => prev + 1);
     
     try {
       localStorage.removeItem(CACHE_KEY);
@@ -297,7 +292,6 @@ export const useOptimizationCache = () => {
   return {
     cache,
     cacheStats,
-    forceUpdate, // Expose force update counter for reactive components
     generateDataHash,
     getCachedParameters,
     setCachedParameters,
