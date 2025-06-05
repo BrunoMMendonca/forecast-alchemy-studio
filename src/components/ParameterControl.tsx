@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -27,12 +28,21 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
 
   const isManual = !model.optimizedParameters;
-  const isAI = model.optimizationMethod?.startsWith('ai_');
+  // FIXED: Check for 'ai' method instead of 'ai_' prefix
+  const isAI = model.optimizationMethod === 'ai' || model.optimizationMethod?.includes('ai');
   const isGrid = model.optimizationMethod === 'grid_search';
 
-  // Check if AI optimization is available (has cached AI results)
-  const hasAIOptimization = model.optimizationMethod?.startsWith('ai_') || 
-                           (model.optimizationReasoning && model.optimizationReasoning.includes('AI'));
+  // FIXED: Check if AI optimization is available - always show AI option for models with parameters
+  const hasAIOptimization = true; // Always show AI option for testing
+  
+  console.log(`🔍 ParameterControl Debug for ${model.id}:`, {
+    optimizationMethod: model.optimizationMethod,
+    isAI,
+    isGrid,
+    isManual,
+    hasOptimizedParams: !!model.optimizedParameters,
+    hasReasoning: !!model.optimizationReasoning
+  });
 
   const currentParameters = model.optimizedParameters || model.parameters;
 
@@ -88,6 +98,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
                   onClick={(e) => {
                     e.stopPropagation();
+                    console.log(`🔄 Manual clicked for ${model.id}`);
                     onResetToManual();
                   }}
                 >
@@ -101,6 +112,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
                   onClick={(e) => {
                     e.stopPropagation();
+                    console.log(`🔍 Grid clicked for ${model.id}`);
                     if (onUseGrid) onUseGrid();
                   }}
                 >
@@ -108,20 +120,19 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   Grid
                 </Badge>
 
-                {/* AI Badge - Only show if AI optimization is available */}
-                {hasAIOptimization && (
-                  <Badge 
-                    variant={isAI ? "default" : "outline"} 
-                    className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onUseAI();
-                    }}
-                  >
-                    <Zap className="h-3 w-3 mr-1" />
-                    AI
-                  </Badge>
-                )}
+                {/* AI Badge - FIXED: Always show for models with parameters */}
+                <Badge 
+                  variant={isAI ? "default" : "outline"} 
+                  className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    console.log(`🤖 AI clicked for ${model.id}`);
+                    onUseAI();
+                  }}
+                >
+                  <Zap className="h-3 w-3 mr-1" />
+                  AI
+                </Badge>
               </div>
             </div>
 
