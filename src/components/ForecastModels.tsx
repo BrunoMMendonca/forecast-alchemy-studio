@@ -1,8 +1,9 @@
 
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
-import { useForecastModelsLogic } from '@/hooks/useForecastModelsLogic';
+import { useUnifiedModelManagement } from '@/hooks/useUnifiedModelManagement';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
+import { useOptimizationHandler } from '@/hooks/useOptimizationHandler';
 import { ModelSelection } from './ModelSelection';
 import { ProductSelector } from './ProductSelector';
 import { QueueStatusDisplay } from './QueueStatusDisplay';
@@ -37,24 +38,29 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   
   const { cache } = useOptimizationCache();
 
+  // Use the unified model management hook
   const {
     models,
-    isOptimizing,
-    progress,
-    handleQueueOptimization,
-    handleToggleModel,
-    handleUpdateParameter,
-    handleUseAI,
-    handleUseGrid,
-    handleResetToManual,
-    generateForecastsForSelectedSKU
-  } = useForecastModelsLogic(
+    toggleModel,
+    updateParameter,
+    useAIOptimization,
+    useGridOptimization,
+    resetToManual,
+    generateForecasts
+  } = useUnifiedModelManagement(
+    selectedSKU,
     data,
     forecastPeriods,
-    selectedSKU,
-    onForecastGeneration,
-    optimizationQueue
+    undefined, // businessContext - will be added later if needed
+    onForecastGeneration
   );
+
+  // Use optimization handler for queue management
+  const {
+    isOptimizing,
+    progress,
+    handleQueueOptimization
+  } = useOptimizationHandler(data, selectedSKU, optimizationQueue, generateForecasts);
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
@@ -133,11 +139,11 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 
       <ModelSelection
         models={models}
-        onToggleModel={handleToggleModel}
-        onUpdateParameter={handleUpdateParameter}
-        onUseAI={handleUseAI}
-        onUseGrid={handleUseGrid}
-        onResetToManual={handleResetToManual}
+        onToggleModel={toggleModel}
+        onUpdateParameter={updateParameter}
+        onUseAI={useAIOptimization}
+        onUseGrid={useGridOptimization}
+        onResetToManual={resetToManual}
       />
 
       <OptimizationLogger 

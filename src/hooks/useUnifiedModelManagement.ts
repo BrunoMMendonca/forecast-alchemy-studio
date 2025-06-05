@@ -1,37 +1,53 @@
-// DEPRECATED: This file is being replaced by useUnifiedModelManagement.ts
-// TODO: Remove this file after confirming the unified hook works correctly
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
-import { SalesData } from '@/pages/Index';
+import { SalesData, ForecastResult } from '@/pages/Index';
 import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 import { getOptimizationByMethod } from '@/utils/singleModelOptimization';
 import { BusinessContext } from '@/types/businessContext';
+import { useForecastCache } from '@/hooks/useForecastCache';
+import { generateForecastsForSKU } from '@/utils/forecastGenerator';
+import { useToast } from '@/hooks/use-toast';
 
-export const useModelManagement = (selectedSKU: string, data: SalesData[], businessContext?: BusinessContext) => {
+export const useUnifiedModelManagement = (
+  selectedSKU: string, 
+  data: SalesData[], 
+  forecastPeriods: number,
+  businessContext?: BusinessContext,
+  onForecastGeneration?: (results: ForecastResult[], selectedSKU: string) => void
+) => {
+  const { toast } = useToast();
+  const isTogglingAIManualRef = useRef<boolean>(false);
+
   const { 
     generateDataHash, 
     setCachedParameters,
     setSelectedMethod,
     cacheVersion
   } = useOptimizationCache();
+  
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
-  const isTogglingAIManualRef = useRef<boolean>(false);
+  
+  const {
+    getCachedForecast,
+    setCachedForecast,
+    generateParametersHash
+  } = useForecastCache();
 
   const [models, setModels] = useState<ModelConfig[]>(() => {
-    console.log('🎯 INITIAL STATE: Creating default models');
+    console.log('🎯 UNIFIED: Creating default models');
     return getDefaultModels();
   });
 
-  // Create models with current cache and preferences - always read fresh from localStorage
+  // Create models with current cache and preferences
   const createModelsWithCurrentData = useCallback(() => {
     if (!selectedSKU || isTogglingAIManualRef.current) {
       return getDefaultModels();
     }
 
-    console.log('🔄 CREATING MODELS: Reading fresh data from localStorage for', selectedSKU);
+    console.log('🔄 UNIFIED: Reading fresh data from localStorage for', selectedSKU);
     
     // Always read fresh from localStorage
     let optimizationCache = {};
@@ -59,10 +75,10 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
       const preference = preferences[preferenceKey] || 'ai';
       const cached = optimizationCache[selectedSKU]?.[model.id];
 
-      console.log(`📋 MODEL ${model.id}: preference=${preference}, hasCache=${!!cached}, cacheVersion=${cacheVersion}`);
+      console.log(`📋 UNIFIED MODEL ${model.id}: preference=${preference}, hasCache=${!!cached}`);
 
       if (preference === 'manual') {
-        console.log(`👤 MODEL ${model.id}: Using manual parameters`);
+        console.log(`👤 UNIFIED MODEL ${model.id}: Using manual parameters`);
         return model;
       }
 
@@ -70,23 +86,23 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
       let selectedCache = null;
       if (preference === 'ai' && cached?.ai && cached.ai.dataHash === currentDataHash) {
         selectedCache = cached.ai;
-        console.log(`🤖 MODEL ${model.id}: Using AI cache`);
+        console.log(`🤖 UNIFIED MODEL ${model.id}: Using AI cache`);
       } else if (preference === 'grid' && cached?.grid && cached.grid.dataHash === currentDataHash) {
         selectedCache = cached.grid;
-        console.log(`🔍 MODEL ${model.id}: Using Grid cache`);
+        console.log(`🔍 UNIFIED MODEL ${model.id}: Using Grid cache`);
       } else {
         // Fallback to any valid cache
         if (cached?.ai && cached.ai.dataHash === currentDataHash) {
           selectedCache = cached.ai;
-          console.log(`🤖 MODEL ${model.id}: Fallback to AI cache`);
+          console.log(`🤖 UNIFIED MODEL ${model.id}: Fallback to AI cache`);
         } else if (cached?.grid && cached.grid.dataHash === currentDataHash) {
           selectedCache = cached.grid;
-          console.log(`🔍 MODEL ${model.id}: Fallback to Grid cache`);
+          console.log(`🔍 UNIFIED MODEL ${model.id}: Fallback to Grid cache`);
         }
       }
 
       if (selectedCache) {
-        console.log(`✅ USING CACHE: ${model.id} with method ${selectedCache.method}, params:`, selectedCache.parameters);
+        console.log(`✅ UNIFIED USING CACHE: ${model.id} with method ${selectedCache.method}`);
         return {
           ...model,
           optimizedParameters: selectedCache.parameters,
@@ -98,17 +114,50 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
         };
       }
 
-      console.log(`❌ NO CACHE: ${model.id} using default parameters`);
+      console.log(`❌ UNIFIED NO CACHE: ${model.id} using default parameters`);
       return model;
     });
   }, [selectedSKU, data, generateDataHash, cacheVersion]);
 
-  // Single effect that updates models when cache version changes
+  // Generate forecasts when models change
+  const generateForecasts = useCallback(async () => {
+    if (!selectedSKU || models.length === 0) return;
+
+    try {
+      console.log(`🎯 UNIFIED: Generating forecasts for ${selectedSKU}`);
+      
+      const results = await generateForecastsForSKU(
+        selectedSKU,
+        data,
+        models,
+        forecastPeriods,
+        getCachedForecast,
+        setCachedForecast,
+        generateParametersHash
+      );
+
+      console.log(`✅ UNIFIED: Generated ${results.length} forecasts for ${selectedSKU}`);
+      
+      if (onForecastGeneration) {
+        onForecastGeneration(results, selectedSKU);
+      }
+
+    } catch (error) {
+      toast({
+        title: "Forecast Error",
+        description: error instanceof Error ? error.message : "Failed to generate forecasts. Please try again.",
+        variant: "destructive",
+      });
+      console.error('UNIFIED: Forecast generation error:', error);
+    }
+  }, [selectedSKU, data, models, forecastPeriods, getCachedForecast, setCachedForecast, generateParametersHash, onForecastGeneration, toast]);
+
+  // Update models when cache version changes
   useEffect(() => {
     if (selectedSKU && cacheVersion > 0) {
-      console.log(`🔄 CACHE VERSION CHANGED: ${cacheVersion}, updating models for ${selectedSKU}`);
+      console.log(`🔄 UNIFIED CACHE VERSION CHANGED: ${cacheVersion}, updating models for ${selectedSKU}`);
       const updatedModels = createModelsWithCurrentData();
-      console.log('🎯 SETTING NEW MODELS:', updatedModels.map(m => ({ 
+      console.log('🎯 UNIFIED SETTING NEW MODELS:', updatedModels.map(m => ({ 
         id: m.id, 
         hasOptimized: !!m.optimizedParameters,
         method: m.optimizationMethod 
@@ -117,22 +166,30 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     }
   }, [cacheVersion, selectedSKU, createModelsWithCurrentData]);
 
-  // Effect for SKU changes
+  // Update models when SKU changes
   useEffect(() => {
     if (selectedSKU) {
-      console.log(`🔄 SKU CHANGED: Updating models for ${selectedSKU}`);
+      console.log(`🔄 UNIFIED SKU CHANGED: Updating models for ${selectedSKU}`);
       const updatedModels = createModelsWithCurrentData();
       setModels(updatedModels);
     }
   }, [selectedSKU, createModelsWithCurrentData]);
 
-  const toggleModel = (modelId: string) => {
+  // Generate forecasts when models change
+  useEffect(() => {
+    if (selectedSKU && models.length > 0) {
+      console.log(`🔄 UNIFIED: Models changed, regenerating forecasts for ${selectedSKU}`);
+      setTimeout(() => generateForecasts(), 50);
+    }
+  }, [models, selectedSKU, generateForecasts]);
+
+  const toggleModel = useCallback((modelId: string) => {
     setModels(prev => prev.map(model => 
       model.id === modelId ? { ...model, enabled: !model.enabled } : model
     ));
-  };
+  }, []);
 
-  const updateParameter = (modelId: string, parameter: string, value: number) => {
+  const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -141,7 +198,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     saveManualAIPreferences(preferences);
     setSelectedMethod(selectedSKU, modelId, 'manual');
 
-    console.log(`PREFERENCE: Updated ${preferenceKey} to manual (parameter change)`);
+    console.log(`UNIFIED PREFERENCE: Updated ${preferenceKey} to manual (parameter change)`);
 
     setModels(prev => prev.map(model => 
       model.id === modelId 
@@ -161,10 +218,10 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
     }, 100);
-  };
+  }, [selectedSKU, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod]);
 
-  const useAIOptimization = async (modelId: string) => {
-    console.log(`🤖 USE AI: Starting AI optimization for ${selectedSKU}:${modelId}`);
+  const useAIOptimization = useCallback(async (modelId: string) => {
+    console.log(`🤖 UNIFIED USE AI: Starting AI optimization for ${selectedSKU}:${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -187,10 +244,9 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     const cached = optimizationCache[selectedSKU]?.[modelId];
     
     if (cached?.ai && cached.ai.dataHash === currentDataHash) {
-      console.log(`✅ USE AI: Using cached AI result for ${preferenceKey}`);
-      // Cache will trigger model update via cacheVersion
+      console.log(`✅ UNIFIED USE AI: Using cached AI result for ${preferenceKey}`);
     } else {
-      console.log(`🔄 USE AI: Running fresh AI optimization for ${preferenceKey}`);
+      console.log(`🔄 UNIFIED USE AI: Running fresh AI optimization for ${preferenceKey}`);
       
       try {
         const model = models.find(m => m.id === modelId);
@@ -198,7 +254,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
           const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
           
           if (result) {
-            console.log(`✅ USE AI: Fresh AI optimization succeeded for ${preferenceKey}`);
+            console.log(`✅ UNIFIED USE AI: Fresh AI optimization succeeded for ${preferenceKey}`);
             setCachedParameters(
               selectedSKU, 
               modelId, 
@@ -213,17 +269,17 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
           }
         }
       } catch (error) {
-        console.error('AI optimization failed:', error);
+        console.error('UNIFIED: AI optimization failed:', error);
       }
     }
     
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
     }, 100);
-  };
+  }, [selectedSKU, data, models, businessContext, generateDataHash, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters]);
 
-  const useGridOptimization = async (modelId: string) => {
-    console.log(`🔍 GRID: Starting Grid optimization for ${selectedSKU}:${modelId}`);
+  const useGridOptimization = useCallback(async (modelId: string) => {
+    console.log(`🔍 UNIFIED GRID: Starting Grid optimization for ${selectedSKU}:${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -246,10 +302,9 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     const cached = optimizationCache[selectedSKU]?.[modelId];
     
     if (cached?.grid && cached.grid.dataHash === currentDataHash) {
-      console.log(`✅ GRID: Using cached Grid result for ${preferenceKey}`);
-      // Cache will trigger model update via cacheVersion
+      console.log(`✅ UNIFIED GRID: Using cached Grid result for ${preferenceKey}`);
     } else {
-      console.log(`🔄 GRID: Running fresh Grid optimization for ${preferenceKey}`);
+      console.log(`🔄 UNIFIED GRID: Running fresh Grid optimization for ${preferenceKey}`);
       
       try {
         const model = models.find(m => m.id === modelId);
@@ -257,7 +312,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
           const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
           
           if (result) {
-            console.log(`✅ GRID: Fresh Grid optimization succeeded for ${preferenceKey}`);
+            console.log(`✅ UNIFIED GRID: Fresh Grid optimization succeeded for ${preferenceKey}`);
             setCachedParameters(
               selectedSKU, 
               modelId, 
@@ -272,17 +327,17 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
           }
         }
       } catch (error) {
-        console.error('Grid optimization failed:', error);
+        console.error('UNIFIED: Grid optimization failed:', error);
       }
     }
     
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
     }, 100);
-  };
+  }, [selectedSKU, data, models, businessContext, generateDataHash, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters]);
 
-  const resetToManual = (modelId: string) => {
-    console.log(`👤 RESET TO MANUAL: ${selectedSKU}:${modelId}`);
+  const resetToManual = useCallback((modelId: string) => {
+    console.log(`👤 UNIFIED RESET TO MANUAL: ${selectedSKU}:${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -308,28 +363,15 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
     }, 100);
-  };
-
-  const refreshModelsWithPreferences = useCallback(() => {
-    if (!isTogglingAIManualRef.current) {
-      console.log('🔄 REFRESH: Manually refreshing models');
-      const updatedModels = createModelsWithCurrentData();
-      setModels(updatedModels);
-    }
-  }, [createModelsWithCurrentData]);
+  }, [selectedSKU, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod]);
 
   return {
     models,
-    setModels,
-    createModelsWithPreferences: createModelsWithCurrentData,
-    refreshModelsWithPreferences,
     toggleModel,
     updateParameter,
     useAIOptimization,
     useGridOptimization,
     resetToManual,
-    isTogglingAIManualRef,
-    loadManualAIPreferences,
-    saveManualAIPreferences
+    generateForecasts
   };
 };
