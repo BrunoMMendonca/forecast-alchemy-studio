@@ -262,6 +262,8 @@ export const useUnifiedModelManagement = (
         const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
         
         if (result) {
+          console.log(`🎯 AI optimization completed for ${modelId}, updating model state immediately`);
+          
           setCachedParameters(
             selectedSKU, 
             modelId, 
@@ -274,7 +276,7 @@ export const useUnifiedModelManagement = (
             result.method
           );
           
-          // Immediately update the model state to show AI optimization
+          // IMMEDIATELY update the model state to show AI optimization
           setModels(prev => prev.map(m => 
             m.id === modelId 
               ? { 
@@ -288,6 +290,9 @@ export const useUnifiedModelManagement = (
                 }
               : m
           ));
+          
+          // Reset forecast hash to trigger regeneration with new parameters
+          lastForecastGenerationHashRef.current = '';
         }
       }
     } catch (error) {
@@ -317,6 +322,8 @@ export const useUnifiedModelManagement = (
         const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
         
         if (result) {
+          console.log(`🎯 Grid optimization completed for ${modelId}, updating model state immediately`);
+          
           setCachedParameters(
             selectedSKU, 
             modelId, 
@@ -329,7 +336,7 @@ export const useUnifiedModelManagement = (
             result.method
           );
           
-          // Immediately update the model state to show Grid optimization
+          // IMMEDIATELY update the model state to show Grid optimization
           setModels(prev => prev.map(m => 
             m.id === modelId 
               ? { 
@@ -343,6 +350,9 @@ export const useUnifiedModelManagement = (
                 }
               : m
           ));
+          
+          // Reset forecast hash to trigger regeneration with new parameters
+          lastForecastGenerationHashRef.current = '';
         }
       }
     } catch (error) {
