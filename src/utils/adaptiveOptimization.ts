@@ -50,6 +50,24 @@ const getParameterRanges = (modelId: string, level: number = 1): Record<string, 
       3: { window: [3, 5, 7] }, // Basic range
       4: { window: [3] } // Minimal fallback
     },
+    seasonal_moving_average: {
+      1: { 
+        window: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        seasonalPeriods: [4, 6, 12, 24, 52]
+      },
+      2: { 
+        window: [3, 5, 7, 10, 12],
+        seasonalPeriods: [12, 24, 52]
+      },
+      3: { 
+        window: [3, 5, 7],
+        seasonalPeriods: [12, 24]
+      },
+      4: { 
+        window: [3],
+        seasonalPeriods: [12]
+      }
+    },
     simple_exponential_smoothing: {
       1: { alpha: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95] }, // Full range
       2: { alpha: [0.1, 0.2, 0.3, 0.5, 0.7, 0.9] }, // Reduced range
@@ -78,6 +96,32 @@ const getParameterRanges = (modelId: string, level: number = 1): Record<string, 
       4: { // Minimal fallback
         alpha: [0.3],
         beta: [0.1]
+      }
+    },
+    holt_winters: {
+      1: { // Full range
+        alpha: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5],
+        beta: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5],
+        gamma: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5],
+        seasonalPeriods: [4, 6, 12, 24, 52]
+      },
+      2: { // Reduced range
+        alpha: [0.1, 0.2, 0.3, 0.5],
+        beta: [0.1, 0.2, 0.3],
+        gamma: [0.1, 0.2, 0.3],
+        seasonalPeriods: [12, 24, 52]
+      },
+      3: { // Basic range
+        alpha: [0.2, 0.3],
+        beta: [0.1, 0.2],
+        gamma: [0.1, 0.2],
+        seasonalPeriods: [12, 24]
+      },
+      4: { // Minimal fallback
+        alpha: [0.3],
+        beta: [0.1],
+        gamma: [0.1],
+        seasonalPeriods: [12]
       }
     }
   };
@@ -233,11 +277,15 @@ const getDefaultParameters = (modelId: string): Record<string, number> => {
   switch (modelId) {
     case 'moving_average':
       return { window: 3 };
+    case 'seasonal_moving_average':
+      return { window: 3, seasonalPeriods: 12 };
     case 'simple_exponential_smoothing':
     case 'exponential_smoothing':
       return { alpha: 0.3 };
     case 'double_exponential_smoothing':
       return { alpha: 0.3, beta: 0.1 };
+    case 'holt_winters':
+      return { alpha: 0.3, beta: 0.1, gamma: 0.1, seasonalPeriods: 12 };
     default:
       return {};
   }

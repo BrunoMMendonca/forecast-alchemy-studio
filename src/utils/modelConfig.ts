@@ -42,7 +42,7 @@ export const getDefaultModels = (): ModelConfig[] => [
     description: 'Moving average that accounts for seasonal patterns in your data',
     icon: React.createElement(Calendar, { className: "h-4 w-4" }),
     enabled: true,
-    parameters: { window: 3 },
+    parameters: { window: 3, seasonalPeriods: 12 },
     isSeasonal: true
   },
   {
@@ -51,7 +51,7 @@ export const getDefaultModels = (): ModelConfig[] => [
     description: 'Advanced model that handles trend and seasonality simultaneously',
     icon: React.createElement(Activity, { className: "h-4 w-4" }),
     enabled: true,
-    parameters: { alpha: 0.3, beta: 0.1, gamma: 0.1 },
+    parameters: { alpha: 0.3, beta: 0.1, gamma: 0.1, seasonalPeriods: 12 },
     isSeasonal: true
   },
   {
