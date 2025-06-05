@@ -1,11 +1,10 @@
-
 import React from 'react';
-import { Upload, BarChart3, Zap, TrendingUp, Eye } from 'lucide-react';
+import { Upload, BarChart3, Zap, TrendingUp, Eye, LucideProps } from 'lucide-react';
 
 interface Step {
   id: string;
   title: string;
-  icon: React.ComponentType<{ size?: number }>;
+  icon: React.ComponentType<LucideProps>;
 }
 
 interface StepNavigationProps {
