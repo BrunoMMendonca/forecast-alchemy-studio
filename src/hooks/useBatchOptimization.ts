@@ -155,7 +155,6 @@ export const useBatchOptimization = () => {
     }
   }, [navigationAware, optimizationLogger]);
 
-  // Legacy method name for backward compatibility
   const optimizeQueuedSKUs = useCallback(async (
     data: SalesData[],
     models: ModelConfig[],
@@ -164,28 +163,91 @@ export const useBatchOptimization = () => {
     onSKUComplete: (sku: string) => void,
     getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[]
   ) => {
-    // This is a simplified wrapper around runOptimization for backward compatibility
-    await runOptimization(queuedSKUs, data, models);
+    console.log('🚀 BATCH: Starting optimization for queued SKUs:', queuedSKUs);
     
-    // Call completion callbacks for each SKU
-    queuedSKUs.forEach(sku => {
-      models.forEach(model => {
-        if (model.enabled && model.optimizedParameters) {
-          onComplete(
-            sku,
-            model.id,
-            model.optimizedParameters,
-            model.optimizationConfidence || 0,
-            model.optimizationReasoning || '',
-            model.optimizationFactors || {},
-            model.expectedAccuracy || 0,
-            model.optimizationMethod || 'unknown'
-          );
+    if (!queuedSKUs || queuedSKUs.length === 0) {
+      console.log('🚀 BATCH: No SKUs to optimize');
+      return;
+    }
+
+    const startTime = Date.now();
+    setIsOptimizing(true);
+    setProgress({ currentSKU: undefined, completedSKUs: 0, totalSKUs: queuedSKUs.length });
+
+    try {
+      for (let skuIndex = 0; skuIndex < queuedSKUs.length; skuIndex++) {
+        const sku = queuedSKUs[skuIndex];
+        const skuData = data.filter(d => d.sku === sku);
+        
+        console.log(`🚀 BATCH: Processing SKU ${sku} (${skuIndex + 1}/${queuedSKUs.length})`);
+        setProgress({ currentSKU: sku, completedSKUs: skuIndex, totalSKUs: queuedSKUs.length });
+        
+        for (const model of models) {
+          if (!model.enabled) continue;
+          
+          console.log(`🚀 BATCH: Optimizing ${sku}:${model.id}`);
+          
+          try {
+            // Use progressive callback to cache results immediately as they become available
+            const result = await optimizeSingleModel(
+              model, 
+              skuData, 
+              sku, 
+              {
+                setProgress: () => {} // Not using progress updates here
+              }, 
+              false, // Don't force grid search
+              undefined, // No business context
+              (method, methodResult) => {
+                // Progressive callback - cache results immediately
+                console.log(`🚀 BATCH: Method ${method} complete for ${sku}:${model.id}`);
+                onComplete(
+                  sku,
+                  model.id,
+                  methodResult.parameters,
+                  methodResult.confidence || 0,
+                  methodResult.reasoning || '',
+                  methodResult.factors || {},
+                  methodResult.expectedAccuracy || 0,
+                  methodResult.method || method,
+                  // Don't pass bothResults here since this is progressive
+                );
+              }
+            );
+
+            console.log(`✅ BATCH: Completed ${sku}:${model.id} with method ${result.selectedResult.method}`);
+
+            // Final completion callback with bothResults
+            if (result.bothResults) {
+              onComplete(
+                sku,
+                model.id,
+                result.selectedResult.parameters,
+                result.selectedResult.confidence || 0,
+                result.selectedResult.reasoning || '',
+                result.selectedResult.factors || {},
+                result.selectedResult.expectedAccuracy || 0,
+                result.selectedResult.method || 'unknown',
+                result.bothResults
+              );
+            }
+
+          } catch (error: any) {
+            console.error(`❌ BATCH: Failed ${sku}:${model.id}:`, error);
+          }
         }
-      });
-      onSKUComplete(sku);
-    });
-  }, [runOptimization]);
+        
+        console.log(`✅ BATCH: SKU ${sku} complete`);
+        onSKUComplete(sku);
+      }
+    } catch (error: any) {
+      console.error('❌ BATCH: Batch optimization failed:', error);
+    } finally {
+      setIsOptimizing(false);
+      setProgress(null);
+      console.log(`🚀 BATCH: Completed in ${((Date.now() - startTime) / 1000).toFixed(2)} seconds`);
+    }
+  }, []);
 
   return {
     optimizationProgress,

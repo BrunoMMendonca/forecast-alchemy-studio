@@ -14,7 +14,6 @@ interface MultiMethodResult {
   aiResult?: OptimizationResult;
   gridResult: GridOptimizationResult;
   selectedResult: OptimizationResult | GridOptimizationResult;
-  // New: return both results for caching
   bothResults: {
     ai?: OptimizationResult;
     grid: GridOptimizationResult;
@@ -28,12 +27,13 @@ export const optimizeSingleModel = async (
   progressUpdater: ProgressUpdater,
   forceGridSearch: boolean = false,
   businessContext?: BusinessContext,
-  // New: callback for progressive method switching
   onMethodComplete?: (method: 'grid' | 'ai', result: OptimizationResult | GridOptimizationResult) => void
 ): Promise<{
   selectedResult: OptimizationResult | GridOptimizationResult;
   bothResults?: { ai?: OptimizationResult; grid: GridOptimizationResult };
 }> => {
+  console.log(`🔧 SINGLE: Starting optimization for ${sku}:${model.id}`);
+
   if (!model.parameters || Object.keys(model.parameters).length === 0) {
     optimizationLogger.logStep({
       sku,
@@ -64,6 +64,7 @@ export const optimizeSingleModel = async (
   }
 
   if (forceGridSearch) {
+    console.log(`🔧 SINGLE: Force grid search for ${sku}:${model.id}`);
     const gridResult = await runGridOptimization(model, skuData, sku);
     if (onMethodComplete) {
       onMethodComplete('grid', gridResult);
@@ -99,6 +100,7 @@ const runBothOptimizations = async (
   });
 
   // Step 1: Always run Grid optimization first
+  console.log(`🔧 SINGLE: Running grid optimization for ${sku}:${model.id}`);
   const gridResult = await runGridOptimization(model, skuData, sku);
   
   optimizationLogger.logStep({
@@ -109,12 +111,16 @@ const runBothOptimizations = async (
     parameters: gridResult.parameters
   });
 
-  // Notify that grid optimization is complete
+  console.log(`✅ SINGLE: Grid complete for ${sku}:${model.id}`);
+  
+  // Notify that grid optimization is complete - cache immediately
   if (onMethodComplete) {
+    console.log(`🔧 SINGLE: Calling onMethodComplete for grid ${sku}:${model.id}`);
     onMethodComplete('grid', gridResult);
   }
 
   // Step 2: Try AI optimization
+  console.log(`🔧 SINGLE: Running AI optimization for ${sku}:${model.id}`);
   const aiResult = await runAIOptimization(
     model, 
     skuData, 
@@ -128,6 +134,7 @@ const runBothOptimizations = async (
   
   if (aiResult) {
     selectedResult = aiResult;
+    console.log(`✅ SINGLE: AI success for ${sku}:${model.id}`);
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
@@ -136,8 +143,9 @@ const runBothOptimizations = async (
       parameters: aiResult.parameters
     });
     
-    // Notify that AI optimization is complete
+    // Notify that AI optimization is complete - cache immediately
     if (onMethodComplete) {
+      console.log(`🔧 SINGLE: Calling onMethodComplete for AI ${sku}:${model.id}`);
       onMethodComplete('ai', aiResult);
     }
     
@@ -147,6 +155,7 @@ const runBothOptimizations = async (
     } : null);
   } else {
     selectedResult = gridResult;
+    console.log(`⚠️ SINGLE: AI failed, using grid for ${sku}:${model.id}`);
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
