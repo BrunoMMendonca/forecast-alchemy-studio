@@ -28,14 +28,10 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
 
   const isManual = !model.optimizedParameters;
-  // FIXED: Check for 'ai' method instead of 'ai_' prefix
-  const isAI = model.optimizationMethod === 'ai' || model.optimizationMethod?.includes('ai');
+  const isAI = model.optimizationMethod === 'ai';
   const isGrid = model.optimizationMethod === 'grid_search';
 
-  // FIXED: Check if AI optimization is available - always show AI option for models with parameters
-  const hasAIOptimization = true; // Always show AI option for testing
-  
-  console.log(`🔍 ParameterControl Debug for ${model.id}:`, {
+  console.log(`🔍 ParameterControl for ${model.id}:`, {
     optimizationMethod: model.optimizationMethod,
     isAI,
     isGrid,
@@ -49,7 +45,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   // Only show parameters section if model actually has parameters
   const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
 
-  // Check if optimization was actually performed (has method and reasoning/factors)
+  // Check if optimization was actually performed
   const hasOptimizationResults = model.optimizationMethod && 
                                 (model.optimizationReasoning || model.optimizationFactors);
 
@@ -90,9 +86,9 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 <span className="font-medium">Parameters</span>
               </div>
               
-              {/* FIXED: Keep badges in consistent order - Manual, Grid, AI */}
+              {/* Badge order: Manual, Grid, AI */}
               <div className="flex items-center gap-2">
-                {/* Manual Badge - Always show, highlight when active */}
+                {/* Manual Badge */}
                 <Badge 
                   variant={isManual ? "default" : "outline"} 
                   className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
@@ -106,7 +102,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   Manual
                 </Badge>
 
-                {/* Grid Badge - Always show, highlight when active */}
+                {/* Grid Badge */}
                 <Badge 
                   variant={isGrid ? "default" : "outline"} 
                   className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
@@ -120,7 +116,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   Grid
                 </Badge>
 
-                {/* AI Badge - FIXED: Always show for models with parameters */}
+                {/* AI Badge - Always show */}
                 <Badge 
                   variant={isAI ? "default" : "outline"} 
                   className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
@@ -185,7 +181,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 })}
               </div>
 
-              {/* Reasoning Display - Only show if optimization was actually performed */}
+              {/* Reasoning Display - Only show if optimization was performed */}
               {hasOptimizationResults && (
                 <div className="mt-6 pt-4 border-t">
                   <ReasoningDisplay
