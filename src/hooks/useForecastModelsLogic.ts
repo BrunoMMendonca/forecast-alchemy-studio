@@ -1,13 +1,11 @@
+
 import { useState, useRef, useCallback } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
-import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useForecastCache } from '@/hooks/useForecastCache';
-import { useBatchOptimization } from '@/hooks/useBatchOptimization';
-import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimization';
+import { useOptimizationHandler } from '@/hooks/useOptimizationHandler';
 import { useModelManagement } from '@/hooks/useModelManagement';
 import { generateForecastsForSKU } from '@/utils/forecastGenerator';
-import { OptimizationFactors } from '@/types/optimizationTypes';
 
 interface OptimizationQueue {
   getSKUsInQueue: () => string[];
@@ -26,35 +24,24 @@ export const useForecastModelsLogic = (
   const hasTriggeredOptimizationRef = useRef(false);
   
   const {
-    generateDataHash,
-    getCachedParameters,
-    setCachedParameters,
-    getSKUsNeedingOptimization
-  } = useOptimizationCache();
-  
-  const {
     getCachedForecast,
     setCachedForecast,
     generateParametersHash
   } = useForecastCache();
-  
-  const { isOptimizing, progress, optimizationCompleted, optimizeQueuedSKUs } = useBatchOptimization();
 
   const {
-    markOptimizationStarted,
-    markOptimizationCompleted
-  } = useNavigationAwareOptimization();
+    isOptimizing,
+    progress,
+    handleQueueOptimization: baseHandleQueueOptimization
+  } = useOptimizationHandler(data, selectedSKU, optimizationQueue);
 
   const {
     models,
-    setModels,
     toggleModel,
     updateParameter,
     useAIOptimization,
     useGridOptimization,
-    resetToManual,
-    loadManualAIPreferences,
-    saveManualAIPreferences
+    resetToManual
   } = useModelManagement(selectedSKU, data);
 
   const generateForecastsForSelectedSKU = useCallback(async () => {
@@ -91,88 +78,11 @@ export const useForecastModelsLogic = (
   }, [selectedSKU, data, models, forecastPeriods, getCachedForecast, setCachedForecast, generateParametersHash, onForecastGeneration, toast]);
 
   const handleQueueOptimization = useCallback(async () => {
-    if (!optimizationQueue) {
-      console.warn('❌ QUEUE: No optimization queue provided');
-      return;
-    }
-
-    const queuedSKUs = optimizationQueue.getSKUsInQueue();
-    if (queuedSKUs.length === 0) {
-      console.log('📋 QUEUE: No SKUs in queue for optimization');
-      return;
-    }
-
-    const enabledModels = models.filter(m => m.enabled);
-    
-    console.log('🚀 QUEUE: Starting optimization for queued SKUs:', queuedSKUs);
-    console.log('🚀 QUEUE: Using models:', enabledModels.map(m => m.id));
-    
-    markOptimizationStarted(data, '/');
-    
-    await optimizeQueuedSKUs(
-      data, 
-      enabledModels, // Pass ModelConfig[] here
-      queuedSKUs,
-      (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method) => {
-        console.log(`✅ OPTIMIZATION CALLBACK: Received results for ${sku}:${modelId}`);
-        const skuData = data.filter(d => d.sku === sku);
-        const dataHash = generateDataHash(skuData);
-        
-        // Ensure factors has the correct type structure
-        const typedFactors: OptimizationFactors = {
-          stability: factors?.stability || 0,
-          interpretability: factors?.interpretability || 0,
-          complexity: factors?.complexity || 0,
-          businessImpact: factors?.businessImpact || 'Unknown'
-        };
-        
-        setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
-        
-        const preferences = loadManualAIPreferences();
-        const preferenceKey = `${sku}:${modelId}`;
-        if (method?.startsWith('ai_')) {
-          preferences[preferenceKey] = true;
-        } else if (method === 'grid_search') {
-          preferences[preferenceKey] = 'grid';
-        } else {
-          preferences[preferenceKey] = false;
-        }
-        saveManualAIPreferences(preferences);
-        
-        setModels(prev => prev.map(model => 
-          model.id === modelId 
-            ? { 
-                ...model, 
-                optimizedParameters: parameters,
-                optimizationConfidence: confidence,
-                optimizationReasoning: reasoning,
-                optimizationFactors: typedFactors,
-                expectedAccuracy: expectedAccuracy,
-                optimizationMethod: method
-              }
-            : model
-        ));
-        
-        if (sku === selectedSKU) {
-          setForceUpdateTrigger(prev => prev + 1);
-        }
-      },
-      (sku) => {
-        console.log(`🏁 OPTIMIZATION COMPLETE: Finished optimizing ${sku}`);
-        optimizationQueue.removeSKUsFromQueue([sku]);
-        if (sku === selectedSKU) {
-          setForceUpdateTrigger(prev => prev + 1);
-        }
-      },
-      getSKUsNeedingOptimization // Pass the correct function from optimization cache
-    );
-
-    markOptimizationCompleted(data, '/');
-    
+    await baseHandleQueueOptimization();
     setTimeout(() => {
       setForceUpdateTrigger(prev => prev + 1);
     }, 200);
-  }, [optimizationQueue, models, data, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, selectedSKU, markOptimizationCompleted, getSKUsNeedingOptimization]);
+  }, [baseHandleQueueOptimization]);
 
   const handleToggleModel = useCallback((modelId: string) => {
     toggleModel(modelId);
