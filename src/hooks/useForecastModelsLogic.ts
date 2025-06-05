@@ -29,6 +29,15 @@ export const useForecastModelsLogic = (
     generateParametersHash
   } = useForecastCache();
 
+  const {
+    models,
+    toggleModel,
+    updateParameter,
+    useAIOptimization,
+    useGridOptimization,
+    resetToManual
+  } = useModelManagement(selectedSKU, data);
+
   const generateForecastsForSelectedSKU = useCallback(async () => {
     if (!selectedSKU) return;
 
@@ -67,15 +76,6 @@ export const useForecastModelsLogic = (
     progress,
     handleQueueOptimization: baseHandleQueueOptimization
   } = useOptimizationHandler(data, selectedSKU, optimizationQueue, generateForecastsForSelectedSKU);
-
-  const {
-    models,
-    toggleModel,
-    updateParameter,
-    useAIOptimization,
-    useGridOptimization,
-    resetToManual
-  } = useModelManagement(selectedSKU, data);
 
   const handleQueueOptimization = useCallback(async () => {
     await baseHandleQueueOptimization();
