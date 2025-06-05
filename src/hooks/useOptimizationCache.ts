@@ -117,23 +117,15 @@ export const useOptimizationCache = () => {
     // Sort by date to ensure consistent ordering
     const sorted = [...skuData].sort((a, b) => a.date.localeCompare(b.date));
     
-    // Create a more robust hash that includes all relevant data points
-    const salesValues = sorted.map(d => Math.round(d.sales * 1000) / 1000); // More precision
+    // Create a simple, consistent hash format
+    const salesValues = sorted.map(d => Math.round(d.sales * 1000) / 1000);
     const outlierFlags = sorted.map(d => d.isOutlier ? '1' : '0').join('');
     const noteFlags = sorted.map(d => d.note ? '1' : '0').join('');
-    const dateRange = `${sorted[0]?.date || ''}-${sorted[sorted.length - 1]?.date || ''}`;
     
-    // Create a comprehensive hash
-    const hashComponents = [
-      `len:${sorted.length}`,
-      `dates:${dateRange}`,
-      `sales:${salesValues.slice(0, 10).join(',')}`, // First 10 values for brevity
-      `outliers:${outlierFlags}`,
-      `notes:${noteFlags}`
-    ];
+    // Use a simple format that's consistent between calls
+    const hash = `${sorted.length}-${salesValues.join('-')}-${outlierFlags}-${noteFlags}`;
     
-    const hash = hashComponents.join('|');
-    console.log('🗄️ CACHE: Generated robust data hash:', hash.substring(0, 100), '...');
+    console.log('🗄️ CACHE: Generated data hash:', hash.substring(0, 100), '...');
     return hash;
   }, []);
 
@@ -170,10 +162,10 @@ export const useOptimizationCache = () => {
                               (Date.now() - cached.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000);
           
           if (!hasValidAI) {
-            console.log(`🗄️ CACHE: ${sku}:${m.id} - No valid AI cache (hash: ${cached.ai?.dataHash} vs ${currentDataHash})`);
+            console.log(`🗄️ CACHE: ${sku}:${m.id} - No valid AI cache (hash: ${cached.ai?.dataHash?.substring(0, 30)} vs ${currentDataHash.substring(0, 30)})`);
           }
           if (!hasValidGrid) {
-            console.log(`🗄️ CACHE: ${sku}:${m.id} - No valid Grid cache (hash: ${cached.grid?.dataHash} vs ${currentDataHash})`);
+            console.log(`🗄️ CACHE: ${sku}:${m.id} - No valid Grid cache (hash: ${cached.grid?.dataHash?.substring(0, 30)} vs ${currentDataHash.substring(0, 30)})`);
           }
           
           return !hasValidAI || !hasValidGrid;
@@ -341,7 +333,7 @@ export const useOptimizationCache = () => {
     }
     
     const isValid = cached.dataHash === currentDataHash;
-    console.log(`🗄️ CACHE: Hash validation for ${sku}:${modelId}:${method || 'any'}: ${isValid} (cached: ${cached.dataHash.substring(0, 50)}... vs current: ${currentDataHash.substring(0, 50)}...)`);
+    console.log(`🗄️ CACHE: Hash validation for ${sku}:${modelId}:${method || 'any'}: ${isValid} (cached: ${cached.dataHash.substring(0, 30)}... vs current: ${currentDataHash.substring(0, 30)}...)`);
     return isValid;
   }, [getCachedParameters]);
 
