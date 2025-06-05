@@ -39,6 +39,10 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   // Only show parameters section if model actually has parameters
   const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
 
+  // Check if optimization was actually performed (has method and reasoning/factors)
+  const hasOptimizationResults = model.optimizationMethod && 
+                                (model.optimizationReasoning || model.optimizationFactors);
+
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     onParameterUpdate(parameter, values[0]);
   }, [onParameterUpdate]);
@@ -59,36 +63,9 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     return configs[parameter] || { min: 0, max: 1, step: 0.1, description: "Parameter" };
   };
 
-  // If model has no parameters, show a simplified view
+  // If model has no parameters, don't render anything
   if (!hasParameters) {
-    return (
-      <Card className="w-full">
-        <div className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Settings className="h-4 w-4" />
-              <span className="font-medium">No Parameters</span>
-            </div>
-            
-            <div className="text-sm text-slate-500">
-              This model has no configurable parameters
-            </div>
-          </div>
-
-          {/* Show reasoning if available */}
-          {(model.optimizationReasoning || model.optimizationFactors) && (
-            <div className="mt-4 pt-4 border-t">
-              <ReasoningDisplay
-                reasoning={model.optimizationReasoning}
-                factors={model.optimizationFactors}
-                method={model.optimizationMethod}
-                confidence={model.optimizationConfidence}
-              />
-            </div>
-          )}
-        </div>
-      </Card>
-    );
+    return null;
   }
 
   return (
@@ -197,8 +174,8 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 })}
               </div>
 
-              {/* Reasoning Display */}
-              {(model.optimizationReasoning || model.optimizationFactors) && (
+              {/* Reasoning Display - Only show if optimization was actually performed */}
+              {hasOptimizationResults && (
                 <div className="mt-6 pt-4 border-t">
                   <ReasoningDisplay
                     reasoning={model.optimizationReasoning}
