@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Bot, ChevronDown, ChevronUp, Info, Grid3x3, Shield } from 'lucide-react';
+import { Bot, ChevronDown, ChevronUp, Info, Grid3x3, Shield, Brain } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface ReasoningDisplayProps {
@@ -96,7 +97,7 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
     <Card className="border-blue-200 bg-blue-50/30">
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          {getMethodIcon(method)}
+          <Brain className="h-4 w-4" />
           {title}
         </CardTitle>
         <CardDescription className="flex items-center gap-2">
