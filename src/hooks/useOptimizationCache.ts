@@ -109,13 +109,31 @@ export const useOptimizationCache = () => {
   }, [cache]);
 
   const generateDataHash = useCallback((skuData: SalesData[]): string => {
+    if (!skuData || skuData.length === 0) {
+      console.log('🗄️ CACHE: Empty SKU data, returning empty hash');
+      return 'empty';
+    }
+
+    // Sort by date to ensure consistent ordering
     const sorted = [...skuData].sort((a, b) => a.date.localeCompare(b.date));
-    const salesValues = sorted.map(d => Math.round(d.sales * 100) / 100).join('-');
+    
+    // Create a more robust hash that includes all relevant data points
+    const salesValues = sorted.map(d => Math.round(d.sales * 1000) / 1000); // More precision
     const outlierFlags = sorted.map(d => d.isOutlier ? '1' : '0').join('');
     const noteFlags = sorted.map(d => d.note ? '1' : '0').join('');
+    const dateRange = `${sorted[0]?.date || ''}-${sorted[sorted.length - 1]?.date || ''}`;
     
-    const hash = `${sorted.length}-${salesValues.substring(0, 50)}-${outlierFlags}-${noteFlags}`.substring(0, 100);
-    console.log('🗄️ CACHE: Generated data hash:', hash);
+    // Create a comprehensive hash
+    const hashComponents = [
+      `len:${sorted.length}`,
+      `dates:${dateRange}`,
+      `sales:${salesValues.slice(0, 10).join(',')}`, // First 10 values for brevity
+      `outliers:${outlierFlags}`,
+      `notes:${noteFlags}`
+    ];
+    
+    const hash = hashComponents.join('|');
+    console.log('🗄️ CACHE: Generated robust data hash:', hash.substring(0, 100), '...');
     return hash;
   }, []);
 
@@ -139,8 +157,24 @@ export const useOptimizationCache = () => {
       const modelsNeedingOptimization = enabledModelsWithParams
         .filter(m => {
           const cached = cache[sku]?.[m.id];
-          const hasValidAI = cached?.ai && cached.ai.dataHash === currentDataHash;
-          const hasValidGrid = cached?.grid && cached.grid.dataHash === currentDataHash;
+          if (!cached) {
+            console.log(`🗄️ CACHE: ${sku}:${m.id} - No cache entry found`);
+            return true;
+          }
+
+          const hasValidAI = cached.ai && 
+                            cached.ai.dataHash === currentDataHash && 
+                            (Date.now() - cached.ai.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000);
+          const hasValidGrid = cached.grid && 
+                              cached.grid.dataHash === currentDataHash && 
+                              (Date.now() - cached.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000);
+          
+          if (!hasValidAI) {
+            console.log(`🗄️ CACHE: ${sku}:${m.id} - No valid AI cache (hash: ${cached.ai?.dataHash} vs ${currentDataHash})`);
+          }
+          if (!hasValidGrid) {
+            console.log(`🗄️ CACHE: ${sku}:${m.id} - No valid Grid cache (hash: ${cached.grid?.dataHash} vs ${currentDataHash})`);
+          }
           
           return !hasValidAI || !hasValidGrid;
         })
@@ -160,6 +194,7 @@ export const useOptimizationCache = () => {
     method?: 'ai' | 'grid'
   ): OptimizedParameters | null => {
     console.log(`🗄️ CACHE: Looking for ${sku}:${modelId}:${method || 'any'}`);
+    
     const cached = cache[sku]?.[modelId];
     if (!cached) {
       console.log(`🗄️ CACHE: MISS - No cache entry for ${sku}:${modelId}`);
@@ -167,31 +202,57 @@ export const useOptimizationCache = () => {
       return null;
     }
 
+    console.log(`🗄️ CACHE: Cache entry exists for ${sku}:${modelId}:`, {
+      hasAI: !!cached.ai,
+      hasGrid: !!cached.grid,
+      selected: cached.selected,
+      aiTimestamp: cached.ai?.timestamp,
+      gridTimestamp: cached.grid?.timestamp,
+      aiHash: cached.ai?.dataHash?.substring(0, 50),
+      gridHash: cached.grid?.dataHash?.substring(0, 50)
+    });
+
+    const now = Date.now();
+    const isExpired = (entry: OptimizedParameters) => 
+      now - entry.timestamp > CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
+
     if (method) {
       const result = cached[method];
-      if (result) {
-        console.log(`🗄️ CACHE: HIT - Found ${sku}:${modelId}:${method}`);
-        setCacheStats(prev => ({ ...prev, hits: prev.hits + 1 }));
-        return result;
-      } else {
+      if (!result) {
         console.log(`🗄️ CACHE: MISS - No ${method} method for ${sku}:${modelId}`);
         setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
         return null;
       }
-    }
 
-    const selectedMethod = cached.selected || 'ai';
-    const result = cached[selectedMethod] || cached.ai || cached.grid;
-    
-    if (result) {
-      console.log(`🗄️ CACHE: HIT - Found ${sku}:${modelId}:${selectedMethod}`);
+      if (isExpired(result)) {
+        console.log(`🗄️ CACHE: MISS - ${method} method expired for ${sku}:${modelId}`);
+        setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
+        return null;
+      }
+
+      console.log(`🗄️ CACHE: HIT - Found valid ${sku}:${modelId}:${method}`);
       setCacheStats(prev => ({ ...prev, hits: prev.hits + 1 }));
       return result;
-    } else {
+    }
+
+    // If no specific method requested, use selected or fallback to available
+    const selectedMethod = cached.selected || 'ai';
+    let result = cached[selectedMethod];
+    
+    // If selected method doesn't exist or is expired, try alternatives
+    if (!result || isExpired(result)) {
+      result = cached.ai || cached.grid;
+    }
+    
+    if (!result || isExpired(result)) {
       console.log(`🗄️ CACHE: MISS - No valid method for ${sku}:${modelId}`);
       setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
       return null;
     }
+
+    console.log(`🗄️ CACHE: HIT - Found valid ${sku}:${modelId} with method ${result.method}`);
+    setCacheStats(prev => ({ ...prev, hits: prev.hits + 1 }));
+    return result;
   }, [cache]);
 
   const setCachedParameters = useCallback((
@@ -210,7 +271,8 @@ export const useOptimizationCache = () => {
     expectedAccuracy?: number,
     method?: string
   ) => {
-    console.log(`🗄️ CACHE: Setting ${sku}:${modelId} with method ${method}`);
+    console.log(`🗄️ CACHE: Setting ${sku}:${modelId} with method ${method} and hash ${dataHash.substring(0, 50)}...`);
+    
     const optimizedParams: OptimizedParameters = {
       parameters,
       timestamp: Date.now(),
@@ -248,7 +310,6 @@ export const useOptimizationCache = () => {
       return newCache;
     });
 
-    // Don't increment version here - it causes too many re-renders
     console.log('🗄️ CACHE: Cache updated, triggering save');
   }, []);
 
@@ -272,11 +333,16 @@ export const useOptimizationCache = () => {
     setCacheVersion(prev => prev + 1);
   }, []);
 
-  const isCacheValid = useCallback((sku: string, modelId: string, currentDataHash: string): boolean => {
-    const cached = getCachedParameters(sku, modelId);
-    if (!cached) return false;
+  const isCacheValid = useCallback((sku: string, modelId: string, currentDataHash: string, method?: 'ai' | 'grid'): boolean => {
+    const cached = getCachedParameters(sku, modelId, method);
+    if (!cached) {
+      console.log(`🗄️ CACHE: Invalid - no cached parameters for ${sku}:${modelId}:${method || 'any'}`);
+      return false;
+    }
     
-    return cached.dataHash === currentDataHash;
+    const isValid = cached.dataHash === currentDataHash;
+    console.log(`🗄️ CACHE: Hash validation for ${sku}:${modelId}:${method || 'any'}: ${isValid} (cached: ${cached.dataHash.substring(0, 50)}... vs current: ${currentDataHash.substring(0, 50)}...)`);
+    return isValid;
   }, [getCachedParameters]);
 
   const clearCacheForSKU = useCallback((sku: string) => {
