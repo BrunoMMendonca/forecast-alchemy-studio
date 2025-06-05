@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -12,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart3, TrendingUp, Upload, Zap, Eye } from 'lucide-react';
 import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
-import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 import { useGlobalForecastSettings } from '@/hooks/useGlobalForecastSettings';
 import { useToast } from '@/hooks/use-toast';
@@ -44,8 +42,7 @@ const Index = () => {
   // Add optimization queue
   const { addSKUsToQueue, removeSKUsFromQueue, getSKUsInQueue, queueSize, clearQueue } = useOptimizationQueue();
   
-  // Add cache clearing capabilities
-  const { clearAllCache } = useOptimizationCache();
+  // Only keep manual AI preferences clearing (not the cache clearing since ForecastModels handles that)
   const { clearManualAIPreferences } = useManualAIPreferences();
 
   // Handle global settings changes that trigger re-optimization
@@ -54,8 +51,7 @@ const Index = () => {
       const allSKUs = Array.from(new Set(cleanedData.map(d => d.sku)));
       console.log(`⚙️ Global setting '${changedSetting}' changed, marking ${allSKUs.length} SKUs for re-optimization`);
       
-      // Clear existing caches since parameters have changed
-      clearAllCache();
+      // Clear manual preferences since parameters have changed
       clearManualAIPreferences();
       
       // Add all SKUs to optimization queue
@@ -93,10 +89,9 @@ const Index = () => {
   }, []);
 
   const handleDataUpload = (data: SalesData[]) => {
-    console.log('📤 Data uploaded, clearing all caches and marking all SKUs for optimization');
+    console.log('📤 Data uploaded, clearing preferences and marking all SKUs for optimization');
     
-    // Clear all existing caches and preferences to prevent stale data
-    clearAllCache();
+    // Clear existing preferences to prevent stale data
     clearManualAIPreferences();
     
     // Clear existing queue to avoid conflicts with old SKUs
