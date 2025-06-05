@@ -5,7 +5,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useForecastCache } from '@/hooks/useForecastCache';
 import { useOptimizationHandler } from '@/hooks/useOptimizationHandler';
 import { useModelManagement } from '@/hooks/useModelManagement';
-import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { generateForecastsForSKU } from '@/utils/forecastGenerator';
 
 interface OptimizationQueue {
@@ -22,8 +21,6 @@ export const useForecastModelsLogic = (
 ) => {
   const { toast } = useToast();
   const hasTriggeredOptimizationRef = useRef(false);
-  
-  const { cacheVersion } = useOptimizationCache();
   
   const {
     getCachedForecast,
@@ -73,13 +70,13 @@ export const useForecastModelsLogic = (
     }
   }, [selectedSKU, data, models, forecastPeriods, getCachedForecast, setCachedForecast, generateParametersHash, onForecastGeneration, toast]);
 
-  // Watch for cache version changes and trigger forecast regeneration
+  // Watch for models changes and trigger forecast regeneration
   useEffect(() => {
-    if (selectedSKU && cacheVersion > 0) {
-      console.log(`🔄 FORECAST UI: Cache version changed (${cacheVersion}), regenerating forecasts for ${selectedSKU}`);
-      setTimeout(() => generateForecastsForSelectedSKU(), 100);
+    if (selectedSKU && models.length > 0) {
+      console.log(`🔄 FORECAST UI: Models changed, regenerating forecasts for ${selectedSKU}`);
+      setTimeout(() => generateForecastsForSelectedSKU(), 50);
     }
-  }, [cacheVersion, selectedSKU, generateForecastsForSelectedSKU]);
+  }, [models, selectedSKU, generateForecastsForSelectedSKU]);
 
   const {
     isOptimizing,
