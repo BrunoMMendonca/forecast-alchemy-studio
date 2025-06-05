@@ -36,6 +36,9 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 
   const currentParameters = model.optimizedParameters || model.parameters;
 
+  // Only show parameters section if model actually has parameters
+  const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
+
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     onParameterUpdate(parameter, values[0]);
   }, [onParameterUpdate]);
@@ -50,10 +53,43 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
       trend: { min: 0, max: 2, step: 1, description: "Trend component (0=none, 1=additive, 2=multiplicative)" },
       seasonal: { min: 0, max: 2, step: 1, description: "Seasonal component (0=none, 1=additive, 2=multiplicative)" },
       damped: { min: 0, max: 1, step: 1, description: "Damped trend (0=false, 1=true)" },
+      window: { min: 1, max: 12, step: 1, description: "Number of periods to average" },
     };
     
     return configs[parameter] || { min: 0, max: 1, step: 0.1, description: "Parameter" };
   };
+
+  // If model has no parameters, show a simplified view
+  if (!hasParameters) {
+    return (
+      <Card className="w-full">
+        <div className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <Settings className="h-4 w-4" />
+              <span className="font-medium">No Parameters</span>
+            </div>
+            
+            <div className="text-sm text-slate-500">
+              This model has no configurable parameters
+            </div>
+          </div>
+
+          {/* Show reasoning if available */}
+          {(model.optimizationReasoning || model.optimizationFactors) && (
+            <div className="mt-4 pt-4 border-t">
+              <ReasoningDisplay
+                reasoning={model.optimizationReasoning}
+                factors={model.optimizationFactors}
+                method={model.optimizationMethod}
+                confidence={model.optimizationConfidence}
+              />
+            </div>
+          )}
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full">
@@ -131,56 +167,48 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
         <CollapsibleContent>
           <CardContent className="pt-0">
             {/* Parameter Controls */}
-            {currentParameters && Object.keys(currentParameters).length > 0 && (
-              <div className="space-y-4">
-                <div className="grid gap-4">
-                  {Object.entries(currentParameters).map(([parameter, value]) => {
-                    const config = getParameterConfig(parameter);
-                    return (
-                      <div key={parameter} className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <Label htmlFor={`${model.id}-${parameter}`} className="text-sm font-medium">
-                            {parameter}
-                          </Label>
-                          <span className="text-sm font-mono bg-slate-100 px-2 py-1 rounded">
-                            {typeof value === 'number' ? value.toFixed(config.step < 1 ? 2 : 0) : value}
-                          </span>
-                        </div>
-                        <Slider
-                          id={`${model.id}-${parameter}`}
-                          min={config.min}
-                          max={config.max}
-                          step={config.step}
-                          value={[typeof value === 'number' ? value : config.min]}
-                          onValueChange={(values) => handleParameterChange(parameter, values)}
-                          className="w-full"
-                          disabled={!isManual}
-                        />
-                        <p className="text-xs text-slate-500">{config.description}</p>
+            <div className="space-y-4">
+              <div className="grid gap-4">
+                {Object.entries(currentParameters).map(([parameter, value]) => {
+                  const config = getParameterConfig(parameter);
+                  return (
+                    <div key={parameter} className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <Label htmlFor={`${model.id}-${parameter}`} className="text-sm font-medium">
+                          {parameter}
+                        </Label>
+                        <span className="text-sm font-mono bg-slate-100 px-2 py-1 rounded">
+                          {typeof value === 'number' ? value.toFixed(config.step < 1 ? 2 : 0) : value}
+                        </span>
                       </div>
-                    );
-                  })}
+                      <Slider
+                        id={`${model.id}-${parameter}`}
+                        min={config.min}
+                        max={config.max}
+                        step={config.step}
+                        value={[typeof value === 'number' ? value : config.min]}
+                        onValueChange={(values) => handleParameterChange(parameter, values)}
+                        className="w-full"
+                        disabled={!isManual}
+                      />
+                      <p className="text-xs text-slate-500">{config.description}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Reasoning Display */}
+              {(model.optimizationReasoning || model.optimizationFactors) && (
+                <div className="mt-6 pt-4 border-t">
+                  <ReasoningDisplay
+                    reasoning={model.optimizationReasoning}
+                    factors={model.optimizationFactors}
+                    method={model.optimizationMethod}
+                    confidence={model.optimizationConfidence}
+                  />
                 </div>
-
-                {/* Reasoning Display */}
-                {(model.optimizationReasoning || model.optimizationFactors) && (
-                  <div className="mt-6 pt-4 border-t">
-                    <ReasoningDisplay
-                      reasoning={model.optimizationReasoning}
-                      factors={model.optimizationFactors}
-                      method={model.optimizationMethod}
-                      confidence={model.optimizationConfidence}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {(!currentParameters || Object.keys(currentParameters).length === 0) && (
-              <div className="text-center py-4 text-slate-500">
-                No parameters available for this model
-              </div>
-            )}
+              )}
+            </div>
           </CardContent>
         </CollapsibleContent>
       </Collapsible>
