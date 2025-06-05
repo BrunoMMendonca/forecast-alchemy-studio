@@ -52,9 +52,6 @@ export const useOptimizationHandler = (
       return;
     }
 
-    // Note: Cache clearing is now handled during queue addition, not here
-    // This prevents double clearing and timing issues
-
     const enabledModels = models.filter(m => m.enabled);
     
     console.log('🚀 QUEUE: Starting optimization for queued SKUs:', queuedSKUs);
@@ -66,7 +63,7 @@ export const useOptimizationHandler = (
       data, 
       enabledModels,
       queuedSKUs,
-      (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method) => {
+      (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method, bothResults) => {
         console.log(`✅ OPTIMIZATION CALLBACK: Received results for ${sku}:${modelId} with method ${method}`);
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
@@ -78,9 +75,43 @@ export const useOptimizationHandler = (
           businessImpact: factors?.businessImpact || 'Unknown'
         };
         
-        // Save to cache first - this should be immediately available
-        setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
-        console.log(`💾 CACHE SAVE: Saved ${method} results for ${sku}:${modelId} - should be immediately visible`);
+        // Cache both AI and Grid results when available
+        if (bothResults) {
+          if (bothResults.ai) {
+            console.log(`💾 CACHING AI RESULT for ${sku}:${modelId}`);
+            setCachedParameters(
+              sku, 
+              modelId, 
+              bothResults.ai.parameters, 
+              dataHash,
+              bothResults.ai.confidence,
+              bothResults.ai.reasoning,
+              bothResults.ai.factors,
+              bothResults.ai.expectedAccuracy,
+              bothResults.ai.method
+            );
+          }
+          
+          if (bothResults.grid) {
+            console.log(`💾 CACHING GRID RESULT for ${sku}:${modelId}`);
+            setCachedParameters(
+              sku, 
+              modelId, 
+              bothResults.grid.parameters, 
+              dataHash,
+              bothResults.grid.confidence,
+              bothResults.grid.reasoning,
+              bothResults.grid.factors,
+              bothResults.grid.expectedAccuracy,
+              bothResults.grid.method
+            );
+          }
+        } else {
+          // Fallback to single result caching
+          setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
+        }
+        
+        console.log(`💾 CACHE SAVE: Saved results for ${sku}:${modelId} - both AI and Grid should be available`);
         
         // Determine preference based on optimization method
         const preferences = loadManualAIPreferences();
@@ -97,9 +128,9 @@ export const useOptimizationHandler = (
         preferences[preferenceKey] = newPreference;
         saveManualAIPreferences(preferences);
         
-        console.log(`🎯 PREFERENCE SET: ${preferenceKey} = ${newPreference} (method: ${method}) - should be immediately visible`);
+        console.log(`🎯 PREFERENCE SET: ${preferenceKey} = ${newPreference} (method: ${method})`);
         
-        // Update models state immediately with optimized parameters
+        // Update models state immediately with optimized parameters (from selected result)
         setModels(prev => prev.map(model => 
           model.id === modelId 
             ? { 

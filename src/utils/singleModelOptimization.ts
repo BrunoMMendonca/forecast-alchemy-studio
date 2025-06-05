@@ -14,6 +14,11 @@ interface MultiMethodResult {
   aiResult?: OptimizationResult;
   gridResult: GridOptimizationResult;
   selectedResult: OptimizationResult | GridOptimizationResult;
+  // New: return both results for caching
+  bothResults: {
+    ai?: OptimizationResult;
+    grid: GridOptimizationResult;
+  };
 }
 
 export const optimizeSingleModel = async (
@@ -23,7 +28,10 @@ export const optimizeSingleModel = async (
   progressUpdater: ProgressUpdater,
   forceGridSearch: boolean = false,
   businessContext?: BusinessContext
-): Promise<OptimizationResult | GridOptimizationResult> => {
+): Promise<{
+  selectedResult: OptimizationResult | GridOptimizationResult;
+  bothResults?: { ai?: OptimizationResult; grid: GridOptimizationResult };
+}> => {
   console.log(`🚀 OPTIMIZATION START: ${sku}:${model.id} (forceGrid: ${forceGridSearch})`);
   
   if (!model.parameters || Object.keys(model.parameters).length === 0) {
@@ -36,7 +44,7 @@ export const optimizeSingleModel = async (
       parameters: model.parameters
     });
     
-    return { 
+    const defaultResult = { 
       parameters: model.parameters, 
       confidence: 70, 
       method: 'default',
@@ -49,17 +57,29 @@ export const optimizeSingleModel = async (
         businessImpact: 'Minimal risk with default parameters'
       }
     };
+    
+    return { 
+      selectedResult: defaultResult,
+      bothResults: { grid: defaultResult as GridOptimizationResult }
+    };
   }
 
   if (forceGridSearch) {
     console.log(`🔍 FORCE GRID: Running grid-only optimization for ${sku}:${model.id}`);
-    return await runGridOptimization(model, skuData, sku);
+    const gridResult = await runGridOptimization(model, skuData, sku);
+    return { 
+      selectedResult: gridResult,
+      bothResults: { grid: gridResult }
+    };
   }
 
   const results = await runBothOptimizations(model, skuData, sku, progressUpdater, businessContext);
   
   console.log(`✅ OPTIMIZATION COMPLETE: ${sku}:${model.id} using ${results.selectedResult.method}`);
-  return results.selectedResult;
+  return {
+    selectedResult: results.selectedResult,
+    bothResults: results.bothResults
+  };
 };
 
 const runBothOptimizations = async (
@@ -117,7 +137,11 @@ const runBothOptimizations = async (
   return {
     aiResult: aiResult || undefined,
     gridResult,
-    selectedResult
+    selectedResult,
+    bothResults: {
+      ai: aiResult || undefined,
+      grid: gridResult
+    }
   };
 };
 

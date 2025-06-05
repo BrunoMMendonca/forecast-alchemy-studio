@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -131,11 +130,11 @@ export const useOptimizationCache = () => {
       const modelsNeedingOptimization = enabledModelsWithParams
         .filter(m => {
           const cached = cache[sku]?.[m.id];
-          return !cached || 
-                 !cached.ai || 
-                 !cached.grid || 
-                 cached.ai.dataHash !== currentDataHash ||
-                 cached.grid.dataHash !== currentDataHash;
+          // Need optimization if BOTH AI and Grid are missing or invalid
+          const hasValidAI = cached?.ai && cached.ai.dataHash === currentDataHash;
+          const hasValidGrid = cached?.grid && cached.grid.dataHash === currentDataHash;
+          
+          return !hasValidAI || !hasValidGrid;
         })
         .map(m => m.id);
       
@@ -144,7 +143,7 @@ export const useOptimizationCache = () => {
       }
     });
     
-    console.log(`CACHE: ${result.length} SKUs need optimization`);
+    console.log(`CACHE: ${result.length} SKUs need optimization (missing AI or Grid results)`);
     return result;
   }, [cache, generateDataHash]);
 
@@ -218,17 +217,28 @@ export const useOptimizationCache = () => {
       cacheMethod = method === 'grid_search' ? 'grid' : 'ai';
     }
 
-    setCache(prev => ({
-      ...prev,
-      [sku]: {
-        ...prev[sku],
-        [modelId]: {
-          ...prev[sku]?.[modelId],
-          [cacheMethod]: optimizedParams,
-          selected: cacheMethod
+    setCache(prev => {
+      const newCache = {
+        ...prev,
+        [sku]: {
+          ...prev[sku],
+          [modelId]: {
+            ...prev[sku]?.[modelId],
+            [cacheMethod]: optimizedParams,
+            // Only update selected if not already set
+            selected: prev[sku]?.[modelId]?.selected || cacheMethod
+          }
         }
-      }
-    }));
+      };
+      
+      console.log(`💾 CACHE UPDATE: ${sku}:${modelId}:${cacheMethod} cached`, {
+        hasAI: !!newCache[sku][modelId].ai,
+        hasGrid: !!newCache[sku][modelId].grid,
+        selected: newCache[sku][modelId].selected
+      });
+      
+      return newCache;
+    });
   }, []);
 
   const setSelectedMethod = useCallback((
