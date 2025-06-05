@@ -27,7 +27,6 @@ export const CacheDebugger: React.FC = () => {
 
   // Load preferences and track cache changes
   const [preferences, setPreferences] = useState(() => loadManualAIPreferences());
-  const [cacheSnapshot, setCacheSnapshot] = useState(optimizationCache);
 
   // Auto-refresh every 2 seconds when enabled
   useEffect(() => {
@@ -36,7 +35,6 @@ export const CacheDebugger: React.FC = () => {
     const interval = setInterval(() => {
       setLastUpdate(new Date().toLocaleTimeString());
       setPreferences(loadManualAIPreferences());
-      setCacheSnapshot({ ...optimizationCache }); // Force cache update
       console.log('🔄 CACHE DEBUGGER: Auto-refresh triggered', {
         cacheKeys: Object.keys(optimizationCache),
         preferenceKeys: Object.keys(loadManualAIPreferences())
@@ -46,16 +44,23 @@ export const CacheDebugger: React.FC = () => {
     return () => clearInterval(interval);
   }, [autoRefresh, loadManualAIPreferences, optimizationCache]);
 
-  // React to cache changes immediately
+  // React to cache changes immediately - this will make it update in real-time
   useEffect(() => {
-    setCacheSnapshot({ ...optimizationCache });
-    console.log('🔄 CACHE DEBUGGER: Cache changed', Object.keys(optimizationCache));
+    setLastUpdate(new Date().toLocaleTimeString());
+    console.log('🔄 CACHE DEBUGGER: Cache changed', {
+      cacheKeys: Object.keys(optimizationCache),
+      cacheEntries: optimizationCache
+    });
   }, [optimizationCache]);
+
+  // React to preference changes immediately
+  useEffect(() => {
+    setPreferences(loadManualAIPreferences());
+  }, [loadManualAIPreferences]);
 
   const handleRefresh = () => {
     setLastUpdate(new Date().toLocaleTimeString());
     setPreferences(loadManualAIPreferences());
-    setCacheSnapshot({ ...optimizationCache });
     console.log('🔄 CACHE DEBUGGER: Manual refresh', {
       cacheKeys: Object.keys(optimizationCache),
       preferenceKeys: Object.keys(loadManualAIPreferences())
@@ -64,7 +69,7 @@ export const CacheDebugger: React.FC = () => {
 
   const handleExportCache = () => {
     const exportData = {
-      optimizationCache: cacheSnapshot,
+      optimizationCache,
       preferences,
       cacheStats,
       timestamp: new Date().toISOString()
@@ -147,7 +152,7 @@ export const CacheDebugger: React.FC = () => {
             </div>
           </div>
           <div className="mt-2 text-xs text-gray-500">
-            Last updated: {lastUpdate} | Cache entries: {Object.keys(cacheSnapshot).length}
+            Last updated: {lastUpdate} | Cache entries: {Object.keys(optimizationCache).length}
           </div>
         </CardContent>
       </Card>
@@ -161,14 +166,14 @@ export const CacheDebugger: React.FC = () => {
         <TabsContent value="optimization">
           <ScrollArea className="h-96">
             <div className="space-y-4">
-              {Object.keys(cacheSnapshot).length === 0 ? (
+              {Object.keys(optimizationCache).length === 0 ? (
                 <Card>
                   <CardContent className="pt-6">
                     <p className="text-sm text-gray-500">No optimization cache entries</p>
                   </CardContent>
                 </Card>
               ) : (
-                Object.entries(cacheSnapshot).map(([sku, skuCache]) => (
+                Object.entries(optimizationCache).map(([sku, skuCache]) => (
                   <Card key={sku}>
                     <CardHeader>
                       <CardTitle className="text-sm flex items-center justify-between">
