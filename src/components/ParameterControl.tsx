@@ -48,7 +48,16 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 
   const currentParameters = model.optimizedParameters || model.parameters;
 
-  // Check if cached optimization results are available
+  // Only show parameters section if model actually has parameters
+  const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
+
+  // If model has no parameters, don't render anything and don't check cache
+  if (!hasParameters) {
+    console.log('❌ No parameters for model:', model.id, '- skipping cache checks and rendering');
+    return null;
+  }
+
+  // Check if cached optimization results are available - only for models with parameters
   const skuData = data.filter(d => d.sku === selectedSKU);
   const currentDataHash = generateDataHash(skuData);
   
@@ -79,9 +88,6 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const aiCacheAvailable = hasValidAICache();
   const gridCacheAvailable = hasValidGridCache();
 
-  // Only show parameters section if model actually has parameters
-  const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
-
   // Check if optimization was actually performed
   const hasOptimizationResults = model.optimizationMethod && 
                                 (model.optimizationReasoning || model.optimizationFactors);
@@ -107,13 +113,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     return configs[parameter] || { min: 0, max: 1, step: 0.1, description: "Parameter" };
   };
 
-  // If model has no parameters, don't render anything
-  if (!hasParameters) {
-    console.log('❌ No parameters for model:', model.id);
-    return null;
-  }
-
-  console.log('✅ Rendering ParameterControl for model:', model.id);
+  console.log('✅ Rendering ParameterControl for model with parameters:', model.id);
 
   return (
     <Card className="w-full">
