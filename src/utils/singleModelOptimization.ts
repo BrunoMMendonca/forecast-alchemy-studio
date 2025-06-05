@@ -193,12 +193,12 @@ export const optimizeModelForSKU = async (
     
     return {
       success: true,
-      optimizedParameters: result.parameters,
-      confidence: result.confidence,
-      reasoning: result.reasoning,
-      factors: result.factors,
-      expectedAccuracy: result.expectedAccuracy,
-      method: result.method
+      optimizedParameters: result.selectedResult.parameters,
+      confidence: result.selectedResult.confidence,
+      reasoning: result.selectedResult.reasoning,
+      factors: result.selectedResult.factors,
+      expectedAccuracy: result.selectedResult.expectedAccuracy,
+      method: result.selectedResult.method
     };
   } catch (error) {
     console.error(`❌ optimizeModelForSKU: Error for ${sku}:${model.id}:`, error);

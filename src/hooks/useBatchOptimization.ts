@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -9,6 +10,9 @@ interface Progress {
   completed: number;
   failed: number;
   aiOptimized: number;
+  currentSKU?: string;
+  completedSKUs: number;
+  totalSKUs: number;
 }
 
 export const useBatchOptimization = () => {
