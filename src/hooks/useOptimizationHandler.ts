@@ -129,18 +129,24 @@ export const useOptimizationHandler = (
         ));
       },
       (sku) => {
-        optimizationQueue.removeSKUsFromQueue([sku]);
-        
-        if (sku === selectedSKU && onOptimizationComplete) {
-          setTimeout(() => {
-            onOptimizationComplete();
-          }, 200);
-        }
+        // Delay queue removal to ensure UI updates are complete
+        setTimeout(() => {
+          optimizationQueue.removeSKUsFromQueue([sku]);
+          
+          if (sku === selectedSKU && onOptimizationComplete) {
+            setTimeout(() => {
+              onOptimizationComplete();
+            }, 200);
+          }
+        }, 500); // Give more time for UI updates
       },
       getSKUsNeedingOptimization
     );
 
-    markOptimizationCompleted(data, '/');
+    // Mark optimization completed after a slight delay to ensure all updates are processed
+    setTimeout(() => {
+      markOptimizationCompleted(data, '/');
+    }, 1000);
   }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete]);
 
   return {

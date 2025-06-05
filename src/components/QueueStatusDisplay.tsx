@@ -23,7 +23,11 @@ export const QueueStatusDisplay: React.FC<QueueStatusDisplayProps> = ({
   progress,
   hasTriggeredOptimization,
 }) => {
-  if (optimizationQueue.getSKUsInQueue().length === 0) {
+  // Show status if we're actively optimizing OR if there are items in queue
+  const queuedSKUs = optimizationQueue.getSKUsInQueue();
+  const shouldShow = isOptimizing || queuedSKUs.length > 0;
+
+  if (!shouldShow) {
     return null;
   }
 
@@ -39,7 +43,7 @@ export const QueueStatusDisplay: React.FC<QueueStatusDisplayProps> = ({
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
             <Zap className="h-4 w-4 text-blue-600" />
             <span className="font-medium text-blue-800">
-              Currently optimizing: {progress?.currentSKU || 'Unknown'}
+              Currently optimizing: {progress?.currentSKU || 'Processing...'}
             </span>
             <Badge variant="secondary" className="text-xs">
               {progress ? `${progress.completedSKUs + 1}/${progress.totalSKUs}` : 'Processing...'}
@@ -49,7 +53,7 @@ export const QueueStatusDisplay: React.FC<QueueStatusDisplayProps> = ({
           <>
             <Clock className="h-5 w-5 text-amber-600" />
             <span className="font-medium text-amber-800">
-              {optimizationQueue.getSKUsInQueue().length} SKUs queued for optimization
+              {queuedSKUs.length} SKUs queued for optimization
             </span>
             <Badge variant="outline" className="text-xs border-amber-300 text-amber-700">
               {hasTriggeredOptimization ? 'Starting...' : 'Pending'}
