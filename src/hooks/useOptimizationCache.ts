@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -56,7 +57,6 @@ export const useOptimizationCache = () => {
           Object.keys(parsedCache[sku]).forEach(modelId => {
             const entry = parsedCache[sku][modelId];
             
-            // Handle legacy format
             if (entry.parameters) {
               const method = entry.method?.startsWith('ai_') ? 'ai' : 
                            entry.method === 'grid_search' ? 'grid' : 'ai';
@@ -69,7 +69,6 @@ export const useOptimizationCache = () => {
                 filteredCache[sku][modelId].selected = method;
               }
             } else {
-              // New format
               const hasValidEntries = (entry.ai && now - entry.ai.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000) ||
                                     (entry.grid && now - entry.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000);
               
@@ -82,7 +81,6 @@ export const useOptimizationCache = () => {
         });
         
         setCache(filteredCache);
-        console.log('CACHE: Loaded optimization cache from storage');
       }
     } catch (error) {
       console.error('CACHE: Failed to load from localStorage:', error);
@@ -113,8 +111,6 @@ export const useOptimizationCache = () => {
     data: SalesData[], 
     models: ModelConfig[]
   ): { sku: string; models: string[] }[] => {
-    console.log('CACHE: Checking which SKUs need optimization...');
-    
     const enabledModelsWithParams = models.filter(m => 
       m.enabled && m.parameters && Object.keys(m.parameters).length > 0
     );
@@ -131,7 +127,6 @@ export const useOptimizationCache = () => {
       const modelsNeedingOptimization = enabledModelsWithParams
         .filter(m => {
           const cached = cache[sku]?.[m.id];
-          // Need optimization if BOTH AI and Grid are missing or invalid
           const hasValidAI = cached?.ai && cached.ai.dataHash === currentDataHash;
           const hasValidGrid = cached?.grid && cached.grid.dataHash === currentDataHash;
           
@@ -144,7 +139,6 @@ export const useOptimizationCache = () => {
       }
     });
     
-    console.log(`CACHE: ${result.length} SKUs need optimization (missing AI or Grid results)`);
     return result;
   }, [cache, generateDataHash]);
 
@@ -218,36 +212,21 @@ export const useOptimizationCache = () => {
       cacheMethod = method === 'grid_search' ? 'grid' : 'ai';
     }
 
-    console.log(`💾 CACHE UPDATE: Setting ${sku}:${modelId}:${cacheMethod}`);
-
     setCache(prev => {
-      // Create completely new object to ensure React detects the change
       const newCache = JSON.parse(JSON.stringify(prev));
       
       if (!newCache[sku]) newCache[sku] = {};
       if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
       
       newCache[sku][modelId][cacheMethod] = optimizedParams;
-      // Only update selected if not already set
       if (!newCache[sku][modelId].selected) {
         newCache[sku][modelId].selected = cacheMethod;
       }
       
-      console.log(`💾 CACHE UPDATE: ${sku}:${modelId}:${cacheMethod} cached`, {
-        hasAI: !!newCache[sku][modelId].ai,
-        hasGrid: !!newCache[sku][modelId].grid,
-        selected: newCache[sku][modelId].selected
-      });
-      
       return newCache;
     });
 
-    // Increment version counter to trigger real-time updates
-    setCacheVersion(prev => {
-      const newVersion = prev + 1;
-      console.log(`🔄 CACHE VERSION: Incremented to ${newVersion} for ${sku}:${modelId}:${cacheMethod}`);
-      return newVersion;
-    });
+    setCacheVersion(prev => prev + 1);
   }, []);
 
   const setSelectedMethod = useCallback((
@@ -256,7 +235,6 @@ export const useOptimizationCache = () => {
     method: 'ai' | 'grid' | 'manual'
   ) => {
     setCache(prev => {
-      // Create completely new object to ensure React detects the change
       const newCache = JSON.parse(JSON.stringify(prev));
       
       if (!newCache[sku]) newCache[sku] = {};
@@ -267,7 +245,6 @@ export const useOptimizationCache = () => {
       return newCache;
     });
 
-    // Increment version counter for method selection changes too
     setCacheVersion(prev => prev + 1);
   }, []);
 
@@ -288,16 +265,14 @@ export const useOptimizationCache = () => {
   }, []);
 
   const clearAllCache = useCallback(() => {
-    console.log('🗑️ CACHE CLEAR: Clearing all optimization cache');
     setCache({});
     setCacheStats({ hits: 0, misses: 0, skipped: 0 });
     setCacheVersion(0);
     
     try {
       localStorage.removeItem(CACHE_KEY);
-      console.log('🗑️ CACHE CLEAR: Cleared localStorage');
     } catch (error) {
-      console.error('🗑️ CACHE CLEAR: Failed to clear localStorage:', error);
+      console.error('Failed to clear localStorage:', error);
     }
   }, []);
 
@@ -316,7 +291,6 @@ export const useOptimizationCache = () => {
     isOptimizationComplete,
     markOptimizationComplete,
     generateDatasetFingerprint,
-    // Legacy compatibility functions
     startOptimizationSession: () => {},
     markSKUOptimized: () => {},
     completeOptimizationSession: () => {},

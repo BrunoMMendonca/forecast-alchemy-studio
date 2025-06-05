@@ -69,7 +69,6 @@ export const useOptimizationHandler = (
           businessImpact: factors?.businessImpact || 'Unknown'
         };
         
-        // Cache both AI and Grid results when available
         if (bothResults) {
           if (bothResults.ai) {
             setCachedParameters(
@@ -99,14 +98,12 @@ export const useOptimizationHandler = (
             );
           }
         } else {
-          // Fallback to single result caching
           setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
         }
         
-        // Determine preference based on optimization method
         const preferences = loadManualAIPreferences();
         const preferenceKey = `${sku}:${modelId}`;
-        let newPreference: PreferenceValue = 'ai'; // Default to AI
+        let newPreference: PreferenceValue = 'ai';
         
         if (method === 'grid_search') {
           newPreference = 'grid';
@@ -114,11 +111,9 @@ export const useOptimizationHandler = (
           newPreference = 'ai';
         }
         
-        // Save preference with immediate effect
         preferences[preferenceKey] = newPreference;
         saveManualAIPreferences(preferences);
         
-        // Update models state immediately with optimized parameters (from selected result)
         setModels(prev => prev.map(model => 
           model.id === modelId 
             ? { 
@@ -136,9 +131,7 @@ export const useOptimizationHandler = (
       (sku) => {
         optimizationQueue.removeSKUsFromQueue([sku]);
         
-        // Trigger forecast generation for the selected SKU immediately
         if (sku === selectedSKU && onOptimizationComplete) {
-          // Add a small delay to ensure all state updates are complete
           setTimeout(() => {
             onOptimizationComplete();
           }, 200);

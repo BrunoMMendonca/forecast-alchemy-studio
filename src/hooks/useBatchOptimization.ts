@@ -48,19 +48,14 @@ export const useBatchOptimization = () => {
     getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[]
   ) => {
     if (!queuedSKUs || queuedSKUs.length === 0) {
-      console.warn('No SKUs provided for optimization.');
       return;
     }
 
-    // Sort queued SKUs to ensure consistent processing order (first to last)
     const sortedQueuedSKUs = [...queuedSKUs].sort();
-    console.log('🔄 BATCH: Processing SKUs in order:', sortedQueuedSKUs);
-
     const skusNeedingOptimization = getSKUsNeedingOptimization(data, models);
     const totalModelsToOptimize = skusNeedingOptimization.reduce((acc, curr) => acc + curr.models.length, 0);
 
     if (totalModelsToOptimize === 0) {
-      console.log('No models need optimization, completing.');
       return;
     }
 
@@ -68,31 +63,24 @@ export const useBatchOptimization = () => {
 
     let completedSKUs = 0;
 
-    // Process SKUs in sorted order (first to last)
     for (const sku of sortedQueuedSKUs) {
       const skuData = data.filter(d => d.sku === sku);
       
       if (skuData.length === 0) {
-        console.warn(`No data found for SKU: ${sku}`);
         continue;
       }
 
-      console.log(`🚀 BATCH: Starting optimization for SKU ${sku} (${completedSKUs + 1}/${sortedQueuedSKUs.length})`);
       setProgress(prev => prev ? { ...prev, currentSKU: sku } : null);
 
       const modelsToOptimize = models.filter(m => m.enabled && m.parameters && Object.keys(m.parameters).length > 0);
       
       for (const model of modelsToOptimize) {
         try {
-          console.log(`🔧 OPTIMIZING: ${sku}:${model.id}`);
-          
           const businessContext = getBusinessContext();
           const result = await optimizeSingleModel(model, skuData, sku, { setProgress }, false, businessContext);
           
           if (result) {
             const { selectedResult, bothResults } = result;
-            
-            console.log(`✅ OPTIMIZATION SUCCESS: ${sku}:${model.id} (method: ${selectedResult.method})`);
             
             onSKUModelComplete(
               sku,
@@ -107,13 +95,11 @@ export const useBatchOptimization = () => {
             );
           }
         } catch (error) {
-          console.error(`❌ OPTIMIZATION ERROR: ${sku}:${model.id}:`, error);
           setProgress(prev => prev ? { ...prev, failed: prev.failed + 1 } : null);
         }
       }
       
       completedSKUs++;
-      console.log(`🏁 SKU OPTIMIZATION COMPLETE: ${sku} (${completedSKUs}/${sortedQueuedSKUs.length})`);
       setProgress(prev => prev ? { 
         ...prev, 
         completed: prev.completed + modelsToOptimize.length,
