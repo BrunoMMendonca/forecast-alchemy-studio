@@ -1,10 +1,11 @@
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 import { useForecastCache } from '@/hooks/useForecastCache';
 import { useOptimizationHandler } from '@/hooks/useOptimizationHandler';
 import { useModelManagement } from '@/hooks/useModelManagement';
+import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { generateForecastsForSKU } from '@/utils/forecastGenerator';
 
 interface OptimizationQueue {
@@ -20,8 +21,9 @@ export const useForecastModelsLogic = (
   optimizationQueue?: OptimizationQueue
 ) => {
   const { toast } = useToast();
-  const [forceUpdateTrigger, setForceUpdateTrigger] = useState(0);
   const hasTriggeredOptimizationRef = useRef(false);
+  
+  const { cacheVersion } = useOptimizationCache();
   
   const {
     getCachedForecast,
@@ -71,6 +73,14 @@ export const useForecastModelsLogic = (
     }
   }, [selectedSKU, data, models, forecastPeriods, getCachedForecast, setCachedForecast, generateParametersHash, onForecastGeneration, toast]);
 
+  // Watch for cache version changes and trigger forecast regeneration
+  useEffect(() => {
+    if (selectedSKU && cacheVersion > 0) {
+      console.log(`🔄 FORECAST UI: Cache version changed (${cacheVersion}), regenerating forecasts for ${selectedSKU}`);
+      setTimeout(() => generateForecastsForSelectedSKU(), 100);
+    }
+  }, [cacheVersion, selectedSKU, generateForecastsForSelectedSKU]);
+
   const {
     isOptimizing,
     progress,
@@ -79,9 +89,6 @@ export const useForecastModelsLogic = (
 
   const handleQueueOptimization = useCallback(async () => {
     await baseHandleQueueOptimization();
-    setTimeout(() => {
-      setForceUpdateTrigger(prev => prev + 1);
-    }, 200);
   }, [baseHandleQueueOptimization]);
 
   const handleToggleModel = useCallback((modelId: string) => {
