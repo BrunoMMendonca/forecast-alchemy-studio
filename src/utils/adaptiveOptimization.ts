@@ -1,3 +1,4 @@
+
 import { SalesData } from '@/pages/Index';
 import { generateMovingAverage, generateSimpleExponentialSmoothing, generateDoubleExponentialSmoothing } from './forecastAlgorithms';
 import { ValidationConfig, ValidationResult, walkForwardValidation, timeSeriesCrossValidation, ENHANCED_VALIDATION_CONFIG } from './enhancedValidation';
@@ -41,22 +42,22 @@ const generateForecastForModel = (
   }
 };
 
-// Adaptive grid search that focuses around AI suggestions
+// Independent grid search that always finds the best parameters
 export const adaptiveGridSearchOptimization = (
   modelId: string,
   data: SalesData[],
-  aiParameters?: Record<string, number>,
+  aiParameters?: Record<string, number>, // Not used for improvement comparison, just for logging
   config: ValidationConfig = ENHANCED_VALIDATION_CONFIG
 ): OptimizationResult | null => {
-  console.log(`🔍 GRID SEARCH: Starting adaptive grid search for ${modelId}`);
+  console.log(`🔍 GRID SEARCH: Starting independent grid search for ${modelId}`);
   
   if (data.length < config.minValidationSize * 2) {
     console.log(`❌ GRID SEARCH: Insufficient data for optimization (${data.length} points)`);
     return null;
   }
 
-  // Define base parameter ranges
-  const baseRanges: Record<string, Record<string, number[]>> = {
+  // Define comprehensive parameter ranges
+  const parameterRanges: Record<string, Record<string, number[]>> = {
     moving_average: {
       window: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     },
@@ -72,42 +73,18 @@ export const adaptiveGridSearchOptimization = (
     }
   };
 
-  const baseGrid = baseRanges[modelId];
-  if (!baseGrid) {
+  const searchGrid = parameterRanges[modelId];
+  if (!searchGrid) {
     console.log(`❌ GRID SEARCH: No parameter grid defined for ${modelId}`);
     return null;
   }
 
-  // If AI parameters provided, create focused grid around them
-  let searchGrid = { ...baseGrid };
+  // Log AI parameters if provided (for reference only)
   if (aiParameters) {
-    console.log(`🎯 GRID SEARCH: Creating focused grid around AI parameters:`, aiParameters);
-    
-    Object.keys(aiParameters).forEach(param => {
-      const aiValue = aiParameters[param];
-      const baseValues = baseGrid[param] || [];
-      
-      if (param === 'window') {
-        // For window, create range around AI suggestion
-        const aiWindow = Math.round(aiValue);
-        const focused = [];
-        for (let i = Math.max(2, aiWindow - 3); i <= Math.min(15, aiWindow + 3); i++) {
-          focused.push(i);
-        }
-        searchGrid[param] = [...new Set([...focused, ...baseValues])].sort((a, b) => a - b);
-      } else {
-        // For continuous parameters, create fine-grained range around AI value
-        const focused = [];
-        const step = 0.05;
-        for (let i = Math.max(0.05, aiValue - 0.15); i <= Math.min(0.95, aiValue + 0.15); i += step) {
-          focused.push(Math.round(i * 20) / 20);
-        }
-        searchGrid[param] = [...new Set([...focused, ...baseValues])].sort((a, b) => a - b);
-      }
-    });
+    console.log(`🤖 GRID SEARCH: AI suggested parameters (for reference):`, aiParameters);
   }
 
-  // Test parameters and collect results
+  // Test all parameter combinations
   const results: Array<{ params: Record<string, number>; validation: ValidationResult }> = [];
   const paramNames = Object.keys(searchGrid);
   const paramValues = Object.values(searchGrid);
@@ -122,35 +99,14 @@ export const adaptiveGridSearchOptimization = (
   const combinations = generateCombinations(paramValues);
   console.log(`🧮 GRID SEARCH: Testing ${combinations.length} parameter combinations`);
 
-  // Test AI parameters first if provided
-  if (aiParameters) {
-    console.log(`🤖 GRID SEARCH: Testing AI parameters first:`, aiParameters);
-    
-    const generateForecast = (trainData: SalesData[], periods: number) => 
-      generateForecastForModel(modelId, trainData, periods, aiParameters);
-    
-    const aiValidation = config.useWalkForward ? 
-      walkForwardValidation(data, generateForecast, config) :
-      timeSeriesCrossValidation(data, generateForecast, config);
-    
-    if (aiValidation.accuracy > 0) {
-      results.push({ params: aiParameters, validation: aiValidation });
-      console.log(`🤖 GRID SEARCH: AI parameters: Accuracy ${aiValidation.accuracy.toFixed(1)}%, Confidence ${aiValidation.confidence.toFixed(1)}%`);
-    }
-  }
-
-  // Test grid combinations
   let testedCount = 0;
+  let validResults = 0;
+  
   for (const combo of combinations) {
     const parameters: Record<string, number> = {};
     paramNames.forEach((name, i) => {
       parameters[name] = combo[i];
     });
-
-    // Skip if this is the AI parameters we already tested
-    if (aiParameters && JSON.stringify(parameters) === JSON.stringify(aiParameters)) {
-      continue;
-    }
 
     try {
       const generateForecast = (trainData: SalesData[], periods: number) => 
@@ -162,9 +118,10 @@ export const adaptiveGridSearchOptimization = (
       
       if (validation.accuracy > 0) {
         results.push({ params: parameters, validation });
+        validResults++;
         
-        // Log interesting results (top performers or significant differences)
-        if (validation.accuracy > 70 || results.length <= 10) {
+        // Log top performers
+        if (validResults <= 5 || validation.accuracy > 80) {
           console.log(`📊 GRID SEARCH: ${JSON.stringify(parameters)}: Accuracy ${validation.accuracy.toFixed(1)}%, MAPE ${validation.mape.toFixed(1)}%`);
         }
       }
@@ -175,22 +132,23 @@ export const adaptiveGridSearchOptimization = (
     }
   }
 
-  console.log(`✅ GRID SEARCH: Completed: tested ${testedCount} combinations, found ${results.length} valid results`);
+  console.log(`✅ GRID SEARCH: Completed testing ${testedCount} combinations, found ${validResults} valid results`);
 
+  // ALWAYS return the best result found, even if accuracy is low
   if (results.length === 0) {
-    console.log(`❌ GRID SEARCH: No valid results found`);
+    console.log(`❌ GRID SEARCH: No valid results found - this should rarely happen`);
     return null;
   }
 
-  // Find the best result using multiple criteria
+  // Sort by accuracy first, then by confidence, then by parameter simplicity
   const sortedResults = results.sort((a, b) => {
     // Primary: accuracy
     const accuracyDiff = b.validation.accuracy - a.validation.accuracy;
-    if (Math.abs(accuracyDiff) > 1.0) return accuracyDiff;
+    if (Math.abs(accuracyDiff) > 0.5) return accuracyDiff;
     
     // Secondary: confidence
     const confidenceDiff = b.validation.confidence - a.validation.confidence;
-    if (Math.abs(confidenceDiff) > 5.0) return confidenceDiff;
+    if (Math.abs(confidenceDiff) > 2.0) return confidenceDiff;
     
     // Tertiary: prefer simpler parameters (for moving average, smaller window)
     if (modelId === 'moving_average') {
@@ -201,23 +159,28 @@ export const adaptiveGridSearchOptimization = (
   });
 
   const bestResult = sortedResults[0];
-  const isAIBest = aiParameters && JSON.stringify(bestResult.params) === JSON.stringify(aiParameters);
   
-  console.log(`🏆 GRID SEARCH: Best parameters: ${JSON.stringify(bestResult.params)}`);
+  console.log(`🏆 GRID SEARCH: Best parameters found: ${JSON.stringify(bestResult.params)}`);
   console.log(`📊 GRID SEARCH: Best accuracy: ${bestResult.validation.accuracy.toFixed(1)}% (MAPE: ${bestResult.validation.mape.toFixed(1)}%)`);
-  console.log(`🤖 GRID SEARCH: AI was ${isAIBest ? 'OPTIMAL' : 'NOT optimal'}`);
+  
+  // Show comparison with AI if provided
+  if (aiParameters) {
+    const comparison = JSON.stringify(bestResult.params) === JSON.stringify(aiParameters) ? 'MATCHES AI' : 'DIFFERS FROM AI';
+    console.log(`🤖 GRID SEARCH: Result ${comparison}`);
+  }
 
-  // Log top 3 results for comparison
+  // Log top 3 results for transparency
   console.log(`📋 GRID SEARCH: Top 3 results:`);
   sortedResults.slice(0, 3).forEach((result, i) => {
     console.log(`  ${i + 1}. ${JSON.stringify(result.params)} - ${result.validation.accuracy.toFixed(1)}%`);
   });
 
+  // ALWAYS return grid_search method - this is the key fix
   return {
     parameters: bestResult.params,
     accuracy: bestResult.validation.accuracy,
     confidence: bestResult.validation.confidence,
-    method: isAIBest ? 'ai_optimal' : 'grid_search', // This is the key fix
+    method: 'grid_search', // Always grid_search, never ai_optimal
     validationDetails: bestResult.validation
   };
 };

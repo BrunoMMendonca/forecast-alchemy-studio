@@ -1,3 +1,4 @@
+
 import { optimizeParametersWithGrok } from '@/utils/grokApiUtils';
 import { adaptiveGridSearchOptimization, enhancedParameterValidation } from '@/utils/adaptiveOptimization';
 import { ENHANCED_VALIDATION_CONFIG } from '@/utils/enhancedValidation';
@@ -166,7 +167,7 @@ const runBothOptimizations = async (
     }
   }
 
-  // Step 2: Always run Grid optimization
+  // Step 2: ALWAYS run Grid optimization (independent of AI)
   gridResult = await runGridOptimization(model, skuData, sku, progressUpdater, false);
 
   // Step 3: Determine which result to return as default
@@ -182,20 +183,22 @@ const runBothOptimizations = async (
       parameters: aiResult.parameters
     });
   } else if (gridResult) {
+    // AI failed, use grid as fallback
     selectedResult = gridResult;
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
       step: 'complete',
-      message: 'Using grid search parameters as default',
+      message: 'AI failed, using grid search parameters as fallback',
       parameters: gridResult.parameters
     });
   } else {
+    // Both failed - this should be very rare now
     selectedResult = {
       parameters: model.parameters,
       confidence: 60,
-      method: 'fallback',
-      reasoning: 'No optimization method found significant improvements over current parameters. Maintaining original configuration for stability.',
+      method: 'default',
+      reasoning: 'Both AI and grid search failed to find optimal parameters. Using default configuration.',
       factors: {
         stability: 80,
         interpretability: 85,
@@ -219,7 +222,7 @@ const runGridOptimization = async (
   progressUpdater: ProgressUpdater,
   updateProgress: boolean = true
 ): Promise<EnhancedOptimizationResult | null> => {
-  console.log(`🔍 GRID SEARCH: Starting for ${sku}:${model.id}`);
+  console.log(`🔍 GRID SEARCH: Starting independent grid search for ${sku}:${model.id}`);
   
   optimizationLogger.logStep({
     sku,
@@ -232,38 +235,38 @@ const runGridOptimization = async (
     const gridSearchResult = adaptiveGridSearchOptimization(
       model.id,
       skuData,
-      undefined,
+      undefined, // Don't pass AI parameters for comparison
       {
         ...ENHANCED_VALIDATION_CONFIG,
-        tolerance: 2.0, // Increased tolerance for grid search
         useWalkForward: true
       }
     );
     
     console.log(`🔍 GRID SEARCH: Result for ${sku}:${model.id}:`, gridSearchResult);
     
+    // Grid search should ALWAYS return something unless there's a critical error
     if (gridSearchResult && gridSearchResult.parameters) {
       if (updateProgress) {
         progressUpdater.setProgress(prev => prev ? { ...prev, gridOptimized: prev.gridOptimized + 1 } : null);
       }
 
-      console.log(`✅ GRID SEARCH: Success for ${sku}:${model.id} with confidence ${gridSearchResult.confidence}`);
+      console.log(`✅ GRID SEARCH: Success for ${sku}:${model.id} with accuracy ${gridSearchResult.accuracy.toFixed(1)}%`);
 
       return {
         parameters: gridSearchResult.parameters,
-        confidence: gridSearchResult.confidence || 75,
-        method: 'grid_search',
-        reasoning: `Grid search optimization found parameters that improve model performance. Selected configuration provides ${(gridSearchResult.confidence || 75).toFixed(1)}% confidence for balanced forecasting across validation periods.`,
+        confidence: Math.max(70, gridSearchResult.confidence || 75), // Ensure minimum confidence
+        method: 'grid_search', // Always grid_search
+        reasoning: `Grid search systematically tested parameter combinations and selected the configuration with highest validation accuracy (${gridSearchResult.accuracy.toFixed(1)}%). This method provides reliable, data-driven parameter selection through comprehensive evaluation.`,
         factors: {
           stability: 85,
-          interpretability: 80,
-          complexity: 50,
-          businessImpact: 'Systematic optimization focusing on consistent performance across multiple validation periods'
+          interpretability: 90,
+          complexity: 45,
+          businessImpact: 'Systematic optimization ensuring reliable performance through comprehensive parameter testing'
         },
         expectedAccuracy: gridSearchResult.accuracy
       };
     } else {
-      console.log(`❌ GRID SEARCH: No improvement found for ${sku}:${model.id}`);
+      console.log(`❌ GRID SEARCH: Critical error - no results for ${sku}:${model.id}`);
       return null;
     }
   } catch (error) {
