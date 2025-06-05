@@ -6,7 +6,7 @@ import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronRight, Settings, Zap, Grid3X3, User } from 'lucide-react';
+import { ChevronDown, ChevronRight, Settings, Robot, Grid3X3, User } from 'lucide-react';
 import { ModelConfig } from '@/types/forecast';
 import { ReasoningDisplay } from './ReasoningDisplay';
 
@@ -86,23 +86,23 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 <span className="font-medium">Parameters</span>
               </div>
               
-              {/* Badge order: Manual, Grid, AI */}
+              {/* Badge order: AI, Grid, Manual */}
               <div className="flex items-center gap-2">
-                {/* Manual Badge */}
+                {/* AI Badge - First */}
                 <Badge 
-                  variant={isManual ? "default" : "outline"} 
-                  className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
+                  variant={isAI ? "default" : "outline"} 
+                  className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    console.log(`🔄 Manual clicked for ${model.id}`);
-                    onResetToManual();
+                    console.log(`🤖 AI clicked for ${model.id}`);
+                    onUseAI();
                   }}
                 >
-                  <User className="h-3 w-3 mr-1" />
-                  Manual
+                  <Robot className="h-3 w-3 mr-1" />
+                  AI
                 </Badge>
 
-                {/* Grid Badge */}
+                {/* Grid Badge - Second */}
                 <Badge 
                   variant={isGrid ? "default" : "outline"} 
                   className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
@@ -116,18 +116,18 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   Grid
                 </Badge>
 
-                {/* AI Badge - Always show */}
+                {/* Manual Badge - Third */}
                 <Badge 
-                  variant={isAI ? "default" : "outline"} 
-                  className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
+                  variant={isManual ? "default" : "outline"} 
+                  className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    console.log(`🤖 AI clicked for ${model.id}`);
-                    onUseAI();
+                    console.log(`🔄 Manual clicked for ${model.id}`);
+                    onResetToManual();
                   }}
                 >
-                  <Zap className="h-3 w-3 mr-1" />
-                  AI
+                  <User className="h-3 w-3 mr-1" />
+                  Manual
                 </Badge>
               </div>
             </div>
