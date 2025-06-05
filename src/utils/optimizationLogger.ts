@@ -1,4 +1,3 @@
-
 export interface OptimizationStep {
   id: string;
   timestamp: number;
@@ -83,6 +82,18 @@ class OptimizationLogger {
     });
 
     this.notifyListeners();
+  }
+
+  logBatchStart(skus: string[]): void {
+    console.log(`🚀 BATCH START: Starting optimization for ${skus.length} SKUs:`, skus);
+  }
+
+  logSKUComplete(sku: string): void {
+    console.log(`✅ SKU COMPLETE: Finished optimization for ${sku}`);
+  }
+
+  logBatchComplete(totalOptimized: number): void {
+    console.log(`🏁 BATCH COMPLETE: Optimized ${totalOptimized} models total`);
   }
 
   getCurrentLog(): OptimizationLog | null {

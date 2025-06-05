@@ -357,3 +357,47 @@ export const getOptimizationByMethod = async (
 
   return null;
 };
+
+export const optimizeModelForSKU = async (
+  sku: string,
+  skuData: SalesData[],
+  model: ModelConfig,
+  businessContext?: BusinessContext
+): Promise<{
+  success: boolean;
+  optimizedParameters?: Record<string, number>;
+  confidence?: number;
+  reasoning?: string;
+  factors?: {
+    stability: number;
+    interpretability: number;
+    complexity: number;
+    businessImpact: string;
+  };
+  expectedAccuracy?: number;
+  method?: string;
+  error?: string;
+}> => {
+  try {
+    console.log(`🚀 optimizeModelForSKU: Starting optimization for ${sku}:${model.id}`);
+    
+    const progressUpdater = { setProgress: () => {} };
+    const result = await optimizeSingleModel(model, skuData, sku, progressUpdater, false, businessContext);
+    
+    return {
+      success: true,
+      optimizedParameters: result.parameters,
+      confidence: result.confidence,
+      reasoning: result.reasoning,
+      factors: result.factors,
+      expectedAccuracy: result.expectedAccuracy,
+      method: result.method
+    };
+  } catch (error) {
+    console.error(`❌ optimizeModelForSKU: Error for ${sku}:${model.id}:`, error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+};

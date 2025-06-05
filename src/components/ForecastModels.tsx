@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -250,7 +249,12 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         const dataHash = generateDataHash(skuData);
         
         // Store complete optimization result in cache including method
-        setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, factors, expectedAccuracy, method);
+        setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, factors || {
+          stability: 0,
+          interpretability: 0,
+          complexity: 0,
+          businessImpact: 'Unknown'
+        }, expectedAccuracy, method);
         
         console.log(`QUEUE OPTIMIZATION: Setting ${sku}:${modelId} to ${method} (confidence: ${confidence})`);
         
@@ -275,7 +279,12 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
                   optimizedParameters: parameters,
                   optimizationConfidence: confidence,
                   optimizationReasoning: reasoning,
-                  optimizationFactors: factors,
+                  optimizationFactors: factors || {
+                    stability: 0,
+                    interpretability: 0,
+                    complexity: 0,
+                    businessImpact: 'Unknown'
+                  },
                   expectedAccuracy: expectedAccuracy,
                   optimizationMethod: method
                 }
@@ -300,7 +309,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
           setForceUpdateTrigger(prev => prev + 1);
         }
       },
-      getSKUsNeedingOptimization
+      (sku: string, modelIds: string[]) => getSKUsNeedingOptimization(sku, modelIds)
     );
 
     markOptimizationCompleted(data, '/');
