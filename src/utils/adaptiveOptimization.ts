@@ -1,5 +1,7 @@
+
 import { SalesData } from '@/pages/Index';
 import { generateMovingAverage, generateSimpleExponentialSmoothing, generateDoubleExponentialSmoothing } from './forecastAlgorithms';
+import { generateHoltWinters } from './seasonalUtils';
 import { ValidationConfig, ValidationResult, walkForwardValidation, timeSeriesCrossValidation, ENHANCED_VALIDATION_CONFIG } from './enhancedValidation';
 
 interface OptimizationResult {
@@ -30,6 +32,15 @@ const generateForecastForModel = (
           parameters.alpha || 0.3,
           parameters.beta || 0.1,
           forecastPeriods
+        );
+      case 'holt_winters':
+        return generateHoltWinters(
+          trainData.map(d => d.sales),
+          parameters.seasonalPeriods || 12,
+          forecastPeriods,
+          parameters.alpha || 0.3,
+          parameters.beta || 0.1,
+          parameters.gamma || 0.1
         );
       default:
         console.warn(`Unknown model type: ${modelId}`);
