@@ -22,6 +22,7 @@ export const useUnifiedModelManagement = (
   const isTogglingAIManualRef = useRef<boolean>(false);
 
   const { 
+    cache,
     generateDataHash, 
     setCachedParameters,
     setSelectedMethod,
@@ -74,39 +75,20 @@ export const useUnifiedModelManagement = (
     }
   }, [selectedSKU, data, models, forecastPeriods, getCachedForecast, setCachedForecast, generateParametersHash, onForecastGeneration, toast]);
 
-  // Update models when cache version changes (FIXED: removed circular dependency)
+  // FIXED: Make this as reactive as progress updates - no blocking guards
   useEffect(() => {
-    if (!selectedSKU || isTogglingAIManualRef.current) {
-      return;
-    }
+    if (!selectedSKU) return;
 
     console.log(`🔄 UNIFIED CACHE VERSION CHANGED: ${cacheVersion}, updating models for ${selectedSKU}`);
     
-    // Read fresh data from localStorage for this specific update
-    let optimizationCache = {};
-    let preferences = {};
-    
-    try {
-      const storedCache = localStorage.getItem('forecast_optimization_cache');
-      optimizationCache = storedCache ? JSON.parse(storedCache) : {};
-    } catch {
-      optimizationCache = {};
-    }
-    
-    try {
-      const storedPrefs = localStorage.getItem('manual_ai_preferences');
-      preferences = storedPrefs ? JSON.parse(storedPrefs) : {};
-    } catch {
-      preferences = {};
-    }
-
+    const preferences = loadManualAIPreferences();
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
 
     const updatedModels = getDefaultModels().map(model => {
       const preferenceKey = `${selectedSKU}:${model.id}`;
       const preference = preferences[preferenceKey] || 'ai';
-      const cached = optimizationCache[selectedSKU]?.[model.id];
+      const cached = cache[selectedSKU]?.[model.id];
 
       console.log(`📋 UNIFIED MODEL ${model.id}: preference=${preference}, hasCache=${!!cached}, cacheVersion=${cacheVersion}`);
 
@@ -158,7 +140,7 @@ export const useUnifiedModelManagement = (
     })));
     
     setModels(updatedModels);
-  }, [cacheVersion, selectedSKU, data, generateDataHash]);
+  }, [cacheVersion, selectedSKU, data, cache, loadManualAIPreferences, generateDataHash]);
 
   // Update models when SKU changes
   useEffect(() => {
