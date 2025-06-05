@@ -41,48 +41,15 @@ export const useUnifiedModelManagement = (
     return getDefaultModels();
   });
 
-  // Generate forecasts when models change
-  const generateForecasts = useCallback(async () => {
-    if (!selectedSKU || models.length === 0) return;
-
-    try {
-      console.log(`🎯 UNIFIED: Generating forecasts for ${selectedSKU}`);
-      
-      const results = await generateForecastsForSKU(
-        selectedSKU,
-        data,
-        models,
-        forecastPeriods,
-        getCachedForecast,
-        setCachedForecast,
-        generateParametersHash
-      );
-
-      console.log(`✅ UNIFIED: Generated ${results.length} forecasts for ${selectedSKU}`);
-      
-      if (onForecastGeneration) {
-        onForecastGeneration(results, selectedSKU);
-      }
-
-    } catch (error) {
-      toast({
-        title: "Forecast Error",
-        description: error instanceof Error ? error.message : "Failed to generate forecasts. Please try again.",
-        variant: "destructive",
-      });
-      console.error('UNIFIED: Forecast generation error:', error);
-    }
-  }, [selectedSKU, data, models, forecastPeriods, getCachedForecast, setCachedForecast, generateParametersHash, onForecastGeneration, toast]);
-
-  // Update models when cache version changes (FIXED: removed circular dependency)
-  useEffect(() => {
+  // Create models with current cache and preferences
+  const createModelsWithCurrentData = useCallback(() => {
     if (!selectedSKU || isTogglingAIManualRef.current) {
-      return;
+      return getDefaultModels();
     }
 
-    console.log(`🔄 UNIFIED CACHE VERSION CHANGED: ${cacheVersion}, updating models for ${selectedSKU}`);
+    console.log('🔄 UNIFIED: Reading fresh data from localStorage for', selectedSKU);
     
-    // Read fresh data from localStorage for this specific update
+    // Always read fresh from localStorage
     let optimizationCache = {};
     let preferences = {};
     
@@ -103,12 +70,12 @@ export const useUnifiedModelManagement = (
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
 
-    const updatedModels = getDefaultModels().map(model => {
+    return getDefaultModels().map(model => {
       const preferenceKey = `${selectedSKU}:${model.id}`;
       const preference = preferences[preferenceKey] || 'ai';
       const cached = optimizationCache[selectedSKU]?.[model.id];
 
-      console.log(`📋 UNIFIED MODEL ${model.id}: preference=${preference}, hasCache=${!!cached}, cacheVersion=${cacheVersion}`);
+      console.log(`📋 UNIFIED MODEL ${model.id}: preference=${preference}, hasCache=${!!cached}`);
 
       if (preference === 'manual') {
         console.log(`👤 UNIFIED MODEL ${model.id}: Using manual parameters`);
@@ -150,28 +117,67 @@ export const useUnifiedModelManagement = (
       console.log(`❌ UNIFIED NO CACHE: ${model.id} using default parameters`);
       return model;
     });
+  }, [selectedSKU, data, generateDataHash, cacheVersion]);
 
-    console.log('🎯 UNIFIED SETTING NEW MODELS:', updatedModels.map(m => ({ 
-      id: m.id, 
-      hasOptimized: !!m.optimizedParameters,
-      method: m.optimizationMethod 
-    })));
-    
-    setModels(updatedModels);
-  }, [cacheVersion, selectedSKU, data, generateDataHash]);
+  // Generate forecasts when models change
+  const generateForecasts = useCallback(async () => {
+    if (!selectedSKU || models.length === 0) return;
+
+    try {
+      console.log(`🎯 UNIFIED: Generating forecasts for ${selectedSKU}`);
+      
+      const results = await generateForecastsForSKU(
+        selectedSKU,
+        data,
+        models,
+        forecastPeriods,
+        getCachedForecast,
+        setCachedForecast,
+        generateParametersHash
+      );
+
+      console.log(`✅ UNIFIED: Generated ${results.length} forecasts for ${selectedSKU}`);
+      
+      if (onForecastGeneration) {
+        onForecastGeneration(results, selectedSKU);
+      }
+
+    } catch (error) {
+      toast({
+        title: "Forecast Error",
+        description: error instanceof Error ? error.message : "Failed to generate forecasts. Please try again.",
+        variant: "destructive",
+      });
+      console.error('UNIFIED: Forecast generation error:', error);
+    }
+  }, [selectedSKU, data, models, forecastPeriods, getCachedForecast, setCachedForecast, generateParametersHash, onForecastGeneration, toast]);
+
+  // Update models when cache version changes
+  useEffect(() => {
+    if (selectedSKU && cacheVersion > 0) {
+      console.log(`🔄 UNIFIED CACHE VERSION CHANGED: ${cacheVersion}, updating models for ${selectedSKU}`);
+      const updatedModels = createModelsWithCurrentData();
+      console.log('🎯 UNIFIED SETTING NEW MODELS:', updatedModels.map(m => ({ 
+        id: m.id, 
+        hasOptimized: !!m.optimizedParameters,
+        method: m.optimizationMethod 
+      })));
+      setModels(updatedModels);
+    }
+  }, [cacheVersion, selectedSKU, createModelsWithCurrentData]);
 
   // Update models when SKU changes
   useEffect(() => {
-    if (selectedSKU && data.length > 0) {
+    if (selectedSKU) {
       console.log(`🔄 UNIFIED SKU CHANGED: Updating models for ${selectedSKU}`);
-      // Trigger the same logic as cache version change
-      setModels(getDefaultModels());
+      const updatedModels = createModelsWithCurrentData();
+      setModels(updatedModels);
     }
-  }, [selectedSKU]);
+  }, [selectedSKU, createModelsWithCurrentData]);
 
   // Generate forecasts when models change
   useEffect(() => {
-    if (selectedSKU && models.length > 0 && models.some(m => m.enabled)) {
+    if (selectedSKU && models.length > 0) {
       console.log(`🔄 UNIFIED: Models changed, regenerating forecasts for ${selectedSKU}`);
       setTimeout(() => generateForecasts(), 50);
     }
@@ -224,34 +230,47 @@ export const useUnifiedModelManagement = (
     saveManualAIPreferences(preferences);
     setSelectedMethod(selectedSKU, modelId, 'ai');
     
+    // Check cache first
+    let optimizationCache = {};
+    try {
+      const stored = localStorage.getItem('forecast_optimization_cache');
+      optimizationCache = stored ? JSON.parse(stored) : {};
+    } catch {
+      optimizationCache = {};
+    }
+    
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
+    const cached = optimizationCache[selectedSKU]?.[modelId];
     
-    // Check if we already have valid AI cache (rely on cacheVersion system)
-    console.log(`🔄 UNIFIED USE AI: Running fresh AI optimization for ${preferenceKey}`);
-    
-    try {
-      const model = models.find(m => m.id === modelId);
-      if (model) {
-        const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
-        
-        if (result) {
-          console.log(`✅ UNIFIED USE AI: Fresh AI optimization succeeded for ${preferenceKey}`);
-          setCachedParameters(
-            selectedSKU, 
-            modelId, 
-            result.parameters, 
-            currentDataHash,
-            result.confidence,
-            result.reasoning,
-            result.factors,
-            result.expectedAccuracy,
-            result.method
-          );
+    if (cached?.ai && cached.ai.dataHash === currentDataHash) {
+      console.log(`✅ UNIFIED USE AI: Using cached AI result for ${preferenceKey}`);
+    } else {
+      console.log(`🔄 UNIFIED USE AI: Running fresh AI optimization for ${preferenceKey}`);
+      
+      try {
+        const model = models.find(m => m.id === modelId);
+        if (model) {
+          const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
+          
+          if (result) {
+            console.log(`✅ UNIFIED USE AI: Fresh AI optimization succeeded for ${preferenceKey}`);
+            setCachedParameters(
+              selectedSKU, 
+              modelId, 
+              result.parameters, 
+              currentDataHash,
+              result.confidence,
+              result.reasoning,
+              result.factors,
+              result.expectedAccuracy,
+              result.method
+            );
+          }
         }
+      } catch (error) {
+        console.error('UNIFIED: AI optimization failed:', error);
       }
-    } catch (error) {
-      console.error('UNIFIED: AI optimization failed:', error);
     }
     
     setTimeout(() => {
@@ -269,34 +288,47 @@ export const useUnifiedModelManagement = (
     saveManualAIPreferences(preferences);
     setSelectedMethod(selectedSKU, modelId, 'grid');
     
+    // Check cache first
+    let optimizationCache = {};
+    try {
+      const stored = localStorage.getItem('forecast_optimization_cache');
+      optimizationCache = stored ? JSON.parse(stored) : {};
+    } catch {
+      optimizationCache = {};
+    }
+    
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
+    const cached = optimizationCache[selectedSKU]?.[modelId];
     
-    // Run fresh optimization and let cacheVersion system handle updates
-    console.log(`🔄 UNIFIED GRID: Running fresh Grid optimization for ${preferenceKey}`);
-    
-    try {
-      const model = models.find(m => m.id === modelId);
-      if (model) {
-        const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
-        
-        if (result) {
-          console.log(`✅ UNIFIED GRID: Fresh Grid optimization succeeded for ${preferenceKey}`);
-          setCachedParameters(
-            selectedSKU, 
-            modelId, 
-            result.parameters, 
-            currentDataHash,
-            result.confidence,
-            result.reasoning,
-            result.factors,
-            result.expectedAccuracy,
-            result.method
-          );
+    if (cached?.grid && cached.grid.dataHash === currentDataHash) {
+      console.log(`✅ UNIFIED GRID: Using cached Grid result for ${preferenceKey}`);
+    } else {
+      console.log(`🔄 UNIFIED GRID: Running fresh Grid optimization for ${preferenceKey}`);
+      
+      try {
+        const model = models.find(m => m.id === modelId);
+        if (model) {
+          const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
+          
+          if (result) {
+            console.log(`✅ UNIFIED GRID: Fresh Grid optimization succeeded for ${preferenceKey}`);
+            setCachedParameters(
+              selectedSKU, 
+              modelId, 
+              result.parameters, 
+              currentDataHash,
+              result.confidence,
+              result.reasoning,
+              result.factors,
+              result.expectedAccuracy,
+              result.method
+            );
+          }
         }
+      } catch (error) {
+        console.error('UNIFIED: Grid optimization failed:', error);
       }
-    } catch (error) {
-      console.error('UNIFIED: Grid optimization failed:', error);
     }
     
     setTimeout(() => {
