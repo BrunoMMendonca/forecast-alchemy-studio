@@ -60,10 +60,16 @@ export const useOptimizationQueue = () => {
   const addSKUsToQueue = useCallback((skus: string[], reason: OptimizationQueueItem['reason'], skipCacheClear = false) => {
     const timestamp = Date.now();
     
+    // Sort SKUs to ensure consistent order (natural sort for alphanumeric SKUs)
+    const sortedSKUs = [...skus].sort((a, b) => {
+      // Use localeCompare with numeric option for proper alphanumeric sorting
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    });
+    
     // Only clear cache if not already cleared (avoid double clearing for CSV uploads)
     if (!skipCacheClear && reason !== 'csv_upload') {
-      console.log(`🗑️ QUEUE: Clearing cache for ${skus.length} SKUs (reason: ${reason})`);
-      skus.forEach(sku => {
+      console.log(`🗑️ QUEUE: Clearing cache for ${sortedSKUs.length} SKUs (reason: ${reason})`);
+      sortedSKUs.forEach(sku => {
         clearCacheAndPreferencesForSKU(sku);
       });
     } else if (reason === 'csv_upload') {
@@ -72,10 +78,10 @@ export const useOptimizationQueue = () => {
     
     setQueue(prevQueue => {
       // Remove existing entries for these SKUs to avoid duplicates
-      const filteredQueue = prevQueue.filter(item => !skus.includes(item.sku));
+      const filteredQueue = prevQueue.filter(item => !sortedSKUs.includes(item.sku));
       
-      // Add new entries
-      const newItems = skus.map(sku => ({
+      // Add new entries in sorted order
+      const newItems = sortedSKUs.map(sku => ({
         sku,
         reason,
         timestamp,
@@ -83,7 +89,7 @@ export const useOptimizationQueue = () => {
       }));
       
       const newQueue = [...filteredQueue, ...newItems];
-      console.log(`📋 QUEUE: Added ${skus.length} SKUs to optimization queue (reason: ${reason})`, skus);
+      console.log(`📋 QUEUE: Added ${sortedSKUs.length} SKUs to optimization queue (reason: ${reason})`, sortedSKUs);
       console.log(`📋 QUEUE: Total SKUs in queue: ${newQueue.length}`);
       
       return newQueue;
