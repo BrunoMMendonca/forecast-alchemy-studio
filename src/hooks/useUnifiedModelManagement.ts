@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData, ForecastResult } from '@/pages/Index';
@@ -45,6 +46,12 @@ export const useUnifiedModelManagement = (
   const [models, setModels] = useState<ModelConfig[]>(() => {
     return getDefaultModels();
   });
+
+  // Helper function to check if a model has parameters that can be optimized
+  const modelHasParameters = useCallback((model: ModelConfig) => {
+    const params = model.optimizedParameters || model.parameters;
+    return params && Object.keys(params).length > 0;
+  }, []);
 
   // Create a stable hash of model state to prevent unnecessary re-renders
   const modelsHash = useMemo(() => {
@@ -107,6 +114,12 @@ export const useUnifiedModelManagement = (
 
   // Helper function to get the best available method for a model
   const getBestAvailableMethod = useCallback((sku: string, modelId: string, currentDataHash: string) => {
+    // Early return if SKU is empty or model doesn't have parameters
+    if (!sku || sku.trim() === '') return 'manual';
+    
+    const model = getDefaultModels().find(m => m.id === modelId);
+    if (!model || !modelHasParameters(model)) return 'manual';
+
     const cached = cache[sku]?.[modelId];
     if (!cached) return 'manual';
 
@@ -116,11 +129,12 @@ export const useUnifiedModelManagement = (
     if (hasValidAI) return 'ai';
     if (hasValidGrid) return 'grid';
     return 'manual';
-  }, [cache]);
+  }, [cache, modelHasParameters]);
 
   // CONTROLLED cache version updates - only process when actually needed
   useEffect(() => {
-    if (!selectedSKU) return;
+    // Early return if no valid SKU
+    if (!selectedSKU || selectedSKU.trim() === '') return;
 
     // Prevent unnecessary processing
     const shouldProcess = (
@@ -140,6 +154,11 @@ export const useUnifiedModelManagement = (
     const currentDataHash = generateDataHash(skuData);
 
     const updatedModels = getDefaultModels().map(model => {
+      // Skip cache operations for models without parameters
+      if (!modelHasParameters(model)) {
+        return model;
+      }
+
       const preferenceKey = `${selectedSKU}:${model.id}`;
       const storedPreference = preferences[preferenceKey] || 'manual';
       
@@ -198,7 +217,7 @@ export const useUnifiedModelManagement = (
     
     // Reset forecast generation hash when models are updated from cache
     lastForecastGenerationHashRef.current = '';
-  }, [cacheVersion, selectedSKU, data, cache, loadManualAIPreferences, saveManualAIPreferences, generateDataHash, getBestAvailableMethod]);
+  }, [cacheVersion, selectedSKU, data, cache, loadManualAIPreferences, saveManualAIPreferences, generateDataHash, getBestAvailableMethod, modelHasParameters]);
 
   // CONTROLLED forecast generation - only when models hash actually changes
   useEffect(() => {
@@ -229,6 +248,9 @@ export const useUnifiedModelManagement = (
   }, []);
 
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
+    // Early return if no valid SKU
+    if (!selectedSKU || selectedSKU.trim() === '') return;
+    
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -261,6 +283,9 @@ export const useUnifiedModelManagement = (
   }, [selectedSKU, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod]);
 
   const useAIOptimization = useCallback(async (modelId: string) => {
+    // Early return if no valid SKU
+    if (!selectedSKU || selectedSKU.trim() === '') return;
+    
     console.log(`🤖 AI button clicked for ${modelId}`);
     isTogglingAIManualRef.current = true;
     
@@ -309,7 +334,7 @@ export const useUnifiedModelManagement = (
     // Only call API if cache miss or invalid cache
     try {
       const model = models.find(m => m.id === modelId);
-      if (model) {
+      if (model && modelHasParameters(model)) {
         const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
         
         if (result) {
@@ -365,9 +390,12 @@ export const useUnifiedModelManagement = (
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
     }, 100);
-  }, [selectedSKU, data, models, businessContext, generateDataHash, getCachedParameters, isCacheValid, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters]);
+  }, [selectedSKU, data, models, businessContext, generateDataHash, getCachedParameters, isCacheValid, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters, modelHasParameters]);
 
   const useGridOptimization = useCallback(async (modelId: string) => {
+    // Early return if no valid SKU
+    if (!selectedSKU || selectedSKU.trim() === '') return;
+    
     console.log(`📊 Grid button clicked for ${modelId}`);
     isTogglingAIManualRef.current = true;
     
@@ -416,7 +444,7 @@ export const useUnifiedModelManagement = (
     // Only run optimization if cache miss or invalid cache
     try {
       const model = models.find(m => m.id === modelId);
-      if (model) {
+      if (model && modelHasParameters(model)) {
         const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
         
         if (result) {
@@ -472,9 +500,12 @@ export const useUnifiedModelManagement = (
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
     }, 100);
-  }, [selectedSKU, data, models, businessContext, generateDataHash, getCachedParameters, isCacheValid, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters]);
+  }, [selectedSKU, data, models, businessContext, generateDataHash, getCachedParameters, isCacheValid, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters, modelHasParameters]);
 
   const resetToManual = useCallback((modelId: string) => {
+    // Early return if no valid SKU
+    if (!selectedSKU || selectedSKU.trim() === '') return;
+    
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
