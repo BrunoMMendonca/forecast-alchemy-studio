@@ -43,6 +43,11 @@ export const useOptimizationCache = () => {
     markOptimizationComplete
   } = useDatasetOptimization();
 
+  // Helper function to detect old hash format
+  const isOldHashFormat = useCallback((hash: string): boolean => {
+    return hash.includes('len:') || hash.includes('dates:') || hash.includes('sales:');
+  }, []);
+
   // Load state from localStorage on mount
   useEffect(() => {
     console.log('🗄️ CACHE: Loading from localStorage...');
@@ -62,6 +67,12 @@ export const useOptimizationCache = () => {
               const method = entry.method?.startsWith('ai_') ? 'ai' : 
                            entry.method === 'grid_search' ? 'grid' : 'ai';
               
+              // Skip entries with old hash format
+              if (entry.dataHash && isOldHashFormat(entry.dataHash)) {
+                console.log(`🗄️ CACHE: Skipping old format entry ${sku}:${modelId}:${method}`);
+                return;
+              }
+              
               if (now - entry.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000) {
                 if (!filteredCache[sku]) filteredCache[sku] = {};
                 if (!filteredCache[sku][modelId]) filteredCache[sku][modelId] = {};
@@ -73,12 +84,25 @@ export const useOptimizationCache = () => {
                 console.log(`🗄️ CACHE: Expired ${sku}:${modelId}:${method}`);
               }
             } else {
-              const hasValidEntries = (entry.ai && now - entry.ai.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000) ||
-                                    (entry.grid && now - entry.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000);
+              // Handle new cache structure
+              const hasValidAI = entry.ai && 
+                                !isOldHashFormat(entry.ai.dataHash) &&
+                                now - entry.ai.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
+              const hasValidGrid = entry.grid && 
+                                  !isOldHashFormat(entry.grid.dataHash) &&
+                                  now - entry.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
               
-              if (hasValidEntries) {
+              if (hasValidAI || hasValidGrid) {
                 if (!filteredCache[sku]) filteredCache[sku] = {};
-                filteredCache[sku][modelId] = entry;
+                filteredCache[sku][modelId] = {};
+                
+                if (hasValidAI) {
+                  filteredCache[sku][modelId].ai = entry.ai;
+                }
+                if (hasValidGrid) {
+                  filteredCache[sku][modelId].grid = entry.grid;
+                }
+                filteredCache[sku][modelId].selected = entry.selected;
                 console.log(`🗄️ CACHE: Loaded ${sku}:${modelId} with multiple methods`);
               }
             }
@@ -93,7 +117,7 @@ export const useOptimizationCache = () => {
     } catch (error) {
       console.error('🗄️ CACHE: Error loading from localStorage:', error);
     }
-  }, []);
+  }, [isOldHashFormat]);
 
   // Save cache to localStorage when it changes
   useEffect(() => {
@@ -216,6 +240,13 @@ export const useOptimizationCache = () => {
         return null;
       }
 
+      // Check for old hash format and reject
+      if (isOldHashFormat(result.dataHash)) {
+        console.log(`🗄️ CACHE: MISS - ${method} method has old hash format for ${sku}:${modelId}`);
+        setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
+        return null;
+      }
+
       if (isExpired(result)) {
         console.log(`🗄️ CACHE: MISS - ${method} method expired for ${sku}:${modelId}`);
         setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
@@ -231,12 +262,17 @@ export const useOptimizationCache = () => {
     const selectedMethod = cached.selected || 'ai';
     let result = cached[selectedMethod];
     
-    // If selected method doesn't exist or is expired, try alternatives
-    if (!result || isExpired(result)) {
+    // If selected method doesn't exist or is expired or has old hash, try alternatives
+    if (!result || isExpired(result) || isOldHashFormat(result.dataHash)) {
       result = cached.ai || cached.grid;
+      
+      // Check if the fallback also has issues
+      if (result && (isExpired(result) || isOldHashFormat(result.dataHash))) {
+        result = undefined;
+      }
     }
     
-    if (!result || isExpired(result)) {
+    if (!result) {
       console.log(`🗄️ CACHE: MISS - No valid method for ${sku}:${modelId}`);
       setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
       return null;
@@ -245,7 +281,7 @@ export const useOptimizationCache = () => {
     console.log(`🗄️ CACHE: HIT - Found valid ${sku}:${modelId} with method ${result.method}`);
     setCacheStats(prev => ({ ...prev, hits: prev.hits + 1 }));
     return result;
-  }, [cache]);
+  }, [cache, isOldHashFormat]);
 
   const setCachedParameters = useCallback((
     sku: string, 
