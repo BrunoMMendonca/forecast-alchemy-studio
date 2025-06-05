@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -19,9 +18,9 @@ export const useBatchOptimization = () => {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [progress, setProgress] = useState<Progress | null>(null);
 
-  const startOptimization = useCallback((total: number) => {
+  const startOptimization = useCallback((total: number, totalSKUs: number = 0) => {
     setIsOptimizing(true);
-    setProgress({ total, completed: 0, failed: 0, aiOptimized: 0 });
+    setProgress({ total, completed: 0, failed: 0, aiOptimized: 0, completedSKUs: 0, totalSKUs });
   }, []);
 
   const completeOptimization = useCallback(() => {
@@ -60,7 +59,9 @@ export const useBatchOptimization = () => {
       return;
     }
 
-    startOptimization(totalModelsToOptimize);
+    startOptimization(totalModelsToOptimize, queuedSKUs.length);
+
+    let completedSKUs = 0;
 
     for (const sku of queuedSKUs) {
       const skuData = data.filter(d => d.sku === sku);
@@ -69,6 +70,8 @@ export const useBatchOptimization = () => {
         console.warn(`No data found for SKU: ${sku}`);
         continue;
       }
+
+      setProgress(prev => prev ? { ...prev, currentSKU: sku } : null);
 
       const modelsToOptimize = models.filter(m => m.enabled && m.parameters && Object.keys(m.parameters).length > 0);
       
@@ -102,8 +105,13 @@ export const useBatchOptimization = () => {
         }
       }
       
+      completedSKUs++;
       console.log(`🏁 SKU OPTIMIZATION COMPLETE: ${sku}`);
-      setProgress(prev => prev ? { ...prev, completed: prev.completed + modelsToOptimize.length } : null);
+      setProgress(prev => prev ? { 
+        ...prev, 
+        completed: prev.completed + modelsToOptimize.length,
+        completedSKUs 
+      } : null);
       onSKUComplete(sku);
     }
     
