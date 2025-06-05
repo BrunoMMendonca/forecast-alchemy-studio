@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -248,13 +249,16 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
         
-        // Store complete optimization result in cache including method
-        setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, factors || {
+        // Ensure factors has the correct type structure
+        const typedFactors = factors || {
           stability: 0,
           interpretability: 0,
           complexity: 0,
           businessImpact: 'Unknown'
-        }, expectedAccuracy, method);
+        };
+        
+        // Store complete optimization result in cache including method
+        setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
         
         console.log(`QUEUE OPTIMIZATION: Setting ${sku}:${modelId} to ${method} (confidence: ${confidence})`);
         
@@ -279,12 +283,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
                   optimizedParameters: parameters,
                   optimizationConfidence: confidence,
                   optimizationReasoning: reasoning,
-                  optimizationFactors: factors || {
-                    stability: 0,
-                    interpretability: 0,
-                    complexity: 0,
-                    businessImpact: 'Unknown'
-                  },
+                  optimizationFactors: typedFactors,
                   expectedAccuracy: expectedAccuracy,
                   optimizationMethod: method
                 }
@@ -309,7 +308,14 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
           setForceUpdateTrigger(prev => prev + 1);
         }
       },
-      (sku: string, modelIds: string[]) => getSKUsNeedingOptimization(sku, modelIds)
+      (sku: string, modelIds: string[]) => {
+        // Return the SKUs that need optimization - this should return string[]
+        const skusNeedingOptimization = getSKUsNeedingOptimization(sku, modelIds);
+        // Since getSKUsNeedingOptimization returns an array of objects, we need to extract the SKU strings
+        return Array.isArray(skusNeedingOptimization) 
+          ? skusNeedingOptimization.map(item => typeof item === 'string' ? item : item.sku).filter(Boolean)
+          : [];
+      }
     );
 
     markOptimizationCompleted(data, '/');
