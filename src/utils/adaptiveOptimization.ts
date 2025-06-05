@@ -278,7 +278,7 @@ export const enhancedParameterValidation = (
     console.log(`📊 AI accuracy: ${aiValidation.accuracy.toFixed(2)}% (MAPE: ${aiValidation.mape.toFixed(2)}%)`);
     
     // Compare against Grid baseline if available, otherwise use original
-    const baselineAccuracy = gridBaseline?.accuracy || 0;
+    let baselineAccuracy = gridBaseline?.accuracy || 0; // Changed from const to let
     const baselineParameters = gridBaseline?.parameters || originalParameters;
     const comparisonLabel = gridBaseline ? 'Grid baseline' : 'Original';
     

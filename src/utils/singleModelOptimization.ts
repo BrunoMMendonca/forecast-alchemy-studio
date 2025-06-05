@@ -1,3 +1,4 @@
+
 import { optimizeParametersWithGrok } from '@/utils/grokApiUtils';
 import { adaptiveGridSearchOptimization, enhancedParameterValidation } from '@/utils/adaptiveOptimization';
 import { ENHANCED_VALIDATION_CONFIG } from '@/utils/enhancedValidation';
@@ -22,6 +23,7 @@ interface EnhancedOptimizationResult extends OptimizationResult {
     businessImpact: string;
   };
   expectedAccuracy?: number;
+  accuracy: number; // Add missing accuracy property
 }
 
 interface MultiMethodResult {
@@ -59,6 +61,7 @@ export const optimizeSingleModel = async (
       parameters: model.parameters, 
       confidence: 70, 
       method: 'default',
+      accuracy: 70,
       reasoning: 'No parameters available for optimization. Using default configuration.',
       factors: {
         stability: 70,
@@ -103,7 +106,7 @@ const runGridFirstThenAI = async (
   optimizationLogger.logStep({
     sku,
     modelId: model.id,
-    step: 'grid_complete',
+    step: 'validation',
     message: `Grid baseline established: ${gridResult.accuracy.toFixed(2)}% accuracy`,
     parameters: gridResult.parameters
   });
@@ -166,6 +169,7 @@ const runGridFirstThenAI = async (
           parameters: validationResult.parameters,
           confidence: validationResult.confidence,
           method: validationResult.method,
+          accuracy: validationResult.accuracy,
           reasoning: grokResult.reasoning,
           factors: grokResult.factors,
           expectedAccuracy: grokResult.expectedAccuracy
@@ -207,7 +211,7 @@ const runGridFirstThenAI = async (
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
-      step: 'ai_skipped',
+      step: 'validation',
       message: 'AI optimization skipped: invalid API key, using Grid baseline'
     });
   }
@@ -282,6 +286,7 @@ const runGridOptimization = async (
     parameters: gridSearchResult.parameters,
     confidence: Math.max(60, gridSearchResult.confidence || 75), // Ensure minimum confidence
     method: 'grid_search', // Always grid_search
+    accuracy: gridSearchResult.accuracy,
     reasoning: `Grid search systematically tested parameter combinations and selected the configuration with highest validation accuracy (${gridSearchResult.accuracy.toFixed(1)}%). This method provides reliable, data-driven parameter selection through comprehensive evaluation.`,
     factors: {
       stability: 85,
@@ -362,6 +367,7 @@ export const getOptimizationByMethod = async (
           parameters: validationResult.parameters,
           confidence: validationResult.confidence,
           method: validationResult.method,
+          accuracy: validationResult.accuracy,
           reasoning: grokResult.reasoning,
           factors: grokResult.factors,
           expectedAccuracy: grokResult.expectedAccuracy
