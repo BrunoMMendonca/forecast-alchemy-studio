@@ -6,6 +6,7 @@ import { useBatchOptimization } from '@/hooks/useBatchOptimization';
 import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimization';
 import { useModelManagement } from '@/hooks/useModelManagement';
 import { OptimizationFactors } from '@/types/optimizationTypes';
+import { PreferenceValue } from '@/hooks/useManualAIPreferences';
 
 interface OptimizationQueue {
   getSKUsInQueue: () => string[];
@@ -74,16 +75,21 @@ export const useOptimizationHandler = (
         
         setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
         
+        // Set preference based on optimization method with AI->Grid fallback
         const preferences = loadManualAIPreferences();
         const preferenceKey = `${sku}:${modelId}`;
-        if (method?.startsWith('ai_')) {
-          preferences[preferenceKey] = true;
-        } else if (method === 'grid_search') {
-          preferences[preferenceKey] = 'grid';
-        } else {
-          preferences[preferenceKey] = false;
+        let newPreference: PreferenceValue = 'ai'; // Default to AI
+        
+        if (method === 'grid_search') {
+          newPreference = 'grid';
+        } else if (method?.startsWith('ai_')) {
+          newPreference = 'ai';
         }
+        
+        preferences[preferenceKey] = newPreference;
         saveManualAIPreferences(preferences);
+        
+        console.log(`PREFERENCE: Set ${preferenceKey} to ${newPreference} after optimization`);
         
         setModels(prev => prev.map(model => 
           model.id === modelId 

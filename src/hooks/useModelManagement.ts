@@ -1,10 +1,9 @@
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
 import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
-import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
+import { useManualAIPreferences, PreferenceValue } from '@/hooks/useManualAIPreferences';
 import { useModelPreferences } from '@/hooks/useModelPreferences';
 import { getOptimizationByMethod } from '@/utils/singleModelOptimization';
 import { BusinessContext } from '@/types/businessContext';
@@ -57,7 +56,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = false;
+    preferences[preferenceKey] = 'manual';
     saveManualAIPreferences(preferences);
     setSelectedMethod(selectedSKU, modelId, 'manual');
 
@@ -89,7 +88,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = true;
+    preferences[preferenceKey] = 'ai';
     saveManualAIPreferences(preferences);
     setSelectedMethod(selectedSKU, modelId, 'ai');
 
@@ -149,15 +148,17 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
                 : m
             ));
           } else {
-            console.log(`❌ USE AI: AI optimization failed for ${preferenceKey}`);
-            preferences[preferenceKey] = false;
+            console.log(`❌ USE AI: AI optimization failed for ${preferenceKey}, trying Grid fallback`);
+            preferences[preferenceKey] = 'grid';
             saveManualAIPreferences(preferences);
+            await useGridOptimization(modelId);
           }
         }
       } catch (error) {
         console.error('AI optimization failed:', error);
-        preferences[preferenceKey] = false;
+        preferences[preferenceKey] = 'grid';
         saveManualAIPreferences(preferences);
+        await useGridOptimization(modelId);
       }
     }
     
@@ -252,7 +253,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = false;
+    preferences[preferenceKey] = 'manual';
     saveManualAIPreferences(preferences);
     setSelectedMethod(selectedSKU, modelId, 'manual');
 

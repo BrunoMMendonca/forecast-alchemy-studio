@@ -3,15 +3,33 @@ import { useCallback } from 'react';
 
 const MANUAL_AI_PREFERENCE_KEY = 'manual_ai_preferences';
 
-// Updated type to support three states: false (manual), true (AI), 'grid' (grid)
-export type PreferenceValue = boolean | 'grid';
+// Simplified preference type: manual, ai, or grid
+export type PreferenceValue = 'manual' | 'ai' | 'grid';
 
 export const useManualAIPreferences = () => {
   // Load manual/AI/Grid preferences from localStorage
   const loadManualAIPreferences = useCallback((): Record<string, PreferenceValue> => {
     try {
       const stored = localStorage.getItem(MANUAL_AI_PREFERENCE_KEY);
-      return stored ? JSON.parse(stored) : {};
+      const parsed = stored ? JSON.parse(stored) : {};
+      
+      // Migrate old boolean values to new string values
+      const migrated: Record<string, PreferenceValue> = {};
+      Object.keys(parsed).forEach(key => {
+        const value = parsed[key];
+        if (value === true) {
+          migrated[key] = 'ai';
+        } else if (value === false) {
+          migrated[key] = 'manual';
+        } else if (value === 'grid') {
+          migrated[key] = 'grid';
+        } else {
+          // Default to AI for any undefined/unknown values
+          migrated[key] = 'ai';
+        }
+      });
+      
+      return migrated;
     } catch (error) {
       console.error('Failed to load manual/AI preferences:', error);
       return {};
