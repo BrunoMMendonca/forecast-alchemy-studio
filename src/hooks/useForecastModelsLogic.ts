@@ -164,7 +164,7 @@ export const useForecastModelsLogic = (
         }
       },
       (sku: string, modelIds: string[]) => {
-        const skusNeedingOptimization = getSKUsNeedingOptimization(data, enabledModelIds);
+        const skusNeedingOptimization = getSKUsNeedingOptimization(data, modelIds);
         return Array.isArray(skusNeedingOptimization) 
           ? skusNeedingOptimization.map(item => typeof item === 'string' ? item : item.sku).filter(Boolean)
           : [];
