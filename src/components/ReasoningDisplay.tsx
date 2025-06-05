@@ -1,9 +1,8 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Brain, ChevronDown, ChevronUp, Info, Grid3x3, Shield, Bot } from 'lucide-react';
+import { Bot, ChevronDown, ChevronUp, Info, Grid3x3, Shield } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface ReasoningDisplayProps {
@@ -42,7 +41,7 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
     if (method.startsWith('ai_')) return <Bot className="h-4 w-4" />;
     if (method === 'grid_search') return <Grid3x3 className="h-4 w-4" />;
     if (method === 'fallback') return <Shield className="h-4 w-4" />;
-    return <Brain className="h-4 w-4" />;
+    return <Bot className="h-4 w-4" />;
   };
 
   const getMethodLabel = (method: string) => {
