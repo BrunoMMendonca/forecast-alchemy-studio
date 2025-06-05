@@ -104,20 +104,50 @@ export const walkForwardValidation = (
     if (testData.length === 0) continue;
     
     try {
+      console.log(`🔄 Walk-forward step ${step}: Training on ${trainData.length} points, testing on ${testData.length} points`);
+      
+      // Add safety checks for data validity
+      if (trainData.some(d => !d || typeof d.sales !== 'number' || isNaN(d.sales))) {
+        console.warn(`⚠️ Invalid training data in step ${step}, skipping`);
+        continue;
+      }
+      
+      if (testData.some(d => !d || typeof d.sales !== 'number' || isNaN(d.sales))) {
+        console.warn(`⚠️ Invalid test data in step ${step}, skipping`);
+        continue;
+      }
+      
       const predictions = generateForecast(trainData, testData.length);
+      
+      if (!predictions || predictions.length === 0) {
+        console.warn(`⚠️ No predictions generated in step ${step}`);
+        continue;
+      }
+      
+      if (predictions.some(p => typeof p !== 'number' || isNaN(p))) {
+        console.warn(`⚠️ Invalid predictions in step ${step}:`, predictions);
+        continue;
+      }
+      
       const actualValues = testData.map(d => d.sales);
       
-      if (predictions.length > 0) {
-        const result = calculateMetrics(actualValues, predictions, config.recentDataWeight);
-        results.push(result);
-        console.log(`📊 Step ${step + 1}: Accuracy ${result.accuracy.toFixed(1)}%, MAPE ${result.mape.toFixed(1)}%`);
-      }
+      console.log(`📊 Step ${step} - Actual:`, actualValues, 'Predicted:', predictions);
+      
+      const result = calculateMetrics(actualValues, predictions, config.recentDataWeight);
+      results.push(result);
+      console.log(`📊 Step ${step + 1}: Accuracy ${result.accuracy.toFixed(1)}%, MAPE ${result.mape.toFixed(1)}%`);
     } catch (error) {
-      console.warn(`⚠️ Error in walk-forward step ${step}:`, error);
+      console.error(`❌ Detailed error in walk-forward step ${step}:`, error);
+      console.error(`❌ Error details - trainData length: ${trainData.length}, testData length: ${testData.length}`);
+      if (error instanceof Error) {
+        console.error(`❌ Error message: ${error.message}`);
+        console.error(`❌ Error stack: ${error.stack}`);
+      }
     }
   }
   
   if (results.length === 0) {
+    console.log(`❌ No valid results from walk-forward validation`);
     return { accuracy: 0, mape: 100, mae: Infinity, rmse: Infinity, confidence: 0 };
   }
   
