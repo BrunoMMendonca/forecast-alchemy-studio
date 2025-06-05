@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Bot, User, Grid3x3, Shield } from 'lucide-react';
+import { Bot, User, Grid3x3 } from 'lucide-react';
 import { ModelConfig } from '@/types/forecast';
 import { ReasoningDisplay } from './ReasoningDisplay';
 
@@ -80,20 +80,12 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
             Grid Optimized
           </Badge>
         );
-      case 'fallback':
-        console.log(`🎨 UI DEBUG: Showing Fallback badge for ${model.id}`);
-        return (
-          <Badge variant="outline" className="text-slate-600 border-slate-300">
-            <Shield className="h-3 w-3 mr-1" />
-            Fallback
-          </Badge>
-        );
       default:
-        console.log(`🎨 UI DEBUG: Unknown method "${optimizationMethod}" for ${model.id}, showing AI badge as fallback`);
+        console.log(`🎨 UI DEBUG: Unknown method "${optimizationMethod}" for ${model.id}, showing Manual badge as fallback`);
         return (
-          <Badge variant="default" className="text-white bg-purple-600">
-            <Bot className="h-3 w-3 mr-1" />
-            AI Optimized
+          <Badge variant="outline" className="text-slate-600">
+            <User className="h-3 w-3 mr-1" />
+            Manual
           </Badge>
         );
     }

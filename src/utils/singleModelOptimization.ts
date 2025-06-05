@@ -27,7 +27,7 @@ interface EnhancedOptimizationResult extends OptimizationResult {
 
 interface MultiMethodResult {
   aiResult?: EnhancedOptimizationResult;
-  gridResult?: EnhancedOptimizationResult;
+  gridResult: EnhancedOptimizationResult; // Grid never fails now
   selectedResult: EnhancedOptimizationResult;
 }
 
@@ -46,7 +46,7 @@ export const optimizeSingleModel = async (
   sku: string,
   progressUpdater: ProgressUpdater,
   forceGridSearch: boolean = false
-): Promise<EnhancedOptimizationResult | undefined> => {
+): Promise<EnhancedOptimizationResult> => {
   if (!model.parameters || Object.keys(model.parameters).length === 0) {
     optimizationLogger.logStep({
       sku,
@@ -55,6 +55,7 @@ export const optimizeSingleModel = async (
       message: 'No parameters to optimize - using defaults',
       parameters: model.parameters
     });
+    
     return { 
       parameters: model.parameters, 
       confidence: 70, 
@@ -77,7 +78,7 @@ export const optimizeSingleModel = async (
   // Run both AI and Grid optimization for batch processing
   const results = await runBothOptimizations(model, skuData, sku, progressUpdater);
   
-  // Return the selected result (AI preferred if available)
+  // Return the selected result (AI preferred if available, otherwise grid)
   return results.selectedResult;
 };
 
@@ -96,8 +97,7 @@ const runBothOptimizations = async (
   });
 
   let aiResult = null;
-  let gridResult = null;
-
+  
   // Step 1: Try AI optimization
   if (isValidApiKey(GROK_API_KEY)) {
     try {
@@ -167,8 +167,8 @@ const runBothOptimizations = async (
     }
   }
 
-  // Step 2: ALWAYS run Grid optimization (independent of AI)
-  gridResult = await runGridOptimization(model, skuData, sku, progressUpdater, false);
+  // Step 2: ALWAYS run Grid optimization (never fails now)
+  const gridResult = await runGridOptimization(model, skuData, sku, progressUpdater, false);
 
   // Step 3: Determine which result to return as default
   let selectedResult: EnhancedOptimizationResult;
@@ -182,7 +182,7 @@ const runBothOptimizations = async (
       message: 'Using AI optimized parameters as default',
       parameters: aiResult.parameters
     });
-  } else if (gridResult) {
+  } else {
     // AI failed, use grid as fallback
     selectedResult = gridResult;
     optimizationLogger.logStep({
@@ -192,25 +192,11 @@ const runBothOptimizations = async (
       message: 'AI failed, using grid search parameters as fallback',
       parameters: gridResult.parameters
     });
-  } else {
-    // Both failed - this should be very rare now
-    selectedResult = {
-      parameters: model.parameters,
-      confidence: 60,
-      method: 'default',
-      reasoning: 'Both AI and grid search failed to find optimal parameters. Using default configuration.',
-      factors: {
-        stability: 80,
-        interpretability: 85,
-        complexity: 40,
-        businessImpact: 'Conservative approach maintaining known performance'
-      }
-    };
   }
 
   return {
     aiResult: aiResult || undefined,
-    gridResult: gridResult || undefined,
+    gridResult,
     selectedResult
   };
 };
@@ -221,8 +207,8 @@ const runGridOptimization = async (
   sku: string,
   progressUpdater: ProgressUpdater,
   updateProgress: boolean = true
-): Promise<EnhancedOptimizationResult | null> => {
-  console.log(`🔍 GRID SEARCH: Starting independent grid search for ${sku}:${model.id}`);
+): Promise<EnhancedOptimizationResult> => {
+  console.log(`🔍 GRID SEARCH: Starting reliable grid search for ${sku}:${model.id}`);
   
   optimizationLogger.logStep({
     sku,
@@ -231,55 +217,38 @@ const runGridOptimization = async (
     message: 'Starting grid search optimization'
   });
 
-  try {
-    const gridSearchResult = adaptiveGridSearchOptimization(
-      model.id,
-      skuData,
-      undefined, // Don't pass AI parameters for comparison
-      {
-        ...ENHANCED_VALIDATION_CONFIG,
-        useWalkForward: true
-      }
-    );
-    
-    console.log(`🔍 GRID SEARCH: Result for ${sku}:${model.id}:`, gridSearchResult);
-    
-    // Grid search should ALWAYS return something unless there's a critical error
-    if (gridSearchResult && gridSearchResult.parameters) {
-      if (updateProgress) {
-        progressUpdater.setProgress(prev => prev ? { ...prev, gridOptimized: prev.gridOptimized + 1 } : null);
-      }
-
-      console.log(`✅ GRID SEARCH: Success for ${sku}:${model.id} with accuracy ${gridSearchResult.accuracy.toFixed(1)}%`);
-
-      return {
-        parameters: gridSearchResult.parameters,
-        confidence: Math.max(70, gridSearchResult.confidence || 75), // Ensure minimum confidence
-        method: 'grid_search', // Always grid_search
-        reasoning: `Grid search systematically tested parameter combinations and selected the configuration with highest validation accuracy (${gridSearchResult.accuracy.toFixed(1)}%). This method provides reliable, data-driven parameter selection through comprehensive evaluation.`,
-        factors: {
-          stability: 85,
-          interpretability: 90,
-          complexity: 45,
-          businessImpact: 'Systematic optimization ensuring reliable performance through comprehensive parameter testing'
-        },
-        expectedAccuracy: gridSearchResult.accuracy
-      };
-    } else {
-      console.log(`❌ GRID SEARCH: Critical error - no results for ${sku}:${model.id}`);
-      return null;
+  // Grid search now NEVER returns null
+  const gridSearchResult = adaptiveGridSearchOptimization(
+    model.id,
+    skuData,
+    undefined, // Don't pass AI parameters for comparison
+    {
+      ...ENHANCED_VALIDATION_CONFIG,
+      useWalkForward: true
     }
-  } catch (error) {
-    console.error(`❌ GRID SEARCH: Error for ${sku}:${model.id}:`, error);
-    optimizationLogger.logStep({
-      sku,
-      modelId: model.id,
-      step: 'error',
-      message: 'Grid search optimization failed',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    return null;
+  );
+  
+  console.log(`🔍 GRID SEARCH: Result for ${sku}:${model.id}:`, gridSearchResult);
+  
+  if (updateProgress) {
+    progressUpdater.setProgress(prev => prev ? { ...prev, gridOptimized: prev.gridOptimized + 1 } : null);
   }
+
+  console.log(`✅ GRID SEARCH: Success for ${sku}:${model.id} with accuracy ${gridSearchResult.accuracy.toFixed(1)}%`);
+
+  return {
+    parameters: gridSearchResult.parameters,
+    confidence: Math.max(60, gridSearchResult.confidence || 75), // Ensure minimum confidence
+    method: 'grid_search', // Always grid_search
+    reasoning: `Grid search systematically tested parameter combinations and selected the configuration with highest validation accuracy (${gridSearchResult.accuracy.toFixed(1)}%). This method provides reliable, data-driven parameter selection through comprehensive evaluation.`,
+    factors: {
+      stability: 85,
+      interpretability: 90,
+      complexity: 45,
+      businessImpact: 'Systematic optimization ensuring reliable performance through comprehensive parameter testing'
+    },
+    expectedAccuracy: gridSearchResult.accuracy
+  };
 };
 
 // New function to get specific optimization method results
