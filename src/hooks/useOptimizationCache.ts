@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -231,6 +232,9 @@ export const useOptimizationCache = () => {
     const now = Date.now();
     const isExpired = (entry: OptimizedParameters) => 
       now - entry.timestamp > CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
+    
+    const isValidEntry = (entry: OptimizedParameters) => 
+      entry && entry.dataHash && !isExpired(entry) && !isOldHashFormat(entry.dataHash);
 
     if (method) {
       const result = cached[method];
@@ -240,15 +244,11 @@ export const useOptimizationCache = () => {
         return null;
       }
 
-      // Check for old hash format and reject
-      if (isOldHashFormat(result.dataHash)) {
-        console.log(`🗄️ CACHE: MISS - ${method} method has old hash format for ${sku}:${modelId}`);
-        setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
-        return null;
-      }
-
-      if (isExpired(result)) {
-        console.log(`🗄️ CACHE: MISS - ${method} method expired for ${sku}:${modelId}`);
+      if (!isValidEntry(result)) {
+        const reason = !result.dataHash ? 'missing dataHash' : 
+                     isExpired(result) ? 'expired' : 
+                     isOldHashFormat(result.dataHash) ? 'old hash format' : 'invalid';
+        console.log(`🗄️ CACHE: MISS - ${method} method invalid for ${sku}:${modelId} (${reason})`);
         setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
         return null;
       }
@@ -262,12 +262,12 @@ export const useOptimizationCache = () => {
     const selectedMethod = cached.selected || 'ai';
     let result = cached[selectedMethod];
     
-    // If selected method doesn't exist or is expired or has old hash, try alternatives
-    if (!result || isExpired(result) || isOldHashFormat(result.dataHash)) {
+    // If selected method doesn't exist or is invalid, try alternatives
+    if (!isValidEntry(result)) {
       result = cached.ai || cached.grid;
       
-      // Check if the fallback also has issues
-      if (result && (isExpired(result) || isOldHashFormat(result.dataHash))) {
+      // Check if the fallback is also invalid
+      if (!isValidEntry(result)) {
         result = undefined;
       }
     }
