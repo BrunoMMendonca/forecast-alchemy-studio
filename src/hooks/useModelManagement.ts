@@ -53,11 +53,11 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     if (selectedSKU && cache[selectedSKU] && !isTogglingAIManualRef.current) {
       // Use a simple cache change detection
       const currentCacheTime = Date.now();
-      if (currentCacheTime - lastCacheUpdateRef.current > 100) { // Debounce rapid updates
+      if (currentCacheTime - lastCacheVersionRef.current > 100) { // Debounce rapid updates
         console.log('🔄 CACHE UPDATED: Updating models state after optimization for', selectedSKU);
         const modelsWithPreferences = createModelsWithPreferences();
         setModels(modelsWithPreferences);
-        lastCacheUpdateRef.current = currentCacheTime;
+        lastCacheVersionRef.current = currentCacheTime;
       }
     }
   }, [cache, selectedSKU, createModelsWithPreferences]);
