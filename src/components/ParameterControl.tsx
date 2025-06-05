@@ -33,6 +33,12 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 }) => {
   console.log('🔧 ParameterControl render for model:', model.id, 'SKU:', selectedSKU);
   
+  // Early return if no SKU selected to prevent infinite loops
+  if (!selectedSKU || selectedSKU.trim() === '') {
+    console.log('❌ No valid SKU selected, skipping ParameterControl render');
+    return null;
+  }
+  
   const [isExpanded, setIsExpanded] = useState(false);
   const { getCachedParameters, isCacheValid, generateDataHash } = useOptimizationCache();
 
