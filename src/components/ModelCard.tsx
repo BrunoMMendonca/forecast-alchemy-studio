@@ -5,9 +5,12 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ModelConfig } from '@/types/forecast';
 import { ParameterControl } from './ParameterControl';
+import { SalesData } from '@/pages/Index';
 
 interface ModelCardProps {
   model: ModelConfig;
+  selectedSKU: string;
+  data: SalesData[];
   onToggle: () => void;
   onParameterUpdate: (parameter: string, value: number) => void;
   onUseAI: () => void;
@@ -17,6 +20,8 @@ interface ModelCardProps {
 
 export const ModelCard: React.FC<ModelCardProps> = ({
   model,
+  selectedSKU,
+  data,
   onToggle,
   onParameterUpdate,
   onUseAI,
@@ -50,6 +55,8 @@ export const ModelCard: React.FC<ModelCardProps> = ({
       {model.enabled && (
         <ParameterControl
           model={model}
+          selectedSKU={selectedSKU}
+          data={data}
           onParameterUpdate={onParameterUpdate}
           onUseAI={onUseAI}
           onUseGrid={onUseGrid}

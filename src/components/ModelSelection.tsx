@@ -3,9 +3,12 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ModelConfig } from '@/types/forecast';
 import { ModelCard } from './ModelCard';
+import { SalesData } from '@/pages/Index';
 
 interface ModelSelectionProps {
   models: ModelConfig[];
+  selectedSKU: string;
+  data: SalesData[];
   onToggleModel: (modelId: string) => void;
   onUpdateParameter: (modelId: string, parameter: string, value: number) => void;
   onUseAI: (modelId: string) => void;
@@ -15,6 +18,8 @@ interface ModelSelectionProps {
 
 export const ModelSelection: React.FC<ModelSelectionProps> = ({
   models,
+  selectedSKU,
+  data,
   onToggleModel,
   onUpdateParameter,
   onUseAI,
@@ -34,6 +39,8 @@ export const ModelSelection: React.FC<ModelSelectionProps> = ({
           <ModelCard
             key={model.id}
             model={model}
+            selectedSKU={selectedSKU}
+            data={data}
             onToggle={() => onToggleModel(model.id)}
             onParameterUpdate={(parameter, value) => onUpdateParameter(model.id, parameter, value)}
             onUseAI={() => onUseAI(model.id)}

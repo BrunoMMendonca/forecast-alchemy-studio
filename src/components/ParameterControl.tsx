@@ -9,9 +9,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ChevronDown, ChevronRight, Settings, Bot, Grid3X3, User } from 'lucide-react';
 import { ModelConfig } from '@/types/forecast';
 import { ReasoningDisplay } from './ReasoningDisplay';
+import { useOptimizationCache } from '@/hooks/useOptimizationCache';
+import { SalesData } from '@/pages/Index';
 
 interface ParameterControlProps {
   model: ModelConfig;
+  selectedSKU: string;
+  data: SalesData[];
   onParameterUpdate: (parameter: string, value: number) => void;
   onUseAI: () => void;
   onUseGrid?: () => void;
@@ -20,18 +24,38 @@ interface ParameterControlProps {
 
 export const ParameterControl: React.FC<ParameterControlProps> = ({
   model,
+  selectedSKU,
+  data,
   onParameterUpdate,
   onUseAI,
   onUseGrid,
   onResetToManual,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const { getCachedParameters, isCacheValid, generateDataHash } = useOptimizationCache();
 
   const isManual = !model.optimizedParameters;
   const isAI = model.optimizationMethod === 'ai';
   const isGrid = model.optimizationMethod === 'grid_search';
 
   const currentParameters = model.optimizedParameters || model.parameters;
+
+  // Check if cached optimization results are available
+  const skuData = data.filter(d => d.sku === selectedSKU);
+  const currentDataHash = generateDataHash(skuData);
+  
+  const hasValidAICache = () => {
+    const cachedAI = getCachedParameters(selectedSKU, model.id, 'ai');
+    return cachedAI && isCacheValid(selectedSKU, model.id, currentDataHash, 'ai');
+  };
+
+  const hasValidGridCache = () => {
+    const cachedGrid = getCachedParameters(selectedSKU, model.id, 'grid');
+    return cachedGrid && isCacheValid(selectedSKU, model.id, currentDataHash, 'grid');
+  };
+
+  const aiCacheAvailable = hasValidAICache();
+  const gridCacheAvailable = hasValidGridCache();
 
   // Only show parameters section if model actually has parameters
   const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
@@ -82,10 +106,16 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 {/* AI Badge - First */}
                 <Badge 
                   variant={isAI ? "default" : "outline"} 
-                  className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
+                  className={`text-xs ${
+                    aiCacheAvailable 
+                      ? `cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}` 
+                      : 'opacity-50 cursor-not-allowed bg-gray-300'
+                  }`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onUseAI();
+                    if (aiCacheAvailable) {
+                      onUseAI();
+                    }
                   }}
                 >
                   <Bot className="h-3 w-3 mr-1" />
@@ -95,10 +125,16 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 {/* Grid Badge - Second */}
                 <Badge 
                   variant={isGrid ? "default" : "outline"} 
-                  className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
+                  className={`text-xs ${
+                    gridCacheAvailable 
+                      ? `cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}` 
+                      : 'opacity-50 cursor-not-allowed bg-gray-300'
+                  }`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (onUseGrid) onUseGrid();
+                    if (gridCacheAvailable && onUseGrid) {
+                      onUseGrid();
+                    }
                   }}
                 >
                   <Grid3X3 className="h-3 w-3 mr-1" />
