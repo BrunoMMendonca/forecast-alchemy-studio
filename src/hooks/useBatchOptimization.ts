@@ -1,119 +1,151 @@
-
 import { useState, useCallback } from 'react';
-import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
-import { getBusinessContext } from '@/utils/businessContext';
+import { ModelConfig } from '@/types/forecast';
+import { optimizationLogger } from '@/utils/optimizationLogger';
 import { optimizeSingleModel } from '@/utils/singleModelOptimization';
+import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimization';
+import { BusinessContext } from '@/types/businessContext';
 
-interface Progress {
-  total: number;
-  completed: number;
-  failed: number;
-  aiOptimized: number;
-  currentSKU?: string;
-  completedSKUs: number;
-  totalSKUs: number;
+interface OptimizationProgress {
+  [sku: string]: {
+    modelId: string;
+    status: 'pending' | 'optimizing' | 'complete' | 'error';
+    progress: number;
+    result?: any;
+    error?: string;
+  };
 }
 
 export const useBatchOptimization = () => {
+  const [optimizationProgress, setOptimizationProgress] = useState<OptimizationProgress>({});
   const [isOptimizing, setIsOptimizing] = useState(false);
-  const [progress, setProgress] = useState<Progress | null>(null);
+  const navigationAware = useNavigationAwareOptimization();
 
-  const startOptimization = useCallback((total: number, totalSKUs: number = 0) => {
-    setIsOptimizing(true);
-    setProgress({ total, completed: 0, failed: 0, aiOptimized: 0, completedSKUs: 0, totalSKUs });
-  }, []);
-
-  const completeOptimization = useCallback(() => {
-    setIsOptimizing(false);
-    setProgress(null);
-  }, []);
-
-  const optimizeQueuedSKUs = useCallback(async (
+  const runOptimization = useCallback(async (
+    skus: string[],
     data: SalesData[],
     models: ModelConfig[],
-    queuedSKUs: string[],
-    onSKUModelComplete: (
-      sku: string, 
-      modelId: string, 
-      parameters: Record<string, number>, 
-      confidence: number, 
-      reasoning: string, 
-      factors: any, 
-      expectedAccuracy: number, 
-      method: string,
-      bothResults?: { ai?: any; grid: any }
-    ) => void,
-    onSKUComplete: (sku: string) => void,
-    getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[]
+    businessContext?: BusinessContext,
+    forceGridSearch: boolean = false
   ) => {
-    if (!queuedSKUs || queuedSKUs.length === 0) {
+    // NEW: Check if navigation-aware optimization is already running
+    if (!navigationAware.shouldOptimize(data)) {
       return;
     }
 
-    const sortedQueuedSKUs = [...queuedSKUs].sort();
-    const skusNeedingOptimization = getSKUsNeedingOptimization(data, models);
-    const totalModelsToOptimize = skusNeedingOptimization.reduce((acc, curr) => acc + curr.models.length, 0);
-
-    if (totalModelsToOptimize === 0) {
+    if (!skus || skus.length === 0 || !data || data.length === 0 || !models || models.length === 0) {
+      console.warn('Invalid input to runOptimization. Skipping.');
       return;
     }
 
-    startOptimization(totalModelsToOptimize, sortedQueuedSKUs.length);
+    const totalSKUs = skus.length;
+    const startTime = Date.now();
 
-    let completedSKUs = 0;
+    optimizationLogger.startSession(totalSKUs);
+    optimizationLogger.logBatchStart(skus);
 
-    for (const sku of sortedQueuedSKUs) {
-      const skuData = data.filter(d => d.sku === sku);
+    setIsOptimizing(true);
+    setOptimizationProgress(prev => {
+      const newProgress: OptimizationProgress = {};
+      skus.forEach(sku => {
+        newProgress[sku] = {
+          modelId: '',
+          status: 'pending',
+          progress: 0,
+        };
+      });
+      return newProgress;
+    });
+
+    try {
+      navigationAware.markOptimizationStarted(data);
       
-      if (skuData.length === 0) {
-        continue;
-      }
-
-      setProgress(prev => prev ? { ...prev, currentSKU: sku } : null);
-
-      const modelsToOptimize = models.filter(m => m.enabled && m.parameters && Object.keys(m.parameters).length > 0);
-      
-      for (const model of modelsToOptimize) {
-        try {
-          const businessContext = getBusinessContext();
-          const result = await optimizeSingleModel(model, skuData, sku, { setProgress }, false, businessContext);
+      for (const sku of skus) {
+        const skuData = data.filter(d => d.sku === sku);
+        
+        for (const model of models) {
+          if (!model.enabled) continue;
           
-          if (result) {
-            const { selectedResult, bothResults } = result;
-            
-            onSKUModelComplete(
+          setOptimizationProgress(prev => ({
+            ...prev,
+            [sku]: {
+              modelId: model.id,
+              status: 'optimizing',
+              progress: 0,
+            }
+          }));
+
+          try {
+            const result = await optimizeSingleModel(model, skuData, sku, {
+              setProgress: (updater: (prev: any) => any) => {
+                setOptimizationProgress(prev => {
+                  if (!prev[sku]) return prev;
+                  return {
+                    ...prev,
+                    [sku]: {
+                      ...prev[sku],
+                      progress: updater(prev[sku].progress)
+                    }
+                  };
+                });
+              }
+            }, forceGridSearch, businessContext);
+
+            setOptimizationProgress(prev => ({
+              ...prev,
+              [sku]: {
+                ...prev[sku],
+                status: 'complete',
+                result: result.selectedResult
+              }
+            }));
+
+            optimizationLogger.logStep({
               sku,
-              model.id,
-              selectedResult.parameters,
-              selectedResult.confidence,
-              selectedResult.reasoning || '',
-              selectedResult.factors,
-              selectedResult.expectedAccuracy || selectedResult.accuracy,
-              selectedResult.method || 'unknown',
-              bothResults
-            );
+              modelId: model.id,
+              step: 'complete',
+              message: 'Optimization completed',
+              parameters: result.selectedResult.parameters,
+              accuracy: result.selectedResult.accuracy,
+              confidence: result.selectedResult.confidence
+            });
+          } catch (error: any) {
+            console.error(`Optimization failed for SKU ${sku} and model ${model.id}:`, error);
+            
+            setOptimizationProgress(prev => ({
+              ...prev,
+              [sku]: {
+                ...prev[sku],
+                status: 'error',
+                error: error.message || 'Optimization failed'
+              }
+            }));
+
+            optimizationLogger.logStep({
+              sku,
+              modelId: model.id,
+              step: 'error',
+              message: `Optimization failed: ${error.message || 'Unknown error'}`,
+              error: error.message || 'Unknown error'
+            });
           }
-        } catch (error) {
-          setProgress(prev => prev ? { ...prev, failed: prev.failed + 1 } : null);
         }
+        optimizationLogger.logSKUComplete(sku);
       }
-      
-      completedSKUs++;
-      setProgress(prev => prev ? { 
-        ...prev, 
-        completed: prev.completed + modelsToOptimize.length,
-        completedSKUs 
-      } : null);
-      onSKUComplete(sku);
+
+      optimizationLogger.logBatchComplete(totalSKUs);
+      navigationAware.markOptimizationCompleted(data);
+    } catch (error: any) {
+      console.error('Batch optimization failed:', error);
+    } finally {
+      setIsOptimizing(false);
+      console.log(`Batch optimization completed in ${((Date.now() - startTime) / 1000).toFixed(2)} seconds`);
     }
-    
-    completeOptimization();
-  }, [startOptimization, completeOptimization]);
+  }, [navigationAware, optimizationLogger]);
 
   return {
+    optimizationProgress,
     isOptimizing,
-    progress,
-    optimizeQueuedSKUs
+    runOptimization
   };
 };

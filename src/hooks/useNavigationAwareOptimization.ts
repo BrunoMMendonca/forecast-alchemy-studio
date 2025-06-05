@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { SalesData } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
@@ -8,6 +9,7 @@ interface NavigationOptimizationState {
   lastOptimizationTime: number;
   currentRoute: string;
   dataModificationTime: number;
+  optimizationInProgress: boolean; // NEW: Track if optimization is currently running
 }
 
 const NAVIGATION_STATE_KEY = 'navigation_optimization_state';
@@ -17,6 +19,7 @@ export const useNavigationAwareOptimization = () => {
   const [navigationState, setNavigationState] = useState<NavigationOptimizationState | null>(null);
   const lastDataRef = useRef<string>('');
   const optimizationTriggerRef = useRef<number>(0);
+  const optimizationLockRef = useRef<boolean>(false); // NEW: Prevent concurrent optimizations
 
   // Load navigation state on mount
   useEffect(() => {
@@ -24,8 +27,9 @@ export const useNavigationAwareOptimization = () => {
       const stored = localStorage.getItem(NAVIGATION_STATE_KEY);
       if (stored) {
         const parsedState = JSON.parse(stored);
+        // Reset optimization in progress flag on reload
+        parsedState.optimizationInProgress = false;
         setNavigationState(parsedState);
-        console.log('NAVIGATION: Loaded state:', parsedState);
       }
     } catch (error) {
       console.error('NAVIGATION: Failed to load state:', error);
@@ -37,7 +41,6 @@ export const useNavigationAwareOptimization = () => {
     if (navigationState) {
       try {
         localStorage.setItem(NAVIGATION_STATE_KEY, JSON.stringify(navigationState));
-        console.log('NAVIGATION: Saved state:', navigationState);
       } catch (error) {
         console.error('NAVIGATION: Failed to save state:', error);
       }
@@ -70,43 +73,37 @@ export const useNavigationAwareOptimization = () => {
     }
     
     const fingerprint = Math.abs(hash).toString(36).substring(0, 16);
-    
-    console.log('NAVIGATION: Generated fingerprint:', fingerprint, 'for', sortedData.length, 'records');
     return fingerprint;
   }, []);
 
   const shouldOptimize = useCallback((data: SalesData[], currentRoute: string = '/'): boolean => {
     if (!data || data.length === 0) {
-      console.log('NAVIGATION: ❌ No data - skipping optimization');
+      return false;
+    }
+
+    // NEW: Check if optimization is already in progress
+    if (optimizationLockRef.current || navigationState?.optimizationInProgress) {
       return false;
     }
 
     const currentFingerprint = generateStableFingerprint(data);
     const now = Date.now();
 
-    console.log('NAVIGATION: CHECKING OPTIMIZATION NEED');
-    console.log(`NAVIGATION: Current fingerprint: ${currentFingerprint}`);
-    console.log(`NAVIGATION: Stored fingerprint: ${navigationState?.datasetFingerprint}`);
-    console.log(`NAVIGATION: Optimization completed: ${navigationState?.optimizationCompleted}`);
-    
     // PRIORITY 1: Check if data has actually changed
     if (navigationState) {
       // If fingerprint has changed, data was modified - need to re-optimize
       if (navigationState.datasetFingerprint !== currentFingerprint) {
-        console.log('NAVIGATION: ✅ DATA HAS CHANGED - Re-optimization needed');
         return true;
       }
 
       // Same dataset and already optimized
       if (navigationState.datasetFingerprint === currentFingerprint && 
           navigationState.optimizationCompleted) {
-        console.log('NAVIGATION: ❌ SAME DATA AND ALREADY OPTIMIZED - ABSOLUTE BLOCK');
         return false;
       }
 
       // Cooling off period check (secondary safety)
       if (now - navigationState.lastOptimizationTime < COOLING_OFF_PERIOD) {
-        console.log('NAVIGATION: ❌ In cooling off period - skipping');
         return false;
       }
     }
@@ -117,12 +114,10 @@ export const useNavigationAwareOptimization = () => {
       if (stored) {
         const parsedState = JSON.parse(stored);
         if (parsedState.datasetFingerprint !== currentFingerprint) {
-          console.log('NAVIGATION: ✅ LOCALSTORAGE BACKUP - Data changed, re-optimization needed');
           return true;
         }
         if (parsedState.datasetFingerprint === currentFingerprint && 
             parsedState.optimizationCompleted) {
-          console.log('NAVIGATION: ❌ LOCALSTORAGE BACKUP CHECK - Already optimized');
           return false;
         }
       }
@@ -132,44 +127,51 @@ export const useNavigationAwareOptimization = () => {
 
     // PRIORITY 3: Check if this is the same data we've seen before (session level)
     if (lastDataRef.current === currentFingerprint) {
-      console.log('NAVIGATION: ❌ Same data as before in session - skipping optimization');
       return false;
     }
 
-    console.log('NAVIGATION: ✅ OPTIMIZATION APPROVED - All checks passed');
     lastDataRef.current = currentFingerprint;
     return true;
   }, [navigationState, generateStableFingerprint]);
 
   const markOptimizationStarted = useCallback((data: SalesData[], currentRoute: string = '/') => {
+    // NEW: Set optimization lock
+    optimizationLockRef.current = true;
+    
     const fingerprint = generateStableFingerprint(data);
     const newState: NavigationOptimizationState = {
       datasetFingerprint: fingerprint,
       optimizationCompleted: false,
+      optimizationInProgress: true, // NEW: Mark as in progress
       lastOptimizationTime: Date.now(),
       currentRoute,
       dataModificationTime: Date.now()
     };
     
     setNavigationState(newState);
-    console.log('NAVIGATION: ✅ Marked optimization started for fingerprint:', fingerprint);
   }, [generateStableFingerprint]);
 
   const markOptimizationCompleted = useCallback((data: SalesData[], currentRoute: string = '/') => {
+    // NEW: Release optimization lock
+    optimizationLockRef.current = false;
+    
     const fingerprint = generateStableFingerprint(data);
     const newState: NavigationOptimizationState = {
       datasetFingerprint: fingerprint,
       optimizationCompleted: true,
+      optimizationInProgress: false, // NEW: Mark as completed
       lastOptimizationTime: Date.now(),
       currentRoute,
       dataModificationTime: navigationState?.dataModificationTime || Date.now()
     };
     
     setNavigationState(newState);
-    console.log('NAVIGATION: ✅ OPTIMIZATION MARKED AS COMPLETE for fingerprint:', fingerprint);
   }, [navigationState, generateStableFingerprint]);
 
   const markDataModified = useCallback((data?: SalesData[]) => {
+    // NEW: Release any existing optimization lock when data is modified
+    optimizationLockRef.current = false;
+    
     if (data) {
       // When data is provided, update the fingerprint to reflect the change
       const newFingerprint = generateStableFingerprint(data);
@@ -177,18 +179,18 @@ export const useNavigationAwareOptimization = () => {
         ...prev,
         datasetFingerprint: newFingerprint,
         optimizationCompleted: false,
+        optimizationInProgress: false, // NEW: Reset progress flag
         dataModificationTime: Date.now()
       } : null);
-      console.log('NAVIGATION: ✅ Marked data as modified with new fingerprint:', newFingerprint);
     } else {
       // Legacy support - just mark as modified
       if (navigationState) {
         setNavigationState({
           ...navigationState,
           optimizationCompleted: false,
+          optimizationInProgress: false, // NEW: Reset progress flag
           dataModificationTime: Date.now()
         });
-        console.log('NAVIGATION: ✅ Marked data as modified (legacy)');
       }
     }
     lastDataRef.current = '';
@@ -200,7 +202,6 @@ export const useNavigationAwareOptimization = () => {
 
   const incrementTriggerCount = useCallback(() => {
     optimizationTriggerRef.current += 1;
-    console.log('NAVIGATION: Trigger count:', optimizationTriggerRef.current);
   }, []);
 
   return {
