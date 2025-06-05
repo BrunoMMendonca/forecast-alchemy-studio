@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,8 +15,26 @@ export const CacheDebugger: React.FC = () => {
   const [activeTab, setActiveTab] = useState('optimization');
   const [lastUpdate, setLastUpdate] = useState(new Date().toLocaleTimeString());
   
+  // Load cache and preferences directly like preferences do
+  const [optimizationCache, setOptimizationCache] = useState(() => {
+    try {
+      const stored = localStorage.getItem('forecast_optimization_cache');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+  
+  const [preferences, setPreferences] = useState(() => {
+    try {
+      const stored = localStorage.getItem('manual_ai_preferences');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+  
   const { 
-    cache: optimizationCache, 
     cacheStats, 
     cacheVersion,
     clearAllCache, 
@@ -23,42 +42,44 @@ export const CacheDebugger: React.FC = () => {
   } = useOptimizationCache();
   
   const { clearForecastCacheForSKU } = useForecastCache();
-  const { loadManualAIPreferences, clearManualAIPreferences } = useManualAIPreferences();
+  const { clearManualAIPreferences } = useManualAIPreferences();
 
-  // Load preferences and track cache changes
-  const [preferences, setPreferences] = useState(() => loadManualAIPreferences());
+  // Function to refresh cache and preferences from localStorage
+  const refreshData = () => {
+    try {
+      const storedCache = localStorage.getItem('forecast_optimization_cache');
+      const storedPrefs = localStorage.getItem('manual_ai_preferences');
+      
+      setOptimizationCache(storedCache ? JSON.parse(storedCache) : {});
+      setPreferences(storedPrefs ? JSON.parse(storedPrefs) : {});
+      setLastUpdate(new Date().toLocaleTimeString());
+      
+      console.log('🔄 CACHE DEBUGGER: Refreshed from localStorage', {
+        cacheKeys: Object.keys(storedCache ? JSON.parse(storedCache) : {}),
+        preferenceKeys: Object.keys(storedPrefs ? JSON.parse(storedPrefs) : {})
+      });
+    } catch (error) {
+      console.error('Failed to refresh cache data:', error);
+    }
+  };
 
-  // React to cache version changes immediately - this ensures real-time updates
+  // React to cache version changes immediately
   useEffect(() => {
-    setLastUpdate(new Date().toLocaleTimeString());
-    setPreferences(loadManualAIPreferences());
-    console.log(`🔄 CACHE DEBUGGER: Version ${cacheVersion} - Real-time update triggered`, {
-      cacheKeys: Object.keys(optimizationCache),
-      totalEntries: Object.values(optimizationCache).reduce((acc, skuCache) => acc + Object.keys(skuCache).length, 0)
-    });
-  }, [cacheVersion, loadManualAIPreferences, optimizationCache]);
+    refreshData();
+    console.log(`🔄 CACHE DEBUGGER: Version ${cacheVersion} - Real-time update triggered`);
+  }, [cacheVersion]);
 
-  // Auto-refresh every 2 seconds when enabled (fallback)
+  // Auto-refresh every 1 second when enabled
   useEffect(() => {
     if (!autoRefresh) return;
     
-    const interval = setInterval(() => {
-      setLastUpdate(new Date().toLocaleTimeString());
-      setPreferences(loadManualAIPreferences());
-      console.log('🔄 CACHE DEBUGGER: Auto-refresh fallback triggered');
-    }, 2000);
-    
+    const interval = setInterval(refreshData, 1000);
     return () => clearInterval(interval);
-  }, [autoRefresh, loadManualAIPreferences]);
+  }, [autoRefresh]);
 
   const handleRefresh = () => {
-    setLastUpdate(new Date().toLocaleTimeString());
-    setPreferences(loadManualAIPreferences());
-    console.log('🔄 CACHE DEBUGGER: Manual refresh', {
-      cacheVersion,
-      cacheKeys: Object.keys(optimizationCache),
-      preferenceKeys: Object.keys(loadManualAIPreferences())
-    });
+    refreshData();
+    console.log('🔄 CACHE DEBUGGER: Manual refresh', { cacheVersion });
   };
 
   const handleExportCache = () => {
@@ -118,7 +139,7 @@ export const CacheDebugger: React.FC = () => {
             onClick={() => {
               clearAllCache();
               clearManualAIPreferences();
-              handleRefresh();
+              setTimeout(refreshData, 100);
             }}
           >
             <Trash2 className="h-4 w-4 mr-1" />
@@ -179,7 +200,7 @@ export const CacheDebugger: React.FC = () => {
                           onClick={() => {
                             clearCacheForSKU(sku);
                             clearForecastCacheForSKU(sku);
-                            handleRefresh();
+                            setTimeout(refreshData, 100);
                           }}
                         >
                           <Trash2 className="h-3 w-3" />
