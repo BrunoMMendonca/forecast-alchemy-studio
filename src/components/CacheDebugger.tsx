@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -279,8 +278,8 @@ export const CacheDebugger: React.FC = () => {
                 Object.entries(preferences).map(([key, value]) => (
                   <div key={key} className="flex items-center justify-between p-2 border rounded text-sm">
                     <span className="font-mono">{key}</span>
-                    <Badge variant={value === 'manual' ? 'secondary' : value === 'ai' ? 'default' : 'outline'}>
-                      {value}
+                    <Badge variant={String(value) === 'manual' ? 'secondary' : String(value) === 'ai' ? 'default' : 'outline'}>
+                      {String(value)}
                     </Badge>
                   </div>
                 ))
