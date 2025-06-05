@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -250,11 +249,16 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         const dataHash = generateDataHash(skuData);
         
         // Ensure factors has the correct type structure
-        const typedFactors = factors || {
-          stability: 0,
-          interpretability: 0,
-          complexity: 0,
-          businessImpact: 'Unknown'
+        const typedFactors: {
+          stability: number;
+          interpretability: number;
+          complexity: number;
+          businessImpact: string;
+        } = {
+          stability: (factors as any)?.stability || 0,
+          interpretability: (factors as any)?.interpretability || 0,
+          complexity: (factors as any)?.complexity || 0,
+          businessImpact: (factors as any)?.businessImpact || 'Unknown'
         };
         
         // Store complete optimization result in cache including method
@@ -310,7 +314,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
       },
       (sku: string, modelIds: string[]) => {
         // Return the SKUs that need optimization - this should return string[]
-        const skusNeedingOptimization = getSKUsNeedingOptimization(sku, modelIds);
+        const skusNeedingOptimization = getSKUsNeedingOptimization(data, modelIds);
         // Since getSKUsNeedingOptimization returns an array of objects, we need to extract the SKU strings
         return Array.isArray(skusNeedingOptimization) 
           ? skusNeedingOptimization.map(item => typeof item === 'string' ? item : item.sku).filter(Boolean)
