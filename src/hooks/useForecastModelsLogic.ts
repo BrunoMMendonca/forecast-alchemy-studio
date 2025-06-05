@@ -1,3 +1,4 @@
+
 import { useState, useRef, useCallback } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -111,7 +112,7 @@ export const useForecastModelsLogic = (
     
     await optimizeQueuedSKUs(
       data, 
-      enabledModels, 
+      enabledModels, // Pass ModelConfig[] here
       queuedSKUs,
       (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method) => {
         const skuData = data.filter(d => d.sku === sku);
