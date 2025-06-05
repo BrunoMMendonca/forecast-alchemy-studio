@@ -437,47 +437,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
             </div>
           </div>
         )}
-
-        {/* Optimization Complete Summary (only when not optimizing) */}
-        {optimizationCompleted && !isOptimizing && progress && (
-          <div className="border rounded-lg p-4 bg-green-50 border-green-200">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className="rounded-full h-4 w-4 bg-green-600 flex items-center justify-center">
-                  <span className="text-white text-xs">✓</span>
-                </div>
-                <span className="text-sm font-medium text-green-800">
-                  Optimization Complete!
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowOptimizationLog(!showOptimizationLog)}
-                  className="text-xs px-2 py-1 rounded bg-green-100 hover:bg-green-200 text-green-700"
-                >
-                  {showOptimizationLog ? 'Hide' : 'Show'} Log
-                </button>
-                <button
-                  onClick={clearProgress}
-                  className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-            
-            <p className="text-sm text-green-600 mb-2">
-              Successfully processed {progress.totalSKUs} SKU{progress.totalSKUs > 1 ? 's' : ''}
-            </p>
-            
-            <div className="grid grid-cols-2 gap-2 text-xs text-green-600">
-              <div>🤖 AI Optimized: {progress.aiOptimized || 0}</div>
-              <div>🔍 Grid Optimized: {progress.gridOptimized || 0}</div>
-              <div>❌ AI Rejected: {progress.aiRejected || 0}</div>
-              <div>📋 From Cache: {progress.skipped || 0}</div>
-            </div>
-          </div>
-        )}
       </div>
 
       <ModelSelection

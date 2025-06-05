@@ -1,19 +1,20 @@
-
-import React from 'react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
-import { Bot, User, Grid3x3 } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ChevronDown, ChevronRight, Settings, Zap, Grid3X3, User } from 'lucide-react';
 import { ModelConfig } from '@/types/forecast';
 import { ReasoningDisplay } from './ReasoningDisplay';
 
 interface ParameterControlProps {
   model: ModelConfig;
   onParameterUpdate: (parameter: string, value: number) => void;
-  onUseAI?: () => void;
+  onUseAI: () => void;
   onUseGrid?: () => void;
-  onResetToManual?: () => void;
+  onResetToManual: () => void;
 }
 
 export const ParameterControl: React.FC<ParameterControlProps> = ({
@@ -21,193 +22,168 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   onParameterUpdate,
   onUseAI,
   onUseGrid,
-  onResetToManual
+  onResetToManual,
 }) => {
-  if (!model.parameters || Object.keys(model.parameters).length === 0) {
-    return null;
-  }
+  const [isExpanded, setIsExpanded] = useState(false);
 
-  const hasOptimizedParams = !!model.optimizedParameters;
-  const displayParams = model.optimizedParameters || model.parameters;
-  const isUsingOptimized = hasOptimizedParams;
-  const optimizationMethod = model.optimizationMethod;
+  const isManual = !model.optimizedParameters;
+  const isAI = model.optimizationMethod?.startsWith('ai_');
+  const isGrid = model.optimizationMethod === 'grid_search';
 
-  // Enhanced debug logging
-  console.log(`🎨 UI DEBUG: ParameterControl rendering for ${model.id}:`, {
-    hasOptimizedParams,
-    optimizationMethod,
-    confidence: model.optimizationConfidence,
-    reasoning: !!model.optimizationReasoning,
-    modelState: {
-      optimizedParameters: !!model.optimizedParameters,
-      optimizationMethod: model.optimizationMethod,
-      optimizationConfidence: model.optimizationConfidence
-    }
-  });
+  // Check if AI optimization is available (has cached AI results)
+  const hasAIOptimization = model.optimizationMethod?.startsWith('ai_') || 
+                           (model.optimizationReasoning && model.optimizationReasoning.includes('AI'));
 
-  const getOptimizationBadge = () => {
-    console.log(`🎨 UI DEBUG: Determining badge for ${model.id} - hasOptimized: ${hasOptimizedParams}, method: ${optimizationMethod}`);
+  const currentParameters = model.optimizedParameters || model.parameters;
+
+  const handleParameterChange = useCallback((parameter: string, values: number[]) => {
+    onParameterUpdate(parameter, values[0]);
+  }, [onParameterUpdate]);
+
+  const getParameterConfig = (parameter: string) => {
+    const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
+      alpha: { min: 0.1, max: 0.9, step: 0.05, description: "Level smoothing parameter" },
+      beta: { min: 0.1, max: 0.9, step: 0.05, description: "Trend smoothing parameter" },
+      gamma: { min: 0.1, max: 0.9, step: 0.05, description: "Seasonal smoothing parameter" },
+      phi: { min: 0.8, max: 1.0, step: 0.02, description: "Damping parameter" },
+      seasonalPeriods: { min: 2, max: 52, step: 1, description: "Number of periods in a season" },
+      trend: { min: 0, max: 2, step: 1, description: "Trend component (0=none, 1=additive, 2=multiplicative)" },
+      seasonal: { min: 0, max: 2, step: 1, description: "Seasonal component (0=none, 1=additive, 2=multiplicative)" },
+      damped: { min: 0, max: 1, step: 1, description: "Damped trend (0=false, 1=true)" },
+    };
     
-    if (!hasOptimizedParams) {
-      console.log(`🎨 UI DEBUG: Showing Manual badge for ${model.id}`);
-      return (
-        <Badge variant="outline" className="text-slate-600">
-          <User className="h-3 w-3 mr-1" />
-          Manual
-        </Badge>
-      );
-    }
-
-    // Check the optimization method explicitly
-    console.log(`🎨 UI DEBUG: Badge determination for ${model.id}: method="${optimizationMethod}"`);
-    
-    switch (optimizationMethod) {
-      case 'ai_optimal':
-      case 'ai_tolerance':
-      case 'ai_confidence':
-        console.log(`🎨 UI DEBUG: Showing AI badge for ${model.id}`);
-        return (
-          <Badge variant="default" className="text-white bg-purple-600">
-            <Bot className="h-3 w-3 mr-1" />
-            AI Optimized
-          </Badge>
-        );
-      case 'grid_search':
-        console.log(`🎨 UI DEBUG: Showing Grid badge for ${model.id}`);
-        return (
-          <Badge variant="default" className="text-white bg-blue-600">
-            <Grid3x3 className="h-3 w-3 mr-1" />
-            Grid Optimized
-          </Badge>
-        );
-      default:
-        console.log(`🎨 UI DEBUG: Unknown method "${optimizationMethod}" for ${model.id}, showing Manual badge as fallback`);
-        return (
-          <Badge variant="outline" className="text-slate-600">
-            <User className="h-3 w-3 mr-1" />
-            Manual
-          </Badge>
-        );
-    }
-  };
-
-  const getActionButtons = () => {
-    if (!hasOptimizedParams) {
-      // Manual state - show AI and Grid options
-      return (
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onUseAI}
-            className="h-6 text-xs text-purple-600 border-purple-200"
-          >
-            <Bot className="h-3 w-3 mr-1" />
-            Use AI
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onUseGrid}
-            className="h-6 text-xs text-blue-600 border-blue-200"
-          >
-            <Grid3x3 className="h-3 w-3 mr-1" />
-            Use Grid
-          </Button>
-        </div>
-      );
-    } else {
-      // Optimized state - show alternative options and manual reset
-      const currentMethod = optimizationMethod;
-      
-      return (
-        <div className="flex gap-2">
-          {currentMethod !== 'ai_optimal' && currentMethod !== 'ai_tolerance' && currentMethod !== 'ai_confidence' && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onUseAI}
-              className="h-6 text-xs text-purple-600 border-purple-200"
-            >
-              <Bot className="h-3 w-3 mr-1" />
-              Use AI
-            </Button>
-          )}
-          {currentMethod !== 'grid_search' && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onUseGrid}
-              className="h-6 text-xs text-blue-600 border-blue-200"
-            >
-              <Grid3x3 className="h-3 w-3 mr-1" />
-              Use Grid
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onResetToManual}
-            className="h-6 text-xs"
-          >
-            <User className="h-3 w-3 mr-1" />
-            Use Manual
-          </Button>
-        </div>
-      );
-    }
+    return configs[parameter] || { min: 0, max: 1, step: 0.1, description: "Parameter" };
   };
 
   return (
-    <div className="space-y-3 pl-8">
-      <div className="flex items-center gap-2 mb-3">
-        {getOptimizationBadge()}
-        {getActionButtons()}
-        {optimizationMethod === 'grid_search' && model.optimizationConfidence && (
-          <Badge variant="secondary" className="text-xs">
-            {model.optimizationConfidence.toFixed(0)}% accuracy
-          </Badge>
-        )}
-      </div>
+    <Card className="w-full">
+      <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+        <CollapsibleTrigger asChild>
+          <div className="p-4 cursor-pointer hover:bg-slate-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                <Settings className="h-4 w-4" />
+                <span className="font-medium">Parameters</span>
+              </div>
+              
+              {/* FIXED: Keep badges in consistent order - Manual, Grid, AI */}
+              <div className="flex items-center gap-2">
+                {/* Manual Badge - Always show, highlight when active */}
+                <Badge 
+                  variant={isManual ? "default" : "outline"} 
+                  className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onResetToManual();
+                  }}
+                >
+                  <User className="h-3 w-3 mr-1" />
+                  Manual
+                </Badge>
 
-      {Object.entries(displayParams).map(([param, value]) => (
-        <div key={param} className="flex items-center space-x-3">
-          <Label className="w-20 text-sm capitalize">{param}:</Label>
-          <Input
-            type="number"
-            value={value}
-            onChange={(e) => onParameterUpdate(param, parseFloat(e.target.value) || 0)}
-            className="w-24 h-8"
-            step={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
-            min={param === 'alpha' || param === 'beta' || param === 'gamma' ? 0.1 : 1}
-            max={param === 'alpha' || param === 'beta' || param === 'gamma' ? 1 : 30}
-            disabled={isUsingOptimized}
-          />
-          <span className="text-xs text-slate-500">
-            {param === 'window' && 'periods'}
-            {(param === 'alpha' || param === 'beta' || param === 'gamma') && '(0.1-1.0)'}
-          </span>
-          {hasOptimizedParams && model.parameters && (
-            <span className="text-xs text-slate-400">
-              (manual: {model.parameters[param]})
-            </span>
-          )}
-        </div>
-      ))}
+                {/* Grid Badge - Always show, highlight when active */}
+                <Badge 
+                  variant={isGrid ? "default" : "outline"} 
+                  className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onUseGrid) onUseGrid();
+                  }}
+                >
+                  <Grid3X3 className="h-3 w-3 mr-1" />
+                  Grid
+                </Badge>
 
-      {/* Show reasoning if available */}
-      {hasOptimizedParams && model.optimizationReasoning && (
-        <div className="mt-4">
-          <ReasoningDisplay
-            reasoning={model.optimizationReasoning}
-            confidence={model.optimizationConfidence || 0}
-            method={optimizationMethod || 'unknown'}
-            expectedAccuracy={model.expectedAccuracy}
-            factors={model.optimizationFactors}
-            compact={true}
-          />
-        </div>
-      )}
-    </div>
+                {/* AI Badge - Only show if AI optimization is available */}
+                {hasAIOptimization && (
+                  <Badge 
+                    variant={isAI ? "default" : "outline"} 
+                    className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUseAI();
+                    }}
+                  >
+                    <Zap className="h-3 w-3 mr-1" />
+                    AI
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Optimization Status Summary */}
+            {model.optimizationConfidence && (
+              <div className="mt-2 flex items-center space-x-4 text-sm">
+                <span className="text-slate-600">
+                  Confidence: <span className="font-medium">{model.optimizationConfidence.toFixed(0)}%</span>
+                </span>
+                {model.expectedAccuracy && (
+                  <span className="text-slate-600">
+                    Expected Accuracy: <span className="font-medium">{model.expectedAccuracy.toFixed(1)}%</span>
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </CollapsibleTrigger>
+
+        <CollapsibleContent>
+          <CardContent className="pt-0">
+            {/* Parameter Controls */}
+            {currentParameters && Object.keys(currentParameters).length > 0 && (
+              <div className="space-y-4">
+                <div className="grid gap-4">
+                  {Object.entries(currentParameters).map(([parameter, value]) => {
+                    const config = getParameterConfig(parameter);
+                    return (
+                      <div key={parameter} className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <Label htmlFor={`${model.id}-${parameter}`} className="text-sm font-medium">
+                            {parameter}
+                          </Label>
+                          <span className="text-sm font-mono bg-slate-100 px-2 py-1 rounded">
+                            {typeof value === 'number' ? value.toFixed(config.step < 1 ? 2 : 0) : value}
+                          </span>
+                        </div>
+                        <Slider
+                          id={`${model.id}-${parameter}`}
+                          min={config.min}
+                          max={config.max}
+                          step={config.step}
+                          value={[typeof value === 'number' ? value : config.min]}
+                          onValueChange={(values) => handleParameterChange(parameter, values)}
+                          className="w-full"
+                          disabled={!isManual}
+                        />
+                        <p className="text-xs text-slate-500">{config.description}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Reasoning Display */}
+                {(model.optimizationReasoning || model.optimizationFactors) && (
+                  <div className="mt-6 pt-4 border-t">
+                    <ReasoningDisplay
+                      reasoning={model.optimizationReasoning}
+                      factors={model.optimizationFactors}
+                      method={model.optimizationMethod}
+                      confidence={model.optimizationConfidence}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(!currentParameters || Object.keys(currentParameters).length === 0) && (
+              <div className="text-center py-4 text-slate-500">
+                No parameters available for this model
+              </div>
+            )}
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
+    </Card>
   );
 };
