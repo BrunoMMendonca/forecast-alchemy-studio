@@ -1,17 +1,18 @@
 
 import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { ModelConfig } from '@/types/forecast';
 import { ParameterControl } from './ParameterControl';
 
 interface ModelCardProps {
   model: ModelConfig;
-  onToggle: (modelId: string) => void;
-  onParameterUpdate: (modelId: string, parameter: string, value: number) => void;
-  onUseAI?: (modelId: string) => void;
-  onUseGrid?: (modelId: string) => void;
-  onResetToManual?: (modelId: string) => void;
+  onToggle: () => void;
+  onParameterUpdate: (parameter: string, value: number) => void;
+  onUseAI: () => void;
+  onUseGrid?: () => void;
+  onResetToManual: () => void;
 }
 
 export const ModelCard: React.FC<ModelCardProps> = ({
@@ -20,50 +21,41 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   onParameterUpdate,
   onUseAI,
   onUseGrid,
-  onResetToManual
+  onResetToManual,
 }) => {
-  const ringColor = model.isSeasonal ? 'ring-green-200' : 'ring-blue-200';
-
   return (
-    <Card className={`transition-all ${model.enabled ? `ring-2 ${ringColor}` : ''}`}>
-      <CardHeader className="pb-3">
+    <div className="border border-slate-200 rounded-lg p-4 space-y-4">
+      <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <Checkbox
+          <Switch
+            id={`model-${model.id}`}
             checked={model.enabled}
-            onCheckedChange={(checked) => {
-              if (checked !== 'indeterminate') {
-                onToggle(model.id);
-              }
-            }}
+            onCheckedChange={onToggle}
           />
-          {model.icon}
-          <div className="flex-1">
-            <CardTitle className="text-base flex items-center gap-2">
-              {model.name}
-              {model.optimizationConfidence && (
-                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
-                  AI: {model.optimizationConfidence.toFixed(0)}% confidence
-                </span>
-              )}
-            </CardTitle>
-            <CardDescription className="text-sm">
-              {model.description}
-            </CardDescription>
-          </div>
+          <Label htmlFor={`model-${model.id}`} className="text-base font-medium">
+            {model.name}
+          </Label>
+          {model.enabled && (
+            <Badge variant="outline" className="text-xs">
+              Enabled
+            </Badge>
+          )}
         </div>
-      </CardHeader>
-      
-      {model.enabled && (
-        <CardContent className="pt-0">
-          <ParameterControl
-            model={model}
-            onParameterUpdate={(param, value) => onParameterUpdate(model.id, param, value)}
-            onUseAI={() => onUseAI?.(model.id)}
-            onUseGrid={() => onUseGrid?.(model.id)}
-            onResetToManual={() => onResetToManual?.(model.id)}
-          />
-        </CardContent>
+      </div>
+
+      {model.description && (
+        <p className="text-sm text-slate-600">{model.description}</p>
       )}
-    </Card>
+
+      {model.enabled && (
+        <ParameterControl
+          model={model}
+          onParameterUpdate={onParameterUpdate}
+          onUseAI={onUseAI}
+          onUseGrid={onUseGrid}
+          onResetToManual={onResetToManual}
+        />
+      )}
+    </div>
   );
 };

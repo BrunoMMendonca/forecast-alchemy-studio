@@ -79,6 +79,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     toggleModel,
     updateParameter,
     useAIOptimization,
+    useGridOptimization,
     resetToManual,
     isTogglingAIManualRef,
     loadManualAIPreferences,
@@ -242,8 +243,14 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         
         const preferences = loadManualAIPreferences();
         const preferenceKey = `${sku}:${modelId}`;
-        // Only set AI preference if it's actually an AI method
-        preferences[preferenceKey] = method?.startsWith('ai_') || false;
+        // Set preference based on method
+        if (method?.startsWith('ai_')) {
+          preferences[preferenceKey] = true;
+        } else if (method === 'grid_search') {
+          preferences[preferenceKey] = 'grid';
+        } else {
+          preferences[preferenceKey] = false;
+        }
         saveManualAIPreferences(preferences);
         
         console.log(`QUEUE OPTIMIZATION: Updating models state for ${sku}:${modelId} with ${method} parameters and reasoning`);
@@ -353,6 +360,15 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     }, 50);
   };
 
+  const handleUseGrid = (modelId: string) => {
+    console.log(`🔍 Using Grid for ${modelId}`);
+    useGridOptimization(modelId);
+    setTimeout(() => {
+      console.log(`🔍 Regenerating forecasts after Grid toggle for ${modelId}`);
+      generateForecastsForSelectedSKU();
+    }, 50);
+  };
+
   const handleResetToManual = (modelId: string) => {
     console.log(`👤 Resetting to manual for ${modelId}`);
     resetToManual(modelId);
@@ -371,134 +387,77 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
           onSKUChange={onSKUChange}
         />
 
-        {/* Current SKU Optimization Status */}
-        {selectedSKU && (isCurrentSKUQueued || isCurrentSKUBeingOptimized) && (
+        {/* Simplified Queue Status */}
+        {optimizationQueue && optimizationQueue.getSKUsInQueue().length > 0 && (
           <div className={`border rounded-lg p-4 ${
-            isCurrentSKUBeingOptimized 
+            isOptimizing 
               ? 'bg-blue-50 border-blue-200' 
               : 'bg-amber-50 border-amber-200'
           }`}>
             <div className="flex items-center gap-3">
-              {isCurrentSKUBeingOptimized ? (
+              {isOptimizing ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                  <div className="flex items-center gap-2">
-                    <Zap className="h-4 w-4 text-blue-600" />
-                    <span className="font-medium text-blue-800">
-                      Currently Optimizing: {selectedSKU}
-                    </span>
-                  </div>
-                  {progress?.currentModel && (
-                    <Badge variant="secondary" className="text-xs">
-                      {progress.currentModel}
-                    </Badge>
-                  )}
+                  <Zap className="h-4 w-4 text-blue-600" />
+                  <span className="font-medium text-blue-800">
+                    Currently optimizing: {progress?.currentSKU || 'Unknown'}
+                  </span>
+                  <Badge variant="secondary" className="text-xs">
+                    {progress ? `${progress.completedSKUs + 1}/${progress.totalSKUs}` : 'Processing...'}
+                  </Badge>
                 </>
               ) : (
                 <>
                   <Clock className="h-5 w-5 text-amber-600" />
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-amber-800">
-                      SKU Queued for Optimization: {selectedSKU}
-                    </span>
-                    <Badge variant="outline" className="text-xs border-amber-300 text-amber-700">
-                      {hasTriggeredOptimizationRef.current ? 'Starting...' : 'Pending'}
-                    </Badge>
-                  </div>
+                  <span className="font-medium text-amber-800">
+                    {optimizationQueue.getSKUsInQueue().length} SKUs queued for optimization
+                  </span>
+                  <Badge variant="outline" className="text-xs border-amber-300 text-amber-700">
+                    {hasTriggeredOptimizationRef.current ? 'Starting...' : 'Pending'}
+                  </Badge>
                 </>
               )}
             </div>
-            
-            {isCurrentSKUBeingOptimized && progress && (
-              <div className="mt-3">
-                <div className="text-sm text-blue-600 mb-2">
-                  Processing model: {progress.currentModel} 
-                  ({progress.completedSKUs + 1}/{progress.totalSKUs} SKUs)
-                </div>
-                <div className="bg-blue-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${((progress.completedSKUs) / progress.totalSKUs) * 100}%` }}
-                  />
-                </div>
-              </div>
-            )}
           </div>
         )}
 
-        {/* Queue-wide optimization progress (when not optimizing current SKU) */}
-        {(isOptimizing || (progress && (optimizationCompleted || isOptimizing))) && progress && !isCurrentSKUBeingOptimized && (
-          <div className={`border rounded-lg p-4 ${optimizationCompleted ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
+        {/* Optimization Complete Summary (only when not optimizing) */}
+        {optimizationCompleted && !isOptimizing && progress && (
+          <div className="border rounded-lg p-4 bg-green-50 border-green-200">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                {isOptimizing ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                ) : (
-                  <div className="rounded-full h-4 w-4 bg-green-600 flex items-center justify-center">
-                    <span className="text-white text-xs">✓</span>
-                  </div>
-                )}
-                <span className={`text-sm font-medium ${optimizationCompleted ? 'text-green-800' : 'text-blue-800'}`}>
-                  {isOptimizing ? 'Queue AI Optimization in Progress...' : 'Queue Optimization Complete!'}
+                <div className="rounded-full h-4 w-4 bg-green-600 flex items-center justify-center">
+                  <span className="text-white text-xs">✓</span>
+                </div>
+                <span className="text-sm font-medium text-green-800">
+                  Optimization Complete!
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowOptimizationLog(!showOptimizationLog)}
-                  className={`text-xs px-2 py-1 rounded ${
-                    optimizationCompleted 
-                      ? 'bg-green-100 hover:bg-green-200 text-green-700'
-                      : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
-                  }`}
+                  className="text-xs px-2 py-1 rounded bg-green-100 hover:bg-green-200 text-green-700"
                 >
                   {showOptimizationLog ? 'Hide' : 'Show'} Log
                 </button>
-                {optimizationCompleted && (
-                  <button
-                    onClick={clearProgress}
-                    className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
-                  >
-                    Dismiss
-                  </button>
-                )}
+                <button
+                  onClick={clearProgress}
+                  className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
+                >
+                  Dismiss
+                </button>
               </div>
             </div>
             
-            {isOptimizing ? (
-              <>
-                <p className="text-sm text-blue-600 mb-2">
-                  Processing {progress.currentSKU} - {progress.currentModel} ({progress.completedSKUs + 1}/{progress.totalSKUs})
-                </p>
-                <div className="mt-2 bg-blue-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${((progress.completedSKUs) / progress.totalSKUs) * 100}%` }}
-                  />
-                </div>
-              </>
-            ) : (
-              <div>
-                <p className="text-sm text-green-600 mb-2">
-                  Successfully processed {progress.totalSKUs} SKU{progress.totalSKUs > 1 ? 's' : ''} from queue
-                </p>
-                {progress.aiOptimized > 0 && (
-                  <p className="text-xs text-green-500 mb-1">
-                    AI Acceptance Rate: {((progress.aiOptimized / (progress.aiOptimized + progress.aiRejected)) * 100).toFixed(1)}%
-                  </p>
-                )}
-              </div>
-            )}
+            <p className="text-sm text-green-600 mb-2">
+              Successfully processed {progress.totalSKUs} SKU{progress.totalSKUs > 1 ? 's' : ''}
+            </p>
             
-            <div className={`grid grid-cols-2 gap-2 text-xs ${optimizationCompleted ? 'text-green-600' : 'text-blue-500'}`}>
+            <div className="grid grid-cols-2 gap-2 text-xs text-green-600">
               <div>🤖 AI Optimized: {progress.aiOptimized || 0}</div>
               <div>🔍 Grid Optimized: {progress.gridOptimized || 0}</div>
               <div>❌ AI Rejected: {progress.aiRejected || 0}</div>
               <div>📋 From Cache: {progress.skipped || 0}</div>
-              {progress.aiAcceptedByTolerance > 0 && (
-                <div className="col-span-2 text-xs text-blue-600">
-                  ✅ AI by Tolerance: {progress.aiAcceptedByTolerance} | by Confidence: {progress.aiAcceptedByConfidence || 0}
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -509,6 +468,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         onToggleModel={handleToggleModel}
         onUpdateParameter={handleUpdateParameter}
         onUseAI={handleUseAI}
+        onUseGrid={handleUseGrid}
         onResetToManual={handleResetToManual}
       />
 
