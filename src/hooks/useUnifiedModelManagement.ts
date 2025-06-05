@@ -245,6 +245,7 @@ export const useUnifiedModelManagement = (
   }, [selectedSKU, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod]);
 
   const useAIOptimization = useCallback(async (modelId: string) => {
+    console.log(`🤖 Starting AI optimization for ${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -262,8 +263,9 @@ export const useUnifiedModelManagement = (
         const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
         
         if (result) {
-          console.log(`🎯 AI optimization completed for ${modelId}, updating model state immediately`);
+          console.log(`🎯 AI optimization SUCCESS for ${modelId}, immediately updating state`);
           
+          // First update cache
           setCachedParameters(
             selectedSKU, 
             modelId, 
@@ -276,23 +278,29 @@ export const useUnifiedModelManagement = (
             result.method
           );
           
-          // IMMEDIATELY update the model state to show AI optimization
-          setModels(prev => prev.map(m => 
-            m.id === modelId 
-              ? { 
-                  ...m, 
-                  optimizedParameters: result.parameters,
-                  optimizationConfidence: result.confidence,
-                  optimizationReasoning: result.reasoning,
-                  optimizationFactors: result.factors,
-                  expectedAccuracy: result.expectedAccuracy,
-                  optimizationMethod: result.method
-                }
-              : m
-          ));
+          // Then FORCE an immediate model state update
+          setModels(prev => {
+            const newModels = prev.map(m => 
+              m.id === modelId 
+                ? { 
+                    ...m, 
+                    optimizedParameters: result.parameters,
+                    optimizationConfidence: result.confidence,
+                    optimizationReasoning: result.reasoning,
+                    optimizationFactors: result.factors,
+                    expectedAccuracy: result.expectedAccuracy,
+                    optimizationMethod: result.method
+                  }
+                : m
+            );
+            console.log(`🔄 Updated model state for ${modelId}:`, newModels.find(m => m.id === modelId));
+            return newModels;
+          });
           
           // Reset forecast hash to trigger regeneration with new parameters
           lastForecastGenerationHashRef.current = '';
+        } else {
+          console.log(`❌ AI optimization FAILED for ${modelId} - no result returned`);
         }
       }
     } catch (error) {
@@ -305,6 +313,7 @@ export const useUnifiedModelManagement = (
   }, [selectedSKU, data, models, businessContext, generateDataHash, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters]);
 
   const useGridOptimization = useCallback(async (modelId: string) => {
+    console.log(`📊 Starting Grid optimization for ${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -322,8 +331,9 @@ export const useUnifiedModelManagement = (
         const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
         
         if (result) {
-          console.log(`🎯 Grid optimization completed for ${modelId}, updating model state immediately`);
+          console.log(`🎯 Grid optimization SUCCESS for ${modelId}, immediately updating state`);
           
+          // First update cache
           setCachedParameters(
             selectedSKU, 
             modelId, 
@@ -336,23 +346,29 @@ export const useUnifiedModelManagement = (
             result.method
           );
           
-          // IMMEDIATELY update the model state to show Grid optimization
-          setModels(prev => prev.map(m => 
-            m.id === modelId 
-              ? { 
-                  ...m, 
-                  optimizedParameters: result.parameters,
-                  optimizationConfidence: result.confidence,
-                  optimizationReasoning: result.reasoning,
-                  optimizationFactors: result.factors,
-                  expectedAccuracy: result.expectedAccuracy,
-                  optimizationMethod: result.method
-                }
-              : m
-          ));
+          // Then FORCE an immediate model state update
+          setModels(prev => {
+            const newModels = prev.map(m => 
+              m.id === modelId 
+                ? { 
+                    ...m, 
+                    optimizedParameters: result.parameters,
+                    optimizationConfidence: result.confidence,
+                    optimizationReasoning: result.reasoning,
+                    optimizationFactors: result.factors,
+                    expectedAccuracy: result.expectedAccuracy,
+                    optimizationMethod: result.method
+                  }
+                : m
+            );
+            console.log(`🔄 Updated model state for ${modelId}:`, newModels.find(m => m.id === modelId));
+            return newModels;
+          });
           
           // Reset forecast hash to trigger regeneration with new parameters
           lastForecastGenerationHashRef.current = '';
+        } else {
+          console.log(`❌ Grid optimization FAILED for ${modelId} - no result returned`);
         }
       }
     } catch (error) {
