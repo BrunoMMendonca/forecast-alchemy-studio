@@ -37,7 +37,7 @@ export const useModelPreferences = (selectedSKU: string, data: SalesData[]) => {
         
         console.log(`🔍 ${preferenceKey}: preference=${preference}`);
         
-        let cached = null;
+        // If explicitly set to manual (false), return manual mode
         if (preference === false) {
           console.log(`👤 Manual preference for ${preferenceKey}`);
           return {
@@ -49,10 +49,15 @@ export const useModelPreferences = (selectedSKU: string, data: SalesData[]) => {
             expectedAccuracy: undefined,
             optimizationMethod: undefined
           };
-        } else if (preference === 'grid') {
+        }
+        
+        // For AI (true) or Grid ('grid') preferences, try to get cached results
+        let cached = null;
+        if (preference === 'grid') {
           cached = getCachedParameters(selectedSKU, model.id, 'grid');
           console.log(`🔍 Grid preference for ${preferenceKey}:`, !!cached);
         } else {
+          // Default to AI or explicit AI preference
           cached = getCachedParameters(selectedSKU, model.id, 'ai') || 
                    getCachedParameters(selectedSKU, model.id, 'grid');
           console.log(`🤖 AI preference (default) for ${preferenceKey}:`, !!cached);
@@ -70,16 +75,31 @@ export const useModelPreferences = (selectedSKU: string, data: SalesData[]) => {
             optimizationMethod: cached.method
           };
         } else {
-          console.log(`🛠️ No valid cache for ${preferenceKey}, using manual`);
-          return {
-            ...model,
-            optimizedParameters: undefined,
-            optimizationConfidence: undefined,
-            optimizationReasoning: undefined,
-            optimizationFactors: undefined,
-            expectedAccuracy: undefined,
-            optimizationMethod: undefined
-          };
+          // If we have AI/Grid preference but no valid cache, show placeholder state
+          if (preference === true || preference === 'grid' || preference === undefined) {
+            const methodType = preference === 'grid' ? 'Grid' : 'AI';
+            console.log(`🛠️ ${methodType} preference for ${preferenceKey} but no valid cache, showing placeholder`);
+            return {
+              ...model,
+              optimizedParameters: undefined,
+              optimizationConfidence: undefined,
+              optimizationReasoning: `${methodType} optimization in progress...`,
+              optimizationFactors: undefined,
+              expectedAccuracy: undefined,
+              optimizationMethod: preference === 'grid' ? 'grid_search' : 'ai_optimization'
+            };
+          } else {
+            console.log(`🛠️ No valid cache for ${preferenceKey}, using manual`);
+            return {
+              ...model,
+              optimizedParameters: undefined,
+              optimizationConfidence: undefined,
+              optimizationReasoning: undefined,
+              optimizationFactors: undefined,
+              expectedAccuracy: undefined,
+              optimizationMethod: undefined
+            };
+          }
         }
       });
     } catch (error) {
