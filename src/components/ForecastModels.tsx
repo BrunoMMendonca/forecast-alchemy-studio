@@ -1,4 +1,4 @@
-import React, { useState, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
@@ -44,6 +44,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
   const [forceUpdateTrigger, setForceUpdateTrigger] = useState(0);
   const hasTriggeredOptimizationRef = useRef(false);
+  const navigationReturnRef = useRef(false);
   
   const {
     cache,
@@ -76,6 +77,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     models,
     setModels,
     createModelsWithPreferences,
+    refreshModelsWithPreferences,
     toggleModel,
     updateParameter,
     useAIOptimization,
@@ -94,6 +96,21 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   useImperativeHandle(ref, () => ({
     startOptimization: handleQueueOptimization
   }));
+
+  // Detect navigation return and refresh models
+  useEffect(() => {
+    console.log('🔄 NAVIGATION: ForecastModels component mounted/remounted');
+    navigationReturnRef.current = true;
+    
+    // Small delay to allow cache to be populated
+    setTimeout(() => {
+      if (selectedSKU) {
+        console.log('🔄 NAVIGATION: Refreshing models on return for', selectedSKU);
+        refreshModelsWithPreferences();
+      }
+      navigationReturnRef.current = false;
+    }, 100);
+  }, []);
 
   // AUTO-TRIGGER: Watch for shouldStartOptimization prop
   React.useEffect(() => {
@@ -146,7 +163,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 
   // CRITICAL FIX: Watch for cache changes and immediately update models state
   React.useEffect(() => {
-    if (selectedSKU && cache[selectedSKU]) {
+    if (selectedSKU && cache[selectedSKU] && !navigationReturnRef.current) {
       console.log('🔄 CACHE UPDATED: Immediately updating models state for', selectedSKU);
       
       // Update models state with cached optimization results
@@ -185,7 +202,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 
   // Apply preferences immediately when SKU changes or component mounts - BUT NOT on force updates
   React.useEffect(() => {
-    if (selectedSKU && data.length > 0 && forceUpdateTrigger === 0) {
+    if (selectedSKU && data.length > 0 && forceUpdateTrigger === 0 && !navigationReturnRef.current) {
       const modelsWithPreferences = createModelsWithPreferences();
       console.log(`EFFECT: Setting models with preferences for ${selectedSKU} (initial load only)`);
       setModels(modelsWithPreferences);
@@ -482,6 +499,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
           | AI/Manual Toggle: {isTogglingAIManualRef.current ? '🔄 Active' : '✅ Idle'}
           | Last SKU: {lastSKURef.current}
           | Force Updates: {forceUpdateTrigger}
+          | Navigation Return: {navigationReturnRef.current ? '🔄 Active' : '✅ Idle'}
         </div>
       )}
 

@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
 import { getDefaultModels } from '@/utils/modelConfig';
@@ -17,9 +17,10 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
   } = useOptimizationCache();
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
   const isTogglingAIManualRef = useRef<boolean>(false);
+  const lastSelectedSKURef = useRef<string>('');
 
   const createModelsWithPreferences = useCallback((): ModelConfig[] => {
-    console.log('🏗️ CREATING MODELS WITH MULTI-METHOD SUPPORT');
+    console.log('🏗️ CREATING MODELS WITH MULTI-METHOD SUPPORT for SKU:', selectedSKU);
     
     const defaultModels = getDefaultModels();
     
@@ -33,7 +34,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
       const skuData = data.filter(d => d.sku === selectedSKU);
       const currentDataHash = generateDataHash(skuData);
       
-      console.log(`📋 Creating models with multi-method support for ${selectedSKU}:`, preferences);
+      console.log(`📋 Creating models with preferences for ${selectedSKU}:`, preferences);
       
       return defaultModels.map(model => {
         const preferenceKey = `${selectedSKU}:${model.id}`;
@@ -45,10 +46,13 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
         let cached = null;
         if (preference === true) {
           cached = getCachedParameters(selectedSKU, model.id, 'ai');
+          console.log(`🤖 Looking for AI cache for ${preferenceKey}:`, !!cached);
         } else if (preference === 'grid') {
           cached = getCachedParameters(selectedSKU, model.id, 'grid');
+          console.log(`🔍 Looking for Grid cache for ${preferenceKey}:`, !!cached);
         } else if (preference === false) {
           // Manual - no optimized parameters
+          console.log(`👤 Manual preference for ${preferenceKey}`);
           return {
             ...model,
             optimizedParameters: undefined,
@@ -59,8 +63,10 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
             optimizationMethod: undefined
           };
         } else {
-          // No preference - use whatever is available (AI preferred)
-          cached = getCachedParameters(selectedSKU, model.id);
+          // No preference - use AI if available, then grid, then manual
+          cached = getCachedParameters(selectedSKU, model.id, 'ai') || 
+                   getCachedParameters(selectedSKU, model.id, 'grid');
+          console.log(`🎯 No preference for ${preferenceKey}, using available cache:`, !!cached);
         }
         
         if (cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
@@ -75,7 +81,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
             optimizationMethod: cached.method
           };
         } else {
-          console.log(`🛠️ Default to manual for ${preferenceKey}`);
+          console.log(`🛠️ No valid cache for ${preferenceKey}, using manual`);
           return {
             ...model,
             optimizedParameters: undefined,
@@ -97,6 +103,16 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
     console.log('🎯 INITIAL STATE CREATION WITH MULTI-METHOD SUPPORT');
     return getDefaultModels();
   });
+
+  // Effect to update models when SKU changes or when returning from other pages
+  useEffect(() => {
+    if (selectedSKU && selectedSKU !== lastSelectedSKURef.current) {
+      console.log(`🔄 SKU CHANGED: ${lastSelectedSKURef.current} -> ${selectedSKU}, recreating models`);
+      const modelsWithPreferences = createModelsWithPreferences();
+      setModels(modelsWithPreferences);
+      lastSelectedSKURef.current = selectedSKU;
+    }
+  }, [selectedSKU, createModelsWithPreferences]);
 
   const toggleModel = (modelId: string) => {
     setModels(prev => prev.map(model => 
@@ -136,6 +152,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
   };
 
   const useAIOptimization = async (modelId: string) => {
+    console.log(`🤖 USE AI: Starting for ${selectedSKU}:${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -149,6 +166,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
     // Try to get cached AI results first
     const cached = getCachedParameters(selectedSKU, modelId, 'ai');
     if (cached) {
+      console.log(`✅ USE AI: Using cached AI result for ${preferenceKey}`);
       setModels(prev => prev.map(model => 
         model.id === modelId 
           ? { 
@@ -163,6 +181,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
           : model
       ));
     } else {
+      console.log(`🔄 USE AI: Running fresh AI optimization for ${preferenceKey}`);
       // Run fresh AI optimization
       try {
         const model = models.find(m => m.id === modelId);
@@ -172,6 +191,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
           const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai');
           
           if (result) {
+            console.log(`✅ USE AI: Fresh AI optimization succeeded for ${preferenceKey}`);
             const dataHash = generateDataHash(skuData);
             setCachedParameters(
               selectedSKU, 
@@ -198,6 +218,8 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
                   }
                 : m
             ));
+          } else {
+            console.log(`❌ USE AI: Fresh AI optimization failed for ${preferenceKey}`);
           }
         }
       } catch (error) {
@@ -211,6 +233,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
   };
 
   const useGridOptimization = async (modelId: string) => {
+    console.log(`🔍 USE GRID: Starting for ${selectedSKU}:${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -224,6 +247,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
     // Try to get cached Grid results first
     const cached = getCachedParameters(selectedSKU, modelId, 'grid');
     if (cached) {
+      console.log(`✅ USE GRID: Using cached Grid result for ${preferenceKey}`);
       setModels(prev => prev.map(model => 
         model.id === modelId 
           ? { 
@@ -238,6 +262,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
           : model
       ));
     } else {
+      console.log(`🔄 USE GRID: Running fresh Grid optimization for ${preferenceKey}`);
       // Run fresh Grid optimization
       try {
         const model = models.find(m => m.id === modelId);
@@ -247,6 +272,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
           const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid');
           
           if (result) {
+            console.log(`✅ USE GRID: Fresh Grid optimization succeeded for ${preferenceKey}`);
             const dataHash = generateDataHash(skuData);
             setCachedParameters(
               selectedSKU, 
@@ -273,6 +299,8 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
                   }
                 : m
             ));
+          } else {
+            console.log(`❌ USE GRID: Fresh Grid optimization failed for ${preferenceKey}`);
           }
         }
       } catch (error) {
@@ -286,6 +314,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
   };
 
   const resetToManual = (modelId: string) => {
+    console.log(`👤 RESET TO MANUAL: ${selectedSKU}:${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -315,10 +344,18 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
     }, 100);
   };
 
+  // Force recreation of models with preferences (for external triggers)
+  const refreshModelsWithPreferences = useCallback(() => {
+    console.log('🔄 REFRESH: Manually refreshing models with preferences');
+    const modelsWithPreferences = createModelsWithPreferences();
+    setModels(modelsWithPreferences);
+  }, [createModelsWithPreferences]);
+
   return {
     models,
     setModels,
     createModelsWithPreferences,
+    refreshModelsWithPreferences,
     toggleModel,
     updateParameter,
     useAIOptimization,

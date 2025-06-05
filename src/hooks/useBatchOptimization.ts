@@ -119,10 +119,14 @@ export const useBatchOptimization = () => {
 
           setProgress(prev => prev ? { ...prev, currentModel: model.name } : null);
 
+          console.log(`🔄 BATCH: Running dual optimization for ${sku}:${modelId}`);
+          
           // Run optimization (which now does both AI and Grid)
           const result = await optimizeSingleModel(model, skuData, sku, { setProgress });
           
           if (result) {
+            console.log(`✅ BATCH: Optimization result for ${sku}:${modelId}:`, result.method);
+            
             // Store the primary result (AI preferred)
             onParametersOptimized(
               sku, 
@@ -151,6 +155,7 @@ export const useBatchOptimization = () => {
             // Note: Both AI and Grid results are now automatically stored in cache
             // by the updated optimization function
           } else {
+            console.log(`❌ BATCH: No optimization result for ${sku}:${modelId}`);
             skippedCount++;
           }
         }

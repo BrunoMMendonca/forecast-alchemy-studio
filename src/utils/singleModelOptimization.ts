@@ -40,30 +40,6 @@ const isValidApiKey = (apiKey: string): boolean => {
          !apiKey.includes('placeholder');
 };
 
-// Calculate accuracy using the same method as forecast generator
-const calculateAccuracy = (actual: number[], predicted: number[]): number => {
-  if (actual.length === 0 || predicted.length === 0) return 0;
-  
-  let mapeSum = 0;
-  let validCount = 0;
-  
-  const length = Math.min(actual.length, predicted.length);
-  
-  for (let i = 0; i < length; i++) {
-    if (actual[i] !== 0) {
-      const error = Math.abs(actual[i] - predicted[i]);
-      const percentError = error / Math.abs(actual[i]);
-      mapeSum += percentError;
-      validCount++;
-    }
-  }
-  
-  if (validCount === 0) return 0;
-  
-  const mape = (mapeSum / validCount) * 100;
-  return Math.max(0, 100 - mape);
-};
-
 export const optimizeSingleModel = async (
   model: ModelConfig,
   skuData: SalesData[],
@@ -244,6 +220,8 @@ const runGridOptimization = async (
   progressUpdater: ProgressUpdater,
   updateProgress: boolean = true
 ): Promise<EnhancedOptimizationResult | null> => {
+  console.log(`🔍 GRID SEARCH: Starting for ${sku}:${model.id}`);
+  
   optimizationLogger.logStep({
     sku,
     modelId: model.id,
@@ -251,37 +229,56 @@ const runGridOptimization = async (
     message: 'Starting grid search optimization'
   });
 
-  const gridSearchResult = adaptiveGridSearchOptimization(
-    model.id,
-    skuData,
-    undefined,
-    {
-      ...ENHANCED_VALIDATION_CONFIG,
-      tolerance: 1.0,
-      useWalkForward: true
-    }
-  );
-  
-  if (gridSearchResult) {
-    if (updateProgress) {
-      progressUpdater.setProgress(prev => prev ? { ...prev, gridOptimized: prev.gridOptimized + 1 } : null);
-    }
-
-    return {
-      parameters: gridSearchResult.parameters,
-      confidence: gridSearchResult.confidence,
-      method: 'grid_search',
-      reasoning: `Grid search optimization found parameters that improve accuracy by ${(gridSearchResult.accuracy - 60).toFixed(1)}%. Selected for balanced performance across validation periods.`,
-      factors: {
-        stability: 75,
-        interpretability: 70,
-        complexity: 60,
-        businessImpact: 'Balanced optimization focusing on consistent performance'
+  try {
+    const gridSearchResult = adaptiveGridSearchOptimization(
+      model.id,
+      skuData,
+      undefined,
+      {
+        ...ENHANCED_VALIDATION_CONFIG,
+        tolerance: 2.0, // Increased tolerance for grid search
+        useWalkForward: true,
+        minDataPoints: 3
       }
-    };
-  }
+    );
+    
+    console.log(`🔍 GRID SEARCH: Result for ${sku}:${model.id}:`, gridSearchResult);
+    
+    if (gridSearchResult && gridSearchResult.parameters) {
+      if (updateProgress) {
+        progressUpdater.setProgress(prev => prev ? { ...prev, gridOptimized: prev.gridOptimized + 1 } : null);
+      }
 
-  return null;
+      console.log(`✅ GRID SEARCH: Success for ${sku}:${model.id} with confidence ${gridSearchResult.confidence}`);
+
+      return {
+        parameters: gridSearchResult.parameters,
+        confidence: gridSearchResult.confidence || 75,
+        method: 'grid_search',
+        reasoning: `Grid search optimization found parameters that improve model performance. Selected configuration provides ${(gridSearchResult.confidence || 75).toFixed(1)}% confidence for balanced forecasting across validation periods.`,
+        factors: {
+          stability: 85,
+          interpretability: 80,
+          complexity: 50,
+          businessImpact: 'Systematic optimization focusing on consistent performance across multiple validation periods'
+        },
+        expectedAccuracy: gridSearchResult.accuracy
+      };
+    } else {
+      console.log(`❌ GRID SEARCH: No improvement found for ${sku}:${model.id}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`❌ GRID SEARCH: Error for ${sku}:${model.id}:`, error);
+    optimizationLogger.logStep({
+      sku,
+      modelId: model.id,
+      step: 'error',
+      message: 'Grid search optimization failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+    return null;
+  }
 };
 
 // New function to get specific optimization method results
@@ -291,10 +288,12 @@ export const getOptimizationByMethod = async (
   sku: string,
   method: 'ai' | 'grid'
 ): Promise<EnhancedOptimizationResult | null> => {
+  console.log(`🎯 GET OPTIMIZATION: ${method} for ${sku}:${model.id}`);
   const progressUpdater = { setProgress: () => {} };
 
   if (method === 'ai') {
     if (!isValidApiKey(GROK_API_KEY)) {
+      console.log(`❌ GET OPTIMIZATION: Invalid API key for AI`);
       return null;
     }
 
@@ -331,6 +330,7 @@ export const getOptimizationByMethod = async (
       );
 
       if (validationResult) {
+        console.log(`✅ GET OPTIMIZATION: AI success for ${sku}:${model.id}`);
         return {
           parameters: validationResult.parameters,
           confidence: validationResult.confidence,
@@ -347,5 +347,6 @@ export const getOptimizationByMethod = async (
     return await runGridOptimization(model, skuData, sku, progressUpdater, false);
   }
 
+  console.log(`❌ GET OPTIMIZATION: Failed ${method} for ${sku}:${model.id}`);
   return null;
 };
