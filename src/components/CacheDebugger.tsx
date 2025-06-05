@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 
 export const CacheDebugger: React.FC = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [autoRefresh, setAutoRefresh] = useState(true);
   
   const { 
     cache: optimizationCache, 
@@ -24,6 +25,17 @@ export const CacheDebugger: React.FC = () => {
   const { loadManualAIPreferences, clearManualAIPreferences } = useManualAIPreferences();
 
   const preferences = loadManualAIPreferences();
+
+  // Auto-refresh every 2 seconds when enabled
+  useEffect(() => {
+    if (!autoRefresh) return;
+    
+    const interval = setInterval(() => {
+      setRefreshTrigger(prev => prev + 1);
+    }, 2000);
+    
+    return () => clearInterval(interval);
+  }, [autoRefresh]);
 
   const handleRefresh = () => {
     setRefreshTrigger(prev => prev + 1);
@@ -60,7 +72,17 @@ export const CacheDebugger: React.FC = () => {
     <div className="space-y-4" key={refreshTrigger}>
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Cache Debugger</h3>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="autoRefresh"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="rounded"
+            />
+            <label htmlFor="autoRefresh" className="text-sm">Auto-refresh</label>
+          </div>
           <Button size="sm" variant="outline" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4 mr-1" />
             Refresh
@@ -86,7 +108,10 @@ export const CacheDebugger: React.FC = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Cache Statistics</CardTitle>
+          <CardTitle className="text-sm flex items-center justify-between">
+            Cache Statistics
+            {autoRefresh && <Badge variant="outline" className="text-xs">Live</Badge>}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-4 text-sm">
@@ -99,6 +124,9 @@ export const CacheDebugger: React.FC = () => {
             <div>
               <span className="font-medium">Skipped:</span> {cacheStats.skipped}
             </div>
+          </div>
+          <div className="mt-2 text-xs text-gray-500">
+            Last updated: {new Date().toLocaleTimeString()}
           </div>
         </CardContent>
       </Card>

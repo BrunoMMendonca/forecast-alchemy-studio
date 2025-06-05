@@ -52,13 +52,8 @@ export const useOptimizationHandler = (
       return;
     }
 
-    // Ensure cache and preferences are cleared for all queued SKUs before optimization
-    if (optimizationQueue.clearCacheAndPreferencesForSKU) {
-      queuedSKUs.forEach(sku => {
-        console.log(`🗑️ PRE-OPTIMIZATION CLEAR: Clearing cache for ${sku}`);
-        optimizationQueue.clearCacheAndPreferencesForSKU!(sku);
-      });
-    }
+    // Note: Cache clearing is now handled during queue addition, not here
+    // This prevents double clearing and timing issues
 
     const enabledModels = models.filter(m => m.enabled);
     
@@ -83,9 +78,9 @@ export const useOptimizationHandler = (
           businessImpact: factors?.businessImpact || 'Unknown'
         };
         
-        // Save to cache first
+        // Save to cache first - this should be immediately available
         setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
-        console.log(`💾 CACHE SAVE: Saved ${method} results for ${sku}:${modelId}`);
+        console.log(`💾 CACHE SAVE: Saved ${method} results for ${sku}:${modelId} - should be immediately visible`);
         
         // Determine preference based on optimization method
         const preferences = loadManualAIPreferences();
@@ -102,7 +97,7 @@ export const useOptimizationHandler = (
         preferences[preferenceKey] = newPreference;
         saveManualAIPreferences(preferences);
         
-        console.log(`🎯 PREFERENCE SET: ${preferenceKey} = ${newPreference} (method: ${method})`);
+        console.log(`🎯 PREFERENCE SET: ${preferenceKey} = ${newPreference} (method: ${method}) - should be immediately visible`);
         
         // Update models state immediately with optimized parameters
         setModels(prev => prev.map(model => 

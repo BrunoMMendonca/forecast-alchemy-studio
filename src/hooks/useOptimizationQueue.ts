@@ -8,6 +8,7 @@ interface OptimizationQueueItem {
   sku: string;
   reason: 'csv_upload' | 'data_cleaning' | 'csv_import';
   timestamp: number;
+  skipCacheClear?: boolean; // Flag to skip cache clearing if already done
 }
 
 export const useOptimizationQueue = () => {
@@ -56,13 +57,18 @@ export const useOptimizationQueue = () => {
     console.log(`🗑️ CLEAR: Cleared preferences for SKU ${sku}`);
   }, [clearCacheForSKU, clearForecastCacheForSKU, loadManualAIPreferences, saveManualAIPreferences]);
 
-  const addSKUsToQueue = useCallback((skus: string[], reason: OptimizationQueueItem['reason']) => {
+  const addSKUsToQueue = useCallback((skus: string[], reason: OptimizationQueueItem['reason'], skipCacheClear = false) => {
     const timestamp = Date.now();
     
-    // Clear cache and preferences for each SKU being added
-    skus.forEach(sku => {
-      clearCacheAndPreferencesForSKU(sku);
-    });
+    // Only clear cache if not already cleared (avoid double clearing for CSV uploads)
+    if (!skipCacheClear && reason !== 'csv_upload') {
+      console.log(`🗑️ QUEUE: Clearing cache for ${skus.length} SKUs (reason: ${reason})`);
+      skus.forEach(sku => {
+        clearCacheAndPreferencesForSKU(sku);
+      });
+    } else if (reason === 'csv_upload') {
+      console.log(`📋 QUEUE: Skipping cache clear for CSV upload - cache already cleared during upload`);
+    }
     
     setQueue(prevQueue => {
       // Remove existing entries for these SKUs to avoid duplicates
@@ -72,7 +78,8 @@ export const useOptimizationQueue = () => {
       const newItems = skus.map(sku => ({
         sku,
         reason,
-        timestamp
+        timestamp,
+        skipCacheClear
       }));
       
       const newQueue = [...filteredQueue, ...newItems];
