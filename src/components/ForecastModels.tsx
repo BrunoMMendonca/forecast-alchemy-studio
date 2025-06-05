@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -48,7 +49,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   
   const {
     cache,
-    cacheStats,
     generateDataHash,
     getCachedParameters,
     setCachedParameters,
@@ -66,11 +66,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   const {
     shouldOptimize,
     markOptimizationStarted,
-    markOptimizationCompleted,
-    getTriggerCount,
-    incrementTriggerCount,
-    navigationState,
-    generateStableFingerprint
+    markOptimizationCompleted
   } = useNavigationAwareOptimization();
 
   const {
@@ -447,20 +443,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         onUseGrid={handleUseGrid}
         onResetToManual={handleResetToManual}
       />
-
-      {navigationState && optimizationQueue && (
-        <div className="text-xs text-slate-500 bg-slate-50 rounded p-2">
-          Queue Optimization: {navigationState.optimizationCompleted ? '✅ Complete' : '⏳ Pending'} 
-          | Queue Size: {optimizationQueue.getSKUsInQueue().length}
-          | Trigger Count: {getTriggerCount()} 
-          | Cache: {cacheStats.hits} hits, {cacheStats.misses} misses
-          | Fingerprint: {navigationState.datasetFingerprint}
-          | AI/Manual Toggle: {isTogglingAIManualRef.current ? '🔄 Active' : '✅ Idle'}
-          | Last SKU: {lastSKURef.current}
-          | Force Updates: {forceUpdateTrigger}
-          | Navigation Return: {navigationReturnRef.current ? '🔄 Active' : '✅ Idle'}
-        </div>
-      )}
 
       <OptimizationLogger 
         isVisible={showOptimizationLog} 
