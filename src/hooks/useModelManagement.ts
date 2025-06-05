@@ -4,7 +4,7 @@ import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
 import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
-import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
+import { useManualAIPreferences, PreferenceValue } from '@/hooks/useManualAIPreferences';
 
 export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
   const { generateDataHash, getCachedParameters, isCacheValid } = useOptimizationCache();
@@ -48,6 +48,19 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
             expectedAccuracy: cached.expectedAccuracy
           };
         } 
+        // ENHANCED: If preference is grid and we have cached grid parameters, use them
+        else if (preference === 'grid' && cached && cached.method === 'grid_search') {
+          console.log(`✅ Applying Grid with full reasoning for ${preferenceKey}`);
+          return {
+            ...model,
+            optimizedParameters: cached.parameters,
+            optimizationConfidence: cached.confidence,
+            optimizationReasoning: cached.reasoning,
+            optimizationFactors: cached.factors,
+            expectedAccuracy: cached.expectedAccuracy,
+            optimizationMethod: cached.method
+          };
+        }
         // ENHANCED: If preference is explicitly false (manual), clear all AI-related fields
         else if (preference === false) {
           console.log(`🛠️ Using manual for ${preferenceKey} (preference set to false)`);
@@ -147,7 +160,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
     
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = 'ai'; // Mark as AI
+    preferences[preferenceKey] = true; // Mark as AI (boolean true)
     saveManualAIPreferences(preferences);
 
     console.log(`PREFERENCE: Updated ${preferenceKey} to AI`);
@@ -180,7 +193,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
     
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = 'grid'; // Mark as Grid
+    preferences[preferenceKey] = 'grid'; // Mark as Grid (string 'grid')
     saveManualAIPreferences(preferences);
 
     console.log(`PREFERENCE: Updated ${preferenceKey} to Grid`);

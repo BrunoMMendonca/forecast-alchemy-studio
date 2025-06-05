@@ -1,10 +1,14 @@
+
 import { useCallback } from 'react';
 
 const MANUAL_AI_PREFERENCE_KEY = 'manual_ai_preferences';
 
+// Updated type to support three states: false (manual), true (AI), 'grid' (grid)
+export type PreferenceValue = boolean | 'grid';
+
 export const useManualAIPreferences = () => {
-  // Load manual/AI preferences from localStorage
-  const loadManualAIPreferences = useCallback((): Record<string, boolean> => {
+  // Load manual/AI/Grid preferences from localStorage
+  const loadManualAIPreferences = useCallback((): Record<string, PreferenceValue> => {
     try {
       const stored = localStorage.getItem(MANUAL_AI_PREFERENCE_KEY);
       return stored ? JSON.parse(stored) : {};
@@ -14,8 +18,8 @@ export const useManualAIPreferences = () => {
     }
   }, []);
 
-  // Save manual/AI preferences to localStorage
-  const saveManualAIPreferences = useCallback((preferences: Record<string, boolean>) => {
+  // Save manual/AI/Grid preferences to localStorage
+  const saveManualAIPreferences = useCallback((preferences: Record<string, PreferenceValue>) => {
     try {
       localStorage.setItem(MANUAL_AI_PREFERENCE_KEY, JSON.stringify(preferences));
     } catch (error) {
