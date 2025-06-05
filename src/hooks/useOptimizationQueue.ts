@@ -1,5 +1,8 @@
 
 import { useState, useCallback, useEffect } from 'react';
+import { useOptimizationCache } from '@/hooks/useOptimizationCache';
+import { useForecastCache } from '@/hooks/useForecastCache';
+import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 
 interface OptimizationQueueItem {
   sku: string;
@@ -9,6 +12,9 @@ interface OptimizationQueueItem {
 
 export const useOptimizationQueue = () => {
   const [queue, setQueue] = useState<OptimizationQueueItem[]>([]);
+  const { clearCacheForSKU } = useOptimizationCache();
+  const { clearForecastCacheForSKU } = useForecastCache();
+  const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
 
   // Load queue from localStorage on mount
   useEffect(() => {
@@ -28,8 +34,36 @@ export const useOptimizationQueue = () => {
     localStorage.setItem('optimizationQueue', JSON.stringify(queue));
   }, [queue]);
 
+  const clearCacheAndPreferencesForSKU = useCallback((sku: string) => {
+    console.log(`🗑️ CLEAR: Clearing cache and preferences for SKU ${sku}`);
+    
+    // Clear optimization cache
+    clearCacheForSKU(sku);
+    
+    // Clear forecast cache
+    clearForecastCacheForSKU(sku);
+    
+    // Clear preferences for this SKU
+    const preferences = loadManualAIPreferences();
+    const updatedPreferences = Object.keys(preferences).reduce((acc, key) => {
+      if (!key.startsWith(`${sku}:`)) {
+        acc[key] = preferences[key];
+      }
+      return acc;
+    }, {} as Record<string, any>);
+    
+    saveManualAIPreferences(updatedPreferences);
+    console.log(`🗑️ CLEAR: Cleared preferences for SKU ${sku}`);
+  }, [clearCacheForSKU, clearForecastCacheForSKU, loadManualAIPreferences, saveManualAIPreferences]);
+
   const addSKUsToQueue = useCallback((skus: string[], reason: OptimizationQueueItem['reason']) => {
     const timestamp = Date.now();
+    
+    // Clear cache and preferences for each SKU being added
+    skus.forEach(sku => {
+      clearCacheAndPreferencesForSKU(sku);
+    });
+    
     setQueue(prevQueue => {
       // Remove existing entries for these SKUs to avoid duplicates
       const filteredQueue = prevQueue.filter(item => !skus.includes(item.sku));
@@ -47,7 +81,7 @@ export const useOptimizationQueue = () => {
       
       return newQueue;
     });
-  }, []);
+  }, [clearCacheAndPreferencesForSKU]);
 
   const removeSKUsFromQueue = useCallback((skus: string[]) => {
     setQueue(prevQueue => {
@@ -77,6 +111,7 @@ export const useOptimizationQueue = () => {
     clearQueue,
     getSKUsInQueue,
     isQueueEmpty,
-    queueSize
+    queueSize,
+    clearCacheAndPreferencesForSKU
   };
 };

@@ -11,6 +11,7 @@ import { PreferenceValue } from '@/hooks/useManualAIPreferences';
 interface OptimizationQueue {
   getSKUsInQueue: () => string[];
   removeSKUsFromQueue: (skus: string[]) => void;
+  clearCacheAndPreferencesForSKU?: (sku: string) => void;
 }
 
 export const useOptimizationHandler = (
@@ -49,6 +50,14 @@ export const useOptimizationHandler = (
     if (queuedSKUs.length === 0) {
       console.log('📋 QUEUE: No SKUs in queue for optimization');
       return;
+    }
+
+    // Ensure cache and preferences are cleared for all queued SKUs before optimization
+    if (optimizationQueue.clearCacheAndPreferencesForSKU) {
+      queuedSKUs.forEach(sku => {
+        console.log(`🗑️ PRE-OPTIMIZATION CLEAR: Clearing cache for ${sku}`);
+        optimizationQueue.clearCacheAndPreferencesForSKU!(sku);
+      });
     }
 
     const enabledModels = models.filter(m => m.enabled);
