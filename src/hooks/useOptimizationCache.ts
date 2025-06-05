@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -35,6 +36,7 @@ const CACHE_EXPIRY_HOURS = 24;
 export const useOptimizationCache = () => {
   const [cache, setCache] = useState<OptimizationCache>({});
   const [cacheStats, setCacheStats] = useState({ hits: 0, misses: 0, skipped: 0 });
+  const [forceUpdate, setForceUpdate] = useState(0); // Add force update trigger
   
   const {
     generateDatasetFingerprint,
@@ -239,6 +241,9 @@ export const useOptimizationCache = () => {
       
       return newCache;
     });
+
+    // Force components to re-render by updating the force update counter
+    setForceUpdate(prev => prev + 1);
   }, []);
 
   const setSelectedMethod = useCallback((
@@ -256,6 +261,7 @@ export const useOptimizationCache = () => {
         }
       }
     }));
+    setForceUpdate(prev => prev + 1);
   }, []);
 
   const isCacheValid = useCallback((sku: string, modelId: string, currentDataHash: string): boolean => {
@@ -271,12 +277,14 @@ export const useOptimizationCache = () => {
       delete newCache[sku];
       return newCache;
     });
+    setForceUpdate(prev => prev + 1);
   }, []);
 
   const clearAllCache = useCallback(() => {
     console.log('🗑️ CACHE CLEAR: Clearing all optimization cache');
     setCache({});
     setCacheStats({ hits: 0, misses: 0, skipped: 0 });
+    setForceUpdate(prev => prev + 1);
     
     try {
       localStorage.removeItem(CACHE_KEY);
@@ -289,6 +297,7 @@ export const useOptimizationCache = () => {
   return {
     cache,
     cacheStats,
+    forceUpdate, // Expose force update counter for reactive components
     generateDataHash,
     getCachedParameters,
     setCachedParameters,

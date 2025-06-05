@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +17,7 @@ export const CacheDebugger: React.FC = () => {
   const { 
     cache: optimizationCache, 
     cacheStats, 
+    forceUpdate, // Use the force update counter from the hook
     clearAllCache, 
     clearCacheForSKU 
   } = useOptimizationCache();
@@ -44,14 +44,15 @@ export const CacheDebugger: React.FC = () => {
     return () => clearInterval(interval);
   }, [autoRefresh, loadManualAIPreferences, optimizationCache]);
 
-  // React to cache changes immediately - this will make it update in real-time
+  // React to force update changes - this ensures real-time updates
   useEffect(() => {
     setLastUpdate(new Date().toLocaleTimeString());
-    console.log('🔄 CACHE DEBUGGER: Cache changed', {
+    console.log('🔄 CACHE DEBUGGER: Cache force updated', {
+      forceUpdate,
       cacheKeys: Object.keys(optimizationCache),
       cacheEntries: optimizationCache
     });
-  }, [optimizationCache]);
+  }, [forceUpdate, optimizationCache]);
 
   // React to preference changes immediately
   useEffect(() => {
@@ -152,7 +153,7 @@ export const CacheDebugger: React.FC = () => {
             </div>
           </div>
           <div className="mt-2 text-xs text-gray-500">
-            Last updated: {lastUpdate} | Cache entries: {Object.keys(optimizationCache).length}
+            Last updated: {lastUpdate} | Cache entries: {Object.keys(optimizationCache).length} | Force: {forceUpdate}
           </div>
         </CardContent>
       </Card>
