@@ -8,13 +8,13 @@ import { ForecastFinalization } from '@/components/ForecastFinalization';
 import { ForecastSettings } from '@/components/ForecastSettings';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, TrendingUp, Upload, Zap, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { BarChart3, TrendingUp, Upload, Zap, Eye, Settings, ChevronDown, ChevronUp } from 'lucide-react';
 import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 import { useToast } from '@/hooks/use-toast';
 import { BusinessContext, DEFAULT_BUSINESS_CONTEXT } from '@/types/businessContext';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 export interface SalesData {
   date: string;
@@ -197,27 +197,29 @@ const Index = () => {
           )}
         </div>
 
-        {/* Global Settings Area */}
-        <div className="mb-6">
-          <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
-            <CollapsibleTrigger asChild>
-              <Button 
-                variant="outline" 
-                className="w-full justify-between bg-white/70 backdrop-blur-sm border-blue-200 hover:bg-white/90"
+        {/* Floating Settings Button */}
+        <div className="fixed top-6 right-6 z-50">
+          <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+            <DialogTrigger asChild>
+              <Button
+                size="icon"
+                className="h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl transition-all duration-300"
               >
-                <span className="font-medium">Global Forecast Settings</span>
-                {settingsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                <Settings className="h-6 w-6 text-white" />
               </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-4">
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Global Forecast Settings</DialogTitle>
+              </DialogHeader>
               <ForecastSettings
                 forecastPeriods={forecastPeriods}
                 setForecastPeriods={setForecastPeriods}
                 businessContext={businessContext}
                 setBusinessContext={setBusinessContext}
               />
-            </CollapsibleContent>
-          </Collapsible>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Progress Steps */}
