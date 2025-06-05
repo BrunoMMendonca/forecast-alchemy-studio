@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +17,7 @@ export const CacheDebugger: React.FC = () => {
   const { 
     cache: optimizationCache, 
     cacheStats, 
+    cacheVersion,
     clearAllCache, 
     clearCacheForSKU 
   } = useOptimizationCache();
@@ -28,40 +28,34 @@ export const CacheDebugger: React.FC = () => {
   // Load preferences and track cache changes
   const [preferences, setPreferences] = useState(() => loadManualAIPreferences());
 
-  // Auto-refresh every 2 seconds when enabled
+  // React to cache version changes immediately - this ensures real-time updates
+  useEffect(() => {
+    setLastUpdate(new Date().toLocaleTimeString());
+    setPreferences(loadManualAIPreferences());
+    console.log(`🔄 CACHE DEBUGGER: Version ${cacheVersion} - Real-time update triggered`, {
+      cacheKeys: Object.keys(optimizationCache),
+      totalEntries: Object.values(optimizationCache).reduce((acc, skuCache) => acc + Object.keys(skuCache).length, 0)
+    });
+  }, [cacheVersion, loadManualAIPreferences, optimizationCache]);
+
+  // Auto-refresh every 2 seconds when enabled (fallback)
   useEffect(() => {
     if (!autoRefresh) return;
     
     const interval = setInterval(() => {
       setLastUpdate(new Date().toLocaleTimeString());
       setPreferences(loadManualAIPreferences());
-      console.log('🔄 CACHE DEBUGGER: Auto-refresh triggered', {
-        cacheKeys: Object.keys(optimizationCache),
-        preferenceKeys: Object.keys(loadManualAIPreferences())
-      });
+      console.log('🔄 CACHE DEBUGGER: Auto-refresh fallback triggered');
     }, 2000);
     
     return () => clearInterval(interval);
-  }, [autoRefresh, loadManualAIPreferences, optimizationCache]);
-
-  // React to cache changes immediately - this ensures real-time updates
-  useEffect(() => {
-    setLastUpdate(new Date().toLocaleTimeString());
-    console.log('🔄 CACHE DEBUGGER: Cache updated', {
-      cacheKeys: Object.keys(optimizationCache),
-      totalEntries: Object.values(optimizationCache).reduce((acc, skuCache) => acc + Object.keys(skuCache).length, 0)
-    });
-  }, [optimizationCache]);
-
-  // React to preference changes immediately
-  useEffect(() => {
-    setPreferences(loadManualAIPreferences());
-  }, [loadManualAIPreferences]);
+  }, [autoRefresh, loadManualAIPreferences]);
 
   const handleRefresh = () => {
     setLastUpdate(new Date().toLocaleTimeString());
     setPreferences(loadManualAIPreferences());
     console.log('🔄 CACHE DEBUGGER: Manual refresh', {
+      cacheVersion,
       cacheKeys: Object.keys(optimizationCache),
       preferenceKeys: Object.keys(loadManualAIPreferences())
     });
@@ -72,6 +66,7 @@ export const CacheDebugger: React.FC = () => {
       optimizationCache,
       preferences,
       cacheStats,
+      cacheVersion,
       timestamp: new Date().toISOString()
     };
     
@@ -136,7 +131,7 @@ export const CacheDebugger: React.FC = () => {
         <CardHeader>
           <CardTitle className="text-sm flex items-center justify-between">
             Cache Statistics
-            {autoRefresh && <Badge variant="outline" className="text-xs">Live</Badge>}
+            {autoRefresh && <Badge variant="outline" className="text-xs">Live v{cacheVersion}</Badge>}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -152,7 +147,7 @@ export const CacheDebugger: React.FC = () => {
             </div>
           </div>
           <div className="mt-2 text-xs text-gray-500">
-            Last updated: {lastUpdate} | Cache entries: {Object.keys(optimizationCache).length}
+            Last updated: {lastUpdate} | Version: {cacheVersion} | Cache entries: {Object.keys(optimizationCache).length}
           </div>
         </CardContent>
       </Card>

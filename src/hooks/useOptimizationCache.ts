@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -36,6 +35,7 @@ const CACHE_EXPIRY_HOURS = 24;
 export const useOptimizationCache = () => {
   const [cache, setCache] = useState<OptimizationCache>({});
   const [cacheStats, setCacheStats] = useState({ hits: 0, misses: 0, skipped: 0 });
+  const [cacheVersion, setCacheVersion] = useState(0);
   
   const {
     generateDatasetFingerprint,
@@ -241,6 +241,13 @@ export const useOptimizationCache = () => {
       
       return newCache;
     });
+
+    // Increment version counter to trigger real-time updates
+    setCacheVersion(prev => {
+      const newVersion = prev + 1;
+      console.log(`🔄 CACHE VERSION: Incremented to ${newVersion} for ${sku}:${modelId}:${cacheMethod}`);
+      return newVersion;
+    });
   }, []);
 
   const setSelectedMethod = useCallback((
@@ -259,6 +266,9 @@ export const useOptimizationCache = () => {
       
       return newCache;
     });
+
+    // Increment version counter for method selection changes too
+    setCacheVersion(prev => prev + 1);
   }, []);
 
   const isCacheValid = useCallback((sku: string, modelId: string, currentDataHash: string): boolean => {
@@ -274,12 +284,14 @@ export const useOptimizationCache = () => {
       delete newCache[sku];
       return newCache;
     });
+    setCacheVersion(prev => prev + 1);
   }, []);
 
   const clearAllCache = useCallback(() => {
     console.log('🗑️ CACHE CLEAR: Clearing all optimization cache');
     setCache({});
     setCacheStats({ hits: 0, misses: 0, skipped: 0 });
+    setCacheVersion(0);
     
     try {
       localStorage.removeItem(CACHE_KEY);
@@ -292,6 +304,7 @@ export const useOptimizationCache = () => {
   return {
     cache,
     cacheStats,
+    cacheVersion,
     generateDataHash,
     getCachedParameters,
     setCachedParameters,
