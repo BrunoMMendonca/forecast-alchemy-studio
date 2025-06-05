@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -14,8 +13,8 @@ import { BarChart3, TrendingUp, Upload, Zap, Eye } from 'lucide-react';
 import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
+import { useGlobalForecastSettings } from '@/hooks/useGlobalForecastSettings';
 import { useToast } from '@/hooks/use-toast';
-import { BusinessContext, DEFAULT_BUSINESS_CONTEXT } from '@/types/businessContext';
 
 export interface SalesData {
   date: string;
@@ -37,13 +36,19 @@ const Index = () => {
   const [cleanedData, setCleanedData] = useState<SalesData[]>([]);
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
   const [selectedSKUForResults, setSelectedSKUForResults] = useState<string>('');
-  const [forecastPeriods, setForecastPeriods] = useState(12);
-  const [businessContext, setBusinessContext] = useState<BusinessContext>(DEFAULT_BUSINESS_CONTEXT);
   const [currentStep, setCurrentStep] = useState(0);
   const [shouldStartOptimization, setShouldStartOptimization] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const forecastModelsRef = useRef<any>(null);
   const { toast } = useToast();
+
+  // Use persistent global forecast settings
+  const {
+    forecastPeriods,
+    setForecastPeriods,
+    businessContext,
+    setBusinessContext
+  } = useGlobalForecastSettings();
 
   // Add optimization queue
   const { addSKUsToQueue, removeSKUsFromQueue, getSKUsInQueue, queueSize, clearQueue } = useOptimizationQueue();
