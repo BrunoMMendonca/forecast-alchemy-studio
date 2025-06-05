@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -275,7 +274,6 @@ const Index = () => {
                 getSKUsInQueue,
                 removeSKUsFromQueue
               }}
-              businessContext={businessContext}
             />
           </div>
         )}
@@ -374,7 +372,6 @@ const Index = () => {
                       getSKUsInQueue,
                       removeSKUsFromQueue
                     }}
-                    businessContext={businessContext}
                   />
                 </CardContent>
               </Card>

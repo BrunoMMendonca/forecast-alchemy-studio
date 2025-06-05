@@ -46,6 +46,54 @@ const isValidApiKey = (apiKey: string): boolean => {
   return isValid;
 };
 
+const runGridOptimization = async (
+  model: ModelConfig,
+  skuData: SalesData[],
+  sku: string,
+  progressUpdater: ProgressUpdater,
+  updateProgress: boolean = true
+): Promise<EnhancedOptimizationResult> => {
+  console.log(`🔍 GRID SEARCH: Starting for ${sku}:${model.id}`);
+  
+  optimizationLogger.logStep({
+    sku,
+    modelId: model.id,
+    step: 'grid_search',
+    message: 'Starting grid search optimization'
+  });
+
+  const gridSearchResult = adaptiveGridSearchOptimization(
+    model.id,
+    skuData,
+    undefined,
+    {
+      ...ENHANCED_VALIDATION_CONFIG,
+      useWalkForward: true
+    }
+  );
+  
+  if (updateProgress) {
+    progressUpdater.setProgress(prev => prev ? { ...prev, gridOptimized: prev.gridOptimized + 1 } : null);
+  }
+
+  console.log(`✅ GRID SEARCH: Success for ${sku}:${model.id} with accuracy ${gridSearchResult.accuracy.toFixed(1)}%`);
+
+  return {
+    parameters: gridSearchResult.parameters,
+    confidence: Math.max(60, gridSearchResult.confidence || 75),
+    method: 'grid_search',
+    accuracy: gridSearchResult.accuracy,
+    reasoning: `Grid search systematically tested parameter combinations and selected the configuration with highest validation accuracy (${gridSearchResult.accuracy.toFixed(1)}%). This method provides reliable, data-driven parameter selection through comprehensive evaluation.`,
+    factors: {
+      stability: 85,
+      interpretability: 90,
+      complexity: 45,
+      businessImpact: 'Systematic optimization ensuring reliable performance through comprehensive parameter testing'
+    },
+    expectedAccuracy: gridSearchResult.accuracy
+  };
+};
+
 export const optimizeSingleModel = async (
   model: ModelConfig,
   skuData: SalesData[],
@@ -248,54 +296,6 @@ const runBothOptimizations = async (
   };
 };
 
-const runGridOptimization = async (
-  model: ModelConfig,
-  skuData: SalesData[],
-  sku: string,
-  progressUpdater: ProgressUpdater,
-  updateProgress: boolean = true
-): Promise<EnhancedOptimizationResult> => {
-  console.log(`🔍 GRID SEARCH: Starting for ${sku}:${model.id}`);
-  
-  optimizationLogger.logStep({
-    sku,
-    modelId: model.id,
-    step: 'grid_search',
-    message: 'Starting grid search optimization'
-  });
-
-  const gridSearchResult = adaptiveGridSearchOptimization(
-    model.id,
-    skuData,
-    undefined,
-    {
-      ...ENHANCED_VALIDATION_CONFIG,
-      useWalkForward: true
-    }
-  );
-  
-  if (updateProgress) {
-    progressUpdater.setProgress(prev => prev ? { ...prev, gridOptimized: prev.gridOptimized + 1 } : null);
-  }
-
-  console.log(`✅ GRID SEARCH: Success for ${sku}:${model.id} with accuracy ${gridSearchResult.accuracy.toFixed(1)}%`);
-
-  return {
-    parameters: gridSearchResult.parameters,
-    confidence: Math.max(60, gridSearchResult.confidence || 75),
-    method: 'grid_search',
-    accuracy: gridSearchResult.accuracy,
-    reasoning: `Grid search systematically tested parameter combinations and selected the configuration with highest validation accuracy (${gridSearchResult.accuracy.toFixed(1)}%). This method provides reliable, data-driven parameter selection through comprehensive evaluation.`,
-    factors: {
-      stability: 85,
-      interpretability: 90,
-      complexity: 45,
-      businessImpact: 'Systematic optimization ensuring reliable performance through comprehensive parameter testing'
-    },
-    expectedAccuracy: gridSearchResult.accuracy
-  };
-};
-
 // Simplified method-specific optimization
 export const getOptimizationByMethod = async (
   model: ModelConfig,
@@ -357,52 +357,4 @@ export const getOptimizationByMethod = async (
   }
 
   return null;
-};
-
-const runGridOptimization = async (
-  model: ModelConfig,
-  skuData: SalesData[],
-  sku: string,
-  progressUpdater: ProgressUpdater,
-  updateProgress: boolean = true
-): Promise<EnhancedOptimizationResult> => {
-  console.log(`🔍 GRID SEARCH: Starting for ${sku}:${model.id}`);
-  
-  optimizationLogger.logStep({
-    sku,
-    modelId: model.id,
-    step: 'grid_search',
-    message: 'Starting grid search optimization'
-  });
-
-  const gridSearchResult = adaptiveGridSearchOptimization(
-    model.id,
-    skuData,
-    undefined,
-    {
-      ...ENHANCED_VALIDATION_CONFIG,
-      useWalkForward: true
-    }
-  );
-  
-  if (updateProgress) {
-    progressUpdater.setProgress(prev => prev ? { ...prev, gridOptimized: prev.gridOptimized + 1 } : null);
-  }
-
-  console.log(`✅ GRID SEARCH: Success for ${sku}:${model.id} with accuracy ${gridSearchResult.accuracy.toFixed(1)}%`);
-
-  return {
-    parameters: gridSearchResult.parameters,
-    confidence: Math.max(60, gridSearchResult.confidence || 75),
-    method: 'grid_search',
-    accuracy: gridSearchResult.accuracy,
-    reasoning: `Grid search systematically tested parameter combinations and selected the configuration with highest validation accuracy (${gridSearchResult.accuracy.toFixed(1)}%). This method provides reliable, data-driven parameter selection through comprehensive evaluation.`,
-    factors: {
-      stability: 85,
-      interpretability: 90,
-      complexity: 45,
-      businessImpact: 'Systematic optimization ensuring reliable performance through comprehensive parameter testing'
-    },
-    expectedAccuracy: gridSearchResult.accuracy
-  };
 };
