@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { SalesData } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
@@ -16,9 +17,16 @@ interface OptimizationProgress {
   };
 }
 
+interface BatchProgress {
+  currentSKU?: string;
+  completedSKUs: number;
+  totalSKUs: number;
+}
+
 export const useBatchOptimization = () => {
   const [optimizationProgress, setOptimizationProgress] = useState<OptimizationProgress>({});
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [progress, setProgress] = useState<BatchProgress | null>(null);
   const navigationAware = useNavigationAwareOptimization();
 
   const runOptimization = useCallback(async (
@@ -28,7 +36,6 @@ export const useBatchOptimization = () => {
     businessContext?: BusinessContext,
     forceGridSearch: boolean = false
   ) => {
-    // NEW: Check if navigation-aware optimization is already running
     if (!navigationAware.shouldOptimize(data)) {
       return;
     }
@@ -45,6 +52,7 @@ export const useBatchOptimization = () => {
     optimizationLogger.logBatchStart(skus);
 
     setIsOptimizing(true);
+    setProgress({ currentSKU: undefined, completedSKUs: 0, totalSKUs });
     setOptimizationProgress(prev => {
       const newProgress: OptimizationProgress = {};
       skus.forEach(sku => {
@@ -60,8 +68,11 @@ export const useBatchOptimization = () => {
     try {
       navigationAware.markOptimizationStarted(data);
       
-      for (const sku of skus) {
+      for (let skuIndex = 0; skuIndex < skus.length; skuIndex++) {
+        const sku = skus[skuIndex];
         const skuData = data.filter(d => d.sku === sku);
+        
+        setProgress({ currentSKU: sku, completedSKUs: skuIndex, totalSKUs });
         
         for (const model of models) {
           if (!model.enabled) continue;
@@ -139,13 +150,48 @@ export const useBatchOptimization = () => {
       console.error('Batch optimization failed:', error);
     } finally {
       setIsOptimizing(false);
+      setProgress(null);
       console.log(`Batch optimization completed in ${((Date.now() - startTime) / 1000).toFixed(2)} seconds`);
     }
   }, [navigationAware, optimizationLogger]);
 
+  // Legacy method name for backward compatibility
+  const optimizeQueuedSKUs = useCallback(async (
+    data: SalesData[],
+    models: ModelConfig[],
+    queuedSKUs: string[],
+    onComplete: (sku: string, modelId: string, parameters: any, confidence: number, reasoning: string, factors: any, expectedAccuracy: number, method: string, bothResults?: any) => void,
+    onSKUComplete: (sku: string) => void,
+    getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[]
+  ) => {
+    // This is a simplified wrapper around runOptimization for backward compatibility
+    await runOptimization(queuedSKUs, data, models);
+    
+    // Call completion callbacks for each SKU
+    queuedSKUs.forEach(sku => {
+      models.forEach(model => {
+        if (model.enabled && model.optimizedParameters) {
+          onComplete(
+            sku,
+            model.id,
+            model.optimizedParameters,
+            model.optimizationConfidence || 0,
+            model.optimizationReasoning || '',
+            model.optimizationFactors || {},
+            model.expectedAccuracy || 0,
+            model.optimizationMethod || 'unknown'
+          );
+        }
+      });
+      onSKUComplete(sku);
+    });
+  }, [runOptimization]);
+
   return {
     optimizationProgress,
     isOptimizing,
-    runOptimization
+    progress,
+    runOptimization,
+    optimizeQueuedSKUs
   };
 };
