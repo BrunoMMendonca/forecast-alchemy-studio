@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -117,7 +118,7 @@ const Index = () => {
       }
     }
     
-    console.log(`📤 Adding ${skusInOrder.length} SKUs to queue in order:`, skusInOrder);
+    console.log(`📤 Adding ${skusInOrder.length} SKUs to queue for CSV upload:`, skusInOrder);
     addSKUsToQueue(skusInOrder, 'csv_upload');
     
     toast({
@@ -361,3 +362,4 @@ const Index = () => {
 };
 
 export default Index;
+
