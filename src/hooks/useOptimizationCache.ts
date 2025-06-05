@@ -230,7 +230,7 @@ export const useOptimizationCache = () => {
     const cached = cache[sku]?.[modelId];
     if (!cached) {
       setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
-      console.log(`MULTI-CACHE: Cache MISS for ${sku}:${modelId}`);
+      console.log(`🔍 CACHE DEBUG: Cache MISS for ${sku}:${modelId}${method ? `:${method}` : ''}`);
       return null;
     }
 
@@ -239,11 +239,11 @@ export const useOptimizationCache = () => {
       const result = cached[method];
       if (result) {
         setCacheStats(prev => ({ ...prev, hits: prev.hits + 1 }));
-        console.log(`MULTI-CACHE: Cache HIT for ${sku}:${modelId}:${method}`);
+        console.log(`🔍 CACHE DEBUG: Cache HIT for ${sku}:${modelId}:${method} - method in cache: ${result.method}`);
         return result;
       } else {
         setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
-        console.log(`MULTI-CACHE: Cache MISS for ${sku}:${modelId}:${method}`);
+        console.log(`🔍 CACHE DEBUG: Cache MISS for ${sku}:${modelId}:${method} - slot empty`);
         return null;
       }
     }
@@ -254,11 +254,11 @@ export const useOptimizationCache = () => {
     
     if (result) {
       setCacheStats(prev => ({ ...prev, hits: prev.hits + 1 }));
-      console.log(`MULTI-CACHE: Cache HIT for ${sku}:${modelId} (method: ${selectedMethod})`);
+      console.log(`🔍 CACHE DEBUG: Cache HIT for ${sku}:${modelId} (selected: ${selectedMethod}, method in result: ${result.method})`);
       return result;
     } else {
       setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
-      console.log(`MULTI-CACHE: Cache MISS for ${sku}:${modelId}`);
+      console.log(`🔍 CACHE DEBUG: Cache MISS for ${sku}:${modelId} - no results found`);
       return null;
     }
   }, [cache]);
@@ -279,6 +279,8 @@ export const useOptimizationCache = () => {
     expectedAccuracy?: number,
     method?: string
   ) => {
+    console.log(`🔍 CACHE DEBUG: Setting cached parameters for ${sku}:${modelId} with method: ${method}`);
+    
     const optimizedParams: OptimizedParameters = {
       parameters,
       timestamp: Date.now(),
@@ -287,26 +289,41 @@ export const useOptimizationCache = () => {
       reasoning,
       factors,
       expectedAccuracy,
-      method
+      method // CRITICAL: Preserve the method exactly as passed
     };
 
-    // Determine which cache slot to use
-    const cacheMethod = method?.startsWith('ai_') ? 'ai' : 
-                       method === 'grid_search' ? 'grid' : 'ai';
+    // Determine which cache slot to use - FIXED mapping
+    let cacheMethod: 'ai' | 'grid';
+    if (method === 'grid_search') {
+      cacheMethod = 'grid';
+      console.log(`🔍 CACHE DEBUG: Mapping method 'grid_search' to cache slot 'grid'`);
+    } else if (method?.startsWith('ai_')) {
+      cacheMethod = 'ai';
+      console.log(`🔍 CACHE DEBUG: Mapping method '${method}' to cache slot 'ai'`);
+    } else {
+      // Default fallback - prefer 'grid' for grid_search method
+      cacheMethod = method === 'grid_search' ? 'grid' : 'ai';
+      console.log(`🔍 CACHE DEBUG: Default mapping for method '${method}' to cache slot '${cacheMethod}'`);
+    }
 
-    setCache(prev => ({
-      ...prev,
-      [sku]: {
-        ...prev[sku],
-        [modelId]: {
-          ...prev[sku]?.[modelId],
-          [cacheMethod]: optimizedParams,
-          selected: cacheMethod
+    setCache(prev => {
+      const newCache = {
+        ...prev,
+        [sku]: {
+          ...prev[sku],
+          [modelId]: {
+            ...prev[sku]?.[modelId],
+            [cacheMethod]: optimizedParams,
+            selected: cacheMethod
+          }
         }
-      }
-    }));
-    
-    console.log(`MULTI-CACHE: Cached ${cacheMethod} parameters for ${sku}:${modelId}`);
+      };
+      
+      console.log(`🔍 CACHE DEBUG: Cache updated for ${sku}:${modelId} in slot '${cacheMethod}' with method '${method}'`);
+      console.log(`🔍 CACHE DEBUG: Cache state:`, newCache[sku]?.[modelId]);
+      
+      return newCache;
+    });
   }, []);
 
   const setSelectedMethod = useCallback((
@@ -314,6 +331,8 @@ export const useOptimizationCache = () => {
     modelId: string,
     method: 'ai' | 'grid' | 'manual'
   ) => {
+    console.log(`🔍 CACHE DEBUG: Setting selected method to ${method} for ${sku}:${modelId}`);
+    
     setCache(prev => ({
       ...prev,
       [sku]: {
@@ -324,8 +343,6 @@ export const useOptimizationCache = () => {
         }
       }
     }));
-    
-    console.log(`MULTI-CACHE: Set selected method to ${method} for ${sku}:${modelId}`);
   }, []);
 
   const isCacheValid = useCallback((sku: string, modelId: string, currentDataHash: string): boolean => {

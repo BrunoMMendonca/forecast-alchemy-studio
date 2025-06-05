@@ -233,7 +233,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
   };
 
   const useGridOptimization = async (modelId: string) => {
-    console.log(`🔍 USE GRID: Starting for ${selectedSKU}:${modelId}`);
+    console.log(`🔍 GRID DEBUG: Starting Grid optimization for ${selectedSKU}:${modelId}`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -242,12 +242,12 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
     saveManualAIPreferences(preferences);
     setSelectedMethod(selectedSKU, modelId, 'grid');
 
-    console.log(`PREFERENCE: Updated ${preferenceKey} to Grid`);
+    console.log(`🔍 GRID DEBUG: Set preference to 'grid' for ${preferenceKey}`);
 
     // Try to get cached Grid results first
     const cached = getCachedParameters(selectedSKU, modelId, 'grid');
     if (cached) {
-      console.log(`✅ USE GRID: Using cached Grid result for ${preferenceKey}`);
+      console.log(`🔍 GRID DEBUG: Using cached Grid result for ${preferenceKey}, method: ${cached.method}`);
       setModels(prev => prev.map(model => 
         model.id === modelId 
           ? { 
@@ -257,12 +257,12 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
               optimizationReasoning: cached.reasoning,
               optimizationFactors: cached.factors,
               expectedAccuracy: cached.expectedAccuracy,
-              optimizationMethod: cached.method
+              optimizationMethod: cached.method // CRITICAL: Use method from cache
             }
           : model
       ));
     } else {
-      console.log(`🔄 USE GRID: Running fresh Grid optimization for ${preferenceKey}`);
+      console.log(`🔍 GRID DEBUG: Running fresh Grid optimization for ${preferenceKey}`);
       // Run fresh Grid optimization
       try {
         const model = models.find(m => m.id === modelId);
@@ -272,8 +272,10 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
           const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid');
           
           if (result) {
-            console.log(`✅ USE GRID: Fresh Grid optimization succeeded for ${preferenceKey}`);
+            console.log(`🔍 GRID DEBUG: Fresh Grid optimization succeeded for ${preferenceKey}, method: ${result.method}`);
             const dataHash = generateDataHash(skuData);
+            
+            // Cache with the exact method returned
             setCachedParameters(
               selectedSKU, 
               modelId, 
@@ -283,9 +285,10 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
               result.reasoning,
               result.factors,
               result.expectedAccuracy,
-              result.method
+              result.method // Pass through the exact method
             );
             
+            // Update state with the exact method
             setModels(prev => prev.map(m => 
               m.id === modelId 
                 ? { 
@@ -295,12 +298,14 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
                     optimizationReasoning: result.reasoning,
                     optimizationFactors: result.factors,
                     expectedAccuracy: result.expectedAccuracy,
-                    optimizationMethod: result.method
+                    optimizationMethod: result.method // CRITICAL: Use exact method from result
                   }
                 : m
             ));
+            
+            console.log(`🔍 GRID DEBUG: Models state updated with method: ${result.method}`);
           } else {
-            console.log(`❌ USE GRID: Fresh Grid optimization failed for ${preferenceKey}`);
+            console.log(`🔍 GRID DEBUG: Fresh Grid optimization failed for ${preferenceKey}`);
           }
         }
       } catch (error) {

@@ -32,15 +32,24 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const isUsingOptimized = hasOptimizedParams;
   const optimizationMethod = model.optimizationMethod;
 
-  // Debug logging
-  console.log(`ParameterControl for ${model.id}:`, {
+  // Enhanced debug logging
+  console.log(`🎨 UI DEBUG: ParameterControl rendering for ${model.id}:`, {
     hasOptimizedParams,
     optimizationMethod,
-    confidence: model.optimizationConfidence
+    confidence: model.optimizationConfidence,
+    reasoning: !!model.optimizationReasoning,
+    modelState: {
+      optimizedParameters: !!model.optimizedParameters,
+      optimizationMethod: model.optimizationMethod,
+      optimizationConfidence: model.optimizationConfidence
+    }
   });
 
   const getOptimizationBadge = () => {
+    console.log(`🎨 UI DEBUG: Determining badge for ${model.id} - hasOptimized: ${hasOptimizedParams}, method: ${optimizationMethod}`);
+    
     if (!hasOptimizedParams) {
+      console.log(`🎨 UI DEBUG: Showing Manual badge for ${model.id}`);
       return (
         <Badge variant="outline" className="text-slate-600">
           <User className="h-3 w-3 mr-1" />
@@ -50,12 +59,13 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     }
 
     // Check the optimization method explicitly
-    console.log(`Badge determination for ${model.id}: method=${optimizationMethod}`);
+    console.log(`🎨 UI DEBUG: Badge determination for ${model.id}: method="${optimizationMethod}"`);
     
     switch (optimizationMethod) {
       case 'ai_optimal':
       case 'ai_tolerance':
       case 'ai_confidence':
+        console.log(`🎨 UI DEBUG: Showing AI badge for ${model.id}`);
         return (
           <Badge variant="default" className="text-white bg-purple-600">
             <Bot className="h-3 w-3 mr-1" />
@@ -63,6 +73,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
           </Badge>
         );
       case 'grid_search':
+        console.log(`🎨 UI DEBUG: Showing Grid badge for ${model.id}`);
         return (
           <Badge variant="default" className="text-white bg-blue-600">
             <Grid3x3 className="h-3 w-3 mr-1" />
@@ -70,6 +81,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
           </Badge>
         );
       case 'fallback':
+        console.log(`🎨 UI DEBUG: Showing Fallback badge for ${model.id}`);
         return (
           <Badge variant="outline" className="text-slate-600 border-slate-300">
             <Shield className="h-3 w-3 mr-1" />
@@ -77,8 +89,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
           </Badge>
         );
       default:
-        // If no method is specified but we have optimized params, assume AI
-        console.log(`No method specified for ${model.id}, defaulting to AI badge`);
+        console.log(`🎨 UI DEBUG: Unknown method "${optimizationMethod}" for ${model.id}, showing AI badge as fallback`);
         return (
           <Badge variant="default" className="text-white bg-purple-600">
             <Bot className="h-3 w-3 mr-1" />
