@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -5,14 +6,16 @@ import { OutlierDetection } from '@/components/OutlierDetection';
 import { ForecastModels } from '@/components/ForecastModels';
 import { ForecastResults } from '@/components/ForecastResults';
 import { ForecastFinalization } from '@/components/ForecastFinalization';
-import { GlobalForecastParameters } from '@/components/GlobalForecastParameters';
+import { ForecastSettings } from '@/components/ForecastSettings';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, TrendingUp, Upload, Zap, Eye } from 'lucide-react';
+import { BarChart3, TrendingUp, Upload, Zap, Eye, ChevronDown, ChevronUp } from 'lucide-react';
 import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 import { useToast } from '@/hooks/use-toast';
+import { BusinessContext, DEFAULT_BUSINESS_CONTEXT } from '@/types/businessContext';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 export interface SalesData {
   date: string;
@@ -35,8 +38,10 @@ const Index = () => {
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
   const [selectedSKUForResults, setSelectedSKUForResults] = useState<string>('');
   const [forecastPeriods, setForecastPeriods] = useState(12);
+  const [businessContext, setBusinessContext] = useState<BusinessContext>(DEFAULT_BUSINESS_CONTEXT);
   const [currentStep, setCurrentStep] = useState(0);
   const [shouldStartOptimization, setShouldStartOptimization] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const forecastModelsRef = useRef<any>(null);
   const { toast } = useToast();
 
@@ -170,14 +175,6 @@ const Index = () => {
     }
   };
 
-  const handleProceedToDataCleaning = () => {
-    setCurrentStep(2);
-  };
-
-  const handleProceedToForecasting = () => {
-    setCurrentStep(3);
-  };
-
   const handleOptimizationStarted = () => {
     console.log('🏁 Optimization started, resetting shouldStartOptimization flag');
     setShouldStartOptimization(false);
@@ -199,6 +196,29 @@ const Index = () => {
               📋 {queueSize} SKU{queueSize !== 1 ? 's' : ''} queued for optimization
             </div>
           )}
+        </div>
+
+        {/* Global Settings Area */}
+        <div className="mb-6">
+          <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
+            <CollapsibleTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="w-full justify-between bg-white/70 backdrop-blur-sm border-blue-200 hover:bg-white/90"
+              >
+                <span className="font-medium">Global Forecast Settings</span>
+                {settingsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-4">
+              <ForecastSettings
+                forecastPeriods={forecastPeriods}
+                setForecastPeriods={setForecastPeriods}
+                businessContext={businessContext}
+                setBusinessContext={setBusinessContext}
+              />
+            </CollapsibleContent>
+          </Collapsible>
         </div>
 
         {/* Progress Steps */}
@@ -255,6 +275,7 @@ const Index = () => {
                 getSKUsInQueue,
                 removeSKUsFromQueue
               }}
+              businessContext={businessContext}
             />
           </div>
         )}
@@ -331,53 +352,47 @@ const Index = () => {
           )}
 
           {currentStep === 3 && (
-            <div className="space-y-6">
-              <GlobalForecastParameters
-                forecastPeriods={forecastPeriods}
-                setForecastPeriods={setForecastPeriods}
-              />
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-blue-600" />
-                      Forecast Models
-                    </CardTitle>
-                    <CardDescription>
-                      Generate forecasts using multiple predictive models with AI optimization
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ForecastModels 
-                      data={cleanedData}
-                      forecastPeriods={forecastPeriods}
-                      onForecastGeneration={handleForecastGeneration}
-                      selectedSKU={selectedSKUForResults}
-                      onSKUChange={setSelectedSKUForResults}
-                      optimizationQueue={{
-                        getSKUsInQueue,
-                        removeSKUsFromQueue
-                      }}
-                    />
-                  </CardContent>
-                </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-blue-600" />
+                    Forecast Models
+                  </CardTitle>
+                  <CardDescription>
+                    Generate forecasts using multiple predictive models with AI optimization
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ForecastModels 
+                    data={cleanedData}
+                    forecastPeriods={forecastPeriods}
+                    onForecastGeneration={handleForecastGeneration}
+                    selectedSKU={selectedSKUForResults}
+                    onSKUChange={setSelectedSKUForResults}
+                    optimizationQueue={{
+                      getSKUsInQueue,
+                      removeSKUsFromQueue
+                    }}
+                    businessContext={businessContext}
+                  />
+                </CardContent>
+              </Card>
 
-                <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-                  <CardHeader>
-                    <CardTitle>Forecast Results</CardTitle>
-                    <CardDescription>
-                      Compare predictions from different models for {selectedSKUForResults || 'selected product'}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ForecastResults 
-                      results={forecastResults} 
-                      selectedSKU={selectedSKUForResults}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
+              <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
+                <CardHeader>
+                  <CardTitle>Forecast Results</CardTitle>
+                  <CardDescription>
+                    Compare predictions from different models for {selectedSKUForResults || 'selected product'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ForecastResults 
+                    results={forecastResults} 
+                    selectedSKU={selectedSKUForResults}
+                  />
+                </CardContent>
+              </Card>
             </div>
           )}
 

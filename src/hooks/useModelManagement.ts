@@ -6,8 +6,9 @@ import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences, PreferenceValue } from '@/hooks/useManualAIPreferences';
 import { getOptimizationByMethod } from '@/utils/singleModelOptimization';
+import { BusinessContext } from '@/types/businessContext';
 
-export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
+export const useModelManagement = (selectedSKU: string, data: SalesData[], businessContext?: BusinessContext) => {
   const { 
     generateDataHash, 
     getCachedParameters, 
@@ -185,7 +186,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
         if (model) {
           const skuData = data.filter(d => d.sku === selectedSKU);
           
-          const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai');
+          const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
           
           if (result) {
             console.log(`✅ USE AI: Fresh AI optimization succeeded for ${preferenceKey}`);
@@ -271,7 +272,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
         if (model) {
           const skuData = data.filter(d => d.sku === selectedSKU);
           
-          const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid');
+          const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
           
           if (result) {
             console.log(`🔍 GRID: Fresh Grid optimization succeeded for ${preferenceKey}`);

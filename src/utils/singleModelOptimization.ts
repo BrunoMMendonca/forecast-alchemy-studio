@@ -7,6 +7,7 @@ import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
 import { detectDateFrequency } from '@/utils/dateUtils';
 import { OptimizationResult } from '@/types/batchOptimization';
+import { BusinessContext } from '@/types/businessContext';
 
 const GROK_API_KEY = 'xai-003DWefvygdxNiCFZlEUAvBIBHCiW4wPmJSOzet8xcOKqJq2nYMwbImiRqfgkoNoYP1sLCPOKPTC4HDf';
 
@@ -50,7 +51,8 @@ export const optimizeSingleModel = async (
   skuData: SalesData[],
   sku: string,
   progressUpdater: ProgressUpdater,
-  forceGridSearch: boolean = false
+  forceGridSearch: boolean = false,
+  businessContext?: BusinessContext
 ): Promise<EnhancedOptimizationResult> => {
   console.log(`🚀 OPTIMIZATION START: ${sku}:${model.id} (forceGrid: ${forceGridSearch})`);
   
@@ -86,7 +88,7 @@ export const optimizeSingleModel = async (
   }
 
   // NEW SIMPLIFIED FLOW: Run both Grid and AI, select AI if successful
-  const results = await runBothOptimizations(model, skuData, sku, progressUpdater);
+  const results = await runBothOptimizations(model, skuData, sku, progressUpdater, businessContext);
   
   // Always prefer AI if it succeeded, otherwise use Grid
   console.log(`✅ OPTIMIZATION COMPLETE: ${sku}:${model.id} using ${results.selectedResult.method}`);
@@ -98,7 +100,8 @@ const runBothOptimizations = async (
   model: ModelConfig,
   skuData: SalesData[],
   sku: string,
-  progressUpdater: ProgressUpdater
+  progressUpdater: ProgressUpdater,
+  businessContext?: BusinessContext
 ): Promise<MultiMethodResult> => {
   console.log(`🔄 DUAL OPTIMIZATION: Starting Grid + AI for ${sku}:${model.id}`);
   
@@ -137,7 +140,8 @@ const runBothOptimizations = async (
 
       const frequency = detectDateFrequency(skuData.map(d => d.date));
       
-      const businessContext = {
+      // Use provided business context or default
+      const contextToUse = businessContext || {
         costOfError: 'medium' as const,
         forecastHorizon: 'medium' as const,
         updateFrequency: 'weekly' as const,
@@ -150,7 +154,7 @@ const runBothOptimizations = async (
         accuracy: gridResult.accuracy
       };
 
-      console.log(`🤖 CALLING GROK API for ${sku}:${model.id} with Grid context`);
+      console.log(`🤖 CALLING GROK API for ${sku}:${model.id} with business context:`, contextToUse);
 
       const grokResult = await optimizeParametersWithGrok({
         modelType: model.id,
@@ -158,7 +162,7 @@ const runBothOptimizations = async (
         currentParameters: model.parameters,
         seasonalPeriod: frequency.seasonalPeriod,
         targetMetric: 'accuracy',
-        businessContext
+        businessContext: contextToUse
       }, GROK_API_KEY, gridContext);
 
       console.log(`🤖 GROK SUCCESS for ${sku}:${model.id}:`, {
@@ -297,7 +301,8 @@ export const getOptimizationByMethod = async (
   model: ModelConfig,
   skuData: SalesData[],
   sku: string,
-  method: 'ai' | 'grid'
+  method: 'ai' | 'grid',
+  businessContext?: BusinessContext
 ): Promise<EnhancedOptimizationResult | null> => {
   console.log(`🎯 GET OPTIMIZATION: ${method} for ${sku}:${model.id}`);
   const progressUpdater = { setProgress: () => {} };
@@ -315,14 +320,15 @@ export const getOptimizationByMethod = async (
     try {
       const frequency = detectDateFrequency(skuData.map(d => d.date));
       
-      const businessContext = {
+      // Use provided business context or default
+      const contextToUse = businessContext || {
         costOfError: 'medium' as const,
         forecastHorizon: 'medium' as const,
         updateFrequency: 'weekly' as const,
         interpretabilityNeeds: 'medium' as const
       };
 
-      console.log(`🤖 MANUAL AI REQUEST: Calling Grok for ${sku}:${model.id}`);
+      console.log(`🤖 MANUAL AI REQUEST: Calling Grok for ${sku}:${model.id} with business context:`, contextToUse);
 
       const grokResult = await optimizeParametersWithGrok({
         modelType: model.id,
@@ -330,7 +336,7 @@ export const getOptimizationByMethod = async (
         currentParameters: model.parameters,
         seasonalPeriod: frequency.seasonalPeriod,
         targetMetric: 'accuracy',
-        businessContext
+        businessContext: contextToUse
       }, GROK_API_KEY);
 
       // NO VALIDATION - return AI result directly
@@ -351,4 +357,52 @@ export const getOptimizationByMethod = async (
   }
 
   return null;
+};
+
+const runGridOptimization = async (
+  model: ModelConfig,
+  skuData: SalesData[],
+  sku: string,
+  progressUpdater: ProgressUpdater,
+  updateProgress: boolean = true
+): Promise<EnhancedOptimizationResult> => {
+  console.log(`🔍 GRID SEARCH: Starting for ${sku}:${model.id}`);
+  
+  optimizationLogger.logStep({
+    sku,
+    modelId: model.id,
+    step: 'grid_search',
+    message: 'Starting grid search optimization'
+  });
+
+  const gridSearchResult = adaptiveGridSearchOptimization(
+    model.id,
+    skuData,
+    undefined,
+    {
+      ...ENHANCED_VALIDATION_CONFIG,
+      useWalkForward: true
+    }
+  );
+  
+  if (updateProgress) {
+    progressUpdater.setProgress(prev => prev ? { ...prev, gridOptimized: prev.gridOptimized + 1 } : null);
+  }
+
+  console.log(`✅ GRID SEARCH: Success for ${sku}:${model.id} with accuracy ${gridSearchResult.accuracy.toFixed(1)}%`);
+
+  return {
+    parameters: gridSearchResult.parameters,
+    confidence: Math.max(60, gridSearchResult.confidence || 75),
+    method: 'grid_search',
+    accuracy: gridSearchResult.accuracy,
+    reasoning: `Grid search systematically tested parameter combinations and selected the configuration with highest validation accuracy (${gridSearchResult.accuracy.toFixed(1)}%). This method provides reliable, data-driven parameter selection through comprehensive evaluation.`,
+    factors: {
+      stability: 85,
+      interpretability: 90,
+      complexity: 45,
+      businessImpact: 'Systematic optimization ensuring reliable performance through comprehensive parameter testing'
+    },
+    expectedAccuracy: gridSearchResult.accuracy
+  };
 };
