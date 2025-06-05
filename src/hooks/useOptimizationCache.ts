@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -20,20 +21,24 @@ interface OptimizedParameters {
 }
 
 interface OptimizationCache {
-  [sku: string]: {
-    [modelId: string]: {
-      ai?: OptimizedParameters;
-      grid?: OptimizedParameters;
-      selected?: 'ai' | 'grid' | 'manual';
+  version: number; // NEW: Cache version for format changes
+  data: {
+    [sku: string]: {
+      [modelId: string]: {
+        ai?: OptimizedParameters;
+        grid?: OptimizedParameters;
+        selected?: 'ai' | 'grid' | 'manual';
+      };
     };
   };
 }
 
 const CACHE_KEY = 'forecast_optimization_cache';
 const CACHE_EXPIRY_HOURS = 24;
+const CURRENT_CACHE_VERSION = 2; // NEW: Increment when hash format changes
 
 export const useOptimizationCache = () => {
-  const [cache, setCache] = useState<OptimizationCache>({});
+  const [cache, setCache] = useState<OptimizationCache['data']>({});
   const [cacheStats, setCacheStats] = useState({ hits: 0, misses: 0, skipped: 0 });
   const [cacheVersion, setCacheVersion] = useState(0);
   
@@ -45,8 +50,43 @@ export const useOptimizationCache = () => {
 
   // Helper function to detect old hash format
   const isOldHashFormat = useCallback((hash: string): boolean => {
-    return hash.includes('len:') || hash.includes('dates:') || hash.includes('sales:');
+    if (!hash) return false;
+    return hash.includes('len:') || hash.includes('dates:') || hash.includes('sales:') || hash.length > 100;
   }, []);
+
+  // Helper function to check if cache has ANY old format entries
+  const hasOldFormatEntries = useCallback((cacheData: any): boolean => {
+    if (!cacheData || typeof cacheData !== 'object') return false;
+    
+    // Check if it's the old structure without version
+    if (!cacheData.version) return true;
+    
+    // Check if version is outdated
+    if (cacheData.version < CURRENT_CACHE_VERSION) return true;
+    
+    // Deep check for old hash formats in the data
+    const data = cacheData.data || cacheData;
+    for (const sku in data) {
+      for (const modelId in data[sku]) {
+        const entry = data[sku][modelId];
+        
+        // Check old structure (parameters directly on entry)
+        if (entry.parameters && entry.dataHash && isOldHashFormat(entry.dataHash)) {
+          return true;
+        }
+        
+        // Check new structure (ai/grid methods)
+        if (entry.ai && entry.ai.dataHash && isOldHashFormat(entry.ai.dataHash)) {
+          return true;
+        }
+        if (entry.grid && entry.grid.dataHash && isOldHashFormat(entry.grid.dataHash)) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }, [isOldHashFormat]);
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -55,56 +95,47 @@ export const useOptimizationCache = () => {
       const stored = localStorage.getItem(CACHE_KEY);
       if (stored) {
         const parsedCache = JSON.parse(stored);
-        console.log('🗄️ CACHE: Found stored cache with', Object.keys(parsedCache).length, 'SKUs');
-        const now = Date.now();
-        const filteredCache: OptimizationCache = {};
         
-        Object.keys(parsedCache).forEach(sku => {
-          Object.keys(parsedCache[sku]).forEach(modelId => {
-            const entry = parsedCache[sku][modelId];
+        // Check if cache has old format entries - if so, clear everything
+        if (hasOldFormatEntries(parsedCache)) {
+          console.log('🗄️ CACHE: ⚠️ DETECTED OLD FORMAT ENTRIES - CLEARING ALL CACHE');
+          localStorage.removeItem(CACHE_KEY);
+          setCache({});
+          setCacheStats({ hits: 0, misses: 0, skipped: 0 });
+          return;
+        }
+        
+        // Load valid new format cache
+        const cacheData = parsedCache.data || {};
+        const now = Date.now();
+        const filteredCache: OptimizationCache['data'] = {};
+        
+        Object.keys(cacheData).forEach(sku => {
+          Object.keys(cacheData[sku]).forEach(modelId => {
+            const entry = cacheData[sku][modelId];
             
-            if (entry.parameters) {
-              const method = entry.method?.startsWith('ai_') ? 'ai' : 
-                           entry.method === 'grid_search' ? 'grid' : 'ai';
+            const hasValidAI = entry.ai && 
+                              entry.ai.dataHash &&
+                              !isOldHashFormat(entry.ai.dataHash) &&
+                              now - entry.ai.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
+            const hasValidGrid = entry.grid && 
+                                entry.grid.dataHash &&
+                                !isOldHashFormat(entry.grid.dataHash) &&
+                                now - entry.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
+            
+            if (hasValidAI || hasValidGrid) {
+              if (!filteredCache[sku]) filteredCache[sku] = {};
+              filteredCache[sku][modelId] = {};
               
-              // Skip entries with old hash format
-              if (entry.dataHash && isOldHashFormat(entry.dataHash)) {
-                console.log(`🗄️ CACHE: Skipping old format entry ${sku}:${modelId}:${method}`);
-                return;
+              if (hasValidAI) {
+                filteredCache[sku][modelId].ai = entry.ai;
+                console.log(`🗄️ CACHE: Loaded ${sku}:${modelId}:ai`);
               }
-              
-              if (now - entry.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000) {
-                if (!filteredCache[sku]) filteredCache[sku] = {};
-                if (!filteredCache[sku][modelId]) filteredCache[sku][modelId] = {};
-                
-                filteredCache[sku][modelId][method] = entry;
-                filteredCache[sku][modelId].selected = method;
-                console.log(`🗄️ CACHE: Loaded ${sku}:${modelId}:${method}`);
-              } else {
-                console.log(`🗄️ CACHE: Expired ${sku}:${modelId}:${method}`);
+              if (hasValidGrid) {
+                filteredCache[sku][modelId].grid = entry.grid;
+                console.log(`🗄️ CACHE: Loaded ${sku}:${modelId}:grid`);
               }
-            } else {
-              // Handle new cache structure
-              const hasValidAI = entry.ai && 
-                                !isOldHashFormat(entry.ai.dataHash) &&
-                                now - entry.ai.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
-              const hasValidGrid = entry.grid && 
-                                  !isOldHashFormat(entry.grid.dataHash) &&
-                                  now - entry.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
-              
-              if (hasValidAI || hasValidGrid) {
-                if (!filteredCache[sku]) filteredCache[sku] = {};
-                filteredCache[sku][modelId] = {};
-                
-                if (hasValidAI) {
-                  filteredCache[sku][modelId].ai = entry.ai;
-                }
-                if (hasValidGrid) {
-                  filteredCache[sku][modelId].grid = entry.grid;
-                }
-                filteredCache[sku][modelId].selected = entry.selected;
-                console.log(`🗄️ CACHE: Loaded ${sku}:${modelId} with multiple methods`);
-              }
+              filteredCache[sku][modelId].selected = entry.selected;
             }
           });
         });
@@ -116,16 +147,23 @@ export const useOptimizationCache = () => {
       }
     } catch (error) {
       console.error('🗄️ CACHE: Error loading from localStorage:', error);
+      // Clear corrupted cache
+      localStorage.removeItem(CACHE_KEY);
+      setCache({});
     }
-  }, [isOldHashFormat]);
+  }, [hasOldFormatEntries, isOldHashFormat]);
 
   // Save cache to localStorage when it changes
   useEffect(() => {
     if (Object.keys(cache).length > 0) {
       console.log('🗄️ CACHE: Saving to localStorage with', Object.keys(cache).length, 'SKUs');
       try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
-        console.log('🗄️ CACHE: Successfully saved to localStorage');
+        const cacheWithVersion: OptimizationCache = {
+          version: CURRENT_CACHE_VERSION,
+          data: cache
+        };
+        localStorage.setItem(CACHE_KEY, JSON.stringify(cacheWithVersion));
+        console.log('🗄️ CACHE: Successfully saved to localStorage with version', CURRENT_CACHE_VERSION);
       } catch (error) {
         console.error('🗄️ CACHE: Error saving to localStorage:', error);
       }
@@ -180,9 +218,11 @@ export const useOptimizationCache = () => {
 
           const hasValidAI = cached.ai && 
                             cached.ai.dataHash === currentDataHash && 
+                            !isOldHashFormat(cached.ai.dataHash) &&
                             (Date.now() - cached.ai.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000);
           const hasValidGrid = cached.grid && 
                               cached.grid.dataHash === currentDataHash && 
+                              !isOldHashFormat(cached.grid.dataHash) &&
                               (Date.now() - cached.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000);
           
           if (!hasValidAI) {
@@ -202,7 +242,7 @@ export const useOptimizationCache = () => {
     });
     
     return result;
-  }, [cache, generateDataHash]);
+  }, [cache, generateDataHash, isOldHashFormat]);
 
   const getCachedParameters = useCallback((
     sku: string, 
@@ -299,6 +339,12 @@ export const useOptimizationCache = () => {
     expectedAccuracy?: number,
     method?: string
   ) => {
+    // Validate that we're not storing old format hash
+    if (isOldHashFormat(dataHash)) {
+      console.error(`🗄️ CACHE: ❌ REFUSING to store old format hash for ${sku}:${modelId}:${method}`);
+      return;
+    }
+
     console.log(`🗄️ CACHE: Setting ${sku}:${modelId} with method ${method} and hash ${dataHash.substring(0, 50)}...`);
     
     const optimizedParams: OptimizedParameters = {
@@ -339,7 +385,7 @@ export const useOptimizationCache = () => {
     });
 
     console.log('🗄️ CACHE: Cache updated, triggering save');
-  }, []);
+  }, [isOldHashFormat]);
 
   const setSelectedMethod = useCallback((
     sku: string,
@@ -368,10 +414,10 @@ export const useOptimizationCache = () => {
       return false;
     }
     
-    const isValid = cached.dataHash === currentDataHash;
+    const isValid = cached.dataHash === currentDataHash && !isOldHashFormat(cached.dataHash);
     console.log(`🗄️ CACHE: Hash validation for ${sku}:${modelId}:${method || 'any'}: ${isValid} (cached: ${cached.dataHash.substring(0, 30)}... vs current: ${currentDataHash.substring(0, 30)}...)`);
     return isValid;
-  }, [getCachedParameters]);
+  }, [getCachedParameters, isOldHashFormat]);
 
   const clearCacheForSKU = useCallback((sku: string) => {
     setCache(prev => {
@@ -389,6 +435,7 @@ export const useOptimizationCache = () => {
     
     try {
       localStorage.removeItem(CACHE_KEY);
+      console.log('🗄️ CACHE: ✅ CLEARED ALL CACHE');
     } catch (error) {
       // Silent error handling
     }
