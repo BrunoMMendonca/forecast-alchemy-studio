@@ -103,6 +103,7 @@ export const useForecastModelsLogic = (
     }
 
     const enabledModels = models.filter(m => m.enabled);
+    const enabledModelIds = enabledModels.map(m => m.id);
     
     console.log('🚀 QUEUE: Starting optimization for queued SKUs:', queuedSKUs);
     
@@ -162,7 +163,7 @@ export const useForecastModelsLogic = (
         }
       },
       (sku: string, modelIds: string[]) => {
-        const skusNeedingOptimization = getSKUsNeedingOptimization(data, modelIds);
+        const skusNeedingOptimization = getSKUsNeedingOptimization(data, enabledModelIds);
         return Array.isArray(skusNeedingOptimization) 
           ? skusNeedingOptimization.map(item => typeof item === 'string' ? item : item.sku).filter(Boolean)
           : [];
