@@ -20,7 +20,11 @@ interface OptimizedParameters {
 
 interface OptimizationCache {
   [sku: string]: {
-    [modelId: string]: OptimizedParameters;
+    [modelId: string]: {
+      ai?: OptimizedParameters;
+      grid?: OptimizedParameters;
+      selected?: 'ai' | 'grid' | 'manual';
+    };
   };
 }
 
@@ -52,15 +56,35 @@ export const useOptimizationCache = () => {
         Object.keys(parsedCache).forEach(sku => {
           Object.keys(parsedCache[sku]).forEach(modelId => {
             const entry = parsedCache[sku][modelId];
-            if (now - entry.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000) {
-              if (!filteredCache[sku]) filteredCache[sku] = {};
-              filteredCache[sku][modelId] = entry;
+            
+            // Handle legacy format
+            if (entry.parameters) {
+              // Convert old format to new format
+              const method = entry.method?.startsWith('ai_') ? 'ai' : 
+                           entry.method === 'grid_search' ? 'grid' : 'ai';
+              
+              if (now - entry.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000) {
+                if (!filteredCache[sku]) filteredCache[sku] = {};
+                if (!filteredCache[sku][modelId]) filteredCache[sku][modelId] = {};
+                
+                filteredCache[sku][modelId][method] = entry;
+                filteredCache[sku][modelId].selected = method;
+              }
+            } else {
+              // New format
+              const hasValidEntries = (entry.ai && now - entry.ai.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000) ||
+                                    (entry.grid && now - entry.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000);
+              
+              if (hasValidEntries) {
+                if (!filteredCache[sku]) filteredCache[sku] = {};
+                filteredCache[sku][modelId] = entry;
+              }
             }
           });
         });
         
         setCache(filteredCache);
-        console.log('FIXED CACHE: Loaded optimization cache from storage');
+        console.log('MULTI-CACHE: Loaded optimization cache from storage');
       }
 
       // Load optimization state
@@ -70,11 +94,11 @@ export const useOptimizationCache = () => {
         const now = Date.now();
         if (now - parsedState.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000) {
           setOptimizationState(parsedState);
-          console.log(`FIXED CACHE: Loaded optimization state - fingerprint: ${parsedState.fingerprint}, completed: ${parsedState.completed}`);
+          console.log(`MULTI-CACHE: Loaded optimization state - fingerprint: ${parsedState.fingerprint}, completed: ${parsedState.completed}`);
         }
       }
     } catch (error) {
-      console.error('FIXED CACHE: Failed to load from localStorage:', error);
+      console.error('MULTI-CACHE: Failed to load from localStorage:', error);
     }
   }, []);
 
@@ -84,7 +108,7 @@ export const useOptimizationCache = () => {
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
       } catch (error) {
-        console.error('FIXED CACHE: Failed to save cache to localStorage:', error);
+        console.error('MULTI-CACHE: Failed to save cache to localStorage:', error);
       }
     }
   }, [cache]);
@@ -94,14 +118,13 @@ export const useOptimizationCache = () => {
     if (optimizationState) {
       try {
         localStorage.setItem(OPTIMIZATION_STATE_KEY, JSON.stringify(optimizationState));
-        console.log(`FIXED CACHE: Saved optimization state - fingerprint: ${optimizationState.fingerprint}, completed: ${optimizationState.completed}`);
+        console.log(`MULTI-CACHE: Saved optimization state - fingerprint: ${optimizationState.fingerprint}, completed: ${optimizationState.completed}`);
       } catch (error) {
-        console.error('FIXED CACHE: Failed to save optimization state to localStorage:', error);
+        console.error('MULTI-CACHE: Failed to save optimization state to localStorage:', error);
       }
     }
   }, [optimizationState]);
 
-  // Generate stable dataset fingerprint
   const generateDatasetFingerprint = useCallback((data: SalesData[]): string => {
     // Sort data to ensure consistent ordering
     const sortedData = [...data].sort((a, b) => {
@@ -132,17 +155,17 @@ export const useOptimizationCache = () => {
   const isOptimizationComplete = useCallback((data: SalesData[]): boolean => {
     const currentFingerprint = generateDatasetFingerprint(data);
     
-    console.log(`FIXED CACHE: Checking optimization completion - current: ${currentFingerprint}, stored: ${optimizationState?.fingerprint}, completed: ${optimizationState?.completed}`);
+    console.log(`MULTI-CACHE: Checking optimization completion - current: ${currentFingerprint}, stored: ${optimizationState?.fingerprint}, completed: ${optimizationState?.completed}`);
     
     if (optimizationState && 
         optimizationState.fingerprint === currentFingerprint && 
         optimizationState.completed) {
-      console.log('FIXED CACHE: ✅ OPTIMIZATION ALREADY COMPLETE - SKIPPING');
+      console.log('MULTI-CACHE: ✅ OPTIMIZATION ALREADY COMPLETE - SKIPPING');
       setCacheStats(prev => ({ ...prev, skipped: prev.skipped + 1 }));
       return true;
     }
     
-    console.log('FIXED CACHE: ❌ Optimization needed');
+    console.log('MULTI-CACHE: ❌ Optimization needed');
     return false;
   }, [optimizationState, generateDatasetFingerprint]);
 
@@ -156,7 +179,7 @@ export const useOptimizationCache = () => {
     };
     
     setOptimizationState(newState);
-    console.log(`FIXED CACHE: ✅ MARKED OPTIMIZATION COMPLETE for fingerprint: ${fingerprint}`);
+    console.log(`MULTI-CACHE: ✅ MARKED OPTIMIZATION COMPLETE for fingerprint: ${fingerprint}`);
   }, [generateDatasetFingerprint]);
 
   // Get SKUs needing optimization (only call if optimization is not complete)
@@ -164,7 +187,7 @@ export const useOptimizationCache = () => {
     data: SalesData[], 
     models: ModelConfig[]
   ): { sku: string; models: string[] }[] => {
-    console.log('FIXED CACHE: Checking which SKUs need optimization...');
+    console.log('MULTI-CACHE: Checking which SKUs need optimization...');
     
     const enabledModelsWithParams = models.filter(m => 
       m.enabled && m.parameters && Object.keys(m.parameters).length > 0
@@ -182,7 +205,11 @@ export const useOptimizationCache = () => {
       const modelsNeedingOptimization = enabledModelsWithParams
         .filter(m => {
           const cached = cache[sku]?.[m.id];
-          return !cached || cached.dataHash !== currentDataHash;
+          return !cached || 
+                 !cached.ai || 
+                 !cached.grid || 
+                 cached.ai.dataHash !== currentDataHash ||
+                 cached.grid.dataHash !== currentDataHash;
         })
         .map(m => m.id);
       
@@ -191,19 +218,47 @@ export const useOptimizationCache = () => {
       }
     });
     
-    console.log(`FIXED CACHE: ${result.length} SKUs need optimization`);
+    console.log(`MULTI-CACHE: ${result.length} SKUs need optimization`);
     return result;
   }, [cache, generateDataHash]);
 
-  const getCachedParameters = useCallback((sku: string, modelId: string): OptimizedParameters | null => {
+  const getCachedParameters = useCallback((
+    sku: string, 
+    modelId: string, 
+    method?: 'ai' | 'grid'
+  ): OptimizedParameters | null => {
     const cached = cache[sku]?.[modelId];
-    if (cached) {
+    if (!cached) {
+      setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
+      console.log(`MULTI-CACHE: Cache MISS for ${sku}:${modelId}`);
+      return null;
+    }
+
+    // If method is specified, return that specific method
+    if (method) {
+      const result = cached[method];
+      if (result) {
+        setCacheStats(prev => ({ ...prev, hits: prev.hits + 1 }));
+        console.log(`MULTI-CACHE: Cache HIT for ${sku}:${modelId}:${method}`);
+        return result;
+      } else {
+        setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
+        console.log(`MULTI-CACHE: Cache MISS for ${sku}:${modelId}:${method}`);
+        return null;
+      }
+    }
+
+    // Return selected method or AI if available, otherwise grid
+    const selectedMethod = cached.selected || 'ai';
+    const result = cached[selectedMethod] || cached.ai || cached.grid;
+    
+    if (result) {
       setCacheStats(prev => ({ ...prev, hits: prev.hits + 1 }));
-      console.log(`FIXED CACHE: Cache HIT for ${sku}:${modelId}`);
-      return cached;
+      console.log(`MULTI-CACHE: Cache HIT for ${sku}:${modelId} (method: ${selectedMethod})`);
+      return result;
     } else {
       setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
-      console.log(`FIXED CACHE: Cache MISS for ${sku}:${modelId}`);
+      console.log(`MULTI-CACHE: Cache MISS for ${sku}:${modelId}`);
       return null;
     }
   }, [cache]);
@@ -224,24 +279,53 @@ export const useOptimizationCache = () => {
     expectedAccuracy?: number,
     method?: string
   ) => {
+    const optimizedParams: OptimizedParameters = {
+      parameters,
+      timestamp: Date.now(),
+      dataHash,
+      confidence,
+      reasoning,
+      factors,
+      expectedAccuracy,
+      method
+    };
+
+    // Determine which cache slot to use
+    const cacheMethod = method?.startsWith('ai_') ? 'ai' : 
+                       method === 'grid_search' ? 'grid' : 'ai';
+
     setCache(prev => ({
       ...prev,
       [sku]: {
         ...prev[sku],
         [modelId]: {
-          parameters,
-          timestamp: Date.now(),
-          dataHash,
-          confidence,
-          reasoning,
-          factors,
-          expectedAccuracy,
-          method
+          ...prev[sku]?.[modelId],
+          [cacheMethod]: optimizedParams,
+          selected: cacheMethod
         }
       }
     }));
     
-    console.log(`FIXED CACHE: Cached parameters with method ${method} for ${sku}:${modelId}`);
+    console.log(`MULTI-CACHE: Cached ${cacheMethod} parameters for ${sku}:${modelId}`);
+  }, []);
+
+  const setSelectedMethod = useCallback((
+    sku: string,
+    modelId: string,
+    method: 'ai' | 'grid' | 'manual'
+  ) => {
+    setCache(prev => ({
+      ...prev,
+      [sku]: {
+        ...prev[sku],
+        [modelId]: {
+          ...prev[sku]?.[modelId],
+          selected: method
+        }
+      }
+    }));
+    
+    console.log(`MULTI-CACHE: Set selected method to ${method} for ${sku}:${modelId}`);
   }, []);
 
   const isCacheValid = useCallback((sku: string, modelId: string, currentDataHash: string): boolean => {
@@ -254,15 +338,15 @@ export const useOptimizationCache = () => {
 
   // Legacy compatibility functions (minimal implementations)
   const startOptimizationSession = useCallback(() => {
-    console.log('FIXED CACHE: Legacy startOptimizationSession called');
+    console.log('MULTI-CACHE: Legacy startOptimizationSession called');
   }, []);
 
   const markSKUOptimized = useCallback(() => {
-    console.log('FIXED CACHE: Legacy markSKUOptimized called');
+    console.log('MULTI-CACHE: Legacy markSKUOptimized called');
   }, []);
 
   const completeOptimizationSession = useCallback(() => {
-    console.log('FIXED CACHE: Legacy completeOptimizationSession called');
+    console.log('MULTI-CACHE: Legacy completeOptimizationSession called');
   }, []);
 
   const getDatasetFingerprintString = useCallback((data: SalesData[]): string => {
@@ -284,20 +368,18 @@ export const useOptimizationCache = () => {
 
   // Clear all cache and reset state
   const clearAllCache = useCallback(() => {
-    console.log('🗑️ CACHE CLEAR: Clearing all optimization cache and state');
+    console.log('🗑️ MULTI-CACHE CLEAR: Clearing all optimization cache and state');
     
-    // Clear memory state
     setCache({});
     setCacheStats({ hits: 0, misses: 0, skipped: 0 });
     setOptimizationState(null);
     
-    // Clear localStorage
     try {
       localStorage.removeItem(CACHE_KEY);
       localStorage.removeItem(OPTIMIZATION_STATE_KEY);
-      console.log('🗑️ CACHE CLEAR: Cleared localStorage');
+      console.log('🗑️ MULTI-CACHE CLEAR: Cleared localStorage');
     } catch (error) {
-      console.error('🗑️ CACHE CLEAR: Failed to clear localStorage:', error);
+      console.error('🗑️ MULTI-CACHE CLEAR: Failed to clear localStorage:', error);
     }
   }, []);
 
@@ -307,6 +389,7 @@ export const useOptimizationCache = () => {
     generateDataHash,
     getCachedParameters,
     setCachedParameters,
+    setSelectedMethod,
     isCacheValid,
     getSKUsNeedingOptimization,
     clearCacheForSKU: useCallback((sku: string) => {
@@ -317,20 +400,18 @@ export const useOptimizationCache = () => {
       });
     }, []),
     clearAllCache: useCallback(() => {
-      console.log('🗑️ CACHE CLEAR: Clearing all optimization cache and state');
+      console.log('🗑️ MULTI-CACHE CLEAR: Clearing all optimization cache and state');
       
-      // Clear memory state
       setCache({});
       setCacheStats({ hits: 0, misses: 0, skipped: 0 });
       setOptimizationState(null);
       
-      // Clear localStorage
       try {
         localStorage.removeItem(CACHE_KEY);
         localStorage.removeItem(OPTIMIZATION_STATE_KEY);
-        console.log('🗑️ CACHE CLEAR: Cleared localStorage');
+        console.log('🗑️ MULTI-CACHE CLEAR: Cleared localStorage');
       } catch (error) {
-        console.error('🗑️ CACHE CLEAR: Failed to clear localStorage:', error);
+        console.error('🗑️ MULTI-CACHE CLEAR: Failed to clear localStorage:', error);
       }
     }, []),
     batchValidateCache: useCallback(() => ({}), []),

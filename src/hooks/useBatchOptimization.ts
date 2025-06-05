@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { optimizationLogger } from '@/utils/optimizationLogger';
@@ -36,7 +35,7 @@ export const useBatchOptimization = () => {
     getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[]
   ) => {
     if (queuedSKUs.length === 0) {
-      console.log('📋 QUEUE: No SKUs in queue for optimization');
+      console.log('📋 MULTI-QUEUE: No SKUs in queue for optimization');
       toast({
         title: "No Optimization Needed",
         description: "No SKUs are queued for optimization",
@@ -44,20 +43,17 @@ export const useBatchOptimization = () => {
       return;
     }
 
-    // Validate that queued SKUs exist in current data
     const currentSKUs = Array.from(new Set(data.map(d => d.sku)));
     const validQueuedSKUs = queuedSKUs.filter(sku => currentSKUs.includes(sku));
     
     if (validQueuedSKUs.length < queuedSKUs.length) {
       const invalidSKUs = queuedSKUs.filter(sku => !currentSKUs.includes(sku));
-      console.warn('📋 QUEUE: Removing invalid SKUs from queue:', invalidSKUs);
-      
-      // Remove invalid SKUs from queue
+      console.warn('📋 MULTI-QUEUE: Removing invalid SKUs from queue:', invalidSKUs);
       invalidSKUs.forEach(sku => onSKUCompleted(sku));
     }
 
     if (validQueuedSKUs.length === 0) {
-      console.log('📋 QUEUE: No valid SKUs found in queue after validation');
+      console.log('📋 MULTI-QUEUE: No valid SKUs found in queue after validation');
       toast({
         title: "No Valid SKUs",
         description: "All queued SKUs are no longer present in the current data",
@@ -65,13 +61,11 @@ export const useBatchOptimization = () => {
       return;
     }
 
-    // Filter to only optimize SKUs that are in the queue and need optimization
     const skusNeedingOptimization = getSKUsNeedingOptimization(data, models);
     const skusToOptimize = skusNeedingOptimization.filter(({ sku }) => validQueuedSKUs.includes(sku));
     
     if (skusToOptimize.length === 0) {
-      console.log('📋 QUEUE: All valid queued SKUs already have optimized parameters');
-      // Remove all valid queued SKUs since they're already optimized
+      console.log('📋 MULTI-QUEUE: All valid queued SKUs already have optimized parameters');
       validQueuedSKUs.forEach(sku => onSKUCompleted(sku));
       toast({
         title: "Optimization Complete",
@@ -92,10 +86,9 @@ export const useBatchOptimization = () => {
     setIsOptimizing(true);
     setOptimizationCompleted(false);
     
-    // Start logging session
     optimizationLogger.startSession(totalSKUs);
 
-    console.log(`📋 QUEUE: Starting optimization for ${totalSKUs} valid queued SKUs`, skusToOptimize.map(s => s.sku));
+    console.log(`📋 MULTI-QUEUE: Starting dual optimization (AI + Grid) for ${totalSKUs} valid queued SKUs`, skusToOptimize.map(s => s.sku));
 
     try {
       for (let i = 0; i < skusToOptimize.length; i++) {
@@ -118,7 +111,7 @@ export const useBatchOptimization = () => {
           aiAcceptedByConfidence: aiAcceptedByConfidenceCount
         });
 
-        console.log(`📋 QUEUE: Optimizing SKU ${i + 1}/${totalSKUs}: ${sku}`);
+        console.log(`📋 MULTI-QUEUE: Optimizing SKU ${i + 1}/${totalSKUs}: ${sku}`);
 
         for (const modelId of modelsToOptimize) {
           const model = models.find(m => m.id === modelId);
@@ -126,9 +119,11 @@ export const useBatchOptimization = () => {
 
           setProgress(prev => prev ? { ...prev, currentModel: model.name } : null);
 
+          // Run optimization (which now does both AI and Grid)
           const result = await optimizeSingleModel(model, skuData, sku, { setProgress });
+          
           if (result) {
-            // Pass the complete optimization result including method
+            // Store the primary result (AI preferred)
             onParametersOptimized(
               sku, 
               model.id, 
@@ -142,7 +137,7 @@ export const useBatchOptimization = () => {
             optimizedCount++;
             
             // Update counters based on method
-            if (result.method.startsWith('ai_')) {
+            if (result.method?.startsWith('ai_')) {
               aiOptimizedCount++;
               if (result.method === 'ai_confidence') {
                 aiAcceptedByConfidenceCount++;
@@ -152,27 +147,28 @@ export const useBatchOptimization = () => {
             } else if (result.method === 'grid_search') {
               gridOptimizedCount++;
             }
+
+            // Note: Both AI and Grid results are now automatically stored in cache
+            // by the updated optimization function
           } else {
             skippedCount++;
           }
         }
 
-        // Remove completed SKU from queue
-        console.log(`📋 QUEUE: Completed optimization for SKU: ${sku}`);
+        console.log(`📋 MULTI-QUEUE: Completed dual optimization for SKU: ${sku}`);
         onSKUCompleted(sku);
       }
 
       const aiAcceptanceRate = aiOptimizedCount > 0 ? 
         ((aiOptimizedCount / (aiOptimizedCount + aiRejectedCount)) * 100).toFixed(1) : '0';
 
-      const successMessage = `Queue Optimization Complete! AI: ${aiOptimizedCount} (${aiAcceptanceRate}% accepted), Grid: ${gridOptimizedCount}, Rejected: ${aiRejectedCount}`;
+      const successMessage = `Dual Optimization Complete! AI: ${aiOptimizedCount} (${aiAcceptanceRate}% accepted), Grid: ${gridOptimizedCount}, Rejected: ${aiRejectedCount}`;
 
       toast({
-        title: "Queue Optimization Complete",
+        title: "Dual Optimization Complete",
         description: successMessage,
       });
 
-      // Update final progress state
       setProgress({
         currentSKU: '',
         completedSKUs: totalSKUs,
@@ -192,17 +188,16 @@ export const useBatchOptimization = () => {
     } catch (error) {
       toast({
         title: "Optimization Error",
-        description: "Failed to complete queue optimization",
+        description: "Failed to complete dual optimization",
         variant: "destructive",
       });
-      console.error('Queue optimization error:', error);
+      console.error('Dual optimization error:', error);
     } finally {
       setIsOptimizing(false);
       optimizationLogger.endSession();
     }
   };
 
-  // Keep the old method for backward compatibility
   const optimizeAllSKUs = async (
     data: SalesData[],
     models: ModelConfig[],
@@ -229,7 +224,7 @@ export const useBatchOptimization = () => {
       models,
       skusToOptimize.map(s => s.sku),
       onParametersOptimized,
-      () => {}, // No queue management in legacy mode
+      () => {},
       getSKUsNeedingOptimization
     );
   };

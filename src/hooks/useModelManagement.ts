@@ -1,19 +1,25 @@
+
 import { useState, useCallback, useRef } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
 import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences, PreferenceValue } from '@/hooks/useManualAIPreferences';
-import { optimizeSingleModel } from '@/utils/singleModelOptimization';
+import { getOptimizationByMethod } from '@/utils/singleModelOptimization';
 
 export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
-  const { generateDataHash, getCachedParameters, isCacheValid, setCachedParameters } = useOptimizationCache();
+  const { 
+    generateDataHash, 
+    getCachedParameters, 
+    isCacheValid, 
+    setCachedParameters,
+    setSelectedMethod 
+  } = useOptimizationCache();
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
   const isTogglingAIManualRef = useRef<boolean>(false);
 
-  // FIXED: Apply preferences during initial model creation with enhanced cache handling and reasoning
   const createModelsWithPreferences = useCallback((): ModelConfig[] => {
-    console.log('🏗️ CREATING MODELS WITH PREFERENCES AND REASONING');
+    console.log('🏗️ CREATING MODELS WITH MULTI-METHOD SUPPORT');
     
     const defaultModels = getDefaultModels();
     
@@ -27,30 +33,38 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
       const skuData = data.filter(d => d.sku === selectedSKU);
       const currentDataHash = generateDataHash(skuData);
       
-      console.log(`📋 Creating models with preferences and reasoning for ${selectedSKU}:`, preferences);
+      console.log(`📋 Creating models with multi-method support for ${selectedSKU}:`, preferences);
       
       return defaultModels.map(model => {
-        const cached = getCachedParameters(selectedSKU, model.id);
         const preferenceKey = `${selectedSKU}:${model.id}`;
         const preference = preferences[preferenceKey];
         
-        console.log(`🔍 ${preferenceKey}: preference=${preference}, cached=${!!cached}, cacheValid=${cached ? isCacheValid(selectedSKU, model.id, currentDataHash) : false}`);
+        console.log(`🔍 ${preferenceKey}: preference=${preference}`);
         
-        // ENHANCED: If preference is AI (true) and we have cached parameters with reasoning, use them
-        if (preference === true && cached) {
-          console.log(`✅ Applying AI with full reasoning for ${preferenceKey}`);
+        // Get cached parameters based on preference
+        let cached = null;
+        if (preference === true) {
+          cached = getCachedParameters(selectedSKU, model.id, 'ai');
+        } else if (preference === 'grid') {
+          cached = getCachedParameters(selectedSKU, model.id, 'grid');
+        } else if (preference === false) {
+          // Manual - no optimized parameters
           return {
             ...model,
-            optimizedParameters: cached.parameters,
-            optimizationConfidence: cached.confidence,
-            optimizationReasoning: cached.reasoning,
-            optimizationFactors: cached.factors,
-            expectedAccuracy: cached.expectedAccuracy
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
           };
-        } 
-        // ENHANCED: If preference is grid and we have cached grid parameters, use them
-        else if (preference === 'grid' && cached && cached.method === 'grid_search') {
-          console.log(`✅ Applying Grid with full reasoning for ${preferenceKey}`);
+        } else {
+          // No preference - use whatever is available (AI preferred)
+          cached = getCachedParameters(selectedSKU, model.id);
+        }
+        
+        if (cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
+          console.log(`✅ Applying ${cached.method} optimization for ${preferenceKey}`);
           return {
             ...model,
             optimizedParameters: cached.parameters,
@@ -60,39 +74,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
             expectedAccuracy: cached.expectedAccuracy,
             optimizationMethod: cached.method
           };
-        }
-        // ENHANCED: If preference is explicitly false (manual), clear all AI-related fields
-        else if (preference === false) {
-          console.log(`🛠️ Using manual for ${preferenceKey} (preference set to false)`);
-          return {
-            ...model,
-            optimizedParameters: undefined,
-            optimizationConfidence: undefined,
-            optimizationReasoning: undefined,
-            optimizationFactors: undefined,
-            expectedAccuracy: undefined
-          };
-        }
-        // ENHANCED: If no preference is set but we have valid cached parameters with reasoning, use them
-        else if (!preference && cached && isCacheValid(selectedSKU, model.id, currentDataHash)) {
-          console.log(`🤖 Auto-applying AI with full reasoning for ${preferenceKey}`);
-          
-          // Auto-set preference to AI when we have valid cached parameters
-          const updatedPreferences = { ...preferences };
-          updatedPreferences[preferenceKey] = true;
-          saveManualAIPreferences(updatedPreferences);
-          
-          return {
-            ...model,
-            optimizedParameters: cached.parameters,
-            optimizationConfidence: cached.confidence,
-            optimizationReasoning: cached.reasoning,
-            optimizationFactors: cached.factors,
-            expectedAccuracy: cached.expectedAccuracy
-          };
-        }
-        // Default to manual with clean state
-        else {
+        } else {
           console.log(`🛠️ Default to manual for ${preferenceKey}`);
           return {
             ...model,
@@ -100,20 +82,20 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
             optimizationConfidence: undefined,
             optimizationReasoning: undefined,
             optimizationFactors: undefined,
-            expectedAccuracy: undefined
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
           };
         }
       });
     } catch (error) {
-      console.error('❌ Error creating models with preferences and reasoning:', error);
+      console.error('❌ Error creating models with multi-method support:', error);
       return defaultModels;
     }
-  }, [selectedSKU, data, loadManualAIPreferences, saveManualAIPreferences, generateDataHash, getCachedParameters, isCacheValid]);
+  }, [selectedSKU, data, loadManualAIPreferences, generateDataHash, getCachedParameters, isCacheValid]);
 
-  // Initialize models with a reactive function
   const [models, setModels] = useState<ModelConfig[]>(() => {
-    console.log('🎯 INITIAL STATE CREATION WITH REASONING');
-    return getDefaultModels(); // Will be immediately updated by the effect
+    console.log('🎯 INITIAL STATE CREATION WITH MULTI-METHOD SUPPORT');
+    return getDefaultModels();
   });
 
   const toggleModel = (modelId: string) => {
@@ -123,13 +105,13 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
   };
 
   const updateParameter = (modelId: string, parameter: string, value: number) => {
-    // Set flag to prevent optimization during manual parameter updates
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = false; // Mark as manual when parameters are manually updated
+    preferences[preferenceKey] = false;
     saveManualAIPreferences(preferences);
+    setSelectedMethod(selectedSKU, modelId, 'manual');
 
     console.log(`PREFERENCE: Updated ${preferenceKey} to manual (parameter change)`);
 
@@ -149,24 +131,24 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
     ));
 
     setTimeout(() => {
-      // Clear the flag after operations complete
       isTogglingAIManualRef.current = false;
     }, 100);
   };
 
   const useAIOptimization = async (modelId: string) => {
-    // Set flag to prevent optimization during AI toggle
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = true; // Mark as AI (boolean true)
+    preferences[preferenceKey] = true;
     saveManualAIPreferences(preferences);
+    setSelectedMethod(selectedSKU, modelId, 'ai');
 
     console.log(`PREFERENCE: Updated ${preferenceKey} to AI`);
 
-    const cached = getCachedParameters(selectedSKU, modelId);
-    if (cached && cached.method?.startsWith('ai_')) {
+    // Try to get cached AI results first
+    const cached = getCachedParameters(selectedSKU, modelId, 'ai');
+    if (cached) {
       setModels(prev => prev.map(model => 
         model.id === modelId 
           ? { 
@@ -181,17 +163,15 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
           : model
       ));
     } else {
-      // Trigger AI optimization if no cached results
+      // Run fresh AI optimization
       try {
         const model = models.find(m => m.id === modelId);
         if (model) {
           const skuData = data.filter(d => d.sku === selectedSKU);
-          const progressUpdater = { setProgress: () => {} }; // Dummy progress updater
           
-          const result = await optimizeSingleModel(model, skuData, selectedSKU, progressUpdater, false);
+          const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai');
           
-          if (result && result.method?.startsWith('ai_')) {
-            // Cache the results using the correct function name
+          if (result) {
             const dataHash = generateDataHash(skuData);
             setCachedParameters(
               selectedSKU, 
@@ -231,18 +211,19 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
   };
 
   const useGridOptimization = async (modelId: string) => {
-    // Set flag to prevent optimization during Grid toggle
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = 'grid'; // Mark as Grid (string 'grid')
+    preferences[preferenceKey] = 'grid';
     saveManualAIPreferences(preferences);
+    setSelectedMethod(selectedSKU, modelId, 'grid');
 
     console.log(`PREFERENCE: Updated ${preferenceKey} to Grid`);
 
-    const cached = getCachedParameters(selectedSKU, modelId);
-    if (cached && cached.method === 'grid_search') {
+    // Try to get cached Grid results first
+    const cached = getCachedParameters(selectedSKU, modelId, 'grid');
+    if (cached) {
       setModels(prev => prev.map(model => 
         model.id === modelId 
           ? { 
@@ -257,17 +238,15 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
           : model
       ));
     } else {
-      // Trigger grid optimization if no cached results
+      // Run fresh Grid optimization
       try {
         const model = models.find(m => m.id === modelId);
         if (model) {
           const skuData = data.filter(d => d.sku === selectedSKU);
-          const progressUpdater = { setProgress: () => {} }; // Dummy progress updater
           
-          const result = await optimizeSingleModel(model, skuData, selectedSKU, progressUpdater, true); // Force grid search
+          const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid');
           
           if (result) {
-            // Cache the results using the correct function name
             const dataHash = generateDataHash(skuData);
             setCachedParameters(
               selectedSKU, 
@@ -307,13 +286,13 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
   };
 
   const resetToManual = (modelId: string) => {
-    // Set flag to prevent optimization during manual reset
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
     const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = false; // Mark as manual
+    preferences[preferenceKey] = false;
     saveManualAIPreferences(preferences);
+    setSelectedMethod(selectedSKU, modelId, 'manual');
 
     console.log(`PREFERENCE: Updated ${preferenceKey} to manual (reset)`);
 
@@ -332,7 +311,6 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[]) => {
     ));
     
     setTimeout(() => {
-      // Clear the flag after operations complete
       isTogglingAIManualRef.current = false;
     }, 100);
   };
