@@ -1,9 +1,10 @@
+
 import React from 'react';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Brain, Target, BarChart3, TrendingUp } from 'lucide-react';
+import { Brain, Target, BarChart3, TrendingUp, Settings } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { BusinessContext, BUSINESS_CONTEXT_OPTIONS } from '@/types/businessContext';
 
