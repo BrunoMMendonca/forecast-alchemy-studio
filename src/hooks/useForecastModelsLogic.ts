@@ -1,4 +1,3 @@
-
 import { useState, useRef, useCallback } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
@@ -104,7 +103,6 @@ export const useForecastModelsLogic = (
     }
 
     const enabledModels = models.filter(m => m.enabled);
-    const enabledModelIds = enabledModels.map(m => m.id);
     
     console.log('🚀 QUEUE: Starting optimization for queued SKUs:', queuedSKUs);
     
@@ -112,7 +110,7 @@ export const useForecastModelsLogic = (
     
     await optimizeQueuedSKUs(
       data, 
-      enabledModelIds, 
+      enabledModels, 
       queuedSKUs,
       (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method) => {
         const skuData = data.filter(d => d.sku === sku);
