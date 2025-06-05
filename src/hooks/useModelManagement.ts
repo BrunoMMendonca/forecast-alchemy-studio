@@ -14,7 +14,8 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
     generateDataHash, 
     getCachedParameters, 
     setCachedParameters,
-    setSelectedMethod 
+    setSelectedMethod,
+    cache 
   } = useOptimizationCache();
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
   const { createModelsWithPreferences } = useModelPreferences(selectedSKU, data);
@@ -35,6 +36,15 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
       lastSelectedSKURef.current = selectedSKU;
     }
   }, [selectedSKU, createModelsWithPreferences]);
+
+  // Effect to update models when cache changes (after optimization)
+  useEffect(() => {
+    if (selectedSKU && cache[selectedSKU] && !isTogglingAIManualRef.current) {
+      console.log('🔄 CACHE UPDATED: Updating models state after optimization for', selectedSKU);
+      const modelsWithPreferences = createModelsWithPreferences();
+      setModels(modelsWithPreferences);
+    }
+  }, [cache, selectedSKU, createModelsWithPreferences]);
 
   const toggleModel = (modelId: string) => {
     setModels(prev => prev.map(model => 
@@ -268,9 +278,11 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
   };
 
   const refreshModelsWithPreferences = useCallback(() => {
-    console.log('🔄 REFRESH: Manually refreshing models with preferences');
-    const modelsWithPreferences = createModelsWithPreferences();
-    setModels(modelsWithPreferences);
+    if (!isTogglingAIManualRef.current) {
+      console.log('🔄 REFRESH: Manually refreshing models with preferences');
+      const modelsWithPreferences = createModelsWithPreferences();
+      setModels(modelsWithPreferences);
+    }
   }, [createModelsWithPreferences]);
 
   return {

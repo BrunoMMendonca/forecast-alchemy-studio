@@ -3,7 +3,6 @@ import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } f
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useForecastModelsLogic } from '@/hooks/useForecastModelsLogic';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
-import { useModelManagement } from '@/hooks/useModelManagement';
 import { ModelSelection } from './ModelSelection';
 import { ProductSelector } from './ProductSelector';
 import { QueueStatusDisplay } from './QueueStatusDisplay';
@@ -35,14 +34,8 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 }, ref) => {
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
   const hasTriggeredOptimizationRef = useRef(false);
-  const navigationReturnRef = useRef(false);
   
   const { cache } = useOptimizationCache();
-  const { 
-    createModelsWithPreferences, 
-    refreshModelsWithPreferences,
-    setModels 
-  } = useModelManagement(selectedSKU, data);
 
   const {
     models,
@@ -67,20 +60,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   useImperativeHandle(ref, () => ({
     startOptimization: handleQueueOptimization
   }));
-
-  // Detect navigation return and refresh models
-  useEffect(() => {
-    console.log('🔄 NAVIGATION: ForecastModels component mounted/remounted');
-    navigationReturnRef.current = true;
-    
-    setTimeout(() => {
-      if (selectedSKU) {
-        console.log('🔄 NAVIGATION: Refreshing models on return for', selectedSKU);
-        refreshModelsWithPreferences();
-      }
-      navigationReturnRef.current = false;
-    }, 100);
-  }, []);
 
   // AUTO-TRIGGER: Watch for shouldStartOptimization prop
   React.useEffect(() => {
@@ -124,20 +103,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
       }
     }
   }, [optimizationQueue?.getSKUsInQueue().length]);
-
-  // Watch for cache changes and update models
-  React.useEffect(() => {
-    if (selectedSKU && cache[selectedSKU] && !navigationReturnRef.current) {
-      console.log('🔄 CACHE UPDATED: Immediately updating models state for', selectedSKU);
-      
-      const modelsWithPreferences = createModelsWithPreferences();
-      setModels(modelsWithPreferences);
-      
-      setTimeout(() => {
-        generateForecastsForSelectedSKU();
-      }, 100);
-    }
-  }, [cache, selectedSKU]);
 
   // Auto-select first SKU when data changes
   React.useEffect(() => {
