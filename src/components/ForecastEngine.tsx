@@ -28,17 +28,35 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
   businessContext
 }) => {
   const { models, toggleModel, updateParameter, updateModelOptimization, resetModel } = useModelParameters();
-  const { results, isGenerating } = useForecastEngine(selectedSKU, data, models, forecastPeriods);
-  const { isOptimizing, optimizingModel, optimizeModel } = useOptimization(selectedSKU, data, businessContext);
+  
+  // Only initialize hooks with valid SKU to prevent cache calls with empty SKU
+  const validSKU = selectedSKU && selectedSKU.trim() !== '';
+  const { results, isGenerating } = useForecastEngine(
+    validSKU ? selectedSKU : '', 
+    data, 
+    models, 
+    forecastPeriods
+  );
+  const { isOptimizing, optimizingModel, optimizeModel } = useOptimization(
+    validSKU ? selectedSKU : '', 
+    data, 
+    businessContext
+  );
 
   // Pass results to parent when they change
   React.useEffect(() => {
-    if (results.length > 0 && selectedSKU) {
+    if (results.length > 0 && validSKU) {
+      console.log('ForecastEngine: Passing results to parent for SKU:', selectedSKU);
       onForecastGeneration(results, selectedSKU);
     }
-  }, [results, selectedSKU, onForecastGeneration]);
+  }, [results, validSKU, selectedSKU, onForecastGeneration]);
 
   const handleOptimizeModel = async (modelId: string, method: 'ai' | 'grid') => {
+    if (!validSKU) {
+      console.log('ForecastEngine: Cannot optimize without valid SKU');
+      return;
+    }
+
     const model = models.find(m => m.id === modelId);
     if (!model) return;
 
@@ -61,6 +79,7 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
   // Auto-select first SKU if none selected
   React.useEffect(() => {
     if (!selectedSKU && availableSKUs.length > 0) {
+      console.log('ForecastEngine: Auto-selecting first SKU:', availableSKUs[0]);
       onSKUChange(availableSKUs[0]);
     }
   }, [selectedSKU, availableSKUs, onSKUChange]);
@@ -89,7 +108,7 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
           </div>
         )}
 
-        {effectiveSelectedSKU && (
+        {effectiveSelectedSKU && effectiveSelectedSKU.trim() !== '' && (
           <ModelParameterPanel
             models={models}
             selectedSKU={effectiveSelectedSKU}

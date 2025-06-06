@@ -22,13 +22,23 @@ export const useOptimization = (
     reasoning?: string;
     method: string;
   } | null> => {
-    if (!selectedSKU || !data.length) return null;
+    // Guard against empty or invalid SKU
+    if (!selectedSKU || selectedSKU.trim() === '' || !data.length) {
+      console.log('useOptimization: No valid SKU or data, skipping optimization');
+      return null;
+    }
 
+    console.log('useOptimization: Starting optimization for SKU:', selectedSKU, 'Model:', model.id, 'Method:', method);
     setIsOptimizing(true);
     setOptimizingModel(model.id);
 
     try {
       const skuData = data.filter(d => d.sku === selectedSKU);
+      if (skuData.length === 0) {
+        console.log('useOptimization: No data found for SKU:', selectedSKU);
+        return null;
+      }
+
       const result = await getOptimizationByMethod(model, skuData, selectedSKU, method, businessContext);
       
       return result ? {

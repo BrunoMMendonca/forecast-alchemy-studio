@@ -21,17 +21,21 @@ export const useForecastEngine = (
   } = useForecastCache();
 
   const generateForecasts = useCallback(async () => {
-    if (!selectedSKU || !data.length) {
+    // Early return if no valid SKU or data
+    if (!selectedSKU || selectedSKU.trim() === '' || !data.length) {
+      console.log('useForecastEngine: No valid SKU or data, clearing results');
       setResults([]);
       return;
     }
 
     const enabledModels = models.filter(m => m.enabled);
     if (enabledModels.length === 0) {
+      console.log('useForecastEngine: No enabled models, clearing results');
       setResults([]);
       return;
     }
 
+    console.log('useForecastEngine: Generating forecasts for SKU:', selectedSKU);
     setIsGenerating(true);
     
     try {
@@ -54,10 +58,14 @@ export const useForecastEngine = (
     }
   }, [selectedSKU, data, models, forecastPeriods, getCachedForecast, setCachedForecast, generateParametersHash]);
 
-  // Auto-generate forecasts when dependencies change
+  // Auto-generate forecasts when dependencies change, but only with valid SKU
   useEffect(() => {
-    generateForecasts();
-  }, [generateForecasts]);
+    if (selectedSKU && selectedSKU.trim() !== '') {
+      generateForecasts();
+    } else {
+      setResults([]);
+    }
+  }, [generateForecasts, selectedSKU]);
 
   return {
     results,
