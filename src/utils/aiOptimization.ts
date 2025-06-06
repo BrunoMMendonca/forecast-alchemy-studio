@@ -42,8 +42,14 @@ export const runAIOptimization = async (
   skuData: SalesData[],
   sku: string,
   businessContext?: BusinessContext,
-  gridContext?: { parameters: Record<string, number>; accuracy: number }
+  gridContext?: { parameters: Record<string, number>; accuracy: number },
+  grokApiEnabled: boolean = true
 ): Promise<OptimizationResult | null> => {
+  if (!grokApiEnabled) {
+    console.log('🔑 AI: Grok API disabled in global settings, skipping AI optimization');
+    return null;
+  }
+
   if (!isValidApiKey(GROK_API_KEY)) {
     console.warn('🔑 AI: Invalid API key, skipping AI optimization');
     return null;

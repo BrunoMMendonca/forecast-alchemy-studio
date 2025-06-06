@@ -13,6 +13,8 @@ interface FloatingSettingsButtonProps {
   setForecastPeriods: (periods: number) => void;
   businessContext: BusinessContext;
   setBusinessContext: (context: BusinessContext) => void;
+  grokApiEnabled: boolean;
+  setGrokApiEnabled: (enabled: boolean) => void;
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
 }
@@ -22,6 +24,8 @@ export const FloatingSettingsButton: React.FC<FloatingSettingsButtonProps> = ({
   setForecastPeriods,
   businessContext,
   setBusinessContext,
+  grokApiEnabled,
+  setGrokApiEnabled,
   settingsOpen,
   setSettingsOpen
 }) => {
@@ -53,6 +57,8 @@ export const FloatingSettingsButton: React.FC<FloatingSettingsButtonProps> = ({
                 setForecastPeriods={setForecastPeriods}
                 businessContext={businessContext}
                 setBusinessContext={setBusinessContext}
+                grokApiEnabled={grokApiEnabled}
+                setGrokApiEnabled={setGrokApiEnabled}
               />
             </TabsContent>
             
