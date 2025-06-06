@@ -28,6 +28,12 @@ export const getSKUsNeedingOptimization = (
     
     const modelsNeedingOptimization = enabledModelsWithParams
       .filter(m => {
+        // Skip models without optimizable parameters
+        if (!hasOptimizableParameters(m)) {
+          console.log(`🗄️ CACHE: ${sku}:${m.id} - Skipping, no optimizable parameters`);
+          return false;
+        }
+
         const cached = cache[sku]?.[m.id];
         if (!cached) {
           console.log(`🗄️ CACHE: ${sku}:${m.id} - No cache entry found`);
