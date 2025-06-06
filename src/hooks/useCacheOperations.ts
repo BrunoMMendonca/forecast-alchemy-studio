@@ -1,3 +1,4 @@
+
 import { useCallback } from 'react';
 import { OptimizationCache, OptimizedParameters, saveCacheToStorage } from '@/utils/cacheStorageUtils';
 import { CACHE_EXPIRY_HOURS } from '@/utils/cacheStorageUtils';
@@ -171,13 +172,7 @@ export const useCacheOperations = (
       return newCache;
     });
 
-    // IMPORTANT: Increment cache version to trigger re-renders
-    console.log(`🔄 CACHE: Incrementing cache version to trigger model updates`);
-    setCacheVersion(prev => {
-      const newVersion = prev + 1;
-      console.log(`🔄 CACHE: Cache version updated from ${prev} to ${newVersion}`);
-      return newVersion;
-    });
+    setCacheVersion(prev => prev + 1);
   }, [setCache, setCacheVersion]);
 
   const clearCacheForSKU = useCallback((sku: string) => {

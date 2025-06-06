@@ -92,26 +92,21 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     onParameterUpdate(parameter, newValue);
   }, [onParameterUpdate, userSelectedMethod, selectedSKU, model.id, setSelectedMethod]);
 
-  // Handle badge clicks with proper duplicate prevention
+  // Handle badge clicks with debouncing to prevent duplicate calls
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
-    console.log(`🎯 BADGE CLICK: Attempting to switch to ${newMethod} for ${model.id} (current: ${userSelectedMethod})`);
-    
     // Prevent duplicate calls by checking if we're already in this method
     if (userSelectedMethod === newMethod) {
-      console.log(`🎯 BADGE CLICK: Already in ${newMethod} mode, ignoring duplicate call`);
       return;
     }
     
-    console.log(`🎯 BADGE CLICK: Proceeding with switch to ${newMethod} for ${model.id}`);
+    console.log(`🎯 BADGE CLICK: Switching to ${newMethod} for ${model.id}`);
     
-    // If switching to manual, let onResetToManual handle the cache update
+    // Update the cache's "selected" field
+    setSelectedMethod(selectedSKU, model.id, newMethod);
+    
+    // If switching to manual, reset the model to clear optimization results
     if (newMethod === 'manual') {
-      console.log(`🎯 BADGE CLICK: Switching to manual, calling onResetToManual (it will handle cache update)`);
       onResetToManual();
-    } else {
-      // For AI/Grid methods, update the cache directly
-      console.log(`🎯 BADGE CLICK: Setting method to ${newMethod} for ${model.id}`);
-      setSelectedMethod(selectedSKU, model.id, newMethod);
     }
   }, [selectedSKU, model.id, userSelectedMethod, setSelectedMethod, onResetToManual]);
 
