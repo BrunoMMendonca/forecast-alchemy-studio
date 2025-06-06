@@ -79,7 +79,6 @@ export const useOptimizationHandler = (
     
     console.log('🚀 OPTIMIZATION: Enabled models:', enabledModels.map(m => m.id));
     console.log('🚀 OPTIMIZATION: Optimizable models:', optimizableModels.map(m => m.id));
-    console.log('🚀 OPTIMIZATION: Non-optimizable models (will skip caching):', enabledModels.filter(m => !hasOptimizableParameters(m)).map(m => m.id));
 
     // If no models have optimizable parameters, remove all SKUs from queue
     if (optimizableModels.length === 0) {
@@ -122,13 +121,6 @@ export const useOptimizationHandler = (
       optimizableModels,
       skusToOptimize,
       (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method, bothResults) => {
-        // CRITICAL: Only cache models with optimizable parameters
-        const model = models.find(m => m.id === modelId);
-        if (!model || !hasOptimizableParameters(model)) {
-          console.log(`🚫 CACHE: Skipping cache for ${sku}:${modelId} - no optimizable parameters`);
-          return;
-        }
-
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
         
@@ -139,12 +131,9 @@ export const useOptimizationHandler = (
           businessImpact: factors?.businessImpact || 'Unknown'
         };
         
-        console.log(`💾 CACHE: Processing optimization result for ${sku}:${modelId}, method: ${method}`);
-        
         // Cache the optimization results
         if (bothResults) {
           if (bothResults.ai) {
-            console.log(`💾 CACHE: Storing AI result for ${sku}:${modelId}`);
             setCachedParameters(
               sku, 
               modelId, 
@@ -154,12 +143,11 @@ export const useOptimizationHandler = (
               bothResults.ai.reasoning,
               bothResults.ai.factors,
               bothResults.ai.expectedAccuracy,
-              'ai'
+              bothResults.ai.method
             );
           }
           
           if (bothResults.grid) {
-            console.log(`💾 CACHE: Storing Grid result for ${sku}:${modelId}`);
             setCachedParameters(
               sku, 
               modelId, 
@@ -169,27 +157,23 @@ export const useOptimizationHandler = (
               bothResults.grid.reasoning,
               bothResults.grid.factors,
               bothResults.grid.expectedAccuracy,
-              'grid_search'
+              bothResults.grid.method
             );
           }
         } else {
-          console.log(`💾 CACHE: Storing single result for ${sku}:${modelId}, method: ${method}`);
           setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
         }
         
         // IMPORTANT: Update preferences to best available method after caching
-        // Add a small delay to ensure cache is updated first
-        setTimeout(() => {
-          const preferences = loadManualAIPreferences();
-          const preferenceKey = `${sku}:${modelId}`;
-          const bestAvailableMethod = getBestAvailableMethod(sku, modelId);
-          
-          preferences[preferenceKey] = bestAvailableMethod;
-          saveManualAIPreferences(preferences);
-          savePreferences(preferences);
-          
-          console.log(`🎯 PREFERENCE UPDATE: ${preferenceKey} -> ${bestAvailableMethod} (after optimization)`);
-        }, 100);
+        const preferences = loadManualAIPreferences();
+        const preferenceKey = `${sku}:${modelId}`;
+        const bestAvailableMethod = getBestAvailableMethod(sku, modelId);
+        
+        preferences[preferenceKey] = bestAvailableMethod;
+        saveManualAIPreferences(preferences);
+        savePreferences(preferences);
+        
+        console.log(`🎯 PREFERENCE UPDATE: ${preferenceKey} -> ${bestAvailableMethod} (after optimization)`);
         
         setModels(prev => prev.map(model => 
           model.id === modelId 

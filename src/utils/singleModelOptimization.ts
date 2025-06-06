@@ -1,3 +1,4 @@
+
 import { optimizationLogger } from '@/utils/optimizationLogger';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -35,11 +36,17 @@ export const optimizeSingleModel = async (
 }> => {
   console.log(`🔧 SINGLE: Starting optimization for ${sku}:${model.id}`);
 
-  // CRITICAL: Early check for models without optimizable parameters - DO NOT OPTIMIZE
+  // Early check for models without optimizable parameters
   if (!hasOptimizableParameters(model)) {
-    console.log(`🚫 SINGLE: Model ${model.id} has no optimizable parameters, skipping optimization entirely`);
+    console.log(`🔧 SINGLE: Model ${model.id} has no optimizable parameters, using defaults`);
+    optimizationLogger.logStep({
+      sku,
+      modelId: model.id,
+      step: 'complete',
+      message: 'No parameters to optimize - using defaults',
+      parameters: model.parameters
+    });
     
-    // Don't call onMethodComplete for non-optimizable models to prevent caching
     const defaultResult = { 
       parameters: model.parameters || {}, 
       confidence: 70, 
@@ -55,8 +62,8 @@ export const optimizeSingleModel = async (
     };
     
     return { 
-      selectedResult: defaultResult
-      // Note: No bothResults to prevent caching
+      selectedResult: defaultResult,
+      bothResults: { grid: defaultResult as GridOptimizationResult }
     };
   }
 
