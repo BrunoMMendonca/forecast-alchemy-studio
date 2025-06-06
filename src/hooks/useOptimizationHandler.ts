@@ -8,6 +8,7 @@ import { useModelManagement } from '@/hooks/useModelManagement';
 import { OptimizationFactors } from '@/types/optimizationTypes';
 import { PreferenceValue } from '@/hooks/useManualAIPreferences';
 import { hasOptimizableParameters } from '@/utils/modelConfig';
+import { getSKUsNeedingOptimization } from '@/utils/cacheValidationUtils';
 
 interface OptimizationQueue {
   getSKUsInQueue: () => string[];
@@ -25,7 +26,7 @@ export const useOptimizationHandler = (
   const {
     generateDataHash,
     setCachedParameters,
-    getSKUsNeedingOptimization
+    cache
   } = useOptimizationCache();
   
   const { isOptimizing, progress, optimizeQueuedSKUs } = useBatchOptimization();
@@ -63,7 +64,7 @@ export const useOptimizationHandler = (
     }
 
     // Check which SKUs actually need optimization
-    const skusNeedingOptimization = getSKUsNeedingOptimization(data, models, undefined, grokApiEnabled);
+    const skusNeedingOptimization = getSKUsNeedingOptimization(data, models, cache, grokApiEnabled);
     const validQueuedSKUs = queuedSKUs.filter(sku => 
       skusNeedingOptimization.some(item => item.sku === sku)
     );
@@ -82,6 +83,11 @@ export const useOptimizationHandler = (
     }
     
     markOptimizationStarted(data, '/');
+    
+    // Create a wrapper function that matches the expected signature
+    const needsOptimizationCheck = (checkData: SalesData[], checkModels: any[]) => {
+      return getSKUsNeedingOptimization(checkData, checkModels, cache, grokApiEnabled);
+    };
     
     await optimizeQueuedSKUs(
       data, 
@@ -169,14 +175,14 @@ export const useOptimizationHandler = (
           }
         }, 500); // Give more time for UI updates
       },
-      (data, models, cache) => getSKUsNeedingOptimization(data, models, cache, grokApiEnabled)
+      needsOptimizationCheck
     );
 
     // Mark optimization completed after a slight delay to ensure all updates are processed
     setTimeout(() => {
       markOptimizationCompleted(data, '/');
     }, 1000);
-  }, [optimizationQueue, models, data, selectedSKU, grokApiEnabled, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete]);
+  }, [optimizationQueue, models, data, selectedSKU, grokApiEnabled, cache, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, markOptimizationCompleted, onOptimizationComplete]);
 
   return {
     isOptimizing,
