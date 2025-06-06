@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useUnifiedModelManagement } from '@/hooks/useUnifiedModelManagement';
@@ -59,8 +58,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     data,
     forecastPeriods,
     undefined,
-    onForecastGeneration,
-    grokApiEnabled // Add this missing parameter
+    onForecastGeneration
   );
 
   // Memoize queue combinations to prevent infinite re-renders
