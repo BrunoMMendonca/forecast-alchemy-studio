@@ -14,11 +14,13 @@ import { getSKUsNeedingOptimization, isCacheValid } from '@/utils/cacheValidatio
 import { useCacheOperations } from '@/hooks/useCacheOperations';
 
 export const useOptimizationCache = () => {
+  // All useState hooks must be called first and in the same order
   const [cache, setCache] = useState<OptimizationCache>({});
   const [cacheStats, setCacheStats] = useState({ hits: 0, misses: 0, skipped: 0 });
   const [cacheVersion, setCacheVersion] = useState(0);
   const [methodSelectionVersion, setMethodSelectionVersion] = useState(0);
   
+  // All custom hooks must be called after useState hooks and in the same order
   const {
     generateDatasetFingerprint,
     isOptimizationComplete,
@@ -32,14 +34,14 @@ export const useOptimizationCache = () => {
     clearCacheForSKU
   } = useCacheOperations(cache, setCache, setCacheStats, setCacheVersion);
 
-  // Load state from localStorage on mount ONLY
+  // All useEffect hooks must come after other hooks
   useEffect(() => {
     const loadedCache = loadCacheFromStorage();
     setCache(loadedCache);
     console.log('🗄️ CACHE: Initial load from localStorage completed');
   }, []);
 
-  // Wrapper for setSelectedMethod that increments method selection version
+  // All useCallback hooks must come after useEffect hooks
   const setSelectedMethod = useCallback((
     sku: string,
     modelId: string,
