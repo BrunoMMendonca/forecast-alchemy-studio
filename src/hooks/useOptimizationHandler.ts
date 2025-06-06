@@ -44,57 +44,62 @@ export const useOptimizationHandler = (
 
   const handleQueueOptimization = useCallback(async () => {
     if (!optimizationQueue) {
-      console.log('🔧 HANDLER: No optimization queue provided');
       return;
     }
 
     const queuedSKUs = optimizationQueue.getSKUsInQueue();
     if (queuedSKUs.length === 0) {
-      console.log('🔧 HANDLER: Queue is empty');
       return;
     }
 
-    console.log('🔧 HANDLER: Starting optimization for queued SKUs:', queuedSKUs);
+    console.log('🚀 OPTIMIZATION: Starting queue processing for SKUs:', queuedSKUs);
 
     const enabledModels = models.filter(m => m.enabled);
-    const modelsWithOptimizableParams = enabledModels.filter(m => hasOptimizableParameters(m));
+    const optimizableModels = enabledModels.filter(m => hasOptimizableParameters(m));
     
-    console.log('🔧 HANDLER: Models with optimizable parameters:', modelsWithOptimizableParams.map(m => m.id));
+    console.log('🚀 OPTIMIZATION: Enabled models:', enabledModels.map(m => m.id));
+    console.log('🚀 OPTIMIZATION: Optimizable models:', optimizableModels.map(m => m.id));
 
-    // If no models have optimizable parameters, remove all SKUs immediately
-    if (modelsWithOptimizableParams.length === 0) {
-      console.log('🔧 HANDLER: No models with optimizable parameters - removing all SKUs from queue');
-      optimizationQueue.removeSKUsFromQueue(queuedSKUs);
+    // If no models have optimizable parameters, remove all SKUs from queue
+    if (optimizableModels.length === 0) {
+      console.log('🧹 OPTIMIZATION: No optimizable models found, clearing queue');
+      if (optimizationQueue.removeUnnecessarySKUs) {
+        optimizationQueue.removeUnnecessarySKUs(queuedSKUs);
+      } else {
+        optimizationQueue.removeSKUsFromQueue(queuedSKUs);
+      }
       return;
     }
 
     // Check which SKUs actually need optimization
-    const skusNeedingOptimization = getSKUsNeedingOptimization(data, modelsWithOptimizableParams);
-    const skusNeedingOptimizationList = skusNeedingOptimization.map(item => item.sku);
-    
-    // Remove SKUs that don't need optimization
-    const skusNotNeedingOptimization = queuedSKUs.filter(sku => !skusNeedingOptimizationList.includes(sku));
-    if (skusNotNeedingOptimization.length > 0) {
-      console.log('🔧 HANDLER: Removing SKUs that don\'t need optimization:', skusNotNeedingOptimization);
-      optimizationQueue.removeSKUsFromQueue(skusNotNeedingOptimization);
+    const skusNeedingOptimization = getSKUsNeedingOptimization(data, optimizableModels);
+    const skusToOptimize = skusNeedingOptimization.map(item => item.sku);
+    const unnecessarySKUs = queuedSKUs.filter(sku => !skusToOptimize.includes(sku));
+
+    console.log('🚀 OPTIMIZATION: SKUs that need optimization:', skusToOptimize);
+    console.log('🧹 OPTIMIZATION: SKUs that don\'t need optimization:', unnecessarySKUs);
+
+    // Remove unnecessary SKUs from queue
+    if (unnecessarySKUs.length > 0) {
+      if (optimizationQueue.removeUnnecessarySKUs) {
+        optimizationQueue.removeUnnecessarySKUs(unnecessarySKUs);
+      } else {
+        optimizationQueue.removeSKUsFromQueue(unnecessarySKUs);
+      }
     }
 
-    // Get the final list of SKUs to optimize
-    const finalSKUsToOptimize = queuedSKUs.filter(sku => skusNeedingOptimizationList.includes(sku));
-    
-    if (finalSKUsToOptimize.length === 0) {
-      console.log('🔧 HANDLER: No SKUs need optimization after filtering');
+    // If no SKUs actually need optimization, we're done
+    if (skusToOptimize.length === 0) {
+      console.log('🧹 OPTIMIZATION: No SKUs need optimization, done');
       return;
     }
-
-    console.log('🔧 HANDLER: Final SKUs to optimize:', finalSKUsToOptimize);
     
     markOptimizationStarted(data, '/');
     
     await optimizeQueuedSKUs(
       data, 
-      modelsWithOptimizableParams,
-      finalSKUsToOptimize,
+      optimizableModels,
+      skusToOptimize,
       (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method, bothResults) => {
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
@@ -166,23 +171,24 @@ export const useOptimizationHandler = (
         ));
       },
       (sku) => {
-        // SKU completion callback - remove immediately when called
-        console.log('🔧 HANDLER: SKU optimization completed:', sku);
-        optimizationQueue.removeSKUsFromQueue([sku]);
-        
-        if (sku === selectedSKU && onOptimizationComplete) {
-          setTimeout(() => {
-            onOptimizationComplete();
-          }, 200);
-        }
+        console.log('✅ OPTIMIZATION: SKU completed:', sku);
+        // Delay queue removal to ensure UI updates are complete
+        setTimeout(() => {
+          optimizationQueue.removeSKUsFromQueue([sku]);
+          
+          if (sku === selectedSKU && onOptimizationComplete) {
+            setTimeout(() => {
+              onOptimizationComplete();
+            }, 200);
+          }
+        }, 500);
       },
       getSKUsNeedingOptimization
     );
 
-    // Mark optimization completed after all SKUs are processed
+    // Mark optimization completed after a slight delay to ensure all updates are processed
     setTimeout(() => {
       markOptimizationCompleted(data, '/');
-      console.log('🔧 HANDLER: Optimization session completed');
     }, 1000);
   }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete]);
 
