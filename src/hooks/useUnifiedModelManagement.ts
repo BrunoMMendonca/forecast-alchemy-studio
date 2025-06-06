@@ -6,6 +6,7 @@ import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useModelState } from './useModelState';
 import { useForecastGeneration } from './useForecastGeneration';
 import { useModelOptimizationSync } from './useModelOptimizationSync';
+import { generateDataHash } from '@/utils/cacheHashUtils';
 
 export const useUnifiedModelManagement = (
   selectedSKU: string, 
@@ -14,7 +15,7 @@ export const useUnifiedModelManagement = (
   businessContext?: BusinessContext,
   onForecastGeneration?: (results: ForecastResult[], selectedSKU: string) => void
 ) => {
-  const { cache, setSelectedMethod } = useOptimizationCache();
+  const { cache, setSelectedMethod, setManualParameters, getManualParameters } = useOptimizationCache();
   
   const {
     models,
@@ -43,28 +44,66 @@ export const useUnifiedModelManagement = (
     lastForecastGenerationHashRef
   );
 
+  // Load manual parameters from cache when SKU changes
+  useEffect(() => {
+    if (!selectedSKU || !data.length) return;
+
+    const skuData = data.filter(d => d.sku === selectedSKU);
+    const currentDataHash = generateDataHash(skuData);
+
+    setModels(prev => prev.map(model => {
+      const manualParams = getManualParameters(selectedSKU, model.id);
+      if (manualParams) {
+        console.log(`🔄 MANUAL RESTORE: Restoring manual parameters for ${selectedSKU}:${model.id}`, manualParams);
+        return {
+          ...model,
+          parameters: { ...model.parameters, ...manualParams },
+          optimizedParameters: undefined,
+          optimizationConfidence: undefined,
+          optimizationReasoning: undefined,
+          optimizationFactors: undefined,
+          expectedAccuracy: undefined,
+          optimizationMethod: undefined
+        };
+      }
+      return model;
+    }));
+  }, [selectedSKU, data, getManualParameters, setModels]);
+
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
     console.log(`🎚️ PARAMETER UPDATE: ${parameter} = ${value} for ${modelId} - switching to manual`);
+    
+    if (!selectedSKU || !data.length) return;
+
+    const skuData = data.filter(d => d.sku === selectedSKU);
+    const currentDataHash = generateDataHash(skuData);
     
     // Set explicit user selection to manual in cache
     setSelectedMethod(selectedSKU, modelId, 'manual');
     
-    // Immediately update the model state to manual mode (clear optimization data)
-    setModels(prev => prev.map(model => 
-      model.id === modelId 
-        ? { 
-            ...model, 
-            parameters: { ...model.parameters, [parameter]: value },
-            optimizedParameters: undefined,
-            optimizationConfidence: undefined,
-            optimizationReasoning: undefined,
-            optimizationFactors: undefined,
-            expectedAccuracy: undefined,
-            optimizationMethod: undefined
-          }
-        : model
-    ));
-  }, [selectedSKU, setSelectedMethod, setModels]);
+    // Update model state immediately
+    setModels(prev => prev.map(model => {
+      if (model.id === modelId) {
+        const newParameters = { ...model.parameters, [parameter]: value };
+        
+        // Store manual parameters in cache
+        setManualParameters(selectedSKU, modelId, newParameters, currentDataHash);
+        
+        return { 
+          ...model, 
+          parameters: newParameters,
+          // Clear optimization data when manually changing parameters
+          optimizedParameters: undefined,
+          optimizationConfidence: undefined,
+          optimizationReasoning: undefined,
+          optimizationFactors: undefined,
+          expectedAccuracy: undefined,
+          optimizationMethod: undefined
+        };
+      }
+      return model;
+    }));
+  }, [selectedSKU, data, setSelectedMethod, setManualParameters, setModels]);
 
   const resetToManual = useCallback((modelId: string) => {
     console.log(`🔄 RESET TO MANUAL: ${modelId}`);
@@ -102,9 +141,11 @@ export const useUnifiedModelManagement = (
       const cached = cache[selectedSKU]?.[modelId];
       
       if (method === 'manual') {
-        // Clear optimization data for manual mode
+        // Check for cached manual parameters
+        const manualParams = getManualParameters(selectedSKU, modelId);
         return {
           ...model,
+          parameters: manualParams ? { ...model.parameters, ...manualParams } : model.parameters,
           optimizedParameters: undefined,
           optimizationConfidence: undefined,
           optimizationReasoning: undefined,
@@ -136,7 +177,7 @@ export const useUnifiedModelManagement = (
       
       return model;
     }));
-  }, [selectedSKU, setSelectedMethod, setModels, cache]);
+  }, [selectedSKU, setSelectedMethod, setModels, cache, getManualParameters]);
 
   // CONTROLLED forecast generation - only when models hash actually changes
   useEffect(() => {

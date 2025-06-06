@@ -30,6 +30,8 @@ export const useOptimizationCache = () => {
     getCachedParameters,
     setCachedParameters,
     setSelectedMethod: _setSelectedMethod,
+    setManualParameters,
+    getManualParameters,
     clearCacheForSKU
   } = useCacheOperations(cache, setCache, setCacheStats, setCacheVersion);
 
@@ -78,6 +80,8 @@ export const useOptimizationCache = () => {
     getCachedParameters,
     setCachedParameters,
     setSelectedMethod,
+    setManualParameters,
+    getManualParameters,
     isCacheValid: isCacheValidCallback,
     getSKUsNeedingOptimization: getSKUsNeedingOptimizationCallback,
     clearCacheForSKU,

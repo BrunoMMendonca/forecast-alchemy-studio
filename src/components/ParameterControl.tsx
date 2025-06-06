@@ -34,7 +34,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   grokApiEnabled = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { cache, cacheVersion } = useOptimizationCache();
+  const { cache, cacheVersion, getManualParameters } = useOptimizationCache();
   const { getBestAvailableMethod } = useOptimizationMethodManagement();
 
   // Get the actual data hash for the current SKU
@@ -123,13 +123,20 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   // Determine the source of truth for parameter values
   const getParameterValue = useCallback((parameter: string) => {
     if (isManual) {
+      // First check cache for manual parameters
+      const manualParams = getManualParameters(selectedSKU, model.id);
+      if (manualParams && manualParams[parameter] !== undefined) {
+        console.log(`📊 PARAM_VALUE: Using cached manual value for ${parameter}: ${manualParams[parameter]}`);
+        return manualParams[parameter];
+      }
+      // Fall back to model parameters
       return model.parameters?.[parameter];
     } else {
       const optimizedValue = model.optimizedParameters?.[parameter];
       const modelValue = model.parameters?.[parameter];
       return optimizedValue !== undefined ? optimizedValue : modelValue;
     }
-  }, [isManual, model.parameters, model.optimizedParameters]);
+  }, [isManual, model.parameters, model.optimizedParameters, selectedSKU, model.id, getManualParameters]);
 
   const canOptimize = hasOptimizableParameters(model);
 
