@@ -31,6 +31,9 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
   businessContext,
   grokApiEnabled = true
 }) => {
+  console.log('ForecastEngine: Rendering with data length:', data.length);
+  console.log('ForecastEngine: selectedSKU:', selectedSKU);
+  
   const { models, toggleModel, updateParameter, updateModelOptimization, resetModel } = useModelParameters();
   
   // Only initialize hooks with valid SKU to prevent cache calls with empty SKU
@@ -86,6 +89,9 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
   const availableSKUs = Array.from(new Set(data.map(d => d.sku))).sort();
   const effectiveSelectedSKU = selectedSKU || (availableSKUs.length > 0 ? availableSKUs[0] : '');
 
+  console.log('ForecastEngine: availableSKUs:', availableSKUs);
+  console.log('ForecastEngine: effectiveSelectedSKU:', effectiveSelectedSKU);
+
   // Auto-select first SKU if none selected
   React.useEffect(() => {
     if (!selectedSKU && availableSKUs.length > 0) {
@@ -106,6 +112,14 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        <div className="border border-red-200 p-4 rounded bg-red-50">
+          <p className="text-sm text-red-700 mb-2">Debug Info:</p>
+          <p className="text-xs">Data length: {data.length}</p>
+          <p className="text-xs">Selected SKU: "{selectedSKU}"</p>
+          <p className="text-xs">Available SKUs: {availableSKUs.join(', ')}</p>
+          <p className="text-xs">Effective SKU: "{effectiveSelectedSKU}"</p>
+        </div>
+        
         <ProductSelector
           data={data}
           selectedSKU={effectiveSelectedSKU}
