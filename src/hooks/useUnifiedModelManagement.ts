@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData, ForecastResult } from '@/pages/Index';
@@ -16,17 +17,18 @@ export const useUnifiedModelManagement = (
   onForecastGeneration?: (results: ForecastResult[], selectedSKU: string) => void
 ) => {
   const { toast } = useToast();
-  const isTogglingAIManualRef = useRef<boolean>(false);
-  const lastProcessedCacheVersionRef = useRef<number>(-1);
-  const lastProcessedSKURef = useRef<string>('');
   const forecastGenerationInProgressRef = useRef<boolean>(false);
   const lastForecastGenerationHashRef = useRef<string>('');
+  const lastProcessedCacheVersionRef = useRef<number>(-1);
+  const lastProcessedMethodVersionRef = useRef<number>(-1);
+  const lastProcessedSKURef = useRef<string>('');
 
   const { 
     cache,
     generateDataHash, 
     setSelectedMethod,
-    cacheVersion
+    cacheVersion,
+    methodSelectionVersion
   } = useOptimizationCache();
   
   const { loadAutoBestMethod, saveAutoBestMethod } = useAutoBestMethod();
@@ -43,8 +45,9 @@ export const useUnifiedModelManagement = (
     const hashData = enabledModels.map(m => ({
       id: m.id,
       enabled: m.enabled,
-      params: m.optimizedParameters || m.parameters,
-      method: m.optimizationMethod
+      // Only include the actual parameter values that affect forecasting
+      // Don't include optimization metadata like method, confidence, etc.
+      params: m.optimizedParameters || m.parameters
     }));
     
     return JSON.stringify(hashData);
@@ -141,20 +144,21 @@ export const useUnifiedModelManagement = (
     return methodsUpdated;
   }, [cache, loadAutoBestMethod, saveAutoBestMethod, getBestAvailableMethod]);
 
-  // CONTROLLED cache version updates - only process when actually needed
+  // CONTROLLED cache version updates - only process when optimization data actually changes
   useEffect(() => {
     if (!selectedSKU) return;
 
-    // Prevent unnecessary processing
-    const shouldProcess = (
+    // Only process cache version changes (when optimization data changes)
+    const shouldProcessCacheVersion = (
       cacheVersion !== lastProcessedCacheVersionRef.current || 
       selectedSKU !== lastProcessedSKURef.current
     );
 
-    if (!shouldProcess) {
+    if (!shouldProcessCacheVersion) {
       return;
     }
     
+    console.log(`🗄️ CACHE: Processing cache version change: ${lastProcessedCacheVersionRef.current} -> ${cacheVersion}`);
     lastProcessedCacheVersionRef.current = cacheVersion;
     lastProcessedSKURef.current = selectedSKU;
     
@@ -201,9 +205,74 @@ export const useUnifiedModelManagement = (
     
     setModels(updatedModels);
     
-    // Reset forecast generation hash when models are updated from cache
+    // Reset forecast generation hash when models are updated from cache changes
     lastForecastGenerationHashRef.current = '';
   }, [cacheVersion, selectedSKU, data, cache, generateDataHash, updateAutoBestMethods]);
+
+  // SEPARATE effect for method selection changes - lightweight UI updates only
+  useEffect(() => {
+    if (!selectedSKU) return;
+
+    // Only process method selection changes
+    const shouldProcessMethodVersion = (
+      methodSelectionVersion !== lastProcessedMethodVersionRef.current &&
+      methodSelectionVersion > 0
+    );
+
+    if (!shouldProcessMethodVersion) {
+      return;
+    }
+
+    console.log(`🎯 METHOD: Processing method selection change: ${lastProcessedMethodVersionRef.current} -> ${methodSelectionVersion}`);
+    lastProcessedMethodVersionRef.current = methodSelectionVersion;
+
+    const skuData = data.filter(d => d.sku === selectedSKU);
+    const currentDataHash = generateDataHash(skuData);
+
+    // Lightweight model updates for method selection changes
+    const updatedModels = models.map(model => {
+      const cached = cache[selectedSKU]?.[model.id];
+      const userSelectedMethod = cached?.selected;
+      
+      if (!userSelectedMethod || userSelectedMethod === 'manual') {
+        // Clear optimization data for manual mode
+        return {
+          ...model,
+          optimizedParameters: undefined,
+          optimizationConfidence: undefined,
+          optimizationReasoning: undefined,
+          optimizationFactors: undefined,
+          expectedAccuracy: undefined,
+          optimizationMethod: undefined
+        };
+      }
+
+      // Apply cached data for AI/Grid modes
+      let selectedCache = null;
+      if (userSelectedMethod === 'ai' && cached?.ai) {
+        selectedCache = cached.ai;
+      } else if (userSelectedMethod === 'grid' && cached?.grid) {
+        selectedCache = cached.grid;
+      }
+
+      if (selectedCache && selectedCache.dataHash === currentDataHash) {
+        return {
+          ...model,
+          optimizedParameters: selectedCache.parameters,
+          optimizationConfidence: selectedCache.confidence,
+          optimizationReasoning: selectedCache.reasoning,
+          optimizationFactors: selectedCache.factors,
+          expectedAccuracy: selectedCache.expectedAccuracy,
+          optimizationMethod: selectedCache.method
+        };
+      }
+
+      return model;
+    });
+
+    setModels(updatedModels);
+    // DO NOT reset forecast generation hash for method changes - they don't affect forecast parameters
+  }, [methodSelectionVersion, selectedSKU, models, cache, generateDataHash]);
 
   // CONTROLLED forecast generation - only when models hash actually changes
   useEffect(() => {
@@ -233,12 +302,12 @@ export const useUnifiedModelManagement = (
   }, []);
 
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
-    isTogglingAIManualRef.current = true;
+    console.log(`🎚️ PARAMETER UPDATE: ${parameter} = ${value} for ${modelId}`);
     
-    // Set explicit user selection to manual in cache
+    // Set explicit user selection to manual in cache (this will trigger method selection effect)
     setSelectedMethod(selectedSKU, modelId, 'manual');
 
-    // Update the parameter without clearing optimization data
+    // Update the parameter - this will trigger forecast regeneration via modelsHash change
     setModels(prev => prev.map(model => 
       model.id === modelId 
         ? { 
@@ -248,25 +317,16 @@ export const useUnifiedModelManagement = (
         : model
     ));
 
-    lastForecastGenerationHashRef.current = '';
-
-    setTimeout(() => {
-      isTogglingAIManualRef.current = false;
-    }, 100);
+    // No need to clear forecast hash - modelsHash change will trigger regeneration
   }, [selectedSKU, setSelectedMethod]);
 
   const resetToManual = useCallback((modelId: string) => {
-    isTogglingAIManualRef.current = true;
+    console.log(`🔄 RESET TO MANUAL: ${modelId}`);
     
-    // Only set the method to manual - don't clear optimization data
-    // The cache preserves all optimization results for instant switching
+    // Only set the method to manual - the method selection effect will handle the UI update
     setSelectedMethod(selectedSKU, modelId, 'manual');
     
-    lastForecastGenerationHashRef.current = '';
-    
-    setTimeout(() => {
-      isTogglingAIManualRef.current = false;
-    }, 100);
+    // No need to clear forecast hash - method selection doesn't affect forecast parameters
   }, [selectedSKU, setSelectedMethod]);
 
   return {

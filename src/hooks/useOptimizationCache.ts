@@ -17,6 +17,7 @@ export const useOptimizationCache = () => {
   const [cache, setCache] = useState<OptimizationCache>({});
   const [cacheStats, setCacheStats] = useState({ hits: 0, misses: 0, skipped: 0 });
   const [cacheVersion, setCacheVersion] = useState(0);
+  const [methodSelectionVersion, setMethodSelectionVersion] = useState(0);
   
   const {
     generateDatasetFingerprint,
@@ -27,7 +28,7 @@ export const useOptimizationCache = () => {
   const {
     getCachedParameters,
     setCachedParameters,
-    setSelectedMethod,
+    setSelectedMethod: _setSelectedMethod,
     clearCacheForSKU
   } = useCacheOperations(cache, setCache, setCacheStats, setCacheVersion);
 
@@ -38,8 +39,16 @@ export const useOptimizationCache = () => {
     console.log('🗄️ CACHE: Initial load from localStorage completed');
   }, []);
 
-  // REMOVED: The automatic save effect that was causing localStorage spam
-  // localStorage saves now only happen in specific functions when optimization results are stored
+  // Wrapper for setSelectedMethod that increments method selection version
+  const setSelectedMethod = useCallback((
+    sku: string,
+    modelId: string,
+    method: 'ai' | 'grid' | 'manual'
+  ) => {
+    _setSelectedMethod(sku, modelId, method);
+    setMethodSelectionVersion(prev => prev + 1);
+    console.log(`🎯 METHOD: Method selection version incremented to track UI change`);
+  }, [_setSelectedMethod]);
 
   const getSKUsNeedingOptimizationCallback = useCallback((
     data: SalesData[], 
@@ -58,6 +67,7 @@ export const useOptimizationCache = () => {
     setCache({});
     setCacheStats({ hits: 0, misses: 0, skipped: 0 });
     setCacheVersion(0);
+    setMethodSelectionVersion(0);
     clearCacheStorage();
   }, []);
 
@@ -65,6 +75,7 @@ export const useOptimizationCache = () => {
     cache,
     cacheStats,
     cacheVersion,
+    methodSelectionVersion,
     generateDataHash,
     getCachedParameters,
     setCachedParameters,

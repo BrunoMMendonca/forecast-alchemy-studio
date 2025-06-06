@@ -151,29 +151,33 @@ export const useCacheOperations = (
       
       return newCache;
     });
-  }, [setCache]);
+
+    // INCREMENT CACHE VERSION: Only when actual optimization data is stored
+    setCacheVersion(prev => prev + 1);
+  }, [setCache, setCacheVersion]);
 
   const setSelectedMethod = useCallback((
     sku: string,
     modelId: string,
     method: 'ai' | 'grid' | 'manual'
   ) => {
-    console.log(`🗄️ CACHE: Setting user selected method ${sku}:${modelId} to ${method} (memory only)`);
+    console.log(`🗄️ CACHE: Setting user selected method ${sku}:${modelId} to ${method} (memory only, no version increment)`);
     setCache(prev => {
       const newCache = JSON.parse(JSON.stringify(prev));
       
       if (!newCache[sku]) newCache[sku] = {};
       if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
       
-      // This is the user's explicit choice - store in memory only (no localStorage save)
+      // This is the user's explicit choice - store in memory only (no localStorage save, no version increment)
       newCache[sku][modelId].selected = method;
       
       console.log(`🗄️ CACHE: User selected method stored in memory: ${sku}:${modelId} = ${method}`);
       return newCache;
     });
 
-    setCacheVersion(prev => prev + 1);
-  }, [setCache, setCacheVersion]);
+    // REMOVED: setCacheVersion increment - method selection is UI state, not data change
+    console.log(`🗄️ CACHE: Method selection complete - no cache version increment`);
+  }, [setCache]);
 
   const clearCacheForSKU = useCallback((sku: string) => {
     setCache(prev => {
