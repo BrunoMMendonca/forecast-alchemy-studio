@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
@@ -55,6 +56,9 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   // Check what methods are available
   const hasAI = cacheEntry?.ai != null;
   const hasGrid = cacheEntry?.grid != null;
+
+  // Slider should only be enabled when in manual mode
+  const isSliderEnabled = currentMethod === 'manual';
 
   const handleMethodSelect = (method: 'ai' | 'grid' | 'manual') => {
     console.log(`🎯 PARAMETER_CONTROL: User selecting ${method} for ${selectedSKU}:${modelId}`);
@@ -188,7 +192,8 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
           min={parameter.min}
           max={parameter.max}
           step={parameter.step}
-          className="w-full"
+          className={`w-full ${!isSliderEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          disabled={!isSliderEnabled}
         />
         <div className="flex justify-between text-xs text-slate-500">
           <span>{parameter.min}</span>
