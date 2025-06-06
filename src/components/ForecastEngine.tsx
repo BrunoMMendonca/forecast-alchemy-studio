@@ -118,19 +118,17 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
           </div>
         )}
 
-        {effectiveSelectedSKU && effectiveSelectedSKU.trim() !== '' && (
-          <ModelParameterPanel
-            models={models}
-            selectedSKU={effectiveSelectedSKU}
-            onToggleModel={toggleModel}
-            onUpdateParameter={updateParameter}
-            onOptimizeModel={handleOptimizeModel}
-            onResetModel={resetModel}
-            isOptimizing={isOptimizing}
-            optimizingModel={optimizingModel}
-            grokApiEnabled={grokApiEnabled}
-          />
-        )}
+        <ModelParameterPanel
+          models={models}
+          selectedSKU={effectiveSelectedSKU}
+          onToggleModel={toggleModel}
+          onUpdateParameter={updateParameter}
+          onOptimizeModel={handleOptimizeModel}
+          onResetModel={resetModel}
+          isOptimizing={isOptimizing}
+          optimizingModel={optimizingModel}
+          grokApiEnabled={grokApiEnabled}
+        />
       </CardContent>
     </Card>
   );
