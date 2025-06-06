@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -58,13 +57,8 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const isAI = userSelectedMethod === 'ai';
   const isGrid = userSelectedMethod === 'grid';
 
-  // Use manual parameters when in manual mode, optimized parameters otherwise
-  const currentParameters = useMemo(() => {
-    if (isManual) {
-      return model.parameters; // Use the model's current parameters for manual mode
-    }
-    return optimizationData?.parameters || model.parameters;
-  }, [isManual, optimizationData?.parameters, model.parameters]);
+  // Always use model.parameters for display - this is the current state
+  const currentParameters = model.parameters;
 
   const canOptimize = hasOptimizableParameters(model);
 
@@ -75,8 +69,9 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const hasOptimizationResults = canOptimize && optimizationData && !isManual;
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
+    console.log(`🎛️ SLIDER: Changing ${parameter} to ${values[0]} for ${model.id}`);
     onParameterUpdate(parameter, values[0]);
-  }, [onParameterUpdate]);
+  }, [onParameterUpdate, model.id]);
 
   // Handle badge clicks - update cache "selected" field directly
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
@@ -90,6 +85,14 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
       onResetToManual();
     }
   }, [selectedSKU, model.id, setSelectedMethod, onResetToManual]);
+
+  // Use manual parameters when in manual mode, optimized parameters otherwise
+  const currentParameters = useMemo(() => {
+    if (isManual) {
+      return model.parameters; // Use the model's current parameters for manual mode
+    }
+    return optimizationData?.parameters || model.parameters;
+  }, [isManual, optimizationData?.parameters, model.parameters]);
 
   const getParameterConfig = (parameter: string) => {
     const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
