@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -74,6 +73,26 @@ const Index = () => {
     setCurrentStep(step);
   }, []);
 
+  // Helper function to convert step name to index
+  const getStepIndex = (step: string): number => {
+    const stepMap: Record<string, number> = {
+      'upload': 0,
+      'visualize': 1,
+      'outliers': 2,
+      'forecast': 3,
+      'results': 4
+    };
+    return stepMap[step] || 0;
+  };
+
+  // Helper function to convert step index to name
+  const getStepName = (index: number): 'upload' | 'visualize' | 'outliers' | 'forecast' | 'results' => {
+    const stepNames: ('upload' | 'visualize' | 'outliers' | 'forecast' | 'results')[] = [
+      'upload', 'visualize', 'outliers', 'forecast', 'results'
+    ];
+    return stepNames[index] || 'upload';
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -87,13 +106,13 @@ const Index = () => {
         </div>
 
         <StepNavigation 
-          currentStep={currentStep} 
-          onStepChange={handleStepChange}
-          hasData={data.length > 0}
-          hasResults={forecastResults.length > 0}
+          currentStep={getStepIndex(currentStep)}
+          salesDataLength={data.length}
+          forecastResultsLength={forecastResults.length}
+          onStepClick={(stepIndex: number) => handleStepChange(getStepName(stepIndex))}
         />
 
-        <Tabs value={currentStep} onValueChange={(value) => handleStepChange(value as any)} className="w-full">
+        <Tabs value={currentStep} onValueChange={(value) => handleStepChange(value as 'upload' | 'visualize' | 'outliers' | 'forecast' | 'results')} className="w-full">
           <TabsList className="grid w-full grid-cols-5 mb-6">
             <TabsTrigger value="upload" className="flex items-center gap-2">
               <Upload className="h-4 w-4" />
