@@ -8,6 +8,8 @@ interface QueueStatusDisplayProps {
   optimizationQueue: {
     getSKUsInQueue: () => string[];
     removeSKUsFromQueue: (skus: string[]) => void;
+    queueSize: number;
+    uniqueSKUCount: number;
   };
   isOptimizing: boolean;
   progress?: {
@@ -27,7 +29,7 @@ export const QueueStatusDisplay: React.FC<QueueStatusDisplayProps> = ({
   onOpenQueuePopup,
 }) => {
   const queuedSKUs = optimizationQueue.getSKUsInQueue();
-  const shouldShow = isOptimizing || queuedSKUs.length > 0;
+  const shouldShow = isOptimizing || optimizationQueue.queueSize > 0;
 
   if (!shouldShow) {
     return null;
@@ -56,7 +58,7 @@ export const QueueStatusDisplay: React.FC<QueueStatusDisplayProps> = ({
             <>
               <Clock className="h-5 w-5 text-amber-600" />
               <span className="font-medium text-amber-800">
-                {queuedSKUs.length} SKUs queued for optimization
+                {optimizationQueue.queueSize} combinations queued ({optimizationQueue.uniqueSKUCount} SKUs)
               </span>
               <Badge variant="outline" className="text-xs border-amber-300 text-amber-700">
                 {hasTriggeredOptimization ? 'Starting...' : 'Pending'}

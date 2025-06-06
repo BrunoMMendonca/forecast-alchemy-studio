@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -42,7 +41,7 @@ const Index = () => {
   const [isQueuePopupOpen, setIsQueuePopupOpen] = useState(false);
   const { toast } = useToast();
 
-  const { addSKUsToQueue, removeSKUsFromQueue, getSKUsInQueue, queueSize, clearQueue } = useOptimizationQueue();
+  const { addSKUsToQueue, removeSKUsFromQueue, getSKUsInQueue, queueSize, uniqueSKUCount, getQueuedCombinations, getModelsForSKU, clearQueue } = useOptimizationQueue();
   const { clearManualAIPreferences } = useManualAIPreferences();
 
   const handleGlobalSettingsChange = (changedSetting: 'forecastPeriods' | 'businessContext' | 'grokApiEnabled') => {
@@ -107,7 +106,7 @@ const Index = () => {
     
     toast({
       title: "Data Uploaded",
-      description: `${skusInOrder.length} SKU${skusInOrder.length > 1 ? 's' : ''} ready for optimization`,
+      description: `${skusInOrder.length} SKU${skusInOrder.length > 1 ? 's' : ''} with optimizable models queued for optimization`,
     });
   };
 
@@ -164,7 +163,7 @@ const Index = () => {
           <div className="mt-4 flex items-center justify-center gap-4">
             {salesData.length > 0 && queueSize > 0 && (
               <div className="text-sm text-blue-600 bg-blue-50 rounded-lg px-4 py-2">
-                📋 {queueSize} SKU{queueSize !== 1 ? 's' : ''} queued for optimization
+                📋 {queueSize} optimization combinations queued ({uniqueSKUCount} SKUs)
               </div>
             )}
             <Button
@@ -327,8 +326,12 @@ const Index = () => {
         <OptimizationQueuePopup
           optimizationQueue={{
             getSKUsInQueue,
+            getQueuedCombinations,
+            getModelsForSKU,
             removeSKUsFromQueue,
-            removeUnnecessarySKUs: removeSKUsFromQueue
+            removeUnnecessarySKUs: removeSKUsFromQueue,
+            queueSize,
+            uniqueSKUCount
           }}
           models={[]} // Empty models array when no data
           isOptimizing={false}

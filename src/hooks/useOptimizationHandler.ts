@@ -7,11 +7,13 @@ import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimi
 import { useModelManagement } from '@/hooks/useModelManagement';
 import { OptimizationFactors } from '@/types/optimizationTypes';
 import { PreferenceValue, useManualAIPreferences } from '@/hooks/useManualAIPreferences';
-import { hasOptimizableParameters } from '@/utils/modelConfig';
+import { hasOptimizableParameters, getDefaultModels } from '@/utils/modelConfig';
 
 interface OptimizationQueue {
   getSKUsInQueue: () => string[];
+  getQueuedCombinations: () => Array<{sku: string, modelId: string}>;
   removeSKUsFromQueue: (skus: string[]) => void;
+  removeSKUModelPairsFromQueue: (pairs: Array<{sku: string, modelId: string}>) => void;
   removeUnnecessarySKUs: (skus: string[]) => void;
   clearCacheAndPreferencesForSKU?: (sku: string) => void;
 }
@@ -51,24 +53,28 @@ export const useOptimizationHandler = (
       return;
     }
 
-    const queuedSKUs = optimizationQueue.getSKUsInQueue();
-    if (queuedSKUs.length === 0) {
-      console.log('🚫 OPTIMIZATION: No SKUs in queue');
+    const queuedCombinations = optimizationQueue.getQueuedCombinations();
+    if (queuedCombinations.length === 0) {
+      console.log('🚫 OPTIMIZATION: No SKU/model combinations in queue');
       return;
     }
 
-    console.log('🚀 OPTIMIZATION: Starting queue processing for SKUs:', queuedSKUs);
+    console.log('🚀 OPTIMIZATION: Starting queue processing for combinations:', queuedCombinations);
 
-    const enabledModels = models.filter(m => m.enabled);
-    const optimizableModels = enabledModels.filter(m => hasOptimizableParameters(m));
+    // Get the default optimizable models
+    const defaultModels = getDefaultModels();
+    const optimizableModels = defaultModels.filter(m => hasOptimizableParameters(m));
     
-    console.log('🚀 OPTIMIZATION: Enabled models:', enabledModels.map(m => m.id));
-    console.log('🚀 OPTIMIZATION: Optimizable models:', optimizableModels.map(m => m.id));
-    console.log('🚀 OPTIMIZATION: Non-optimizable models (will skip):', enabledModels.filter(m => !hasOptimizableParameters(m)).map(m => m.id));
+    console.log('🚀 OPTIMIZATION: Available optimizable models:', optimizableModels.map(m => m.id));
 
-    // If no models have optimizable parameters, remove all SKUs from queue
-    if (optimizableModels.length === 0) {
-      console.log('🧹 OPTIMIZATION: No optimizable models found, clearing queue');
+    // Filter combinations to only include models that actually exist and are optimizable
+    const validCombinations = queuedCombinations.filter(combo => 
+      optimizableModels.some(model => model.id === combo.modelId)
+    );
+
+    if (validCombinations.length === 0) {
+      console.log('🧹 OPTIMIZATION: No valid optimizable combinations found, clearing queue');
+      const queuedSKUs = optimizationQueue.getSKUsInQueue();
       if (optimizationQueue.removeUnnecessarySKUs) {
         optimizationQueue.removeUnnecessarySKUs(queuedSKUs);
       } else {
@@ -77,28 +83,34 @@ export const useOptimizationHandler = (
       return;
     }
 
-    // Check which SKUs actually need optimization
+    // Check which combinations actually need optimization
     const skusNeedingOptimization = getSKUsNeedingOptimization(data, optimizableModels);
-    const skusToOptimize = skusNeedingOptimization.map(item => item.sku);
-    const unnecessarySKUs = queuedSKUs.filter(sku => !skusToOptimize.includes(sku));
+    const validSKUsSet = new Set(skusNeedingOptimization.map(item => item.sku));
+    
+    const combinationsToOptimize = validCombinations.filter(combo => 
+      validSKUsSet.has(combo.sku)
+    );
+    
+    const unnecessaryCombinations = validCombinations.filter(combo => 
+      !validSKUsSet.has(combo.sku)
+    );
 
-    console.log('🚀 OPTIMIZATION: SKUs that need optimization:', skusToOptimize);
-    console.log('🧹 OPTIMIZATION: SKUs that don\'t need optimization:', unnecessarySKUs);
+    console.log('🚀 OPTIMIZATION: Combinations that need optimization:', combinationsToOptimize.length);
+    console.log('🧹 OPTIMIZATION: Unnecessary combinations:', unnecessaryCombinations.length);
 
-    // Remove unnecessary SKUs from queue
-    if (unnecessarySKUs.length > 0) {
-      if (optimizationQueue.removeUnnecessarySKUs) {
-        optimizationQueue.removeUnnecessarySKUs(unnecessarySKUs);
-      } else {
-        optimizationQueue.removeSKUsFromQueue(unnecessarySKUs);
-      }
+    // Remove unnecessary combinations from queue
+    if (unnecessaryCombinations.length > 0 && optimizationQueue.removeSKUModelPairsFromQueue) {
+      optimizationQueue.removeSKUModelPairsFromQueue(unnecessaryCombinations);
     }
 
-    // If no SKUs actually need optimization, we're done
-    if (skusToOptimize.length === 0) {
-      console.log('🧹 OPTIMIZATION: No SKUs need optimization, done');
+    // If no combinations actually need optimization, we're done
+    if (combinationsToOptimize.length === 0) {
+      console.log('🧹 OPTIMIZATION: No combinations need optimization, done');
       return;
     }
+
+    // Extract unique SKUs from the combinations that need optimization
+    const skusToOptimize = Array.from(new Set(combinationsToOptimize.map(combo => combo.sku)));
     
     markOptimizationStarted(data, '/');
     
@@ -110,7 +122,7 @@ export const useOptimizationHandler = (
         console.log(`💾 CACHE: Processing optimization result for ${sku}:${modelId}, method: ${method}`);
         
         // CRITICAL: Only cache models with optimizable parameters
-        const model = models.find(m => m.id === modelId);
+        const model = optimizableModels.find(m => m.id === modelId);
         if (!model || !hasOptimizableParameters(model)) {
           console.log(`🚫 CACHE: Skipping cache for ${sku}:${modelId} - no optimizable parameters`);
           return;
@@ -201,9 +213,14 @@ export const useOptimizationHandler = (
       },
       (sku) => {
         console.log('✅ OPTIMIZATION: SKU completed:', sku);
-        // Delay queue removal to ensure UI updates are complete
+        // Remove the completed SKU/model combinations from queue
         setTimeout(() => {
-          optimizationQueue.removeSKUsFromQueue([sku]);
+          if (optimizationQueue.removeSKUModelPairsFromQueue) {
+            const completedCombinations = combinationsToOptimize.filter(combo => combo.sku === sku);
+            optimizationQueue.removeSKUModelPairsFromQueue(completedCombinations);
+          } else {
+            optimizationQueue.removeSKUsFromQueue([sku]);
+          }
           
           if (sku === selectedSKU && onOptimizationComplete) {
             setTimeout(() => {
