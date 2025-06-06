@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useUnifiedModelManagement } from '@/hooks/useUnifiedModelManagement';
@@ -77,34 +78,42 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     };
   }, []);
 
-  // AUTO-START OPTIMIZATION: React to queue changes
+  // AUTO-START OPTIMIZATION: React to queue changes with more robust detection
   useEffect(() => {
     if (!optimizationQueue || !componentMountedRef.current) {
+      console.log('🔄 FORECAST_MODELS: Skipping auto-start - no queue or not mounted');
       return;
     }
 
     const queueSize = optimizationQueue.queueSize;
-    console.log('🔄 FORECAST_MODELS: Queue size changed:', queueSize, 'isOptimizing:', isOptimizing);
+    const queuedCombinations = optimizationQueue.getQueuedCombinations();
+    
+    console.log('🔄 FORECAST_MODELS: Queue check - size:', queueSize, 'combinations:', queuedCombinations.length, 'isOptimizing:', isOptimizing);
 
     // Auto-start optimization if:
     // 1. Queue has items
     // 2. Not currently optimizing 
     // 3. Component is mounted
     if (queueSize > 0 && !isOptimizing) {
-      console.log('🚀 FORECAST_MODELS: Auto-starting optimization for queue size:', queueSize);
+      console.log('🚀 FORECAST_MODELS: CONDITIONS MET - Auto-starting optimization');
+      console.log('🚀 FORECAST_MODELS: - Queue size:', queueSize);
+      console.log('🚀 FORECAST_MODELS: - Is optimizing:', isOptimizing);
+      console.log('🚀 FORECAST_MODELS: - Component mounted:', componentMountedRef.current);
+      console.log('🚀 FORECAST_MODELS: - Queued combinations:', queuedCombinations);
       
-      // Small delay to ensure all components are ready
-      setTimeout(() => {
-        if (componentMountedRef.current && !isOptimizing) {
-          console.log('🚀 FORECAST_MODELS: Actually starting optimization now');
-          handleQueueOptimization();
-          if (onOptimizationStarted) {
-            onOptimizationStarted();
-          }
-        }
-      }, 500);
+      // Use immediate execution instead of timeout to avoid race conditions
+      console.log('🚀 FORECAST_MODELS: EXECUTING handleQueueOptimization NOW');
+      handleQueueOptimization();
+      if (onOptimizationStarted) {
+        onOptimizationStarted();
+      }
+    } else {
+      console.log('🔄 FORECAST_MODELS: NOT starting optimization:');
+      console.log('🔄 FORECAST_MODELS: - Queue size > 0:', queueSize > 0);
+      console.log('🔄 FORECAST_MODELS: - Not optimizing:', !isOptimizing);
+      console.log('🔄 FORECAST_MODELS: - Component mounted:', componentMountedRef.current);
     }
-  }, [optimizationQueue?.queueSize, isOptimizing, handleQueueOptimization, onOptimizationStarted]);
+  }, [optimizationQueue?.queueSize, optimizationQueue?.getQueuedCombinations().length, isOptimizing, handleQueueOptimization, onOptimizationStarted]);
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
@@ -191,3 +200,4 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 });
 
 ForecastModels.displayName = 'ForecastModels';
+
