@@ -66,7 +66,7 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
                 <Info className="h-4 w-4 text-blue-600" />
                 <span className="text-sm font-medium">View Reasoning</span>
                 <Badge variant="outline" className={`text-xs ${getConfidenceColor(confidence)}`}>
-                  {confidence}% confident
+                  {confidence.toFixed(1)}% confident
                 </Badge>
               </div>
               {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -106,7 +106,7 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
             <span className="capitalize">{getMethodLabel(method)}</span>
           </div>
           <Badge variant="outline" className={getConfidenceColor(confidence)}>
-            {confidence}% confidence
+            {confidence.toFixed(1)}% confidence
           </Badge>
           {expectedAccuracy && (
             <Badge variant="secondary">

@@ -2,16 +2,14 @@
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, Settings2, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ModelConfig } from '@/types/forecast';
 import { ModelParameterPanel } from './ModelParameterPanel';
 import { ReasoningDisplay } from './ReasoningDisplay';
 import { hasOptimizableParameters } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
-import { SalesData } from '@/pages/Index';
 
 interface ModelCardProps {
   model: ModelConfig;
@@ -31,7 +29,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   grokApiEnabled = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { getCachedParameters, generateDataHash } = useOptimizationCache();
+  const { getCachedParameters } = useOptimizationCache();
 
   // Get cached optimization results
   const cachedResults = useMemo(() => {
@@ -58,23 +56,16 @@ export const ModelCard: React.FC<ModelCardProps> = ({
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            {model.enabled && (
-              <>
-                <Badge variant="outline">
-                  {model.id}
-                </Badge>
-                {hasOptimizableParameters(model) && (
-                  <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-                    <CollapsibleTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <Settings2 className="h-4 w-4 mr-1" />
-                        Configure
-                        {isExpanded ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />}
-                      </Button>
-                    </CollapsibleTrigger>
-                  </Collapsible>
-                )}
-              </>
+            {model.enabled && hasOptimizableParameters(model) && (
+              <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <Settings2 className="h-4 w-4 mr-1" />
+                    Configure
+                    {isExpanded ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />}
+                  </Button>
+                </CollapsibleTrigger>
+              </Collapsible>
             )}
           </div>
         </div>
@@ -93,18 +84,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
 
               {showOptimizationResults && (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-medium">Optimization Results</h4>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={onResetToManual}
-                      className="text-xs"
-                    >
-                      <RotateCcw className="h-3 w-3 mr-1" />
-                      Reset to Manual
-                    </Button>
-                  </div>
+                  <h4 className="text-sm font-medium">Optimization Results</h4>
 
                   <ReasoningDisplay
                     reasoning={cachedResults.reasoning || 'Optimization completed successfully.'}
