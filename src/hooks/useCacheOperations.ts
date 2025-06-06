@@ -1,3 +1,4 @@
+
 import { useCallback } from 'react';
 import { OptimizationCache, OptimizedParameters } from '@/utils/cacheStorageUtils';
 import { CACHE_EXPIRY_HOURS } from '@/utils/cacheStorageUtils';
@@ -111,8 +112,35 @@ export const useCacheOperations = (
       if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
       
       newCache[sku][modelId][cacheMethod] = optimizedParams;
-      if (!newCache[sku][modelId].selected) {
-        newCache[sku][modelId].selected = cacheMethod;
+      
+      // Auto-select the best available method when storing optimization results
+      // Priority: AI > Grid > Manual
+      const hasAI = newCache[sku][modelId].ai;
+      const hasGrid = newCache[sku][modelId].grid;
+      
+      let bestMethod: 'ai' | 'grid' | 'manual' = 'manual';
+      if (hasAI && hasGrid) {
+        // If both exist, prefer AI
+        bestMethod = 'ai';
+      } else if (hasAI) {
+        bestMethod = 'ai';
+      } else if (hasGrid) {
+        bestMethod = 'grid';
+      }
+      
+      // Only auto-select if there's no existing user selection, or if we're upgrading to a better method
+      const currentSelected = newCache[sku][modelId].selected;
+      const shouldAutoSelect = (
+        !currentSelected || // No selection yet
+        (currentSelected === 'manual' && bestMethod !== 'manual') || // Upgrade from manual
+        (currentSelected === 'grid' && bestMethod === 'ai') // Upgrade from grid to AI
+      );
+      
+      if (shouldAutoSelect) {
+        newCache[sku][modelId].selected = bestMethod;
+        console.log(`🎯 CACHE: Auto-selected best method ${bestMethod} for ${sku}:${modelId}`);
+      } else {
+        console.log(`🎯 CACHE: Keeping existing selection ${currentSelected} for ${sku}:${modelId}`);
       }
       
       console.log(`🗄️ CACHE: Successfully stored ${sku}:${modelId}:${cacheMethod}`);
