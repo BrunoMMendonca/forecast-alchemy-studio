@@ -58,21 +58,44 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const isAI = userSelectedMethod === 'ai';
   const isGrid = userSelectedMethod === 'grid';
 
-  // CRITICAL FIX: Always use model.parameters for the actual parameter values
-  // Only use optimizationData for display of optimization results
-  const currentParameters = model.parameters;
+  console.log(`🔍 ParameterControl Debug for ${model.id}:`, {
+    userSelectedMethod,
+    isManual,
+    modelParameters: model.parameters,
+    optimizedParameters: model.optimizedParameters,
+    optimizationDataParameters: optimizationData?.parameters
+  });
+
+  // NEW APPROACH: Determine the source of truth for parameter values
+  const getParameterValue = useCallback((parameter: string) => {
+    if (isManual) {
+      // In manual mode, ALWAYS use model.parameters
+      const value = model.parameters?.[parameter];
+      console.log(`📊 Manual mode - ${parameter}: ${value} (from model.parameters)`);
+      return value;
+    } else {
+      // In AI/Grid mode, use optimized parameters if available, otherwise fall back to model parameters
+      const optimizedValue = model.optimizedParameters?.[parameter];
+      const modelValue = model.parameters?.[parameter];
+      const finalValue = optimizedValue !== undefined ? optimizedValue : modelValue;
+      console.log(`📊 ${isAI ? 'AI' : 'Grid'} mode - ${parameter}: ${finalValue} (optimized: ${optimizedValue}, model: ${modelValue})`);
+      return finalValue;
+    }
+  }, [isManual, isAI, model.parameters, model.optimizedParameters]);
+
   const canOptimize = hasOptimizableParameters(model);
 
   // Only show parameters section if model actually has parameters
-  const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
+  const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;
 
   // Check if optimization results exist for display
   const hasOptimizationResults = canOptimize && optimizationData && !isManual;
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
-    console.log(`🎯 Parameter change: ${parameter} = ${values[0]} for model ${model.id}`);
-    onParameterUpdate(parameter, values[0]);
-  }, [onParameterUpdate, model.id]);
+    const newValue = values[0];
+    console.log(`🎯 Parameter change: ${parameter} = ${newValue} for model ${model.id} (was: ${getParameterValue(parameter)})`);
+    onParameterUpdate(parameter, newValue);
+  }, [onParameterUpdate, model.id, getParameterValue]);
 
   // Handle badge clicks - update cache "selected" field directly
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
@@ -199,9 +222,15 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
             {/* Parameter Controls */}
             <div className="space-y-4">
               <div className="grid gap-4">
-                {Object.entries(currentParameters).map(([parameter, value]) => {
+                {Object.entries(model.parameters || {}).map(([parameter, _]) => {
                   const config = getParameterConfig(parameter);
-                  const currentValue = typeof value === 'number' ? value : config.min;
+                  const currentValue = getParameterValue(parameter);
+                  const safeValue = typeof currentValue === 'number' ? currentValue : config.min;
+                  
+                  // Force slider re-render when switching modes by using a unique key
+                  const sliderKey = `${model.id}-${parameter}-${userSelectedMethod}-${safeValue}`;
+                  
+                  console.log(`🎚️ Rendering slider for ${parameter}: value=${safeValue}, key=${sliderKey}`);
                   
                   return (
                     <div key={parameter} className="space-y-2">
@@ -210,15 +239,16 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                           {parameter}
                         </Label>
                         <span className="text-sm font-mono bg-slate-100 px-2 py-1 rounded">
-                          {currentValue.toFixed(config.step < 1 ? 2 : 0)}
+                          {safeValue.toFixed(config.step < 1 ? 2 : 0)}
                         </span>
                       </div>
                       <Slider
+                        key={sliderKey}
                         id={`${model.id}-${parameter}`}
                         min={config.min}
                         max={config.max}
                         step={config.step}
-                        value={[currentValue]}
+                        value={[safeValue]}
                         onValueChange={(values) => handleParameterChange(parameter, values)}
                         className="w-full"
                         disabled={!isManual || disabled}
