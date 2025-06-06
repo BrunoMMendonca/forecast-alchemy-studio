@@ -225,8 +225,10 @@ const Index = () => {
         {currentStep === 1 && salesData.length > 0 && (
           <OutlierDetection
             data={salesData}
-            onDataCleaned={handleDataCleaning}
+            cleanedData={cleanedData}
+            onDataCleaning={handleDataCleaning}
             onImportDataCleaning={handleImportDataCleaning}
+            queueSize={queueSize}
           />
         )}
 
@@ -249,8 +251,6 @@ const Index = () => {
           <ForecastResults
             results={forecastResults}
             selectedSKU={selectedSKUForResults}
-            data={cleanedData}
-            forecastPeriods={forecastPeriods}
           />
         )}
 
