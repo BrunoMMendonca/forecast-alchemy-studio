@@ -8,7 +8,6 @@ interface ModelParameterPanelProps {
   selectedSKU: string;
   onToggleModel: (modelId: string) => void;
   onUpdateParameter: (modelId: string, parameter: string, value: number) => void;
-  onOptimizeModel: (modelId: string, method: 'ai' | 'grid') => void;
   onResetModel: (modelId: string) => void;
   isOptimizing: boolean;
   optimizingModel: string | null;
@@ -20,7 +19,6 @@ export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
   selectedSKU,
   onToggleModel,
   onUpdateParameter,
-  onOptimizeModel,
   onResetModel,
   isOptimizing,
   optimizingModel,
@@ -35,8 +33,6 @@ export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
           selectedSKU={selectedSKU}
           onToggle={() => onToggleModel(model.id)}
           onParameterUpdate={(parameter, value) => onUpdateParameter(model.id, parameter, value)}
-          onUseAI={() => onOptimizeModel(model.id, 'ai')}
-          onUseGrid={() => onOptimizeModel(model.id, 'grid')}
           onResetToManual={() => onResetModel(model.id)}
           isOptimizing={isOptimizing && optimizingModel === model.id}
           grokApiEnabled={grokApiEnabled}

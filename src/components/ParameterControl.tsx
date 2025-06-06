@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -9,13 +10,12 @@ import { ChevronDown, ChevronRight, Settings, Bot, Grid3X3, User } from 'lucide-
 import { ModelConfig } from '@/types/forecast';
 import { ReasoningDisplay } from './ReasoningDisplay';
 import { hasOptimizableParameters } from '@/utils/modelConfig';
+import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 
 interface ParameterControlProps {
   model: ModelConfig;
   selectedSKU: string;
   onParameterUpdate: (parameter: string, value: number) => void;
-  onUseAI: () => void;
-  onUseGrid?: () => void;
   onResetToManual: () => void;
   disabled?: boolean;
   grokApiEnabled?: boolean;
@@ -25,19 +25,22 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   model,
   selectedSKU,
   onParameterUpdate,
-  onUseAI,
-  onUseGrid,
   onResetToManual,
   disabled = false,
   grokApiEnabled = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
+
+  // Get current preference for this model
+  const preferences = loadManualAIPreferences();
+  const preferenceKey = `${selectedSKU}:${model.id}`;
+  const currentPreference = preferences[preferenceKey] || 'manual';
 
   // Fix the logic to properly determine the current method
-  const currentMethod = model.optimizationMethod;
-  const isManual = !currentMethod || currentMethod === 'manual';
-  const isAI = currentMethod === 'ai' || currentMethod === 'ai_optimization';
-  const isGrid = currentMethod === 'grid_search' || currentMethod === 'grid';
+  const isManual = currentPreference === 'manual';
+  const isAI = currentPreference === 'ai';
+  const isGrid = currentPreference === 'grid';
 
   const currentParameters = model.optimizedParameters || model.parameters;
   const canOptimize = hasOptimizableParameters(model);
@@ -51,6 +54,21 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     onParameterUpdate(parameter, values[0]);
   }, [onParameterUpdate]);
+
+  // Handle badge clicks - only update preference, don't trigger optimization
+  const handlePreferenceChange = useCallback((newPreference: 'manual' | 'ai' | 'grid') => {
+    const updatedPreferences = { ...preferences };
+    updatedPreferences[preferenceKey] = newPreference;
+    saveManualAIPreferences(updatedPreferences);
+    
+    // If switching to manual, reset the model
+    if (newPreference === 'manual') {
+      onResetToManual();
+    }
+    
+    // Note: No optimization is triggered here - we only change display preference
+    // The model should already have cached results from batch optimization
+  }, [preferences, preferenceKey, saveManualAIPreferences, onResetToManual]);
 
   const getParameterConfig = (parameter: string) => {
     const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
@@ -106,7 +124,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                       className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onUseAI();
+                        handlePreferenceChange('ai');
                       }}
                     >
                       <Bot className="h-3 w-3 mr-1" />
@@ -120,7 +138,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (onUseGrid) onUseGrid();
+                      handlePreferenceChange('grid');
                     }}
                   >
                     <Grid3X3 className="h-3 w-3 mr-1" />
@@ -133,7 +151,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onResetToManual();
+                      handlePreferenceChange('manual');
                     }}
                   >
                     <User className="h-3 w-3 mr-1" />
@@ -218,6 +236,15 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                   <p className="text-sm text-gray-700">
                     Manual mode: You can adjust parameters using the sliders above.
+                  </p>
+                </div>
+              )}
+
+              {/* No cached results indicator */}
+              {canOptimize && !isManual && !model.optimizationReasoning && (
+                <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+                  <p className="text-sm text-yellow-700">
+                    No {isAI ? 'AI' : 'Grid'} optimization results available. Results will appear after batch optimization runs.
                   </p>
                 </div>
               )}

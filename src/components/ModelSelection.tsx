@@ -9,8 +9,6 @@ interface ModelSelectionProps {
   selectedSKU: string;
   onToggleModel: (modelId: string) => void;
   onUpdateParameter: (modelId: string, parameter: string, value: number) => void;
-  onUseAI: (modelId: string) => void;
-  onUseGrid?: (modelId: string) => void;
   onResetToManual: (modelId: string) => void;
 }
 
@@ -19,8 +17,6 @@ export const ModelSelection: React.FC<ModelSelectionProps> = ({
   selectedSKU,
   onToggleModel,
   onUpdateParameter,
-  onUseAI,
-  onUseGrid,
   onResetToManual,
 }) => {
   return (
@@ -28,7 +24,7 @@ export const ModelSelection: React.FC<ModelSelectionProps> = ({
       <CardHeader>
         <CardTitle>Forecasting Models</CardTitle>
         <CardDescription>
-          Select and configure your forecasting models. AI optimization uses advanced algorithms to find optimal parameters.
+          Select and configure your forecasting models. Optimization happens automatically in the background.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -39,8 +35,6 @@ export const ModelSelection: React.FC<ModelSelectionProps> = ({
             selectedSKU={selectedSKU}
             onToggle={() => onToggleModel(model.id)}
             onParameterUpdate={(parameter, value) => onUpdateParameter(model.id, parameter, value)}
-            onUseAI={() => onUseAI(model.id)}
-            onUseGrid={onUseGrid ? () => onUseGrid(model.id) : undefined}
             onResetToManual={() => onResetToManual(model.id)}
           />
         ))}

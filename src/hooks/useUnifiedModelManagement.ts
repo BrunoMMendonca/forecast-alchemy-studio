@@ -4,7 +4,6 @@ import { SalesData, ForecastResult } from '@/pages/Index';
 import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
-import { getOptimizationByMethod } from '@/utils/singleModelOptimization';
 import { BusinessContext } from '@/types/businessContext';
 import { useForecastCache } from '@/hooks/useForecastCache';
 import { generateForecastsForSKU } from '@/utils/forecastGenerator';
@@ -27,10 +26,7 @@ export const useUnifiedModelManagement = (
   const { 
     cache,
     generateDataHash, 
-    setCachedParameters,
     setSelectedMethod,
-    getCachedParameters,
-    isCacheValid,
     cacheVersion
   } = useOptimizationCache();
   
@@ -260,220 +256,6 @@ export const useUnifiedModelManagement = (
     }, 100);
   }, [selectedSKU, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod]);
 
-  const useAIOptimization = useCallback(async (modelId: string) => {
-    console.log(`🤖 AI button clicked for ${modelId}`);
-    isTogglingAIManualRef.current = true;
-    
-    const skuData = data.filter(d => d.sku === selectedSKU);
-    const currentDataHash = generateDataHash(skuData);
-    
-    console.log(`🤖 Checking cache FIRST for AI optimization ${selectedSKU}:${modelId}`);
-    
-    // CACHE-FIRST APPROACH: Check if we have valid cached AI results
-    const cachedAI = getCachedParameters(selectedSKU, modelId, 'ai');
-    if (cachedAI && isCacheValid(selectedSKU, modelId, currentDataHash, 'ai')) {
-      console.log(`✅ CACHE HIT: Using cached AI result for ${modelId} - no API call needed!`);
-      
-      // Update preference to AI
-      const preferences = loadManualAIPreferences();
-      const preferenceKey = `${selectedSKU}:${modelId}`;
-      preferences[preferenceKey] = 'ai';
-      saveManualAIPreferences(preferences);
-      setSelectedMethod(selectedSKU, modelId, 'ai');
-      
-      // Apply cached AI parameters immediately
-      setModels(prev => {
-        const newModels = prev.map(m => 
-          m.id === modelId 
-            ? { 
-                ...m, 
-                optimizedParameters: cachedAI.parameters,
-                optimizationConfidence: cachedAI.confidence,
-                optimizationReasoning: cachedAI.reasoning,
-                optimizationFactors: cachedAI.factors,
-                expectedAccuracy: cachedAI.expectedAccuracy,
-                optimizationMethod: cachedAI.method
-              }
-            : m
-        );
-        return newModels;
-      });
-      
-      lastForecastGenerationHashRef.current = '';
-      isTogglingAIManualRef.current = false;
-      return;
-    }
-    
-    console.log(`🚀 CACHE MISS: No valid cached AI result, making fresh API call for ${modelId}`);
-    
-    // Only call API if cache miss or invalid cache
-    try {
-      const model = models.find(m => m.id === modelId);
-      if (model) {
-        const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
-        
-        if (result) {
-          console.log(`🎯 Fresh AI optimization SUCCESS for ${modelId}`);
-          
-          // Update preference to AI
-          const preferences = loadManualAIPreferences();
-          const preferenceKey = `${selectedSKU}:${modelId}`;
-          preferences[preferenceKey] = 'ai';
-          saveManualAIPreferences(preferences);
-          setSelectedMethod(selectedSKU, modelId, 'ai');
-          
-          // Cache the new result
-          setCachedParameters(
-            selectedSKU, 
-            modelId, 
-            result.parameters, 
-            currentDataHash,
-            result.confidence,
-            result.reasoning,
-            result.factors,
-            result.expectedAccuracy,
-            result.method
-          );
-          
-          // Apply new parameters
-          setModels(prev => {
-            const newModels = prev.map(m => 
-              m.id === modelId 
-                ? { 
-                    ...m, 
-                    optimizedParameters: result.parameters,
-                    optimizationConfidence: result.confidence,
-                    optimizationReasoning: result.reasoning,
-                    optimizationFactors: result.factors,
-                    expectedAccuracy: result.expectedAccuracy,
-                    optimizationMethod: result.method
-                  }
-                : m
-            );
-            return newModels;
-          });
-          
-          lastForecastGenerationHashRef.current = '';
-        } else {
-          console.log(`❌ Fresh AI optimization FAILED for ${modelId} - no result returned`);
-        }
-      }
-    } catch (error) {
-      console.error('AI optimization failed:', error);
-    }
-    
-    setTimeout(() => {
-      isTogglingAIManualRef.current = false;
-    }, 100);
-  }, [selectedSKU, data, models, businessContext, generateDataHash, getCachedParameters, isCacheValid, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters]);
-
-  const useGridOptimization = useCallback(async (modelId: string) => {
-    console.log(`📊 Grid button clicked for ${modelId}`);
-    isTogglingAIManualRef.current = true;
-    
-    const skuData = data.filter(d => d.sku === selectedSKU);
-    const currentDataHash = generateDataHash(skuData);
-    
-    console.log(`📊 Checking cache FIRST for Grid optimization ${selectedSKU}:${modelId}`);
-    
-    // CACHE-FIRST APPROACH: Check if we have valid cached Grid results
-    const cachedGrid = getCachedParameters(selectedSKU, modelId, 'grid');
-    if (cachedGrid && isCacheValid(selectedSKU, modelId, currentDataHash, 'grid')) {
-      console.log(`✅ CACHE HIT: Using cached Grid result for ${modelId} - no API call needed!`);
-      
-      // Update preference to Grid
-      const preferences = loadManualAIPreferences();
-      const preferenceKey = `${selectedSKU}:${modelId}`;
-      preferences[preferenceKey] = 'grid';
-      saveManualAIPreferences(preferences);
-      setSelectedMethod(selectedSKU, modelId, 'grid');
-      
-      // Apply cached Grid parameters immediately
-      setModels(prev => {
-        const newModels = prev.map(m => 
-          m.id === modelId 
-            ? { 
-                ...m, 
-                optimizedParameters: cachedGrid.parameters,
-                optimizationConfidence: cachedGrid.confidence,
-                optimizationReasoning: cachedGrid.reasoning,
-                optimizationFactors: cachedGrid.factors,
-                expectedAccuracy: cachedGrid.expectedAccuracy,
-                optimizationMethod: cachedGrid.method
-              }
-            : m
-        );
-        return newModels;
-      });
-      
-      lastForecastGenerationHashRef.current = '';
-      isTogglingAIManualRef.current = false;
-      return;
-    }
-    
-    console.log(`🚀 CACHE MISS: No valid cached Grid result, running fresh optimization for ${modelId}`);
-    
-    // Only run optimization if cache miss or invalid cache
-    try {
-      const model = models.find(m => m.id === modelId);
-      if (model) {
-        const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
-        
-        if (result) {
-          console.log(`🎯 Fresh Grid optimization SUCCESS for ${modelId}`);
-          
-          // Update preference to Grid
-          const preferences = loadManualAIPreferences();
-          const preferenceKey = `${selectedSKU}:${modelId}`;
-          preferences[preferenceKey] = 'grid';
-          saveManualAIPreferences(preferences);
-          setSelectedMethod(selectedSKU, modelId, 'grid');
-          
-          // Cache the new result
-          setCachedParameters(
-            selectedSKU, 
-            modelId, 
-            result.parameters, 
-            currentDataHash,
-            result.confidence,
-            result.reasoning,
-            result.factors,
-            result.expectedAccuracy,
-            result.method
-          );
-          
-          // Apply new parameters
-          setModels(prev => {
-            const newModels = prev.map(m => 
-              m.id === modelId 
-                ? { 
-                    ...m, 
-                    optimizedParameters: result.parameters,
-                    optimizationConfidence: result.confidence,
-                    optimizationReasoning: result.reasoning,
-                    optimizationFactors: result.factors,
-                    expectedAccuracy: result.expectedAccuracy,
-                    optimizationMethod: result.method
-                  }
-                : m
-            );
-            return newModels;
-          });
-          
-          lastForecastGenerationHashRef.current = '';
-        } else {
-          console.log(`❌ Fresh Grid optimization FAILED for ${modelId} - no result returned`);
-        }
-      }
-    } catch (error) {
-      console.error('Grid optimization failed:', error);
-    }
-    
-    setTimeout(() => {
-      isTogglingAIManualRef.current = false;
-    }, 100);
-  }, [selectedSKU, data, models, businessContext, generateDataHash, getCachedParameters, isCacheValid, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod, setCachedParameters]);
-
   const resetToManual = useCallback((modelId: string) => {
     isTogglingAIManualRef.current = true;
     
@@ -509,8 +291,6 @@ export const useUnifiedModelManagement = (
     models,
     toggleModel,
     updateParameter,
-    useAIOptimization,
-    useGridOptimization,
     resetToManual,
     generateForecasts
   };

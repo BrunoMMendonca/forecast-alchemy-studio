@@ -11,8 +11,6 @@ interface ModelCardProps {
   selectedSKU: string;
   onToggle: () => void;
   onParameterUpdate: (parameter: string, value: number) => void;
-  onUseAI: () => void;
-  onUseGrid?: () => void;
   onResetToManual: () => void;
   isOptimizing?: boolean;
   grokApiEnabled?: boolean;
@@ -23,8 +21,6 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   selectedSKU,
   onToggle,
   onParameterUpdate,
-  onUseAI,
-  onUseGrid,
   onResetToManual,
   isOptimizing = false,
   grokApiEnabled
@@ -63,8 +59,6 @@ export const ModelCard: React.FC<ModelCardProps> = ({
           model={model}
           selectedSKU={selectedSKU}
           onParameterUpdate={onParameterUpdate}
-          onUseAI={onUseAI}
-          onUseGrid={onUseGrid}
           onResetToManual={onResetToManual}
           disabled={isOptimizing}
           grokApiEnabled={grokApiEnabled}
