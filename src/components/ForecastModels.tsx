@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useUnifiedModelManagement } from '@/hooks/useUnifiedModelManagement';
@@ -144,7 +143,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
             optimizationQueue={{
               getSKUsInQueue: optimizationQueue.getSKUsInQueue,
               removeSKUsFromQueue: optimizationQueue.removeSKUsFromQueue,
-              removeUnnecessarySKUs: optimizationQueue.removeUnnecessarySKUs,
               queueSize: optimizationQueue.queueSize,
               uniqueSKUCount: optimizationQueue.uniqueSKUCount
             }}
