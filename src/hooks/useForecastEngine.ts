@@ -3,7 +3,6 @@ import { useState, useCallback, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
 import { generateForecastsForSKU } from '@/utils/forecastGenerator';
-import { useForecastCache } from '@/hooks/useForecastCache';
 
 export const useForecastEngine = (
   selectedSKU: string,
@@ -14,12 +13,6 @@ export const useForecastEngine = (
 ) => {
   const [results, setResults] = useState<ForecastResult[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  
-  const {
-    getCachedForecast,
-    setCachedForecast,
-    generateParametersHash
-  } = useForecastCache();
 
   const generateForecasts = useCallback(async () => {
     // Early return if no valid SKU or data
@@ -45,9 +38,6 @@ export const useForecastEngine = (
         data,
         models,
         forecastPeriods,
-        getCachedForecast,
-        setCachedForecast,
-        generateParametersHash,
         grokApiEnabled
       );
       
@@ -58,7 +48,7 @@ export const useForecastEngine = (
     } finally {
       setIsGenerating(false);
     }
-  }, [selectedSKU, data, models, forecastPeriods, grokApiEnabled, getCachedForecast, setCachedForecast, generateParametersHash]);
+  }, [selectedSKU, data, models, forecastPeriods, grokApiEnabled]);
 
   // Auto-generate forecasts when dependencies change, but only with valid SKU
   useEffect(() => {

@@ -6,7 +6,6 @@ import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 import { BusinessContext } from '@/types/businessContext';
-import { useForecastCache } from '@/hooks/useForecastCache';
 import { generateForecastsForSKU } from '@/utils/forecastGenerator';
 import { useToast } from '@/hooks/use-toast';
 
@@ -32,12 +31,6 @@ export const useUnifiedModelManagement = (
   } = useOptimizationCache();
   
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
-  
-  const {
-    getCachedForecast,
-    setCachedForecast,
-    generateParametersHash
-  } = useForecastCache();
 
   const [models, setModels] = useState<ModelConfig[]>(() => {
     return getDefaultModels();
@@ -81,10 +74,7 @@ export const useUnifiedModelManagement = (
         selectedSKU,
         data,
         models,
-        forecastPeriods,
-        getCachedForecast,
-        setCachedForecast,
-        generateParametersHash
+        forecastPeriods
       );
       
       if (onForecastGeneration) {
@@ -100,7 +90,7 @@ export const useUnifiedModelManagement = (
     } finally {
       forecastGenerationInProgressRef.current = false;
     }
-  }, [selectedSKU, data, modelsHash, forecastPeriods, getCachedForecast, setCachedForecast, generateParametersHash, onForecastGeneration, toast]);
+  }, [selectedSKU, data, modelsHash, forecastPeriods, onForecastGeneration, toast]);
 
   // Helper function to get the best available method for a model
   const getBestAvailableMethod = useCallback((sku: string, modelId: string, currentDataHash: string) => {
