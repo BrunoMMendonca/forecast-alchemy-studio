@@ -19,13 +19,8 @@ interface ForecastModelsProps {
   onOptimizationStarted?: () => void;
   optimizationQueue?: {
     getSKUsInQueue: () => string[];
-    getQueuedCombinations: () => Array<{sku: string, modelId: string}>;
-    getModelsForSKU: (sku: string) => string[];
     removeSKUsFromQueue: (skus: string[]) => void;
-    removeSKUModelPairsFromQueue: (pairs: Array<{sku: string, modelId: string}>) => void;
     removeUnnecessarySKUs: (skus: string[]) => void;
-    queueSize: number;
-    uniqueSKUCount: number;
   };
 }
 
