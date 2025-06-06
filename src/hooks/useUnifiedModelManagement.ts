@@ -14,31 +14,29 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
     setCachedParameters,
     setSelectedMethod,
     getCachedParameters,
-    isCacheValid,
-    cacheVersion
+    isCacheValid
   } = useOptimizationCache();
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
   const isTogglingAIManualRef = useRef<boolean>(false);
+  const lastProcessedSKURef = useRef<string>('');
 
   const [models, setModels] = useState<ModelConfig[]>(() => {
     return getDefaultModels();
   });
 
-  // Create models with current cache and preferences - always read fresh from localStorage
-  const createModelsWithCurrentData = useCallback(() => {
-    if (!selectedSKU || isTogglingAIManualRef.current) {
+  // Simple function to create models with cached data - no complex dependencies
+  const applyOptimizedParametersToModels = useCallback((targetSKU: string, targetData: SalesData[]) => {
+    if (!targetSKU || isTogglingAIManualRef.current) {
       return getDefaultModels();
     }
 
-    let optimizationCache = {};
-    let preferences = {};
-    
-    try {
-      const storedCache = localStorage.getItem('forecast_optimization_cache');
-      optimizationCache = storedCache ? JSON.parse(storedCache) : {};
-    } catch {
-      optimizationCache = {};
+    const skuData = targetData.filter(d => d.sku === targetSKU);
+    if (skuData.length === 0) {
+      return getDefaultModels();
     }
+
+    const currentDataHash = generateDataHash(skuData);
+    let preferences = {};
     
     try {
       const storedPrefs = localStorage.getItem('manual_ai_preferences');
@@ -47,68 +45,63 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
       preferences = {};
     }
 
-    const skuData = data.filter(d => d.sku === selectedSKU);
-    const currentDataHash = generateDataHash(skuData);
-
     return getDefaultModels().map(model => {
       // Skip optimization logic for models without parameters
       if (!hasOptimizableParameters(model)) {
-        console.log(`🔧 UNIFIED: Skipping optimization logic for ${model.id} - no parameters`);
         return model;
       }
 
-      const preferenceKey = `${selectedSKU}:${model.id}`;
+      const preferenceKey = `${targetSKU}:${model.id}`;
       const preference = preferences[preferenceKey] || 'ai';
-      const cached = optimizationCache[selectedSKU]?.[model.id];
 
       if (preference === 'manual') {
         return model;
       }
 
-      let selectedCache = null;
-      if (preference === 'ai' && cached?.ai && cached.ai.dataHash === currentDataHash) {
-        selectedCache = cached.ai;
-      } else if (preference === 'grid' && cached?.grid && cached.grid.dataHash === currentDataHash) {
-        selectedCache = cached.grid;
-      } else {
-        if (cached?.ai && cached.ai.dataHash === currentDataHash) {
-          selectedCache = cached.ai;
-        } else if (cached?.grid && cached.grid.dataHash === currentDataHash) {
-          selectedCache = cached.grid;
+      // Only look for cached parameters if we have a preference for AI or Grid
+      let cachedParams = null;
+      if (preference === 'ai') {
+        cachedParams = getCachedParameters(targetSKU, model.id, 'ai');
+        if (cachedParams && isCacheValid(targetSKU, model.id, currentDataHash, 'ai')) {
+          // Use cached AI parameters
+        } else {
+          cachedParams = null;
+        }
+      } else if (preference === 'grid') {
+        cachedParams = getCachedParameters(targetSKU, model.id, 'grid');
+        if (cachedParams && isCacheValid(targetSKU, model.id, currentDataHash, 'grid')) {
+          // Use cached Grid parameters
+        } else {
+          cachedParams = null;
         }
       }
 
-      if (selectedCache) {
+      if (cachedParams) {
         return {
           ...model,
-          optimizedParameters: selectedCache.parameters,
-          optimizationConfidence: selectedCache.confidence,
-          optimizationReasoning: selectedCache.reasoning,
-          optimizationFactors: selectedCache.factors,
-          expectedAccuracy: selectedCache.expectedAccuracy,
-          optimizationMethod: selectedCache.method
+          optimizedParameters: cachedParams.parameters,
+          optimizationConfidence: cachedParams.confidence,
+          optimizationReasoning: cachedParams.reasoning,
+          optimizationFactors: cachedParams.factors,
+          expectedAccuracy: cachedParams.expectedAccuracy,
+          optimizationMethod: cachedParams.method
         };
       }
 
       return model;
     });
-  }, [selectedSKU, data, generateDataHash, cacheVersion]);
+  }, [generateDataHash, getCachedParameters, isCacheValid]);
 
-  // Single effect that updates models when cache version changes
+  // Single effect that only runs when SKU changes
   useEffect(() => {
-    if (selectedSKU && cacheVersion > 0) {
-      const updatedModels = createModelsWithCurrentData();
+    if (selectedSKU && selectedSKU !== lastProcessedSKURef.current) {
+      console.log(`🔄 UNIFIED: Processing SKU change from ${lastProcessedSKURef.current} to ${selectedSKU}`);
+      lastProcessedSKURef.current = selectedSKU;
+      
+      const updatedModels = applyOptimizedParametersToModels(selectedSKU, data);
       setModels(updatedModels);
     }
-  }, [cacheVersion, selectedSKU, createModelsWithCurrentData]);
-
-  // Effect for SKU changes
-  useEffect(() => {
-    if (selectedSKU) {
-      const updatedModels = createModelsWithCurrentData();
-      setModels(updatedModels);
-    }
-  }, [selectedSKU, createModelsWithCurrentData]);
+  }, [selectedSKU, applyOptimizedParametersToModels, data]);
 
   const toggleModel = (modelId: string) => {
     setModels(prev => prev.map(model => 
@@ -119,7 +112,6 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
   const updateParameter = (modelId: string, parameter: string, value: number) => {
     const model = models.find(m => m.id === modelId);
     
-    // Add parameter check to prevent optimization logic for models without parameters
     if (!model || !hasOptimizableParameters(model)) {
       console.log(`⚠️ UNIFIED: Cannot update parameter for ${modelId} - no optimizable parameters`);
       return;
@@ -156,7 +148,6 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
   const useAIOptimization = async (modelId: string) => {
     const model = models.find(m => m.id === modelId);
     
-    // Add parameter check to prevent optimization for models without parameters
     if (!model || !hasOptimizableParameters(model)) {
       console.log(`⚠️ UNIFIED: Cannot use AI optimization for ${modelId} - no optimizable parameters`);
       return;
@@ -168,19 +159,17 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
     
-    // CACHE-FIRST APPROACH: Check if we have valid cached AI results
+    // Check cache first
     const cachedAI = getCachedParameters(selectedSKU, modelId, 'ai');
     if (cachedAI && isCacheValid(selectedSKU, modelId, currentDataHash, 'ai')) {
-      console.log(`✅ CACHE HIT: Using cached AI result for ${modelId} - no API call needed! (unified)`);
+      console.log(`✅ CACHE HIT: Using cached AI result for ${modelId}`);
       
-      // Update preference to AI
       const preferences = loadManualAIPreferences();
       const preferenceKey = `${selectedSKU}:${modelId}`;
       preferences[preferenceKey] = 'ai';
       saveManualAIPreferences(preferences);
       setSelectedMethod(selectedSKU, modelId, 'ai');
       
-      // Cache will trigger model update via cacheVersion - but also apply immediately
       setModels(prev => prev.map(model => 
         model.id === modelId 
           ? { 
@@ -199,14 +188,12 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
       return;
     }
     
-    console.log(`🚀 CACHE MISS: No valid cached AI result, making fresh API call for ${modelId} (unified)`);
+    console.log(`🚀 CACHE MISS: Making fresh API call for ${modelId}`);
     
-    // Only call API if cache miss or invalid cache
     try {
       const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'ai', businessContext);
       
       if (result) {
-        // Update preference to AI
         const preferences = loadManualAIPreferences();
         const preferenceKey = `${selectedSKU}:${modelId}`;
         preferences[preferenceKey] = 'ai';
@@ -224,6 +211,21 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
           result.expectedAccuracy,
           result.method
         );
+
+        // Update models immediately
+        setModels(prev => prev.map(model => 
+          model.id === modelId 
+            ? { 
+                ...model, 
+                optimizedParameters: result.parameters,
+                optimizationConfidence: result.confidence,
+                optimizationReasoning: result.reasoning,
+                optimizationFactors: result.factors,
+                expectedAccuracy: result.expectedAccuracy,
+                optimizationMethod: result.method
+              }
+            : model
+        ));
       }
     } catch (error) {
       console.error('AI optimization failed:', error);
@@ -237,7 +239,6 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
   const useGridOptimization = async (modelId: string) => {
     const model = models.find(m => m.id === modelId);
     
-    // Add parameter check to prevent optimization for models without parameters
     if (!model || !hasOptimizableParameters(model)) {
       console.log(`⚠️ UNIFIED: Cannot use Grid optimization for ${modelId} - no optimizable parameters`);
       return;
@@ -249,19 +250,17 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
     
-    // CACHE-FIRST APPROACH: Check if we have valid cached Grid results
+    // Check cache first
     const cachedGrid = getCachedParameters(selectedSKU, modelId, 'grid');
     if (cachedGrid && isCacheValid(selectedSKU, modelId, currentDataHash, 'grid')) {
-      console.log(`✅ CACHE HIT: Using cached Grid result for ${modelId} - no optimization needed! (unified)`);
+      console.log(`✅ CACHE HIT: Using cached Grid result for ${modelId}`);
       
-      // Update preference to Grid
       const preferences = loadManualAIPreferences();
       const preferenceKey = `${selectedSKU}:${modelId}`;
       preferences[preferenceKey] = 'grid';
       saveManualAIPreferences(preferences);
       setSelectedMethod(selectedSKU, modelId, 'grid');
       
-      // Apply cached Grid parameters immediately
       setModels(prev => prev.map(model => 
         model.id === modelId 
           ? { 
@@ -280,14 +279,12 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
       return;
     }
     
-    console.log(`🚀 CACHE MISS: No valid cached Grid result, running fresh optimization for ${modelId} (unified)`);
+    console.log(`🚀 CACHE MISS: Running fresh optimization for ${modelId}`);
     
-    // Only run optimization if cache miss or invalid cache
     try {
       const result = await getOptimizationByMethod(model, skuData, selectedSKU, 'grid', businessContext);
       
       if (result) {
-        // Update preference to Grid
         const preferences = loadManualAIPreferences();
         const preferenceKey = `${selectedSKU}:${modelId}`;
         preferences[preferenceKey] = 'grid';
@@ -305,6 +302,21 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
           result.expectedAccuracy,
           result.method
         );
+
+        // Update models immediately
+        setModels(prev => prev.map(model => 
+          model.id === modelId 
+            ? { 
+                ...model, 
+                optimizedParameters: result.parameters,
+                optimizationConfidence: result.confidence,
+                optimizationReasoning: result.reasoning,
+                optimizationFactors: result.factors,
+                expectedAccuracy: result.expectedAccuracy,
+                optimizationMethod: result.method
+              }
+            : model
+        ));
       }
     } catch (error) {
       console.error('Grid optimization failed:', error);
@@ -318,13 +330,11 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
   const resetToManual = (modelId: string) => {
     const model = models.find(m => m.id === modelId);
     
-    // Add parameter check - though manual mode should work for all models
     if (!model) {
       console.log(`⚠️ UNIFIED: Model ${modelId} not found`);
       return;
     }
 
-    // Allow manual mode even for models without parameters (they just won't show parameter controls)
     console.log(`👤 Manual reset for ${modelId} (unified hook)`);
     isTogglingAIManualRef.current = true;
     
@@ -354,16 +364,16 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
   };
 
   const refreshModelsWithPreferences = useCallback(() => {
-    if (!isTogglingAIManualRef.current) {
-      const updatedModels = createModelsWithCurrentData();
+    if (!isTogglingAIManualRef.current && selectedSKU) {
+      const updatedModels = applyOptimizedParametersToModels(selectedSKU, data);
       setModels(updatedModels);
     }
-  }, [createModelsWithCurrentData]);
+  }, [selectedSKU, data, applyOptimizedParametersToModels]);
 
   return {
     models,
     setModels,
-    createModelsWithPreferences: createModelsWithCurrentData,
+    createModelsWithPreferences: applyOptimizedParametersToModels,
     refreshModelsWithPreferences,
     toggleModel,
     updateParameter,
