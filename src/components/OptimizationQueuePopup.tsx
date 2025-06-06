@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Clock, X, Zap } from 'lucide-react';
+import { Clock, X, Zap, Play } from 'lucide-react';
 import { getDefaultModels, hasOptimizableParameters } from '@/utils/modelConfig';
 
 interface OptimizationQueuePopupProps {
@@ -75,7 +75,7 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
         <div className="space-y-4">
           {isOptimizing && progress && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-3">
                 <div>
                   <h3 className="font-medium text-blue-800">Currently Processing</h3>
                   <p className="text-sm text-blue-600">SKU: {progress.currentSKU}</p>
@@ -84,6 +84,23 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
                   {progress.completedSKUs + 1}/{progress.totalSKUs}
                 </Badge>
               </div>
+              
+              {/* Show which model pairs are being optimized for the current SKU */}
+              {progress.currentSKU && (
+                <div className="mt-3 pt-3 border-t border-blue-200">
+                  <h4 className="text-sm font-medium text-blue-700 mb-2 flex items-center gap-1">
+                    <Play className="h-3 w-3" />
+                    Running Optimizations:
+                  </h4>
+                  <div className="flex flex-wrap gap-1">
+                    {optimizableModels.map(model => (
+                      <Badge key={model.id} variant="outline" className="text-xs bg-blue-100 border-blue-300">
+                        {progress.currentSKU}:{model.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -124,6 +141,26 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
                         <div className="font-mono text-sm font-medium">{sku}</div>
                         <div className="text-xs text-muted-foreground">
                           {modelsForSKU.length} model{modelsForSKU.length !== 1 ? 's' : ''} queued: {modelsForSKU.join(', ')}
+                        </div>
+                        {/* Show individual model pairs for this SKU */}
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {modelsForSKU.map(modelId => {
+                            const model = optimizableModels.find(m => m.id === modelId);
+                            const modelName = model?.name || modelId;
+                            return (
+                              <Badge 
+                                key={modelId} 
+                                variant="outline" 
+                                className={`text-xs ${
+                                  isCurrentlyOptimizing 
+                                    ? 'bg-blue-100 border-blue-300 text-blue-700' 
+                                    : 'bg-gray-100'
+                                }`}
+                              >
+                                {modelName}
+                              </Badge>
+                            );
+                          })}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
