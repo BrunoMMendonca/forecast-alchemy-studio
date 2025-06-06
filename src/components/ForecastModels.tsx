@@ -19,8 +19,13 @@ interface ForecastModelsProps {
   onOptimizationStarted?: () => void;
   optimizationQueue?: {
     getSKUsInQueue: () => string[];
+    getQueuedCombinations: () => Array<{sku: string, modelId: string}>;
+    getModelsForSKU: (sku: string) => string[];
     removeSKUsFromQueue: (skus: string[]) => void;
+    removeSKUModelPairsFromQueue: (pairs: Array<{sku: string, modelId: string}>) => void;
     removeUnnecessarySKUs: (skus: string[]) => void;
+    queueSize: number;
+    uniqueSKUCount: number;
   };
 }
 
@@ -55,7 +60,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     onForecastGeneration
   );
 
-  // Use optimization handler for queue management
+  // Use optimization handler for queue management - pass the complete queue interface
   const {
     isOptimizing,
     progress,
@@ -136,7 +141,13 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 
         {optimizationQueue && (
           <QueueStatusDisplay
-            optimizationQueue={optimizationQueue}
+            optimizationQueue={{
+              getSKUsInQueue: optimizationQueue.getSKUsInQueue,
+              removeSKUsFromQueue: optimizationQueue.removeSKUsFromQueue,
+              removeUnnecessarySKUs: optimizationQueue.removeUnnecessarySKUs,
+              queueSize: optimizationQueue.queueSize,
+              uniqueSKUCount: optimizationQueue.uniqueSKUCount
+            }}
             isOptimizing={isOptimizing}
             progress={progress}
             hasTriggeredOptimization={hasTriggeredOptimizationRef.current}
