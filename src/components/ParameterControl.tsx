@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
@@ -5,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Bot, Grid3x3, User } from 'lucide-react';
 import { Parameter } from '@/types/forecast';
 import { useCacheOperations } from '@/hooks/useCacheOperations';
-import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 
 interface ParameterControlProps {
   name: string;
@@ -75,6 +75,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     } else if (method === 'manual') {
       // For manual, trigger the reset to manual callback to clear optimized parameters
       if (onResetToManual) {
+        console.log(`🎯 PARAMETER_CONTROL: Calling onResetToManual for ${selectedSKU}:${modelId}`);
         onResetToManual();
       }
     }
