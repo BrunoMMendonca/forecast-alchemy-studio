@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -16,15 +17,25 @@ export interface SalesData {
   sku: string;
   date: string;
   sales: number;
+  note?: string;
+  isOutlier?: boolean;
+}
+
+export interface ForecastPrediction {
+  date: string;
+  value: number;
 }
 
 export interface ForecastResult {
   sku: string;
-  date: string;
-  forecast: number;
+  model: string;
+  predictions: ForecastPrediction[];
+  accuracy?: number;
   modelId: string;
   confidenceIntervalLower?: number;
   confidenceIntervalUpper?: number;
+  date?: string;
+  forecast?: number;
 }
 
 const Index = () => {
@@ -186,9 +197,16 @@ const Index = () => {
           </div>
         </div>
 
-        <FloatingSettingsButton />
+        <FloatingSettingsButton
+          forecastPeriods={forecastPeriods}
+          setForecastPeriods={setForecastPeriods}
+          businessContext={{}}
+          setBusinessContext={() => {}}
+          manualAIPreferences={{}}
+          setManualAIPreferences={() => {}}
+        />
 
-        <StepNavigation currentStep={currentStep} onStepChange={setCurrentStep} />
+        <StepNavigation currentStep={currentStep} />
 
         {/* Step 1: Data Upload */}
         {currentStep === 0 && (
@@ -223,8 +241,6 @@ const Index = () => {
           <ForecastResults
             results={forecastResults}
             selectedSKU={selectedSKUForResults}
-            data={cleanedData}
-            forecastPeriods={forecastPeriods}
           />
         )}
 
