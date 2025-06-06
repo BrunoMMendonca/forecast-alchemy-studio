@@ -11,7 +11,7 @@ export const useCacheOperations = (
   const getCachedParameters = useCallback((
     sku: string, 
     modelId: string, 
-    method?: 'ai' | 'grid'
+    method?: 'ai' | 'grid' | 'manual'
   ): OptimizedParameters | null => {
     console.log(`🗄️ CACHE: Looking for ${sku}:${modelId}:${method || 'any'}`);
     
@@ -42,11 +42,11 @@ export const useCacheOperations = (
       return result;
     }
 
-    const selectedMethod = cached.selected || 'ai';
+    const selectedMethod = cached.selected || 'manual';
     let result = cached[selectedMethod];
     
     if (!isValidEntry(result)) {
-      result = cached.ai || cached.grid;
+      result = cached.ai || cached.grid || cached.manual;
       
       if (!isValidEntry(result)) {
         result = undefined;
@@ -93,11 +93,13 @@ export const useCacheOperations = (
       method
     };
 
-    let cacheMethod: 'ai' | 'grid';
+    let cacheMethod: 'ai' | 'grid' | 'manual';
     if (method === 'grid_search') {
       cacheMethod = 'grid';
     } else if (method?.startsWith('ai_')) {
       cacheMethod = 'ai';
+    } else if (method === 'manual') {
+      cacheMethod = 'manual';
     } else {
       cacheMethod = method === 'grid_search' ? 'grid' : 'ai';
     }
@@ -112,32 +114,41 @@ export const useCacheOperations = (
       
       newCache[sku][modelId][cacheMethod] = optimizedParams;
       
-      // Auto-select the best available method when storing optimization results
-      // Priority: AI > Grid > Manual
-      const hasAI = newCache[sku][modelId].ai;
-      const hasGrid = newCache[sku][modelId].grid;
-      
-      let bestMethod: 'ai' | 'grid' | 'manual' = 'manual';
-      if (hasAI && hasGrid) {
-        bestMethod = 'ai';
-      } else if (hasAI) {
-        bestMethod = 'ai';
-      } else if (hasGrid) {
-        bestMethod = 'grid';
-      }
-      
-      const currentSelected = newCache[sku][modelId].selected;
-      const shouldAutoSelect = (
-        !currentSelected || 
-        (currentSelected === 'manual' && bestMethod !== 'manual') || 
-        (currentSelected === 'grid' && bestMethod === 'ai')
-      );
-      
-      if (shouldAutoSelect) {
-        newCache[sku][modelId].selected = bestMethod;
-        console.log(`🎯 CACHE: Auto-selected best method ${bestMethod} for ${sku}:${modelId}`);
+      // Auto-select logic - prioritize manual when explicitly set
+      if (cacheMethod === 'manual') {
+        newCache[sku][modelId].selected = 'manual';
+        console.log(`🎯 CACHE: Auto-selected manual method for ${sku}:${modelId}`);
       } else {
-        console.log(`🎯 CACHE: Keeping existing selection ${currentSelected} for ${sku}:${modelId}`);
+        // Auto-select the best available method when storing optimization results
+        // Priority: AI > Grid > Manual
+        const hasAI = newCache[sku][modelId].ai;
+        const hasGrid = newCache[sku][modelId].grid;
+        const hasManual = newCache[sku][modelId].manual;
+        
+        let bestMethod: 'ai' | 'grid' | 'manual' = 'manual';
+        if (hasAI && hasGrid) {
+          bestMethod = 'ai';
+        } else if (hasAI) {
+          bestMethod = 'ai';
+        } else if (hasGrid) {
+          bestMethod = 'grid';
+        } else if (hasManual) {
+          bestMethod = 'manual';
+        }
+        
+        const currentSelected = newCache[sku][modelId].selected;
+        const shouldAutoSelect = (
+          !currentSelected || 
+          (currentSelected === 'manual' && bestMethod !== 'manual') || 
+          (currentSelected === 'grid' && bestMethod === 'ai')
+        );
+        
+        if (shouldAutoSelect) {
+          newCache[sku][modelId].selected = bestMethod;
+          console.log(`🎯 CACHE: Auto-selected best method ${bestMethod} for ${sku}:${modelId}`);
+        } else {
+          console.log(`🎯 CACHE: Keeping existing selection ${currentSelected} for ${sku}:${modelId}`);
+        }
       }
       
       console.log(`🗄️ CACHE: Successfully stored ${sku}:${modelId}:${cacheMethod}`);

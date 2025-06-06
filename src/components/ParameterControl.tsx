@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -123,13 +124,22 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   // Determine the source of truth for parameter values
   const getParameterValue = useCallback((parameter: string) => {
     if (isManual) {
+      // For manual mode, check cache first, then fall back to model parameters
+      const manualCache = cacheEntry?.manual;
+      if (manualCache && manualCache.dataHash === currentDataHash) {
+        const cachedValue = manualCache.parameters?.[parameter];
+        if (cachedValue !== undefined) {
+          console.log(`🔄 PARAM_CONTROL: Using cached manual value for ${parameter}: ${cachedValue}`);
+          return cachedValue;
+        }
+      }
       return model.parameters?.[parameter];
     } else {
       const optimizedValue = model.optimizedParameters?.[parameter];
       const modelValue = model.parameters?.[parameter];
       return optimizedValue !== undefined ? optimizedValue : modelValue;
     }
-  }, [isManual, model.parameters, model.optimizedParameters]);
+  }, [isManual, model.parameters, model.optimizedParameters, cacheEntry, currentDataHash]);
 
   const canOptimize = hasOptimizableParameters(model);
 

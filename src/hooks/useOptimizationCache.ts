@@ -50,6 +50,27 @@ export const useOptimizationCache = () => {
     _setSelectedMethod(sku, modelId, method);
   }, [_setSelectedMethod]);
 
+  // New function to cache manual parameters
+  const cacheManualParameters = useCallback((
+    sku: string,
+    modelId: string,
+    parameters: Record<string, number>,
+    dataHash: string
+  ) => {
+    console.log(`🗄️ CACHE: Caching manual parameters for ${sku}:${modelId}`);
+    setCachedParameters(
+      sku,
+      modelId,
+      parameters,
+      dataHash,
+      undefined, // no confidence for manual
+      undefined, // no reasoning for manual
+      undefined, // no factors for manual
+      undefined, // no expected accuracy for manual
+      'manual'   // method identifier
+    );
+  }, [setCachedParameters]);
+
   const getSKUsNeedingOptimizationCallback = useCallback((
     data: SalesData[], 
     models: ModelConfig[]
@@ -59,7 +80,7 @@ export const useOptimizationCache = () => {
     sku: string, 
     modelId: string, 
     currentDataHash: string, 
-    method?: 'ai' | 'grid'
+    method?: 'ai' | 'grid' | 'manual'
   ) => isCacheValid(sku, modelId, currentDataHash, cache, method), [cache]);
 
   const clearAllCache = useCallback(() => {
@@ -77,6 +98,7 @@ export const useOptimizationCache = () => {
     generateDataHash,
     getCachedParameters,
     setCachedParameters,
+    cacheManualParameters,
     setSelectedMethod,
     isCacheValid: isCacheValidCallback,
     getSKUsNeedingOptimization: getSKUsNeedingOptimizationCallback,

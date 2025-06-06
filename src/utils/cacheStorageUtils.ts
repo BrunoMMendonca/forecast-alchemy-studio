@@ -1,4 +1,3 @@
-
 const CACHE_KEY = 'forecast_optimization_cache';
 const CACHE_EXPIRY_HOURS = 24;
 
@@ -23,6 +22,7 @@ export interface OptimizationCache {
     [modelId: string]: {
       ai?: OptimizedParameters;
       grid?: OptimizedParameters;
+      manual?: OptimizedParameters;
       selected?: 'ai' | 'grid' | 'manual';
     };
   };
@@ -49,7 +49,8 @@ export const loadCacheFromStorage = (): OptimizationCache => {
         // Handle both old and new cache structures
         if (entry.parameters) {
           const method = entry.method?.startsWith('ai_') ? 'ai' : 
-                       entry.method === 'grid_search' ? 'grid' : 'ai';
+                       entry.method === 'grid_search' ? 'grid' : 
+                       entry.method === 'manual' ? 'manual' : 'ai';
           
           // Skip entries that don't have the new hash format (v2-)
           if (!entry.dataHash?.startsWith('v2-')) {
@@ -75,8 +76,11 @@ export const loadCacheFromStorage = (): OptimizationCache => {
           const hasValidGrid = entry.grid && 
                               entry.grid.dataHash?.startsWith('v2-') &&
                               now - entry.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
+          const hasValidManual = entry.manual && 
+                                entry.manual.dataHash?.startsWith('v2-') &&
+                                now - entry.manual.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
           
-          if (hasValidAI || hasValidGrid) {
+          if (hasValidAI || hasValidGrid || hasValidManual) {
             if (!filteredCache[sku]) filteredCache[sku] = {};
             filteredCache[sku][modelId] = {};
             
@@ -85,6 +89,9 @@ export const loadCacheFromStorage = (): OptimizationCache => {
             }
             if (hasValidGrid) {
               filteredCache[sku][modelId].grid = entry.grid;
+            }
+            if (hasValidManual) {
+              filteredCache[sku][modelId].manual = entry.manual;
             }
             filteredCache[sku][modelId].selected = entry.selected;
             console.log(`🗄️ CACHE: Loaded ${sku}:${modelId} with multiple methods`);

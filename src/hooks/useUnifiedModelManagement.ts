@@ -1,11 +1,12 @@
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { BusinessContext } from '@/types/businessContext';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useModelState } from './useModelState';
 import { useForecastGeneration } from './useForecastGeneration';
 import { useModelOptimizationSync } from './useModelOptimizationSync';
+import { generateDataHash } from '@/utils/cacheHashUtils';
 
 export const useUnifiedModelManagement = (
   selectedSKU: string, 
@@ -14,7 +15,7 @@ export const useUnifiedModelManagement = (
   businessContext?: BusinessContext,
   onForecastGeneration?: (results: ForecastResult[], selectedSKU: string) => void
 ) => {
-  const { cache, setSelectedMethod } = useOptimizationCache();
+  const { cache, setSelectedMethod, cacheManualParameters } = useOptimizationCache();
   
   const {
     models,
@@ -35,6 +36,12 @@ export const useUnifiedModelManagement = (
     onForecastGeneration
   );
 
+  // Get current data hash for the selected SKU
+  const currentDataHash = useMemo(() => {
+    const skuData = data.filter(d => d.sku === selectedSKU);
+    return generateDataHash(skuData);
+  }, [data, selectedSKU]);
+
   // Sync models with optimization cache
   useModelOptimizationSync(
     selectedSKU,
@@ -49,22 +56,28 @@ export const useUnifiedModelManagement = (
     // Set explicit user selection to manual in cache
     setSelectedMethod(selectedSKU, modelId, 'manual');
     
-    // Immediately update the model state to manual mode (clear optimization data)
-    setModels(prev => prev.map(model => 
-      model.id === modelId 
-        ? { 
-            ...model, 
-            parameters: { ...model.parameters, [parameter]: value },
-            optimizedParameters: undefined,
-            optimizationConfidence: undefined,
-            optimizationReasoning: undefined,
-            optimizationFactors: undefined,
-            expectedAccuracy: undefined,
-            optimizationMethod: undefined
-          }
-        : model
-    ));
-  }, [selectedSKU, setSelectedMethod, setModels]);
+    // Update the model state to manual mode
+    setModels(prev => prev.map(model => {
+      if (model.id === modelId) {
+        const updatedParameters = { ...model.parameters, [parameter]: value };
+        
+        // Cache the manual parameters immediately
+        cacheManualParameters(selectedSKU, modelId, updatedParameters, currentDataHash);
+        
+        return { 
+          ...model, 
+          parameters: updatedParameters,
+          optimizedParameters: undefined,
+          optimizationConfidence: undefined,
+          optimizationReasoning: undefined,
+          optimizationFactors: undefined,
+          expectedAccuracy: undefined,
+          optimizationMethod: undefined
+        };
+      }
+      return model;
+    }));
+  }, [selectedSKU, setSelectedMethod, setModels, cacheManualParameters, currentDataHash]);
 
   const resetToManual = useCallback((modelId: string) => {
     console.log(`🔄 RESET TO MANUAL: ${modelId}`);
@@ -102,16 +115,32 @@ export const useUnifiedModelManagement = (
       const cached = cache[selectedSKU]?.[modelId];
       
       if (method === 'manual') {
-        // Clear optimization data for manual mode
-        return {
-          ...model,
-          optimizedParameters: undefined,
-          optimizationConfidence: undefined,
-          optimizationReasoning: undefined,
-          optimizationFactors: undefined,
-          expectedAccuracy: undefined,
-          optimizationMethod: undefined
-        };
+        // Try to restore manual parameters from cache first
+        const manualCache = cached?.manual;
+        if (manualCache && manualCache.dataHash === currentDataHash) {
+          console.log(`🔄 RESTORING manual parameters from cache for ${modelId}`);
+          return {
+            ...model,
+            parameters: manualCache.parameters,
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
+          };
+        } else {
+          // Clear optimization data for manual mode
+          return {
+            ...model,
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
+          };
+        }
       } else {
         // Apply cached optimization data if available
         let selectedCache = null;
@@ -136,7 +165,7 @@ export const useUnifiedModelManagement = (
       
       return model;
     }));
-  }, [selectedSKU, setSelectedMethod, setModels, cache]);
+  }, [selectedSKU, setSelectedMethod, setModels, cache, currentDataHash]);
 
   // CONTROLLED forecast generation - only when models hash actually changes
   useEffect(() => {
