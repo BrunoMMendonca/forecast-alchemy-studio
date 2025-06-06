@@ -333,20 +333,4 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
       </Collapsible>
     </Card>
   );
-
-  function getParameterConfig(parameter: string) {
-    const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
-      alpha: { min: 0.1, max: 0.9, step: 0.05, description: "Level smoothing parameter" },
-      beta: { min: 0.1, max: 0.9, step: 0.05, description: "Trend smoothing parameter" },
-      gamma: { min: 0.1, max: 0.9, step: 0.05, description: "Seasonal smoothing parameter" },
-      phi: { min: 0.8, max: 1.0, step: 0.02, description: "Damping parameter" },
-      seasonalPeriods: { min: 2, max: 52, step: 1, description: "Number of periods in a season" },
-      trend: { min: 0, max: 2, step: 1, description: "Trend component (0=none, 1=additive, 2=multiplicative)" },
-      seasonal: { min: 0, max: 2, step: 1, description: "Seasonal component (0=none, 1=additive, 2=multiplicative)" },
-      damped: { min: 0, max: 1, step: 1, description: "Damped trend (0=false, 1=true)" },
-      window: { min: 1, max: 12, step: 1, description: "Number of periods to average" },
-    };
-    
-    return configs[parameter] || { min: 0, max: 1, step: 0.1, description: "Parameter" };
-  }
 };
