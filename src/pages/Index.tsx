@@ -1,5 +1,3 @@
-
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -132,18 +130,11 @@ const Index = () => {
     );
   };
 
-  const handleImportDataCleaning = (cleanedData: SalesData[]) => {
-    setCleanedData(cleanedData);
-    setSalesData(cleanedData);
-    setCurrentStep(2);
-    setForecastResults([]);
-    setSelectedSKUForResults('');
-    
-    const skus = Array.from(new Set(cleanedData.map(d => d.sku)));
-    addSKUsToQueue(skus, 'csv_import');
+  const handleImportDataCleaning = (importedSKUs: string[]) => {
+    addSKUsToQueue(importedSKUs, 'csv_import');
     
     toast(
-      `Data Imported - ${skus.length} SKU${skus.length > 1 ? 's' : ''} queued for optimization after data import`
+      `Data Imported - ${importedSKUs.length} SKU${importedSKUs.length > 1 ? 's' : ''} queued for optimization after data import`
     );
   };
 
@@ -258,6 +249,8 @@ const Index = () => {
           <ForecastResults
             results={forecastResults}
             selectedSKU={selectedSKUForResults}
+            data={cleanedData}
+            forecastPeriods={forecastPeriods}
           />
         )}
 
@@ -276,4 +269,3 @@ const Index = () => {
 };
 
 export default Index;
-
