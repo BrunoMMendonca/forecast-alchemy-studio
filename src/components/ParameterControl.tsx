@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
@@ -31,11 +31,21 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   grokApiEnabled = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { cache } = useOptimizationCache();
+  const { cache, cacheVersion } = useOptimizationCache();
 
-  // Get current user selection from cache
-  const cacheEntry = cache[selectedSKU]?.[model.id];
-  const userSelectedMethod = cacheEntry?.selected;
+  // Get current user selection from cache - depend on cacheVersion for reactivity
+  const cacheEntry = useMemo(() => {
+    console.log(`🔄 PARAM_CONTROL: Cache lookup for ${selectedSKU}:${model.id} (version: ${cacheVersion})`);
+    const entry = cache[selectedSKU]?.[model.id];
+    console.log(`🔄 PARAM_CONTROL: Found cache entry:`, entry);
+    return entry;
+  }, [cache, selectedSKU, model.id, cacheVersion]);
+
+  const userSelectedMethod = useMemo(() => {
+    const method = cacheEntry?.selected;
+    console.log(`🔄 PARAM_CONTROL: User selected method for ${selectedSKU}:${model.id} = ${method}`);
+    return method;
+  }, [cacheEntry, selectedSKU, model.id]);
   
   // Load optimization data from cache based on user selection
   const optimizationData = useMemo(() => {
@@ -43,14 +53,12 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
       return null;
     }
 
-    // Try to get data for the selected method first
     if (userSelectedMethod === 'ai' && cacheEntry.ai) {
       return cacheEntry.ai;
     } else if (userSelectedMethod === 'grid' && cacheEntry.grid) {
       return cacheEntry.grid;
     }
 
-    // Fallback to any available optimization data
     return cacheEntry.ai || cacheEntry.grid || null;
   }, [cacheEntry, userSelectedMethod]);
 
@@ -58,6 +66,17 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const isManual = userSelectedMethod === 'manual';
   const isAI = userSelectedMethod === 'ai';
   const isGrid = userSelectedMethod === 'grid';
+
+  // Log current state for debugging
+  useEffect(() => {
+    console.log(`🎯 PARAM_CONTROL: Current state for ${selectedSKU}:${model.id}:`, {
+      userSelectedMethod,
+      isManual,
+      isAI,
+      isGrid,
+      cacheVersion
+    });
+  }, [selectedSKU, model.id, userSelectedMethod, isManual, isAI, isGrid, cacheVersion]);
 
   // SIMPLIFIED: Determine the source of truth for parameter values
   const getParameterValue = useCallback((parameter: string) => {
@@ -90,16 +109,15 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
     // Prevent duplicate calls by checking if we're already in this method
     if (userSelectedMethod === newMethod) {
+      console.log(`🎯 BADGE CLICK: Already in ${newMethod} mode for ${model.id}, ignoring`);
       return;
     }
     
     console.log(`🎯 BADGE CLICK: Switching to ${newMethod} for ${model.id}`);
     
     if (onMethodSelection) {
-      // Use the new direct method selection handler
       onMethodSelection(newMethod);
     } else {
-      // Fallback to the old approach
       if (newMethod === 'manual') {
         onResetToManual();
       }

@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { OptimizationCache, OptimizedParameters, saveCacheToStorage } from '@/utils/cacheStorageUtils';
 import { CACHE_EXPIRY_HOURS } from '@/utils/cacheStorageUtils';
@@ -120,7 +119,6 @@ export const useCacheOperations = (
       
       let bestMethod: 'ai' | 'grid' | 'manual' = 'manual';
       if (hasAI && hasGrid) {
-        // If both exist, prefer AI
         bestMethod = 'ai';
       } else if (hasAI) {
         bestMethod = 'ai';
@@ -128,12 +126,11 @@ export const useCacheOperations = (
         bestMethod = 'grid';
       }
       
-      // Only auto-select if there's no existing user selection, or if we're upgrading to a better method
       const currentSelected = newCache[sku][modelId].selected;
       const shouldAutoSelect = (
-        !currentSelected || // No selection yet
-        (currentSelected === 'manual' && bestMethod !== 'manual') || // Upgrade from manual
-        (currentSelected === 'grid' && bestMethod === 'ai') // Upgrade from grid to AI
+        !currentSelected || 
+        (currentSelected === 'manual' && bestMethod !== 'manual') || 
+        (currentSelected === 'grid' && bestMethod === 'ai')
       );
       
       if (shouldAutoSelect) {
@@ -144,15 +141,11 @@ export const useCacheOperations = (
       }
       
       console.log(`🗄️ CACHE: Successfully stored ${sku}:${modelId}:${cacheMethod}`);
-      
-      // SAVE TO LOCALSTORAGE: Only when optimization results are stored
-      console.log('🗄️ CACHE: Saving optimization results to localStorage');
       saveCacheToStorage(newCache);
       
       return newCache;
     });
 
-    // INCREMENT CACHE VERSION: Only when actual optimization data is stored
     setCacheVersion(prev => prev + 1);
   }, [setCache, setCacheVersion]);
 
@@ -161,22 +154,31 @@ export const useCacheOperations = (
     modelId: string,
     method: 'ai' | 'grid' | 'manual'
   ) => {
-    console.log(`🗄️ CACHE: Setting user selected method ${sku}:${modelId} to ${method} (memory only)`);
+    console.log(`🗄️ CACHE: Setting user selected method ${sku}:${modelId} to ${method}`);
+    
     setCache(prev => {
       const newCache = JSON.parse(JSON.stringify(prev));
       
       if (!newCache[sku]) newCache[sku] = {};
       if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
       
-      // This is the user's explicit choice - store in memory only (no localStorage save)
+      // Store the user's explicit choice and save to localStorage immediately
       newCache[sku][modelId].selected = method;
       
-      console.log(`🗄️ CACHE: User selected method stored in memory: ${sku}:${modelId} = ${method}`);
+      console.log(`🗄️ CACHE: User selected method stored: ${sku}:${modelId} = ${method}`);
+      console.log(`🗄️ CACHE: Saving method selection to localStorage`);
+      saveCacheToStorage(newCache);
+      
       return newCache;
     });
 
-    console.log(`🗄️ CACHE: Method selection complete - method set to ${method}`);
-  }, [setCache]);
+    // Force a cache version update to trigger UI re-renders
+    setCacheVersion(prev => {
+      const newVersion = prev + 1;
+      console.log(`🗄️ CACHE: Method selection triggered cache version update: ${prev} -> ${newVersion}`);
+      return newVersion;
+    });
+  }, [setCache, setCacheVersion]);
 
   const clearCacheForSKU = useCallback((sku: string) => {
     setCache(prev => {
