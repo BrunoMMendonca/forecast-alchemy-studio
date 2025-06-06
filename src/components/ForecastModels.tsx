@@ -37,7 +37,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   const componentMountedRef = useRef(false);
   const autoOptimizationDoneRef = useRef(false);
   
-  // Use the unified model management hook
+  // Use the unified model management hook - fix the arguments
   const {
     models,
     toggleModel,
@@ -48,9 +48,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   } = useUnifiedModelManagement(
     selectedSKU,
     data,
-    undefined, // businessContext
-    forecastPeriods,
-    onForecastGeneration
+    undefined // businessContext
   );
 
   // Use optimization handler for queue management - fix the arguments

@@ -164,8 +164,8 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
 
               {isOptimizing && progress && (
                 <div className="text-sm text-muted-foreground">
-                  Optimizing: {progress.currentSKU || 'Processing'} - {progress.currentModel || 'Model'} 
-                  ({progress.skuIndex || 0}/{progress.totalSKUs || 0})
+                  Optimizing: {progress.currentSKU || 'Processing'} 
+                  ({progress.completedSKUs}/{progress.totalSKUs})
                 </div>
               )}
             </CardContent>
