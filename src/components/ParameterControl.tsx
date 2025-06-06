@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -58,30 +57,18 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const isAI = userSelectedMethod === 'ai';
   const isGrid = userSelectedMethod === 'grid';
 
-  console.log(`🔍 ParameterControl Debug for ${model.id}:`, {
-    userSelectedMethod,
-    isManual,
-    modelParameters: model.parameters,
-    optimizedParameters: model.optimizedParameters,
-    optimizationDataParameters: optimizationData?.parameters
-  });
-
-  // NEW APPROACH: Determine the source of truth for parameter values
+  // SIMPLIFIED: Determine the source of truth for parameter values
   const getParameterValue = useCallback((parameter: string) => {
     if (isManual) {
       // In manual mode, ALWAYS use model.parameters
-      const value = model.parameters?.[parameter];
-      console.log(`📊 Manual mode - ${parameter}: ${value} (from model.parameters)`);
-      return value;
+      return model.parameters?.[parameter];
     } else {
       // In AI/Grid mode, use optimized parameters if available, otherwise fall back to model parameters
       const optimizedValue = model.optimizedParameters?.[parameter];
       const modelValue = model.parameters?.[parameter];
-      const finalValue = optimizedValue !== undefined ? optimizedValue : modelValue;
-      console.log(`📊 ${isAI ? 'AI' : 'Grid'} mode - ${parameter}: ${finalValue} (optimized: ${optimizedValue}, model: ${modelValue})`);
-      return finalValue;
+      return optimizedValue !== undefined ? optimizedValue : modelValue;
     }
-  }, [isManual, isAI, model.parameters, model.optimizedParameters]);
+  }, [isManual, model.parameters, model.optimizedParameters]);
 
   const canOptimize = hasOptimizableParameters(model);
 
@@ -93,22 +80,26 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     const newValue = values[0];
-    console.log(`🎯 Parameter change: ${parameter} = ${newValue} for model ${model.id} (was: ${getParameterValue(parameter)})`);
     onParameterUpdate(parameter, newValue);
-  }, [onParameterUpdate, model.id, getParameterValue]);
+  }, [onParameterUpdate]);
 
-  // Handle badge clicks - update cache "selected" field directly
+  // FIXED: Handle badge clicks with debouncing to prevent duplicate calls
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
+    // Prevent duplicate calls by checking if we're already in this method
+    if (userSelectedMethod === newMethod) {
+      return;
+    }
+    
     console.log(`🎯 BADGE CLICK: Switching to ${newMethod} for ${model.id}`);
     
-    // Update the cache's "selected" field directly
+    // Update the cache's "selected" field
     setSelectedMethod(selectedSKU, model.id, newMethod);
     
     // If switching to manual, reset the model to clear optimization results
     if (newMethod === 'manual') {
       onResetToManual();
     }
-  }, [selectedSKU, model.id, setSelectedMethod, onResetToManual]);
+  }, [selectedSKU, model.id, userSelectedMethod, setSelectedMethod, onResetToManual]);
 
   const getParameterConfig = (parameter: string) => {
     const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
@@ -164,6 +155,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                       className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
                       onClick={(e) => {
                         e.stopPropagation();
+                        e.preventDefault();
                         handlePreferenceChange('ai');
                       }}
                     >
@@ -178,6 +170,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
                     onClick={(e) => {
                       e.stopPropagation();
+                      e.preventDefault();
                       handlePreferenceChange('grid');
                     }}
                   >
@@ -191,6 +184,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
                     onClick={(e) => {
                       e.stopPropagation();
+                      e.preventDefault();
                       handlePreferenceChange('manual');
                     }}
                   >
@@ -227,11 +221,6 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   const currentValue = getParameterValue(parameter);
                   const safeValue = typeof currentValue === 'number' ? currentValue : config.min;
                   
-                  // Force slider re-render when switching modes by using a unique key
-                  const sliderKey = `${model.id}-${parameter}-${userSelectedMethod}-${safeValue}`;
-                  
-                  console.log(`🎚️ Rendering slider for ${parameter}: value=${safeValue}, key=${sliderKey}`);
-                  
                   return (
                     <div key={parameter} className="space-y-2">
                       <div className="flex justify-between items-center">
@@ -243,7 +232,6 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                         </span>
                       </div>
                       <Slider
-                        key={sliderKey}
                         id={`${model.id}-${parameter}`}
                         min={config.min}
                         max={config.max}
