@@ -7,9 +7,10 @@ import { ForecastResults } from '@/components/ForecastResults';
 import { ForecastFinalization } from '@/components/ForecastFinalization';
 import { StepNavigation } from '@/components/StepNavigation';
 import { FloatingSettingsButton } from '@/components/FloatingSettingsButton';
+import { OptimizationQueuePopup } from '@/components/OptimizationQueuePopup';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, TrendingUp, Upload, Zap, Eye } from 'lucide-react';
+import { BarChart3, TrendingUp, Upload, Zap, Eye, Queue } from 'lucide-react';
 import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 import { useGlobalForecastSettings } from '@/hooks/useGlobalForecastSettings';
@@ -37,6 +38,7 @@ const Index = () => {
   const [selectedSKUForResults, setSelectedSKUForResults] = useState<string>('');
   const [currentStep, setCurrentStep] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [isQueuePopupOpen, setIsQueuePopupOpen] = useState(false);
   const { toast } = useToast();
 
   const { addSKUsToQueue, removeSKUsFromQueue, getSKUsInQueue, queueSize, clearQueue } = useOptimizationQueue();
@@ -158,11 +160,22 @@ const Index = () => {
           <p className="text-xl text-slate-600 max-w-2xl mx-auto">
             Upload your historical sales data, leverage AI for optimization, and generate enterprise-ready forecasts for S&OP planning.
           </p>
-          {salesData.length > 0 && queueSize > 0 && (
-            <div className="mt-4 text-sm text-blue-600 bg-blue-50 rounded-lg px-4 py-2 inline-block">
-              📋 {queueSize} SKU{queueSize !== 1 ? 's' : ''} queued for optimization
-            </div>
-          )}
+          <div className="mt-4 flex items-center justify-center gap-4">
+            {salesData.length > 0 && queueSize > 0 && (
+              <div className="text-sm text-blue-600 bg-blue-50 rounded-lg px-4 py-2">
+                📋 {queueSize} SKU{queueSize !== 1 ? 's' : ''} queued for optimization
+              </div>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsQueuePopupOpen(true)}
+              className="gap-2"
+            >
+              <Queue className="h-4 w-4" />
+              View Queue
+            </Button>
+          </div>
         </div>
 
         {/* Floating Settings Button */}
@@ -308,6 +321,20 @@ const Index = () => {
             </Card>
           )}
         </div>
+
+        {/* Global Optimization Queue Popup */}
+        <OptimizationQueuePopup
+          optimizationQueue={{
+            getSKUsInQueue,
+            removeSKUsFromQueue,
+            removeUnnecessarySKUs: removeSKUsFromQueue
+          }}
+          models={[]} // Empty models array when no data
+          isOptimizing={false}
+          progress={null}
+          isOpen={isQueuePopupOpen}
+          onOpenChange={setIsQueuePopupOpen}
+        />
       </div>
     </div>
   );
