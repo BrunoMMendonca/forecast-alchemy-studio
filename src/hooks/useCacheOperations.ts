@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { OptimizationCache, OptimizedParameters, saveCacheToStorage } from '@/utils/cacheStorageUtils';
 import { CACHE_EXPIRY_HOURS } from '@/utils/cacheStorageUtils';
@@ -181,52 +180,6 @@ export const useCacheOperations = (
     });
   }, [setCache, setCacheVersion]);
 
-  const setManualParameters = useCallback((
-    sku: string,
-    modelId: string,
-    parameters: Record<string, number>,
-    dataHash: string
-  ) => {
-    console.log(`🗄️ CACHE: Setting manual parameters for ${sku}:${modelId}`);
-    
-    setCache(prev => {
-      const newCache = JSON.parse(JSON.stringify(prev));
-      
-      if (!newCache[sku]) newCache[sku] = {};
-      if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
-      
-      // Store manual parameters with special 'manual' entry
-      newCache[sku][modelId].manual = {
-        parameters,
-        timestamp: Date.now(),
-        dataHash,
-        method: 'manual'
-      };
-      
-      // Set selected method to manual
-      newCache[sku][modelId].selected = 'manual';
-      
-      console.log(`🗄️ CACHE: Manual parameters stored for ${sku}:${modelId}`);
-      saveCacheToStorage(newCache);
-      
-      return newCache;
-    });
-
-    setCacheVersion(prev => prev + 1);
-  }, [setCache, setCacheVersion]);
-
-  const getManualParameters = useCallback((
-    sku: string,
-    modelId: string
-  ): Record<string, number> | null => {
-    const cached = cache[sku]?.[modelId]?.manual;
-    if (cached) {
-      console.log(`🗄️ CACHE: Found manual parameters for ${sku}:${modelId}`);
-      return cached.parameters;
-    }
-    return null;
-  }, [cache]);
-
   const clearCacheForSKU = useCallback((sku: string) => {
     setCache(prev => {
       const newCache = JSON.parse(JSON.stringify(prev));
@@ -245,8 +198,6 @@ export const useCacheOperations = (
     getCachedParameters,
     setCachedParameters,
     setSelectedMethod,
-    setManualParameters,
-    getManualParameters,
     clearCacheForSKU
   };
 };

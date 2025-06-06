@@ -23,7 +23,6 @@ export interface OptimizationCache {
     [modelId: string]: {
       ai?: OptimizedParameters;
       grid?: OptimizedParameters;
-      manual?: OptimizedParameters;
       selected?: 'ai' | 'grid' | 'manual';
     };
   };
@@ -50,23 +49,20 @@ export const loadCacheFromStorage = (): OptimizationCache => {
         // Handle both old and new cache structures
         if (entry.parameters) {
           const method = entry.method?.startsWith('ai_') ? 'ai' : 
-                       entry.method === 'grid_search' ? 'grid' : 
-                       entry.method === 'manual' ? 'manual' : 'ai';
+                       entry.method === 'grid_search' ? 'grid' : 'ai';
           
-          // Skip entries that don't have the new hash format (v2-) except for manual
-          if (method !== 'manual' && !entry.dataHash?.startsWith('v2-')) {
+          // Skip entries that don't have the new hash format (v2-)
+          if (!entry.dataHash?.startsWith('v2-')) {
             console.log(`🗄️ CACHE: Skipping old format entry ${sku}:${modelId}:${method}`);
             return;
           }
           
-          if (method === 'manual' || now - entry.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000) {
+          if (now - entry.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000) {
             if (!filteredCache[sku]) filteredCache[sku] = {};
             if (!filteredCache[sku][modelId]) filteredCache[sku][modelId] = {};
             
             filteredCache[sku][modelId][method] = entry;
-            if (method !== 'manual') {
-              filteredCache[sku][modelId].selected = method;
-            }
+            filteredCache[sku][modelId].selected = method;
             console.log(`🗄️ CACHE: Loaded ${sku}:${modelId}:${method}`);
           } else {
             console.log(`🗄️ CACHE: Expired ${sku}:${modelId}:${method}`);
@@ -79,9 +75,8 @@ export const loadCacheFromStorage = (): OptimizationCache => {
           const hasValidGrid = entry.grid && 
                               entry.grid.dataHash?.startsWith('v2-') &&
                               now - entry.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
-          const hasValidManual = entry.manual; // Manual parameters don't expire
           
-          if (hasValidAI || hasValidGrid || hasValidManual) {
+          if (hasValidAI || hasValidGrid) {
             if (!filteredCache[sku]) filteredCache[sku] = {};
             filteredCache[sku][modelId] = {};
             
@@ -90,9 +85,6 @@ export const loadCacheFromStorage = (): OptimizationCache => {
             }
             if (hasValidGrid) {
               filteredCache[sku][modelId].grid = entry.grid;
-            }
-            if (hasValidManual) {
-              filteredCache[sku][modelId].manual = entry.manual;
             }
             filteredCache[sku][modelId].selected = entry.selected;
             console.log(`🗄️ CACHE: Loaded ${sku}:${modelId} with multiple methods`);
