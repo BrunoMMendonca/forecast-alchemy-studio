@@ -24,42 +24,38 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
     return getDefaultModels();
   });
 
-  // Single effect that updates models when needed - inline logic to avoid function dependencies
-  useEffect(() => {
+  // Create models with current cache and preferences - always read fresh from localStorage
+  const createModelsWithCurrentData = useCallback(() => {
     if (!selectedSKU || isTogglingAIManualRef.current) {
-      setModels(getDefaultModels());
-      return;
+      return getDefaultModels();
     }
 
-    console.log(`🔧 UNIFIED: Updating models for SKU: ${selectedSKU}, cache version: ${cacheVersion}`);
+    let optimizationCache = {};
+    let preferences = {};
+    
+    try {
+      const storedCache = localStorage.getItem('forecast_optimization_cache');
+      optimizationCache = storedCache ? JSON.parse(storedCache) : {};
+    } catch {
+      optimizationCache = {};
+    }
+    
+    try {
+      const storedPrefs = localStorage.getItem('manual_ai_preferences');
+      preferences = storedPrefs ? JSON.parse(storedPrefs) : {};
+    } catch {
+      preferences = {};
+    }
 
-    const updatedModels = getDefaultModels().map(model => {
-      // EARLY EXIT: Skip ALL cache/preference logic for models without parameters
+    const skuData = data.filter(d => d.sku === selectedSKU);
+    const currentDataHash = generateDataHash(skuData);
+
+    return getDefaultModels().map(model => {
+      // Skip optimization logic for models without parameters
       if (!hasOptimizableParameters(model)) {
-        console.log(`🔧 UNIFIED: Skipping ALL optimization logic for ${model.id} - no parameters`);
+        console.log(`🔧 UNIFIED: Skipping optimization logic for ${model.id} - no parameters`);
         return model;
       }
-
-      // Only do cache/preference operations for models WITH parameters
-      let optimizationCache = {};
-      let preferences = {};
-      
-      try {
-        const storedCache = localStorage.getItem('forecast_optimization_cache');
-        optimizationCache = storedCache ? JSON.parse(storedCache) : {};
-      } catch {
-        optimizationCache = {};
-      }
-      
-      try {
-        const storedPrefs = localStorage.getItem('manual_ai_preferences');
-        preferences = storedPrefs ? JSON.parse(storedPrefs) : {};
-      } catch {
-        preferences = {};
-      }
-
-      const skuData = data.filter(d => d.sku === selectedSKU);
-      const currentDataHash = generateDataHash(skuData);
 
       const preferenceKey = `${selectedSKU}:${model.id}`;
       const preference = preferences[preferenceKey] || 'ai';
@@ -96,9 +92,23 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
 
       return model;
     });
+  }, [selectedSKU, data, generateDataHash, cacheVersion]);
 
-    setModels(updatedModels);
-  }, [selectedSKU, cacheVersion]); // Only stable dependencies
+  // Single effect that updates models when cache version changes
+  useEffect(() => {
+    if (selectedSKU && cacheVersion > 0) {
+      const updatedModels = createModelsWithCurrentData();
+      setModels(updatedModels);
+    }
+  }, [cacheVersion, selectedSKU, createModelsWithCurrentData]);
+
+  // Effect for SKU changes
+  useEffect(() => {
+    if (selectedSKU) {
+      const updatedModels = createModelsWithCurrentData();
+      setModels(updatedModels);
+    }
+  }, [selectedSKU, createModelsWithCurrentData]);
 
   const toggleModel = (modelId: string) => {
     setModels(prev => prev.map(model => 
@@ -343,17 +353,17 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
     }, 100);
   };
 
-  // Simple refresh function that triggers the useEffect
   const refreshModelsWithPreferences = useCallback(() => {
-    if (!isTogglingAIManualRef.current && selectedSKU) {
-      // Force a re-render by updating cache version will trigger useEffect
-      console.log('🔄 UNIFIED: Refreshing models with preferences');
+    if (!isTogglingAIManualRef.current) {
+      const updatedModels = createModelsWithCurrentData();
+      setModels(updatedModels);
     }
-  }, [selectedSKU]);
+  }, [createModelsWithCurrentData]);
 
   return {
     models,
     setModels,
+    createModelsWithPreferences: createModelsWithCurrentData,
     refreshModelsWithPreferences,
     toggleModel,
     updateParameter,

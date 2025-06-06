@@ -4,7 +4,7 @@ import { SalesData } from '@/pages/Index';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useBatchOptimization } from '@/hooks/useBatchOptimization';
 import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimization';
-import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
+import { useModelManagement } from '@/hooks/useModelManagement';
 import { OptimizationFactors } from '@/types/optimizationTypes';
 import { PreferenceValue } from '@/hooks/useManualAIPreferences';
 
@@ -34,9 +34,11 @@ export const useOptimizationHandler = (
   } = useNavigationAwareOptimization();
 
   const {
+    models,
+    setModels,
     loadManualAIPreferences,
     saveManualAIPreferences
-  } = useManualAIPreferences();
+  } = useModelManagement(selectedSKU, data);
 
   const handleQueueOptimization = useCallback(async () => {
     if (!optimizationQueue) {
@@ -48,9 +50,7 @@ export const useOptimizationHandler = (
       return;
     }
 
-    // Get enabled models from the default models (since we don't have access to the hook state here)
-    const { getDefaultModels } = await import('@/utils/modelConfig');
-    const enabledModels = getDefaultModels().filter(m => m.enabled);
+    const enabledModels = models.filter(m => m.enabled);
     
     markOptimizationStarted(data, '/');
     
@@ -113,6 +113,20 @@ export const useOptimizationHandler = (
         
         preferences[preferenceKey] = newPreference;
         saveManualAIPreferences(preferences);
+        
+        setModels(prev => prev.map(model => 
+          model.id === modelId 
+            ? { 
+                ...model, 
+                optimizedParameters: parameters,
+                optimizationConfidence: confidence,
+                optimizationReasoning: reasoning,
+                optimizationFactors: typedFactors,
+                expectedAccuracy: expectedAccuracy,
+                optimizationMethod: method
+              }
+            : model
+        ));
       },
       (sku) => {
         // Delay queue removal to ensure UI updates are complete
@@ -133,7 +147,7 @@ export const useOptimizationHandler = (
     setTimeout(() => {
       markOptimizationCompleted(data, '/');
     }, 1000);
-  }, [optimizationQueue, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete]);
+  }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete]);
 
   return {
     isOptimizing,
