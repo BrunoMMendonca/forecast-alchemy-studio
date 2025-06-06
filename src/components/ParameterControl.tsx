@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -57,26 +58,25 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const isAI = userSelectedMethod === 'ai';
   const isGrid = userSelectedMethod === 'grid';
 
-  // Use manual parameters when in manual mode, optimized parameters otherwise
-  const currentParameters = useMemo(() => {
-    if (isManual) {
-      return model.parameters; // Use the model's current parameters for manual mode
-    }
-    return optimizationData?.parameters || model.parameters;
-  }, [isManual, optimizationData?.parameters, model.parameters]);
+  // ALWAYS use model.parameters for slider values - this is the source of truth for manual mode
+  const displayParameters = model.parameters;
 
   const canOptimize = hasOptimizableParameters(model);
 
   // Only show parameters section if model actually has parameters
-  const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
+  const hasParameters = displayParameters && Object.keys(displayParameters).length > 0;
 
   // Check if optimization results exist for display
   const hasOptimizationResults = canOptimize && optimizationData && !isManual;
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
-    console.log(`🎛️ SLIDER: Changing ${parameter} to ${values[0]} for ${model.id}`);
-    onParameterUpdate(parameter, values[0]);
-  }, [onParameterUpdate, model.id]);
+    const newValue = values[0];
+    console.log(`🎛️ SLIDER CHANGE: ${parameter} = ${newValue} for model ${model.id}`);
+    console.log(`🎛️ SLIDER: Current model.parameters.${parameter} = ${model.parameters[parameter]}`);
+    
+    // Call the parent update function immediately
+    onParameterUpdate(parameter, newValue);
+  }, [onParameterUpdate, model.id, model.parameters]);
 
   // Handle badge clicks - update cache "selected" field directly
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
@@ -203,8 +203,12 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
             {/* Parameter Controls */}
             <div className="space-y-4">
               <div className="grid gap-4">
-                {Object.entries(currentParameters).map(([parameter, value]) => {
+                {Object.entries(displayParameters).map(([parameter, value]) => {
                   const config = getParameterConfig(parameter);
+                  const currentValue = typeof value === 'number' ? value : config.min;
+                  
+                  console.log(`🎛️ RENDER: ${parameter} = ${currentValue} (isManual: ${isManual})`);
+                  
                   return (
                     <div key={parameter} className="space-y-2">
                       <div className="flex justify-between items-center">
@@ -212,7 +216,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                           {parameter}
                         </Label>
                         <span className="text-sm font-mono bg-slate-100 px-2 py-1 rounded">
-                          {typeof value === 'number' ? value.toFixed(config.step < 1 ? 2 : 0) : value}
+                          {currentValue.toFixed(config.step < 1 ? 2 : 0)}
                         </span>
                       </div>
                       <Slider
@@ -220,7 +224,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                         min={config.min}
                         max={config.max}
                         step={config.step}
-                        value={[typeof value === 'number' ? value : config.min]}
+                        value={[currentValue]}
                         onValueChange={(values) => handleParameterChange(parameter, values)}
                         className="w-full"
                         disabled={!isManual || disabled}
