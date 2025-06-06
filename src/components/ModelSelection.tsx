@@ -10,6 +10,7 @@ interface ModelSelectionProps {
   onToggleModel: (modelId: string) => void;
   onUpdateParameter: (modelId: string, parameter: string, value: number) => void;
   onResetToManual: (modelId: string) => void;
+  grokApiEnabled?: boolean;
 }
 
 export const ModelSelection: React.FC<ModelSelectionProps> = ({
@@ -18,6 +19,7 @@ export const ModelSelection: React.FC<ModelSelectionProps> = ({
   onToggleModel,
   onUpdateParameter,
   onResetToManual,
+  grokApiEnabled,
 }) => {
   return (
     <Card>
@@ -36,6 +38,7 @@ export const ModelSelection: React.FC<ModelSelectionProps> = ({
             onToggle={() => onToggleModel(model.id)}
             onParameterUpdate={(parameter, value) => onUpdateParameter(model.id, parameter, value)}
             onResetToManual={() => onResetToManual(model.id)}
+            grokApiEnabled={grokApiEnabled}
           />
         ))}
       </CardContent>

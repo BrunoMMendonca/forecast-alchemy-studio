@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useUnifiedModelManagement } from '@/hooks/useUnifiedModelManagement';
@@ -205,6 +206,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         onToggleModel={toggleModel}
         onUpdateParameter={updateParameter}
         onResetToManual={resetToManual}
+        grokApiEnabled={grokApiEnabled}
       />
 
       <OptimizationLogger 
