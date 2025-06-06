@@ -18,21 +18,12 @@ export const getSKUsNeedingOptimization = (
   console.log('🗄️ CACHE: Models with optimizable parameters:', enabledModelsWithParams.map(m => m.id));
   console.log('🗄️ CACHE: Models without parameters (skipping):', models.filter(m => m.enabled && !hasOptimizableParameters(m)).map(m => m.id));
   
-  // If no models have optimizable parameters, return empty array
-  if (enabledModelsWithParams.length === 0) {
-    console.log('🗄️ CACHE: No models with optimizable parameters found');
-    return [];
-  }
-  
   const skus = Array.from(new Set(data.map(d => d.sku))).sort();
   const result: { sku: string; models: string[] }[] = [];
   
   skus.forEach(sku => {
     const skuData = data.filter(d => d.sku === sku);
-    if (skuData.length < 3) {
-      console.log(`🗄️ CACHE: SKU ${sku} has insufficient data (${skuData.length} points), skipping`);
-      return;
-    }
+    if (skuData.length < 3) return;
     
     const currentDataHash = generateDataHash(skuData);
     
@@ -67,7 +58,6 @@ export const getSKUsNeedingOptimization = (
     }
   });
   
-  console.log('🗄️ CACHE: Final SKUs needing optimization:', result);
   return result;
 };
 

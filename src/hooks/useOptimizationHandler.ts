@@ -7,7 +7,6 @@ import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimi
 import { useModelManagement } from '@/hooks/useModelManagement';
 import { OptimizationFactors } from '@/types/optimizationTypes';
 import { PreferenceValue } from '@/hooks/useManualAIPreferences';
-import { hasOptimizableParameters } from '@/utils/modelConfig';
 
 interface OptimizationQueue {
   getSKUsInQueue: () => string[];
@@ -51,45 +50,14 @@ export const useOptimizationHandler = (
       return;
     }
 
-    console.log('🔄 QUEUE: Starting optimization for queued SKUs:', queuedSKUs);
-
     const enabledModels = models.filter(m => m.enabled);
-    
-    // Check if any models have optimizable parameters
-    const modelsWithOptimizableParams = enabledModels.filter(m => hasOptimizableParameters(m));
-    
-    if (modelsWithOptimizableParams.length === 0) {
-      console.log('🔄 QUEUE: No models with optimizable parameters, clearing queue');
-      optimizationQueue.removeSKUsFromQueue(queuedSKUs);
-      return;
-    }
-
-    // Filter SKUs that actually need optimization
-    const skusNeedingOptimization = getSKUsNeedingOptimization(data, enabledModels);
-    const skusToOptimize = queuedSKUs.filter(sku => 
-      skusNeedingOptimization.some(item => item.sku === sku)
-    );
-
-    // Remove SKUs that don't need optimization
-    const skusToRemove = queuedSKUs.filter(sku => !skusToOptimize.includes(sku));
-    if (skusToRemove.length > 0) {
-      console.log('🔄 QUEUE: Removing SKUs that don\'t need optimization:', skusToRemove);
-      optimizationQueue.removeSKUsFromQueue(skusToRemove);
-    }
-
-    if (skusToOptimize.length === 0) {
-      console.log('🔄 QUEUE: No SKUs actually need optimization, queue cleared');
-      return;
-    }
-
-    console.log('🔄 QUEUE: Optimizing SKUs:', skusToOptimize);
     
     markOptimizationStarted(data, '/');
     
     await optimizeQueuedSKUs(
       data, 
       enabledModels,
-      skusToOptimize,
+      queuedSKUs,
       (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method, bothResults) => {
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
@@ -161,7 +129,6 @@ export const useOptimizationHandler = (
         ));
       },
       (sku) => {
-        console.log('🔄 QUEUE: Completed optimization for SKU:', sku);
         // Delay queue removal to ensure UI updates are complete
         setTimeout(() => {
           optimizationQueue.removeSKUsFromQueue([sku]);
