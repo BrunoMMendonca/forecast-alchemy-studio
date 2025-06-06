@@ -41,10 +41,9 @@ export const useForecastCache = () => {
         });
         
         setForecastCache(filteredCache);
-        console.log('📊 FORECAST CACHE: Loaded cache with', Object.keys(filteredCache).length, 'SKUs');
       }
     } catch (error) {
-      console.error('📊 FORECAST CACHE: Error loading cache:', error);
+      // Silent error handling
     }
   }, []);
 
@@ -52,9 +51,8 @@ export const useForecastCache = () => {
   useEffect(() => {
     try {
       localStorage.setItem(FORECAST_CACHE_KEY, JSON.stringify(forecastCache));
-      console.log('📊 FORECAST CACHE: Saved cache to localStorage');
     } catch (error) {
-      console.error('📊 FORECAST CACHE: Error saving cache:', error);
+      // Silent error handling
     }
   }, [forecastCache]);
 
@@ -63,9 +61,7 @@ export const useForecastCache = () => {
     optimizedParameters: Record<string, number> | undefined
   ): string => {
     const effectiveParams = optimizedParameters || parameters || {};
-    const hash = btoa(JSON.stringify(effectiveParams)).substring(0, 16);
-    console.log('📊 FORECAST CACHE: Generated hash:', hash, 'for params:', effectiveParams);
-    return hash;
+    return btoa(JSON.stringify(effectiveParams)).substring(0, 16);
   }, []);
 
   const getCachedForecast = useCallback((
@@ -79,11 +75,9 @@ export const useForecastCache = () => {
     if (cached && 
         cached.parametersHash === parametersHash && 
         cached.forecastPeriods === forecastPeriods) {
-      console.log('📊 FORECAST CACHE: Cache HIT for', sku, modelName);
       return cached.result;
     }
     
-    console.log('📊 FORECAST CACHE: Cache MISS for', sku, modelName, 'hash:', parametersHash);
     return null;
   }, [forecastCache]);
 
@@ -92,7 +86,6 @@ export const useForecastCache = () => {
     parametersHash: string,
     forecastPeriods: number
   ) => {
-    console.log('📊 FORECAST CACHE: Caching forecast for', result.sku, result.model, 'hash:', parametersHash);
     setForecastCache(prev => ({
       ...prev,
       [result.sku]: {
@@ -108,7 +101,6 @@ export const useForecastCache = () => {
   }, []);
 
   const clearForecastCacheForSKU = useCallback((sku: string) => {
-    console.log('📊 FORECAST CACHE: Clearing cache for SKU:', sku);
     setForecastCache(prev => {
       const newCache = { ...prev };
       delete newCache[sku];

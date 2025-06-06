@@ -50,13 +50,8 @@ export const generateForecastsForSKU = async (
   generateParametersHash: (params?: Record<string, number>, optimized?: Record<string, number>) => string,
   grokApiEnabled: boolean = true
 ): Promise<ForecastResult[]> => {
-  console.log('📊 FORECAST GENERATOR: Starting forecast generation for SKU:', selectedSKU);
-  
   const enabledModels = models.filter(m => m.enabled);
-  if (enabledModels.length === 0) {
-    console.log('📊 FORECAST GENERATOR: No enabled models');
-    return [];
-  }
+  if (enabledModels.length === 0) return [];
 
   const skuData = data
     .filter(d => d.sku === selectedSKU)
@@ -71,98 +66,84 @@ export const generateForecastsForSKU = async (
   const forecastDates = generateForecastDates(lastDate, forecastPeriods, frequency);
   const results: ForecastResult[] = [];
 
-  console.log('📊 FORECAST GENERATOR: Processing', enabledModels.length, 'enabled models');
-
   for (const model of enabledModels) {
     const effectiveParameters = model.optimizedParameters || model.parameters;
     const parametersHash = generateParametersHash(model.parameters, model.optimizedParameters);
     
-    console.log(`📊 FORECAST GENERATOR: Processing model ${model.name} with hash ${parametersHash}`);
-    
     const cachedForecast = getCachedForecast(selectedSKU, model.name, parametersHash, forecastPeriods);
     if (cachedForecast) {
-      console.log(`📊 FORECAST GENERATOR: Using cached result for ${model.name}`);
       results.push(cachedForecast);
       continue;
     }
 
     let predictions: number[] = [];
 
-    try {
-      switch (model.id) {
-        case 'moving_average':
-          predictions = generateMovingAverage(skuData, effectiveParameters?.window || 3, forecastPeriods);
-          break;
-        case 'simple_exponential_smoothing':
-          predictions = generateSimpleExponentialSmoothing(skuData, effectiveParameters?.alpha || 0.3, forecastPeriods);
-          break;
-        case 'double_exponential_smoothing':
-          predictions = generateDoubleExponentialSmoothing(
-            skuData, 
-            effectiveParameters?.alpha || 0.3, 
-            effectiveParameters?.beta || 0.1, 
-            forecastPeriods
-          );
-          break;
-        case 'exponential_smoothing':
-          predictions = generateSimpleExponentialSmoothing(skuData, effectiveParameters?.alpha || 0.3, forecastPeriods);
-          break;
-        case 'linear_trend':
-          predictions = generateLinearTrend(skuData, forecastPeriods);
-          break;
-        case 'seasonal_moving_average':
-          predictions = generateSeasonalMovingAverage(
-            skuData.map(d => d.sales),
-            effectiveParameters?.window || 3,
-            frequency.seasonalPeriod,
-            forecastPeriods
-          );
-          break;
-        case 'holt_winters':
-          predictions = generateHoltWinters(
-            skuData.map(d => d.sales),
-            frequency.seasonalPeriod,
-            forecastPeriods,
-            effectiveParameters?.alpha || 0.3,
-            effectiveParameters?.beta || 0.1,
-            effectiveParameters?.gamma || 0.1
-          );
-          break;
-        case 'seasonal_naive':
-          predictions = generateSeasonalNaive(
-            skuData.map(d => d.sales),
-            frequency.seasonalPeriod,
-            forecastPeriods
-          );
-          break;
-        default:
-          console.warn(`📊 FORECAST GENERATOR: Unknown model type: ${model.id}`);
-          continue;
-      }
-
-      // Use standardized accuracy calculation - same as optimization
-      const recentActual = skuData.slice(-Math.min(10, skuData.length)).map(d => d.sales);
-      const syntheticPredicted = predictions.slice(0, recentActual.length);
-      const accuracy = calculateStandardizedAccuracy(recentActual, syntheticPredicted);
-
-      const result: ForecastResult = {
-        sku: selectedSKU,
-        model: model.name,
-        predictions: forecastDates.map((date, i) => ({
-          date,
-          value: Math.round(predictions[i] || 0)
-        })),
-        accuracy
-      };
-
-      console.log(`📊 FORECAST GENERATOR: Generated forecast for ${model.name}, caching with hash ${parametersHash}`);
-      setCachedForecast(result, parametersHash, forecastPeriods);
-      results.push(result);
-    } catch (error) {
-      console.error(`📊 FORECAST GENERATOR: Error generating forecast for ${model.name}:`, error);
+    switch (model.id) {
+      case 'moving_average':
+        predictions = generateMovingAverage(skuData, effectiveParameters?.window || 3, forecastPeriods);
+        break;
+      case 'simple_exponential_smoothing':
+        predictions = generateSimpleExponentialSmoothing(skuData, effectiveParameters?.alpha || 0.3, forecastPeriods);
+        break;
+      case 'double_exponential_smoothing':
+        predictions = generateDoubleExponentialSmoothing(
+          skuData, 
+          effectiveParameters?.alpha || 0.3, 
+          effectiveParameters?.beta || 0.1, 
+          forecastPeriods
+        );
+        break;
+      case 'exponential_smoothing':
+        predictions = generateSimpleExponentialSmoothing(skuData, effectiveParameters?.alpha || 0.3, forecastPeriods);
+        break;
+      case 'linear_trend':
+        predictions = generateLinearTrend(skuData, forecastPeriods);
+        break;
+      case 'seasonal_moving_average':
+        predictions = generateSeasonalMovingAverage(
+          skuData.map(d => d.sales),
+          effectiveParameters?.window || 3,
+          frequency.seasonalPeriod,
+          forecastPeriods
+        );
+        break;
+      case 'holt_winters':
+        predictions = generateHoltWinters(
+          skuData.map(d => d.sales),
+          frequency.seasonalPeriod,
+          forecastPeriods,
+          effectiveParameters?.alpha || 0.3,
+          effectiveParameters?.beta || 0.1,
+          effectiveParameters?.gamma || 0.1
+        );
+        break;
+      case 'seasonal_naive':
+        predictions = generateSeasonalNaive(
+          skuData.map(d => d.sales),
+          frequency.seasonalPeriod,
+          forecastPeriods
+        );
+        break;
     }
+
+    // Use standardized accuracy calculation - same as optimization
+    const recentActual = skuData.slice(-Math.min(10, skuData.length)).map(d => d.sales);
+    const syntheticPredicted = predictions.slice(0, recentActual.length);
+    const accuracy = calculateStandardizedAccuracy(recentActual, syntheticPredicted);
+
+    const result: ForecastResult = {
+      sku: selectedSKU,
+      model: model.name,
+      predictions: forecastDates.map((date, i) => ({
+        date,
+        value: Math.round(predictions[i] || 0)
+      })),
+      accuracy
+    };
+
+    setCachedForecast(result, parametersHash, forecastPeriods);
+    results.push(result);
   }
 
-  console.log(`📊 FORECAST GENERATOR: Generated ${results.length} forecasts for SKU ${selectedSKU}`);
   return results;
 };

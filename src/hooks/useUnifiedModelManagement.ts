@@ -55,40 +55,27 @@ export const useUnifiedModelManagement = (
       method: m.optimizationMethod
     }));
     
-    const hash = JSON.stringify(hashData);
-    console.log('🔄 MODEL MANAGEMENT: Models hash updated:', hash.substring(0, 100), '...');
-    return hash;
+    return JSON.stringify(hashData);
   }, [models]);
 
   // Generate forecasts when models actually change (not just re-render)
   const generateForecasts = useCallback(async () => {
-    if (!selectedSKU || models.length === 0) {
-      console.log('🔄 MODEL MANAGEMENT: No SKU or models, skipping forecast generation');
-      return;
-    }
-    
+    if (!selectedSKU || models.length === 0) return;
     if (forecastGenerationInProgressRef.current) {
-      console.log('🔄 MODEL MANAGEMENT: Forecast generation already in progress');
       return;
     }
 
     // Check if we've already generated for this exact state
     if (lastForecastGenerationHashRef.current === modelsHash) {
-      console.log('🔄 MODEL MANAGEMENT: Models hash unchanged, skipping forecast generation');
       return;
     }
 
     const enabledModels = models.filter(m => m.enabled);
-    if (enabledModels.length === 0) {
-      console.log('🔄 MODEL MANAGEMENT: No enabled models, clearing results');
-      return;
-    }
+    if (enabledModels.length === 0) return;
 
     try {
       forecastGenerationInProgressRef.current = true;
       lastForecastGenerationHashRef.current = modelsHash;
-      
-      console.log('🔄 MODEL MANAGEMENT: Starting forecast generation for SKU:', selectedSKU);
       
       const results = await generateForecastsForSKU(
         selectedSKU,
@@ -100,14 +87,11 @@ export const useUnifiedModelManagement = (
         generateParametersHash
       );
       
-      console.log('🔄 MODEL MANAGEMENT: Generated', results.length, 'forecasts');
-      
-      if (onForecastGeneration && results.length > 0) {
+      if (onForecastGeneration) {
         onForecastGeneration(results, selectedSKU);
       }
 
     } catch (error) {
-      console.error('🔄 MODEL MANAGEMENT: Forecast generation error:', error);
       toast({
         title: "Forecast Error",
         description: error instanceof Error ? error.message : "Failed to generate forecasts. Please try again.",
@@ -132,6 +116,42 @@ export const useUnifiedModelManagement = (
     return 'manual';
   }, [cache]);
 
+  // Function to update preferences to best available method
+  const updatePreferencesToBestAvailable = useCallback((sku: string, currentDataHash: string) => {
+    const preferences = loadManualAIPreferences();
+    let preferencesUpdated = false;
+
+    // Get all models that have cache entries for this SKU
+    const skuCache = cache[sku];
+    if (!skuCache) return;
+
+    Object.keys(skuCache).forEach(modelId => {
+      const preferenceKey = `${sku}:${modelId}`;
+      const currentPreference = preferences[preferenceKey];
+      const bestAvailableMethod = getBestAvailableMethod(sku, modelId, currentDataHash);
+
+      // Only update if we have a better method available than current preference
+      const shouldUpdate = (
+        !currentPreference || // No preference set
+        (currentPreference === 'manual' && bestAvailableMethod !== 'manual') || // Manual -> Better method
+        (currentPreference === 'grid' && bestAvailableMethod === 'ai') // Grid -> AI
+      );
+
+      if (shouldUpdate && bestAvailableMethod !== currentPreference) {
+        preferences[preferenceKey] = bestAvailableMethod;
+        preferencesUpdated = true;
+        console.log(`🎯 AUTO-PREFERENCE UPDATE: ${preferenceKey} -> ${bestAvailableMethod} (was: ${currentPreference || 'none'})`);
+      }
+    });
+
+    if (preferencesUpdated) {
+      saveManualAIPreferences(preferences);
+      console.log(`💾 PREFERENCES: Updated to best available methods for ${sku}`);
+    }
+
+    return preferencesUpdated;
+  }, [cache, loadManualAIPreferences, saveManualAIPreferences, getBestAvailableMethod]);
+
   // CONTROLLED cache version updates - only process when actually needed
   useEffect(() => {
     if (!selectedSKU) return;
@@ -146,15 +166,16 @@ export const useUnifiedModelManagement = (
       return;
     }
     
-    console.log('🔄 MODEL MANAGEMENT: Processing cache update for SKU:', selectedSKU, 'version:', cacheVersion);
-    
     lastProcessedCacheVersionRef.current = cacheVersion;
     lastProcessedSKURef.current = selectedSKU;
     
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
     
-    // Load preferences
+    // First, update preferences to best available methods
+    const preferencesWereUpdated = updatePreferencesToBestAvailable(selectedSKU, currentDataHash);
+    
+    // Load preferences (potentially updated)
     const preferences = loadManualAIPreferences();
 
     const updatedModels = getDefaultModels().map(model => {
@@ -171,7 +192,6 @@ export const useUnifiedModelManagement = (
       }
 
       if (selectedCache && selectedCache.dataHash === currentDataHash) {
-        console.log(`🔄 MODEL MANAGEMENT: Using cached ${actualPreference} parameters for ${model.id}`);
         return {
           ...model,
           optimizedParameters: selectedCache.parameters,
@@ -190,7 +210,7 @@ export const useUnifiedModelManagement = (
     
     // Reset forecast generation hash when models are updated from cache
     lastForecastGenerationHashRef.current = '';
-  }, [cacheVersion, selectedSKU, data, cache, generateDataHash, loadManualAIPreferences, getBestAvailableMethod]);
+  }, [cacheVersion, selectedSKU, data, cache, generateDataHash, updatePreferencesToBestAvailable]);
 
   // CONTROLLED forecast generation - only when models hash actually changes
   useEffect(() => {
@@ -213,7 +233,6 @@ export const useUnifiedModelManagement = (
   }, [modelsHash, selectedSKU, generateForecasts]);
 
   const toggleModel = useCallback((modelId: string) => {
-    console.log('🔄 MODEL MANAGEMENT: Toggling model:', modelId);
     setModels(prev => prev.map(model => 
       model.id === modelId ? { ...model, enabled: !model.enabled } : model
     ));
@@ -222,7 +241,6 @@ export const useUnifiedModelManagement = (
   }, []);
 
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
-    console.log('🔄 MODEL MANAGEMENT: Updating parameter:', modelId, parameter, value);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
@@ -255,7 +273,6 @@ export const useUnifiedModelManagement = (
   }, [selectedSKU, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod]);
 
   const resetToManual = useCallback((modelId: string) => {
-    console.log('🔄 MODEL MANAGEMENT: Resetting to manual:', modelId);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();
