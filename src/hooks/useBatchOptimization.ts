@@ -161,9 +161,11 @@ export const useBatchOptimization = () => {
     queuedSKUs: string[],
     onComplete: (sku: string, modelId: string, parameters: any, confidence: number, reasoning: string, factors: any, expectedAccuracy: number, method: string, bothResults?: any) => void,
     onSKUComplete: (sku: string) => void,
-    getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[]
+    getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[],
+    grokApiEnabled: boolean = true // Add grokApiEnabled parameter
   ) => {
     console.log('🚀 BATCH: Starting optimization for queued SKUs:', queuedSKUs);
+    console.log('🚀 BATCH: Grok API enabled:', grokApiEnabled);
     
     if (!queuedSKUs || queuedSKUs.length === 0) {
       console.log('🚀 BATCH: No SKUs to optimize');
@@ -212,7 +214,8 @@ export const useBatchOptimization = () => {
                   methodResult.method || method,
                   // Don't pass bothResults here since this is progressive
                 );
-              }
+              },
+              grokApiEnabled // Pass grokApiEnabled to optimizeSingleModel
             );
 
             console.log(`✅ BATCH: Completed ${sku}:${model.id} with method ${result.selectedResult.method}`);

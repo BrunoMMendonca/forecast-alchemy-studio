@@ -246,7 +246,8 @@ export const useOptimizationHandler = (
           }, 200);
         }
       },
-      getSKUsNeedingOptimization
+      getSKUsNeedingOptimization,
+      grokApiEnabled
     );
 
     // Mark optimization completed after a slight delay to ensure all updates are processed
