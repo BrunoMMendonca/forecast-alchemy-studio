@@ -22,9 +22,8 @@ interface ForecastModelsProps {
   };
 }
 
-// Helper function to validate SKU - more robust validation
+// Helper function to validate SKU
 const isValidSKU = (sku: any): boolean => {
-  console.log('🔍 ForecastModels isValidSKU check:', { sku, type: typeof sku, length: sku?.length });
   return sku !== null && sku !== undefined && typeof sku === 'string' && sku.trim().length > 0;
 };
 
@@ -46,12 +45,10 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   console.log('🔄 ForecastModels render - selectedSKU validation:', {
     selectedSKU: `"${selectedSKU}"`,
     isValid: isValidSKU(selectedSKU),
-    type: typeof selectedSKU,
-    length: selectedSKU?.length,
     dataLength: data?.length
   });
   
-  // Auto-select first SKU when data changes - FIXED to prevent empty strings
+  // Auto-select first SKU ONLY when data changes and no valid SKU is selected
   useEffect(() => {
     const skus = Array.from(new Set(data.map(d => d.sku))).sort();
     const currentlyValid = isValidSKU(selectedSKU);
@@ -67,11 +64,10 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     if (skus.length > 0 && !currentlyValid) {
       console.log('✅ Auto-selecting first SKU:', skus[0]);
       onSKUChange(skus[0]);
-      return; // Early return to prevent further processing
     }
-  }, [data, selectedSKU, onSKUChange]);
+  }, [data, onSKUChange]); // Removed selectedSKU from deps to prevent loops
 
-  // CRITICAL: Only initialize hooks if we have a truly valid SKU
+  // Determine if we should initialize hooks
   const hooksShouldInitialize = isValidSKU(selectedSKU);
   
   console.log('🧪 ForecastModels hooks initialization check:', {
@@ -109,7 +105,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     generateForecasts
   );
 
-  // Mark component as mounted and handle initial optimization
+  // Handle component mounting and initial optimization - SIMPLIFIED
   useEffect(() => {
     componentMountedRef.current = true;
     
@@ -119,13 +115,12 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
       return;
     }
     
-    // Only auto-trigger once per mount
+    // Auto-trigger optimization if queue exists and hasn't been done yet
     if (optimizationQueue && !autoOptimizationDoneRef.current) {
       const queuedSKUs = optimizationQueue.getSKUsInQueue();
       if (queuedSKUs.length > 0 && !isOptimizing) {
         autoOptimizationDoneRef.current = true;
         
-        // Add delay to ensure all components are ready
         setTimeout(() => {
           if (componentMountedRef.current && isValidSKU(selectedSKU)) {
             handleQueueOptimization();
@@ -140,14 +135,9 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     return () => {
       componentMountedRef.current = false;
     };
-  }, [selectedSKU]); // Add selectedSKU as dependency to re-run when it changes
+  }, []); // Empty deps to only run on mount
 
-  // Expose methods to parent component
-  useImperativeHandle(ref, () => ({
-    startOptimization: handleQueueOptimization
-  }));
-
-  // CONTROLLED shouldStartOptimization trigger - only once per change
+  // Handle shouldStartOptimization trigger - SIMPLIFIED
   useEffect(() => {
     if (!isValidSKU(selectedSKU)) {
       console.log('⏭️ Skipping optimization trigger - invalid SKU');
@@ -161,9 +151,9 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         onOptimizationStarted();
       }
     }
-  }, [shouldStartOptimization, selectedSKU]);
+  }, [shouldStartOptimization]); // Only depend on shouldStartOptimization
 
-  // Reset trigger flags when optimization completes or queue is empty
+  // Reset trigger flags when optimization completes
   useEffect(() => {
     if (!isOptimizing) {
       hasTriggeredOptimizationRef.current = false;
@@ -173,7 +163,12 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
       hasTriggeredOptimizationRef.current = false;
       autoOptimizationDoneRef.current = false;
     }
-  }, [isOptimizing, optimizationQueue?.getSKUsInQueue().length]);
+  }, [isOptimizing, optimizationQueue]);
+
+  // Expose methods to parent component
+  useImperativeHandle(ref, () => ({
+    startOptimization: handleQueueOptimization
+  }));
 
   // Don't render anything if we don't have a valid SKU yet
   if (!isValidSKU(selectedSKU)) {
