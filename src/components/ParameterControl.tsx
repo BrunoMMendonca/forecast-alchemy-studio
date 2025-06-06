@@ -104,13 +104,14 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     
     console.log(`🎯 BADGE CLICK: Proceeding with switch to ${newMethod} for ${model.id}`);
     
-    // Update the cache's "selected" field
-    setSelectedMethod(selectedSKU, model.id, newMethod);
-    
-    // If switching to manual, reset the model to clear optimization results
+    // If switching to manual, let onResetToManual handle the cache update
     if (newMethod === 'manual') {
-      console.log(`🎯 BADGE CLICK: Switching to manual, calling onResetToManual`);
+      console.log(`🎯 BADGE CLICK: Switching to manual, calling onResetToManual (it will handle cache update)`);
       onResetToManual();
+    } else {
+      // For AI/Grid methods, update the cache directly
+      console.log(`🎯 BADGE CLICK: Setting method to ${newMethod} for ${model.id}`);
+      setSelectedMethod(selectedSKU, model.id, newMethod);
     }
   }, [selectedSKU, model.id, userSelectedMethod, setSelectedMethod, onResetToManual]);
 
