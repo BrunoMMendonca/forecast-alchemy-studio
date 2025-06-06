@@ -45,30 +45,15 @@ export const useOptimizationHandler = (
 
   const { saveManualAIPreferences: savePreferences } = useManualAIPreferences();
 
-  // Helper function to determine best available method for a model
-  const getBestAvailableMethod = useCallback((sku: string, modelId: string): PreferenceValue => {
-    const cached = cache[sku]?.[modelId];
-    if (!cached) return 'manual';
-
-    const skuData = data.filter(d => d.sku === sku);
-    const currentDataHash = generateDataHash(skuData);
-
-    const hasValidAI = cached.ai && cached.ai.dataHash === currentDataHash;
-    const hasValidGrid = cached.grid && cached.grid.dataHash === currentDataHash;
-
-    // Priority: AI > Grid > Manual
-    if (hasValidAI) return 'ai';
-    if (hasValidGrid) return 'grid';
-    return 'manual';
-  }, [cache, data, generateDataHash]);
-
   const handleQueueOptimization = useCallback(async () => {
     if (!optimizationQueue) {
+      console.log('🚫 OPTIMIZATION: No optimization queue provided');
       return;
     }
 
     const queuedSKUs = optimizationQueue.getSKUsInQueue();
     if (queuedSKUs.length === 0) {
+      console.log('🚫 OPTIMIZATION: No SKUs in queue');
       return;
     }
 
@@ -79,7 +64,7 @@ export const useOptimizationHandler = (
     
     console.log('🚀 OPTIMIZATION: Enabled models:', enabledModels.map(m => m.id));
     console.log('🚀 OPTIMIZATION: Optimizable models:', optimizableModels.map(m => m.id));
-    console.log('🚀 OPTIMIZATION: Non-optimizable models (will skip caching):', enabledModels.filter(m => !hasOptimizableParameters(m)).map(m => m.id));
+    console.log('🚀 OPTIMIZATION: Non-optimizable models (will skip):', enabledModels.filter(m => !hasOptimizableParameters(m)).map(m => m.id));
 
     // If no models have optimizable parameters, remove all SKUs from queue
     if (optimizableModels.length === 0) {
@@ -122,6 +107,8 @@ export const useOptimizationHandler = (
       optimizableModels,
       skusToOptimize,
       (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method, bothResults) => {
+        console.log(`💾 CACHE: Processing optimization result for ${sku}:${modelId}, method: ${method}`);
+        
         // CRITICAL: Only cache models with optimizable parameters
         const model = models.find(m => m.id === modelId);
         if (!model || !hasOptimizableParameters(model)) {
@@ -139,10 +126,10 @@ export const useOptimizationHandler = (
           businessImpact: factors?.businessImpact || 'Unknown'
         };
         
-        console.log(`💾 CACHE: Processing optimization result for ${sku}:${modelId}, method: ${method}`);
-        
-        // Cache the optimization results
+        // Cache the optimization results - handle both single and dual results
         if (bothResults) {
+          console.log(`💾 CACHE: Storing dual results for ${sku}:${modelId}`);
+          
           if (bothResults.ai) {
             console.log(`💾 CACHE: Storing AI result for ${sku}:${modelId}`);
             setCachedParameters(
@@ -172,25 +159,32 @@ export const useOptimizationHandler = (
               'grid_search'
             );
           }
-        } else {
-          console.log(`💾 CACHE: Storing single result for ${sku}:${modelId}, method: ${method}`);
-          setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
-        }
-        
-        // IMPORTANT: Update preferences to best available method after caching
-        // Add a small delay to ensure cache is updated first
-        setTimeout(() => {
+          
+          // Set preference to best available method
           const preferences = loadManualAIPreferences();
           const preferenceKey = `${sku}:${modelId}`;
-          const bestAvailableMethod = getBestAvailableMethod(sku, modelId);
-          
-          preferences[preferenceKey] = bestAvailableMethod;
+          const bestMethod = bothResults.ai ? 'ai' : 'grid';
+          preferences[preferenceKey] = bestMethod;
           saveManualAIPreferences(preferences);
           savePreferences(preferences);
           
-          console.log(`🎯 PREFERENCE UPDATE: ${preferenceKey} -> ${bestAvailableMethod} (after optimization)`);
-        }, 100);
+          console.log(`🎯 PREFERENCE: Set ${preferenceKey} -> ${bestMethod} (dual optimization)`);
+        } else {
+          console.log(`💾 CACHE: Storing single result for ${sku}:${modelId}, method: ${method}`);
+          setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
+          
+          // Set preference based on the method used
+          const preferences = loadManualAIPreferences();
+          const preferenceKey = `${sku}:${modelId}`;
+          const preferenceMethod = method === 'ai_optimization' ? 'ai' : method === 'grid_search' ? 'grid' : 'manual';
+          preferences[preferenceKey] = preferenceMethod;
+          saveManualAIPreferences(preferences);
+          savePreferences(preferences);
+          
+          console.log(`🎯 PREFERENCE: Set ${preferenceKey} -> ${preferenceMethod} (single optimization)`);
+        }
         
+        // Update model state
         setModels(prev => prev.map(model => 
           model.id === modelId 
             ? { 
@@ -225,7 +219,7 @@ export const useOptimizationHandler = (
     setTimeout(() => {
       markOptimizationCompleted(data, '/');
     }, 1000);
-  }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, savePreferences, getBestAvailableMethod, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete]);
+  }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, savePreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete]);
 
   return {
     isOptimizing,
