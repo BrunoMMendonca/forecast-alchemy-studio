@@ -10,6 +10,7 @@ import { ChevronDown, ChevronRight, Settings, Bot, Grid3X3, User } from 'lucide-
 import { ModelConfig } from '@/types/forecast';
 import { ReasoningDisplay } from './ReasoningDisplay';
 import { hasOptimizableParameters } from '@/utils/modelConfig';
+import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 
 interface ParameterControlProps {
   model: ModelConfig;
@@ -18,8 +19,6 @@ interface ParameterControlProps {
   onUseAI: () => void;
   onUseGrid?: () => void;
   onResetToManual: () => void;
-  disabled?: boolean;
-  grokApiEnabled?: boolean;
 }
 
 export const ParameterControl: React.FC<ParameterControlProps> = ({
@@ -29,10 +28,9 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   onUseAI,
   onUseGrid,
   onResetToManual,
-  disabled = false,
-  grokApiEnabled = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const { getCachedParameters } = useOptimizationCache();
 
   // Fix the logic to properly determine the current method
   const currentMethod = model.optimizationMethod;
@@ -46,8 +44,10 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   // Only show parameters section if model actually has parameters
   const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
 
-  // Check if optimization results exist - use model's optimization data instead of cache
-  const hasOptimizationResults = canOptimize && model.optimizationReasoning && !isManual;
+  // Check if optimization results exist in cache - use cache as source of truth
+  const cachedAIResults = getCachedParameters(selectedSKU, model.id, 'ai');
+  const cachedGridResults = getCachedParameters(selectedSKU, model.id, 'grid');
+  const hasOptimizationResults = canOptimize && (cachedAIResults || cachedGridResults) && !isManual;
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     onParameterUpdate(parameter, values[0]);
@@ -74,12 +74,6 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     return null;
   }
 
-  // Add safety check for selectedSKU
-  if (!selectedSKU) {
-    console.log('ParameterControl: No selectedSKU provided');
-    return null;
-  }
-
   return (
     <Card className="w-full">
       <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
@@ -100,22 +94,20 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
               {/* Only show optimization badges for models with optimizable parameters */}
               {canOptimize && (
                 <div className="flex items-center gap-2">
-                  {/* AI Badge - Only show when Grok API is enabled */}
-                  {grokApiEnabled && (
-                    <Badge 
-                      variant={isAI ? "default" : "outline"} 
-                      className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onUseAI();
-                      }}
-                    >
-                      <Bot className="h-3 w-3 mr-1" />
-                      AI
-                    </Badge>
-                  )}
+                  {/* AI Badge - First */}
+                  <Badge 
+                    variant={isAI ? "default" : "outline"} 
+                    className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUseAI();
+                    }}
+                  >
+                    <Bot className="h-3 w-3 mr-1" />
+                    AI
+                  </Badge>
 
-                  {/* Grid Badge - Always shown for optimizable models */}
+                  {/* Grid Badge - Second */}
                   <Badge 
                     variant={isGrid ? "default" : "outline"} 
                     className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
@@ -128,7 +120,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     Grid
                   </Badge>
 
-                  {/* Manual Badge - Always clickable */}
+                  {/* Manual Badge - Third - Always clickable */}
                   <Badge 
                     variant={isManual ? "default" : "outline"} 
                     className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
@@ -185,7 +177,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                         value={[typeof value === 'number' ? value : config.min]}
                         onValueChange={(values) => handleParameterChange(parameter, values)}
                         className="w-full"
-                        disabled={!isManual || disabled}
+                        disabled={!isManual}
                       />
                       <p className="text-xs text-slate-500">{config.description}</p>
                     </div>
@@ -193,7 +185,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 })}
               </div>
 
-              {/* Reasoning Display - Only show if optimization results exist */}
+              {/* Reasoning Display - Only show if optimization results exist in cache */}
               {hasOptimizationResults && (
                 <div className="mt-6 pt-4 border-t">
                   <ReasoningDisplay

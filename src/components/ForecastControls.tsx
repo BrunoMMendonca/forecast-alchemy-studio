@@ -3,7 +3,7 @@ import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
-import { ForecastResult } from '@/types/forecast';
+import { ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 
 interface ForecastControlsProps {

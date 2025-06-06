@@ -14,8 +14,6 @@ interface ModelCardProps {
   onUseAI: () => void;
   onUseGrid?: () => void;
   onResetToManual: () => void;
-  isOptimizing?: boolean;
-  grokApiEnabled?: boolean;
 }
 
 export const ModelCard: React.FC<ModelCardProps> = ({
@@ -26,8 +24,6 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   onUseAI,
   onUseGrid,
   onResetToManual,
-  isOptimizing = false,
-  grokApiEnabled = true
 }) => {
   return (
     <div className="border border-slate-200 rounded-lg p-4 space-y-4">
@@ -46,11 +42,6 @@ export const ModelCard: React.FC<ModelCardProps> = ({
               Enabled
             </Badge>
           )}
-          {isOptimizing && (
-            <Badge variant="secondary" className="text-xs">
-              Optimizing...
-            </Badge>
-          )}
         </div>
       </div>
 
@@ -66,8 +57,6 @@ export const ModelCard: React.FC<ModelCardProps> = ({
           onUseAI={onUseAI}
           onUseGrid={onUseGrid}
           onResetToManual={onResetToManual}
-          disabled={isOptimizing}
-          grokApiEnabled={grokApiEnabled}
         />
       )}
     </div>

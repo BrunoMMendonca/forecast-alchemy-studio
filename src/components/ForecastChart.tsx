@@ -1,10 +1,11 @@
+
 import React, { useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, Maximize2 } from 'lucide-react';
-import { ForecastResult } from '@/types/forecast';
+import { ForecastResult } from '@/pages/Index';
 
 interface ForecastChartProps {
   chartData: any[];

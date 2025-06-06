@@ -1,6 +1,5 @@
 
-import { SalesData } from '@/pages/Index';
-import { ForecastResult } from '@/types/forecast';
+import { SalesData, ForecastResult } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
 import { detectDateFrequency, generateForecastDates } from '@/utils/dateUtils';
 import { 
@@ -138,8 +137,7 @@ export const generateForecastsForSKU = async (
         date,
         value: Math.round(predictions[i] || 0)
       })),
-      accuracy,
-      parameters: effectiveParameters || {}
+      accuracy
     };
 
     setCachedForecast(result, parametersHash, forecastPeriods);

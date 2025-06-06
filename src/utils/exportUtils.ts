@@ -1,5 +1,5 @@
 
-import { ForecastResult } from '@/types/forecast';
+import { ForecastResult } from '@/pages/Index';
 
 export interface ExportOptions {
   format: 'csv' | 'excel' | 'json';
@@ -62,11 +62,11 @@ const exportAsCSV = (results: ForecastResult[], options: ExportOptions, filename
     if (selectedResults.length === 0) return;
     
     // Group by SKU for S&OP format
-    const skuGroups = selectedResults.reduce((acc: Record<string, ForecastResult[]>, result) => {
+    const skuGroups = selectedResults.reduce((acc, result) => {
       if (!acc[result.sku]) acc[result.sku] = [];
       acc[result.sku].push(result);
       return acc;
-    }, {});
+    }, {} as Record<string, ForecastResult[]>);
     
     const headers = ['SKU', 'Date', 'Forecast_Value', 'Model_Used'];
     if (options.includeAccuracy) headers.push('Accuracy_%');
@@ -115,11 +115,11 @@ const exportAsJSON = (results: ForecastResult[], options: ExportOptions, filenam
       ? results.filter(r => r.model === options.selectedModel)
       : results;
     
-    const skuGroups = selectedResults.reduce((acc: Record<string, ForecastResult[]>, result) => {
+    const skuGroups = selectedResults.reduce((acc, result) => {
       if (!acc[result.sku]) acc[result.sku] = [];
       acc[result.sku].push(result);
       return acc;
-    }, {});
+    }, {} as Record<string, ForecastResult[]>);
     
     const sopForecasts = Object.entries(skuGroups).map(([sku, skuResults]) => {
       const bestResult = skuResults.reduce((best, current) => 
@@ -161,11 +161,11 @@ const downloadFile = (content: string, filename: string, mimeType: string) => {
 };
 
 export const generateSOPSummary = (results: ForecastResult[]) => {
-  const skuGroups = results.reduce((acc: Record<string, ForecastResult[]>, result) => {
+  const skuGroups = results.reduce((acc, result) => {
     if (!acc[result.sku]) acc[result.sku] = [];
     acc[result.sku].push(result);
     return acc;
-  }, {});
+  }, {} as Record<string, ForecastResult[]>);
   
   return Object.entries(skuGroups).map(([sku, skuResults]) => {
     const bestResult = skuResults.reduce((best, current) => 

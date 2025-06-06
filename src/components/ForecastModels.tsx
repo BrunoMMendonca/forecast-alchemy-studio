@@ -1,7 +1,6 @@
 
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
-import { SalesData } from '@/pages/Index';
-import { ForecastResult } from '@/types/forecast';
+import { SalesData, ForecastResult } from '@/pages/Index';
 import { useUnifiedModelManagement } from '@/hooks/useUnifiedModelManagement';
 import { useOptimizationHandler } from '@/hooks/useOptimizationHandler';
 import { ModelSelection } from './ModelSelection';
