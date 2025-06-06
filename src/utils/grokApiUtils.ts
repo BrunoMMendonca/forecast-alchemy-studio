@@ -1,4 +1,3 @@
-
 export interface GrokOptimizationRequest {
   modelType: string;
   historicalData: number[];
@@ -111,8 +110,13 @@ const calculateDataStats = (data: number[]) => {
 export const optimizeParametersWithGrok = async (
   request: GrokOptimizationRequest,
   apiKey: string,
-  gridBaseline?: { parameters: Record<string, number>; accuracy: number } // NEW: Grid baseline
+  gridBaseline?: { parameters: Record<string, number>; accuracy: number }
 ): Promise<GrokOptimizationResponse> => {
+  // Validate API key before making request
+  if (!apiKey || !apiKey.startsWith('xai-') || apiKey.length < 20) {
+    throw new Error('Invalid API key format - must start with "xai-" and be at least 20 characters');
+  }
+
   // Provide more comprehensive data context (last 100 points instead of 50)
   const dataPoints = request.historicalData.slice(-100);
   const dataStats = calculateDataStats(request.historicalData);
@@ -224,11 +228,54 @@ Respond in JSON format only:
       }),
     });
 
+    // Enhanced error handling with specific status codes
     if (!response.ok) {
-      throw new Error(`Grok API error: ${response.status} - ${response.statusText}`);
+      const errorText = await response.text();
+      let errorMessage = `Grok API error: ${response.status}`;
+      
+      switch (response.status) {
+        case 401:
+          errorMessage += ' - Unauthorized: API key is invalid or missing';
+          break;
+        case 403:
+          errorMessage += ' - Forbidden: API key lacks permissions or account has restrictions';
+          break;
+        case 429:
+          errorMessage += ' - Rate limit exceeded: Too many requests, please wait before retrying';
+          break;
+        case 500:
+          errorMessage += ' - Internal server error: Grok API is experiencing issues';
+          break;
+        case 502:
+        case 503:
+        case 504:
+          errorMessage += ' - Service unavailable: Grok API is temporarily down';
+          break;
+        default:
+          errorMessage += ` - ${response.statusText}`;
+      }
+      
+      if (errorText) {
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error && errorData.error.message) {
+            errorMessage += `: ${errorData.error.message}`;
+          }
+        } catch {
+          // Error text is not JSON, append as is
+          errorMessage += `: ${errorText.substring(0, 200)}`;
+        }
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error('Invalid response format from Grok API - missing choices or message');
+    }
+    
     const content = data.choices[0].message.content;
     
     console.log(`🤖 ${gridBaseline ? 'Grid-baseline-aware' : 'Enhanced multi-criteria'} Grok response received for ${request.modelType}`);
@@ -240,7 +287,7 @@ Respond in JSON format only:
       
       // Validate the response has required fields
       if (!result.optimizedParameters || !result.expectedAccuracy || !result.confidence) {
-        throw new Error('Invalid response format from Grok API');
+        throw new Error('Invalid response format from Grok API - missing required fields');
       }
       
       console.log(`✅ ${gridBaseline ? 'Grid-baseline-aware' : 'Multi-criteria'} optimization result: ${JSON.stringify(result.optimizedParameters)}`);
@@ -248,7 +295,7 @@ Respond in JSON format only:
       console.log(`🎯 Factors:`, result.factors);
       return result;
     } else {
-      throw new Error('Unable to parse optimization response - no valid JSON found');
+      throw new Error('Unable to parse optimization response - no valid JSON found in response');
     }
   } catch (error) {
     console.error(`❌ ${gridBaseline ? 'Grid-baseline-aware' : 'Enhanced multi-criteria'} optimization error for ${request.modelType}:`, error);

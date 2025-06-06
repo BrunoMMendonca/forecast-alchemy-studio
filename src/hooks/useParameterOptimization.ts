@@ -5,10 +5,8 @@ import { optimizeParametersWithGrok } from '@/utils/grokApiUtils';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
 
-// Replace with your actual Grok API key from X.AI
 const GROK_API_KEY = 'xai-003DWefvygdxNiCFZlEUAvBIBHCiW4wPmJSOzet8xcOKqJq2nYMwbImiRqfgkoNoYP1sLCPOKPTC4HDf';
 
-// FIXED: Improved API key validation
 const isValidApiKey = (apiKey: string): boolean => {
   const isValid = apiKey && 
          apiKey.length > 20 && 
@@ -35,7 +33,6 @@ export const useParameterOptimization = () => {
       return model.parameters;
     }
 
-    // Check if API key is valid
     if (!isValidApiKey(GROK_API_KEY)) {
       console.warn('❌ useParameterOptimization: Invalid Grok API key, skipping optimization');
       toast({
@@ -70,12 +67,29 @@ export const useParameterOptimization = () => {
 
       return result.optimizedParameters;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
       console.error(`❌ useParameterOptimization: Failed to optimize ${model.name}:`, error);
+      
+      // Provide user-friendly error messages based on error type
+      let userMessage = `Failed to optimize ${model.name} with AI.`;
+      
+      if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+        userMessage = `AI service access denied. Please check your subscription or try again later.`;
+      } else if (errorMessage.includes('429') || errorMessage.includes('Rate limit')) {
+        userMessage = `AI service rate limit exceeded. Please wait a moment before trying again.`;
+      } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+        userMessage = `AI service authentication failed. API key may be invalid.`;
+      } else if (errorMessage.includes('500') || errorMessage.includes('502') || errorMessage.includes('503')) {
+        userMessage = `AI service is temporarily unavailable. Please try again later.`;
+      }
+      
       toast({
         title: "AI Optimization Failed",
-        description: `Failed to optimize ${model.name} with AI. Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        description: userMessage,
         variant: "destructive",
       });
+      
       return model.parameters;
     } finally {
       setOptimizationProgress('');

@@ -30,6 +30,10 @@ export const isValidApiKey = (apiKey: string): boolean => {
          !apiKey.includes('placeholder') &&
          apiKey.startsWith('xai-');
   
+  if (!isValid) {
+    console.warn('🔑 AI: API key validation failed - key appears invalid');
+  }
+  
   return isValid;
 };
 
@@ -41,6 +45,7 @@ export const runAIOptimization = async (
   gridContext?: { parameters: Record<string, number>; accuracy: number }
 ): Promise<OptimizationResult | null> => {
   if (!isValidApiKey(GROK_API_KEY)) {
+    console.warn('🔑 AI: Invalid API key, skipping AI optimization');
     return null;
   }
 
@@ -54,6 +59,8 @@ export const runAIOptimization = async (
       interpretabilityNeeds: 'medium' as const
     };
 
+    console.log(`🤖 AI: Starting optimization for ${sku}:${model.id}`);
+    
     const grokResult = await optimizeParametersWithGrok({
       modelType: model.id,
       historicalData: skuData.map(d => d.sales),
@@ -63,6 +70,8 @@ export const runAIOptimization = async (
       businessContext: contextToUse
     }, GROK_API_KEY, gridContext);
 
+    console.log(`✅ AI: Success for ${sku}:${model.id}`);
+    
     return {
       parameters: grokResult.optimizedParameters,
       confidence: grokResult.confidence || 75,
@@ -74,6 +83,19 @@ export const runAIOptimization = async (
     };
 
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    // More specific error handling
+    if (errorMessage.includes('403')) {
+      console.error(`❌ AI: API authentication failed for ${sku}:${model.id} - Check API key validity and rate limits`);
+    } else if (errorMessage.includes('429')) {
+      console.error(`❌ AI: Rate limit exceeded for ${sku}:${model.id} - Please wait before retrying`);
+    } else if (errorMessage.includes('401')) {
+      console.error(`❌ AI: Unauthorized access for ${sku}:${model.id} - API key may be invalid`);
+    } else {
+      console.error(`❌ AI: Failed for ${sku}:${model.id}:`, errorMessage);
+    }
+    
     return null;
   }
 };
