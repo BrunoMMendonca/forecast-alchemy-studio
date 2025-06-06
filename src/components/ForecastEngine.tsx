@@ -54,6 +54,17 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
     }
   };
 
+  // Ensure we have a valid selectedSKU
+  const availableSKUs = Array.from(new Set(data.map(d => d.sku))).sort();
+  const effectiveSelectedSKU = selectedSKU || (availableSKUs.length > 0 ? availableSKUs[0] : '');
+
+  // Auto-select first SKU if none selected
+  React.useEffect(() => {
+    if (!selectedSKU && availableSKUs.length > 0) {
+      onSKUChange(availableSKUs[0]);
+    }
+  }, [selectedSKU, availableSKUs, onSKUChange]);
+
   return (
     <Card>
       <CardHeader>
@@ -68,7 +79,7 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
       <CardContent className="space-y-6">
         <ProductSelector
           data={data}
-          selectedSKU={selectedSKU}
+          selectedSKU={effectiveSelectedSKU}
           onSKUChange={onSKUChange}
         />
 
@@ -78,16 +89,18 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
           </div>
         )}
 
-        <ModelParameterPanel
-          models={models}
-          selectedSKU={selectedSKU}
-          onToggleModel={toggleModel}
-          onUpdateParameter={updateParameter}
-          onOptimizeModel={handleOptimizeModel}
-          onResetModel={resetModel}
-          isOptimizing={isOptimizing}
-          optimizingModel={optimizingModel}
-        />
+        {effectiveSelectedSKU && (
+          <ModelParameterPanel
+            models={models}
+            selectedSKU={effectiveSelectedSKU}
+            onToggleModel={toggleModel}
+            onUpdateParameter={updateParameter}
+            onOptimizeModel={handleOptimizeModel}
+            onResetModel={resetModel}
+            isOptimizing={isOptimizing}
+            optimizingModel={optimizingModel}
+          />
+        )}
       </CardContent>
     </Card>
   );
