@@ -31,7 +31,7 @@ export const useParameterOptimization = () => {
   ): Promise<Record<string, number> | undefined> => {
     if (!model.parameters || Object.keys(model.parameters).length === 0) {
       console.log(`⚠️ useParameterOptimization: No parameters for ${model.name}`);
-      return {};
+      return model.parameters;
     }
 
     if (!grokApiEnabled) {
@@ -41,9 +41,7 @@ export const useParameterOptimization = () => {
         description: "AI optimization is disabled in global settings. Enable it in settings to use AI optimization.",
         variant: "default",
       });
-      return Object.fromEntries(
-        Object.entries(model.parameters).map(([key, param]) => [key, param.value])
-      );
+      return model.parameters;
     }
 
     if (!isValidApiKey(GROK_API_KEY)) {
@@ -53,23 +51,17 @@ export const useParameterOptimization = () => {
         description: "AI optimization is not available due to invalid API key. Using manual parameters.",
         variant: "destructive",
       });
-      return Object.fromEntries(
-        Object.entries(model.parameters).map(([key, param]) => [key, param.value])
-      );
+      return model.parameters;
     }
 
     try {
       console.log(`🤖 useParameterOptimization: Starting AI optimization for ${model.name}`);
       setOptimizationProgress(`Optimizing ${model.name} parameters with enhanced AI approach...`);
       
-      const currentParameterValues = Object.fromEntries(
-        Object.entries(model.parameters).map(([key, param]) => [key, param.value])
-      );
-      
       const result = await optimizeParametersWithGrok({
         modelType: model.id,
         historicalData: skuData.map(d => d.sales),
-        currentParameters: currentParameterValues,
+        currentParameters: model.parameters,
         seasonalPeriod: frequency.seasonalPeriod,
         targetMetric: 'accuracy'
       }, GROK_API_KEY);
@@ -109,9 +101,7 @@ export const useParameterOptimization = () => {
         variant: "destructive",
       });
       
-      return Object.fromEntries(
-        Object.entries(model.parameters).map(([key, param]) => [key, param.value])
-      );
+      return model.parameters;
     } finally {
       setOptimizationProgress('');
     }

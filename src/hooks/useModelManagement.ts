@@ -1,4 +1,3 @@
-
 // DEPRECATED: This file is being replaced by useUnifiedModelManagement.ts
 // TODO: Remove this file after confirming the unified hook works correctly
 
@@ -126,13 +125,7 @@ export const useModelManagement = (selectedSKU: string, data: SalesData[], busin
       model.id === modelId 
         ? { 
             ...model, 
-            parameters: { 
-              ...model.parameters, 
-              [parameter]: { 
-                ...model.parameters![parameter], 
-                value 
-              } 
-            },
+            parameters: { ...model.parameters, [parameter]: value },
             optimizedParameters: undefined,
             optimizationConfidence: undefined,
             optimizationReasoning: undefined,

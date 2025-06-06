@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { SalesData } from '@/pages/Index';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
@@ -7,7 +6,6 @@ import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimi
 import { useModelManagement } from '@/hooks/useModelManagement';
 import { OptimizationFactors } from '@/types/optimizationTypes';
 import { PreferenceValue, useManualAIPreferences } from '@/hooks/useManualAIPreferences';
-import { useAutoBestMethod } from '@/hooks/useAutoBestMethod';
 import { hasOptimizableParameters, getDefaultModels } from '@/utils/modelConfig';
 
 interface OptimizationQueue {
@@ -31,7 +29,6 @@ export const useOptimizationHandler = (
     generateDataHash,
     setCachedParameters,
     getSKUsNeedingOptimization,
-    setSelectedMethod,
     cache
   } = useOptimizationCache();
   
@@ -50,21 +47,6 @@ export const useOptimizationHandler = (
   } = useModelManagement(selectedSKU, data);
 
   const { saveManualAIPreferences: savePreferences } = useManualAIPreferences();
-  const { loadAutoBestMethod, saveAutoBestMethod } = useAutoBestMethod();
-
-  // Helper function to get the best available method for automatic selection
-  const getBestAvailableMethod = useCallback((sku: string, modelId: string, currentDataHash: string) => {
-    const cached = cache[sku]?.[modelId];
-    if (!cached) return 'manual';
-
-    const hasValidAI = cached.ai && cached.ai.dataHash === currentDataHash;
-    const hasValidGrid = cached.grid && cached.grid.dataHash === currentDataHash;
-
-    // Priority: AI > Grid > Manual
-    if (hasValidAI) return 'ai';
-    if (hasValidGrid) return 'grid';
-    return 'manual';
-  }, [cache]);
 
   const handleQueueOptimization = useCallback(async () => {
     if (!optimizationQueue) {
@@ -192,34 +174,28 @@ export const useOptimizationHandler = (
             );
           }
           
-          // Update AutoBestMethod and set "selected" to the best available
-          const autoMethods = loadAutoBestMethod();
-          const autoKey = `${sku}:${modelId}`;
+          // Set preference to best available method
+          const preferences = loadManualAIPreferences();
+          const preferenceKey = `${sku}:${modelId}`;
           const bestMethod = bothResults.ai ? 'ai' : 'grid';
-          autoMethods[autoKey] = bestMethod;
-          saveAutoBestMethod(autoMethods);
+          preferences[preferenceKey] = bestMethod;
+          saveManualAIPreferences(preferences);
+          savePreferences(preferences);
           
-          // Set "selected" to match the AutoBestMethod after optimization
-          setSelectedMethod(sku, modelId, bestMethod);
-          
-          console.log(`🎯 AUTO-METHOD: Set ${autoKey} -> ${bestMethod} (dual optimization)`);
-          console.log(`🎯 SELECTED: Set ${autoKey} selected -> ${bestMethod} (matches auto method)`);
+          console.log(`🎯 PREFERENCE: Set ${preferenceKey} -> ${bestMethod} (dual optimization)`);
         } else {
           console.log(`💾 CACHE: Storing single result for ${sku}:${modelId}, method: ${method}`);
           setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
           
-          // Update AutoBestMethod and set "selected" to match
-          const autoMethods = loadAutoBestMethod();
-          const autoKey = `${sku}:${modelId}`;
-          const bestAvailableMethod = getBestAvailableMethod(sku, modelId, dataHash);
-          autoMethods[autoKey] = bestAvailableMethod;
-          saveAutoBestMethod(autoMethods);
+          // Set preference based on the method used
+          const preferences = loadManualAIPreferences();
+          const preferenceKey = `${sku}:${modelId}`;
+          const preferenceMethod = method === 'ai_optimization' ? 'ai' : method === 'grid_search' ? 'grid' : 'manual';
+          preferences[preferenceKey] = preferenceMethod;
+          saveManualAIPreferences(preferences);
+          savePreferences(preferences);
           
-          // Set "selected" to match the AutoBestMethod after optimization
-          setSelectedMethod(sku, modelId, bestAvailableMethod);
-          
-          console.log(`🎯 AUTO-METHOD: Set ${autoKey} -> ${bestAvailableMethod} (single optimization)`);
-          console.log(`🎯 SELECTED: Set ${autoKey} selected -> ${bestAvailableMethod} (matches auto method)`);
+          console.log(`🎯 PREFERENCE: Set ${preferenceKey} -> ${preferenceMethod} (single optimization)`);
         }
         
         // Update model state
@@ -278,7 +254,7 @@ export const useOptimizationHandler = (
     setTimeout(() => {
       markOptimizationCompleted(data, '/');
     }, 1000);
-  }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadAutoBestMethod, saveAutoBestMethod, setSelectedMethod, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete, grokApiEnabled, getBestAvailableMethod]);
+  }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, savePreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete, grokApiEnabled]);
 
   return {
     isOptimizing,

@@ -41,11 +41,10 @@ export const optimizeSingleModel = async (
     console.log(`🚫 SINGLE: Model ${model.id} has no optimizable parameters, skipping optimization entirely`);
     
     const defaultResult = { 
-      parameters: {}, 
+      parameters: model.parameters || {}, 
       confidence: 70, 
       method: 'default',
       accuracy: 70,
-      expectedAccuracy: 70,
       reasoning: 'No parameters available for optimization. Using default configuration.',
       factors: {
         stability: 70,
@@ -108,18 +107,12 @@ const runBothOptimizations = async (
     };
   }
   
-  // Extract parameter values from Parameter objects
-  const currentParameterValues = model.parameters ? 
-    Object.fromEntries(
-      Object.entries(model.parameters).map(([key, param]) => [key, param.value])
-    ) : {};
-  
   optimizationLogger.logStep({
     sku,
     modelId: model.id,
     step: 'start',
     message: 'Starting dual optimization (Grid + AI)',
-    parameters: currentParameterValues
+    parameters: model.parameters
   });
 
   // Step 1: ALWAYS run Grid optimization first
