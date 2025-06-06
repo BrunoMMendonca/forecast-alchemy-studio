@@ -133,7 +133,8 @@ const Index = () => {
             {data.length > 0 && (
               <OutlierDetection 
                 data={data}
-                onDataChange={setData}
+                cleanedData={data}
+                onDataCleaning={setData}
               />
             )}
           </TabsContent>
