@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData, ForecastResult } from '@/pages/Index';
@@ -21,6 +22,7 @@ export const useUnifiedModelManagement = (
   const lastProcessedSKURef = useRef<string>('');
   const forecastGenerationInProgressRef = useRef<boolean>(false);
   const lastForecastGenerationHashRef = useRef<string>('');
+  const isMethodSwitchingRef = useRef<boolean>(false);
 
   const { 
     cache,
@@ -35,17 +37,22 @@ export const useUnifiedModelManagement = (
     return getDefaultModels();
   });
 
-  // Create a stable hash of model state to prevent unnecessary re-renders
+  // Create a hash based ONLY on effective parameters that affect forecasting
   const modelsHash = useMemo(() => {
     const enabledModels = models.filter(m => m.enabled);
     if (enabledModels.length === 0) return 'no-enabled-models';
     
-    const hashData = enabledModels.map(m => ({
-      id: m.id,
-      enabled: m.enabled,
-      params: m.optimizedParameters || m.parameters,
-      method: m.optimizationMethod
-    }));
+    const hashData = enabledModels.map(m => {
+      // Get the effective parameters that will actually be used for forecasting
+      const effectiveParams = m.optimizedParameters || m.parameters;
+      
+      return {
+        id: m.id,
+        enabled: m.enabled,
+        params: effectiveParams
+        // Removed optimizationMethod from hash - it's just UI state
+      };
+    });
     
     return JSON.stringify(hashData);
   }, [models]);
@@ -144,6 +151,7 @@ export const useUnifiedModelManagement = (
   // CONTROLLED cache version updates - only process when actually needed
   useEffect(() => {
     if (!selectedSKU) return;
+    if (isMethodSwitchingRef.current) return; // Skip processing during method switches
 
     // Prevent unnecessary processing
     const shouldProcess = (
@@ -201,13 +209,14 @@ export const useUnifiedModelManagement = (
     
     setModels(updatedModels);
     
-    // Reset forecast generation hash when models are updated from cache
+    // Only reset forecast generation hash when models are updated from cache (data changes)
     lastForecastGenerationHashRef.current = '';
   }, [cacheVersion, selectedSKU, data, cache, generateDataHash, updateAutoBestMethods]);
 
   // CONTROLLED forecast generation - only when models hash actually changes
   useEffect(() => {
     if (!selectedSKU || !models.length) return;
+    if (isMethodSwitchingRef.current) return; // Skip during method switches
     
     const enabledModels = models.filter(m => m.enabled);
     if (enabledModels.length === 0) return;
@@ -234,6 +243,7 @@ export const useUnifiedModelManagement = (
 
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
     isTogglingAIManualRef.current = true;
+    isMethodSwitchingRef.current = true;
     
     // Set explicit user selection to manual in cache
     setSelectedMethod(selectedSKU, modelId, 'manual');
@@ -248,24 +258,27 @@ export const useUnifiedModelManagement = (
         : model
     ));
 
-    lastForecastGenerationHashRef.current = '';
-
+    // Don't force forecast generation - let the models hash change handle it
+    
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
+      isMethodSwitchingRef.current = false;
     }, 100);
   }, [selectedSKU, setSelectedMethod]);
 
   const resetToManual = useCallback((modelId: string) => {
     isTogglingAIManualRef.current = true;
+    isMethodSwitchingRef.current = true;
     
     // Only set the method to manual - don't clear optimization data
     // The cache preserves all optimization results for instant switching
     setSelectedMethod(selectedSKU, modelId, 'manual');
     
-    lastForecastGenerationHashRef.current = '';
+    // Don't force forecast generation - this is just a method switch
     
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
+      isMethodSwitchingRef.current = false;
     }, 100);
   }, [selectedSKU, setSelectedMethod]);
 
