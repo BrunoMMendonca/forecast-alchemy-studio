@@ -66,7 +66,7 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
                 <Info className="h-4 w-4 text-blue-600" />
                 <span className="text-sm font-medium">View Reasoning</span>
                 <Badge variant="outline" className={`text-xs ${getConfidenceColor(confidence)}`}>
-                  {confidence}% confident
+                  {confidence.toFixed(1)}% confident
                 </Badge>
               </div>
               {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -106,7 +106,7 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
             <span className="capitalize">{getMethodLabel(method)}</span>
           </div>
           <Badge variant="outline" className={getConfidenceColor(confidence)}>
-            {confidence}% confidence
+            {confidence.toFixed(1)}% confidence
           </Badge>
           {expectedAccuracy && (
             <Badge variant="secondary">
@@ -125,19 +125,19 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
             {factors.stability !== undefined && (
               <div className="bg-white rounded p-3 border">
                 <div className="text-xs text-slate-500 mb-1">Stability Score</div>
-                <div className="text-lg font-semibold text-blue-600">{factors.stability}%</div>
+                <div className="text-lg font-semibold text-blue-600">{factors.stability.toFixed(1)}%</div>
               </div>
             )}
             {factors.interpretability !== undefined && (
               <div className="bg-white rounded p-3 border">
                 <div className="text-xs text-slate-500 mb-1">Interpretability</div>
-                <div className="text-lg font-semibold text-green-600">{factors.interpretability}%</div>
+                <div className="text-lg font-semibold text-green-600">{factors.interpretability.toFixed(1)}%</div>
               </div>
             )}
             {factors.complexity !== undefined && (
               <div className="bg-white rounded p-3 border">
                 <div className="text-xs text-slate-500 mb-1">Complexity</div>
-                <div className="text-lg font-semibold text-orange-600">{factors.complexity}%</div>
+                <div className="text-lg font-semibold text-orange-600">{factors.complexity.toFixed(1)}%</div>
               </div>
             )}
             {factors.businessImpact && (

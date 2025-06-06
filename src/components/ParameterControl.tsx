@@ -180,7 +180,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
             {canOptimize && optimizationData && !isManual && (
               <div className="mt-2 flex items-center space-x-4 text-sm">
                 <span className="text-slate-600">
-                  Confidence: <span className="font-medium">{optimizationData.confidence?.toFixed(0)}%</span>
+                  Confidence: <span className="font-medium">{optimizationData.confidence?.toFixed(1)}%</span>
                 </span>
                 {optimizationData.expectedAccuracy && (
                   <span className="text-slate-600">

@@ -62,19 +62,19 @@ export const ModelComparisonReasoning: React.FC<ModelComparisonReasoningProps> =
           <div className="grid grid-cols-4 gap-2 text-xs">
             <div className="flex items-center gap-1">
               {getFactorIcon('accuracy')}
-              <span>Accuracy: {decisionFactors.accuracyWeight}%</span>
+              <span>Accuracy: {decisionFactors.accuracyWeight.toFixed(1)}%</span>
             </div>
             <div className="flex items-center gap-1">
               {getFactorIcon('stability')}
-              <span>Stability: {decisionFactors.stabilityWeight}%</span>
+              <span>Stability: {decisionFactors.stabilityWeight.toFixed(1)}%</span>
             </div>
             <div className="flex items-center gap-1">
               {getFactorIcon('interpretability')}
-              <span>Clarity: {decisionFactors.interpretabilityWeight}%</span>
+              <span>Clarity: {decisionFactors.interpretabilityWeight.toFixed(1)}%</span>
             </div>
             <div className="flex items-center gap-1">
               {getFactorIcon('business')}
-              <span>Business: {decisionFactors.businessWeight}%</span>
+              <span>Business: {decisionFactors.businessWeight.toFixed(1)}%</span>
             </div>
           </div>
         </div>
@@ -96,7 +96,7 @@ export const ModelComparisonReasoning: React.FC<ModelComparisonReasoningProps> =
                   <span className="font-medium">{comparison.model}</span>
                   <Badge variant={comparison.isRecommended ? "default" : "outline"} 
                          className={`text-xs ${getScoreColor(comparison.score)}`}>
-                    {comparison.score.toFixed(0)}%
+                    {comparison.score.toFixed(1)}%
                   </Badge>
                 </div>
               </div>
@@ -105,25 +105,25 @@ export const ModelComparisonReasoning: React.FC<ModelComparisonReasoningProps> =
                 <div className="flex items-center gap-1">
                   {getFactorIcon('accuracy')}
                   <span className={getScoreColor(comparison.accuracy)}>
-                    {comparison.accuracy.toFixed(0)}%
+                    {comparison.accuracy.toFixed(1)}%
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
                   {getFactorIcon('stability')}
                   <span className={getScoreColor(comparison.stability)}>
-                    {comparison.stability.toFixed(0)}%
+                    {comparison.stability.toFixed(1)}%
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
                   {getFactorIcon('interpretability')}
                   <span className={getScoreColor(comparison.interpretability)}>
-                    {comparison.interpretability.toFixed(0)}%
+                    {comparison.interpretability.toFixed(1)}%
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
                   {getFactorIcon('business')}
                   <span className={getScoreColor(comparison.businessFit)}>
-                    {comparison.businessFit.toFixed(0)}%
+                    {comparison.businessFit.toFixed(1)}%
                   </span>
                 </div>
               </div>
