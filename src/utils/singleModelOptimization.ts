@@ -5,6 +5,7 @@ import { SalesData } from '@/pages/Index';
 import { BusinessContext } from '@/types/businessContext';
 import { runAIOptimization, OptimizationResult } from '@/utils/aiOptimization';
 import { runGridOptimization, GridOptimizationResult } from '@/utils/gridOptimization';
+import { hasOptimizableParameters } from '@/utils/modelConfig';
 
 interface ProgressUpdater {
   setProgress: (updater: (prev: any) => any) => void;
@@ -35,7 +36,9 @@ export const optimizeSingleModel = async (
 }> => {
   console.log(`🔧 SINGLE: Starting optimization for ${sku}:${model.id}`);
 
-  if (!model.parameters || Object.keys(model.parameters).length === 0) {
+  // Early check for models without optimizable parameters
+  if (!hasOptimizableParameters(model)) {
+    console.log(`🔧 SINGLE: Model ${model.id} has no optimizable parameters, using defaults`);
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
@@ -45,7 +48,7 @@ export const optimizeSingleModel = async (
     });
     
     const defaultResult = { 
-      parameters: model.parameters, 
+      parameters: model.parameters || {}, 
       confidence: 70, 
       method: 'default',
       accuracy: 70,
@@ -193,6 +196,12 @@ export const getOptimizationByMethod = async (
   businessContext?: BusinessContext,
   grokApiEnabled: boolean = true
 ): Promise<OptimizationResult | GridOptimizationResult | null> => {
+  // Early check for models without optimizable parameters
+  if (!hasOptimizableParameters(model)) {
+    console.log(`🔧 OPTIMIZATION: Model ${model.id} has no optimizable parameters, returning null`);
+    return null;
+  }
+
   if (method === 'grid') {
     return await runGridOptimization(model, skuData, sku);
   }

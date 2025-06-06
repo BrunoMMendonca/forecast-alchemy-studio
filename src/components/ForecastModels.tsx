@@ -37,26 +37,29 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   const componentMountedRef = useRef(false);
   const autoOptimizationDoneRef = useRef(false);
   
-  // Use the unified model management hook - fix the arguments
+  // Use the unified model management hook
   const {
     models,
     toggleModel,
     updateParameter,
     useAIOptimization,
     useGridOptimization,
-    resetToManual
+    resetToManual,
+    generateForecasts
   } = useUnifiedModelManagement(
     selectedSKU,
     data,
-    undefined // businessContext
+    forecastPeriods,
+    undefined,
+    onForecastGeneration
   );
 
-  // Use optimization handler for queue management - fix the arguments
+  // Use optimization handler for queue management
   const {
     isOptimizing,
     progress,
     handleQueueOptimization
-  } = useOptimizationHandler(data, selectedSKU, optimizationQueue);
+  } = useOptimizationHandler(data, selectedSKU, optimizationQueue, generateForecasts);
 
   // Mark component as mounted and handle initial optimization
   useEffect(() => {

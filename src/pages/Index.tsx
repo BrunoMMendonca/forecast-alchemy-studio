@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
 import { OutlierDetection } from '@/components/OutlierDetection';
-import { ForecastModels } from '@/components/ForecastModels';
+import { ForecastEngine } from '@/components/ForecastEngine';
 import { ForecastResults } from '@/components/ForecastResults';
 import { ForecastFinalization } from '@/components/ForecastFinalization';
 import { StepNavigation } from '@/components/StepNavigation';
@@ -259,31 +258,16 @@ const Index = () => {
 
           {currentStep === 3 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-blue-600" />
-                    Forecast Models
-                  </CardTitle>
-                  <CardDescription>
-                    Generate forecasts using multiple predictive models with AI optimization
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ForecastModels 
-                    data={cleanedData}
-                    forecastPeriods={forecastPeriods}
-                    onForecastGeneration={handleForecastGeneration}
-                    selectedSKU={selectedSKUForResults}
-                    onSKUChange={setSelectedSKUForResults}
-                    shouldStartOptimization={queueSize > 0}
-                    optimizationQueue={{
-                      getSKUsInQueue,
-                      removeSKUsFromQueue
-                    }}
-                  />
-                </CardContent>
-              </Card>
+              <div className="bg-white/80 backdrop-blur-sm shadow-xl border-0 rounded-lg">
+                <ForecastEngine
+                  data={cleanedData}
+                  forecastPeriods={forecastPeriods}
+                  onForecastGeneration={handleForecastGeneration}
+                  selectedSKU={selectedSKUForResults}
+                  onSKUChange={setSelectedSKUForResults}
+                  businessContext={businessContext}
+                />
+              </div>
 
               <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
                 <CardHeader>

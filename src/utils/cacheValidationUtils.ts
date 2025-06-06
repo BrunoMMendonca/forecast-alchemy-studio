@@ -16,6 +16,7 @@ export const getSKUsNeedingOptimization = (
   );
   
   console.log('🗄️ CACHE: Models with optimizable parameters:', enabledModelsWithParams.map(m => m.id));
+  console.log('🗄️ CACHE: Models without parameters (skipping):', models.filter(m => m.enabled && !hasOptimizableParameters(m)).map(m => m.id));
   
   const skus = Array.from(new Set(data.map(d => d.sku))).sort();
   const result: { sku: string; models: string[] }[] = [];
@@ -28,12 +29,6 @@ export const getSKUsNeedingOptimization = (
     
     const modelsNeedingOptimization = enabledModelsWithParams
       .filter(m => {
-        // Skip models without optimizable parameters
-        if (!hasOptimizableParameters(m)) {
-          console.log(`🗄️ CACHE: ${sku}:${m.id} - Skipping, no optimizable parameters`);
-          return false;
-        }
-
         const cached = cache[sku]?.[m.id];
         if (!cached) {
           console.log(`🗄️ CACHE: ${sku}:${m.id} - No cache entry found`);
