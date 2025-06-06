@@ -94,6 +94,7 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
           <ModelParameterPanel
             models={models}
             selectedSKU={effectiveSelectedSKU}
+            data={data}
             onToggleModel={toggleModel}
             onUpdateParameter={updateParameter}
             onResetModel={resetModel}

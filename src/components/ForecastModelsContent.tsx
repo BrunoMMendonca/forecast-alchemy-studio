@@ -77,6 +77,7 @@ export const ForecastModelsContent: React.FC<ForecastModelsContentProps> = ({
       <ModelSelection
         models={models}
         selectedSKU={selectedSKU}
+        data={data}
         onToggleModel={onToggleModel}
         onUpdateParameter={onUpdateParameter}
         onResetToManual={onResetToManual}
