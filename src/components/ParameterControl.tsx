@@ -55,7 +55,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     onParameterUpdate(parameter, values[0]);
   }, [onParameterUpdate]);
 
-  // Handle badge clicks - update preference to switch view to cached results
+  // Handle badge clicks - update preference and trigger model update
   const handlePreferenceChange = useCallback((newPreference: 'manual' | 'ai' | 'grid') => {
     console.log(`🎯 BADGE CLICK: Switching to ${newPreference} view for ${model.id}`);
     
@@ -68,8 +68,8 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
       onResetToManual();
     }
     
-    // Note: This only changes the view preference - all optimization results 
-    // should already be cached from batch optimization
+    // Note: The badge click changes the preference, and the useUnifiedModelManagement hook
+    // will detect this change and update the model with the appropriate cached results
   }, [preferences, preferenceKey, saveManualAIPreferences, onResetToManual, model.id]);
 
   const getParameterConfig = (parameter: string) => {
@@ -116,7 +116,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 )}
               </div>
               
-              {/* Only show optimization badges for models with optimizable parameters */}
+              {/* Show optimization badges for models with optimizable parameters */}
               {canOptimize && (
                 <div className="flex items-center gap-2">
                   {/* AI Badge - Only show when Grok API is enabled */}
@@ -242,12 +242,12 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 </div>
               )}
 
-              {/* No cached results indicator - only show when not in manual mode */}
+              {/* Status indicator when no optimization results are loaded */}
               {canOptimize && !isManual && !model.optimizationReasoning && (
                 <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
                   <p className="text-sm text-yellow-700">
-                    No {isAI ? 'AI' : 'Grid'} optimization results available for this model. 
-                    Results will appear after batch optimization runs in the background.
+                    No {isAI ? 'AI' : 'Grid'} optimization results are currently loaded for this model. 
+                    If optimization has been run, try refreshing or check if results are available for this SKU.
                   </p>
                 </div>
               )}
