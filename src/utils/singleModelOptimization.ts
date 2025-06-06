@@ -34,7 +34,7 @@ export const optimizeSingleModel = async (
   selectedResult: OptimizationResult | GridOptimizationResult;
   bothResults?: { ai?: OptimizationResult; grid: GridOptimizationResult };
 }> => {
-  console.log(`🔧 SINGLE: Starting optimization for ${sku}:${model.id}`);
+  console.log(`🔧 SINGLE: Starting optimization for ${sku}:${model.id}, grokEnabled=${grokApiEnabled}`);
 
   // CRITICAL: Early check for models without optimizable parameters
   if (!hasOptimizableParameters(model)) {
@@ -59,12 +59,12 @@ export const optimizeSingleModel = async (
     };
   }
 
-  if (forceGridSearch) {
-    console.log(`🔧 SINGLE: Force grid search for ${sku}:${model.id}`);
+  if (forceGridSearch || !grokApiEnabled) {
+    console.log(`🔧 SINGLE: ${forceGridSearch ? 'Force grid search' : 'Grok disabled, using grid only'} for ${sku}:${model.id}`);
     const gridResult = await runGridOptimization(model, skuData, sku);
-    console.log(`✅ SINGLE: Grid forced result for ${sku}:${model.id}:`, gridResult);
+    console.log(`✅ SINGLE: Grid-only result for ${sku}:${model.id}:`, gridResult);
     if (onMethodComplete) {
-      console.log(`🔧 SINGLE: Calling onMethodComplete for forced grid ${sku}:${model.id}`);
+      console.log(`🔧 SINGLE: Calling onMethodComplete for grid-only ${sku}:${model.id}`);
       onMethodComplete('grid', gridResult);
     }
     return { 
@@ -73,7 +73,7 @@ export const optimizeSingleModel = async (
     };
   }
 
-  // Run both optimizations
+  // Run both optimizations only if Grok is enabled
   const results = await runBothOptimizations(model, skuData, sku, progressUpdater, businessContext, onMethodComplete, grokApiEnabled);
   
   return {
@@ -92,6 +92,20 @@ const runBothOptimizations = async (
   grokApiEnabled: boolean = true
 ): Promise<MultiMethodResult> => {
   console.log(`🔧 DUAL: Starting dual optimization for ${sku}:${model.id}, grokEnabled=${grokApiEnabled}`);
+  
+  // If Grok is disabled, we shouldn't be in this function, but handle it gracefully
+  if (!grokApiEnabled) {
+    console.log(`🚫 DUAL: Grok disabled, falling back to grid-only for ${sku}:${model.id}`);
+    const gridResult = await runGridOptimization(model, skuData, sku);
+    if (onMethodComplete) {
+      onMethodComplete('grid', gridResult);
+    }
+    return {
+      gridResult,
+      selectedResult: gridResult,
+      bothResults: { grid: gridResult }
+    };
+  }
   
   optimizationLogger.logStep({
     sku,
@@ -123,24 +137,20 @@ const runBothOptimizations = async (
   // Step 2: Try AI optimization (only if enabled)
   let aiResult: OptimizationResult | null = null;
   
-  if (grokApiEnabled) {
-    console.log(`🤖 AI: Starting AI optimization for ${sku}:${model.id}`);
-    aiResult = await runAIOptimization(
-      model, 
-      skuData, 
-      sku, 
-      businessContext,
-      { parameters: gridResult.parameters, accuracy: gridResult.accuracy },
-      grokApiEnabled
-    );
-    
-    if (aiResult) {
-      console.log(`✅ AI: Completed for ${sku}:${model.id}`, aiResult);
-    } else {
-      console.log(`❌ AI: Failed for ${sku}:${model.id}`);
-    }
+  console.log(`🤖 AI: Starting AI optimization for ${sku}:${model.id}`);
+  aiResult = await runAIOptimization(
+    model, 
+    skuData, 
+    sku, 
+    businessContext,
+    { parameters: gridResult.parameters, accuracy: gridResult.accuracy },
+    grokApiEnabled
+  );
+  
+  if (aiResult) {
+    console.log(`✅ AI: Completed for ${sku}:${model.id}`, aiResult);
   } else {
-    console.log(`🔇 AI: Disabled for ${sku}:${model.id}`);
+    console.log(`❌ AI: Failed for ${sku}:${model.id}`);
   }
 
   // Step 3: Select result and notify if AI succeeded
@@ -169,12 +179,12 @@ const runBothOptimizations = async (
     } : null);
   } else {
     selectedResult = gridResult;
-    console.log(`🎯 RESULT: Grid selected for ${sku}:${model.id} (AI ${grokApiEnabled ? 'failed' : 'disabled'})`);
+    console.log(`🎯 RESULT: Grid selected for ${sku}:${model.id} (AI failed)`);
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
       step: 'ai_rejected',
-      message: `AI optimization ${grokApiEnabled ? 'failed' : 'disabled'}, using Grid result`,
+      message: 'AI optimization failed, using Grid result',
       parameters: gridResult.parameters
     });
   }
