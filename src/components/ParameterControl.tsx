@@ -49,7 +49,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   // Only show parameters section if model actually has parameters
   const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
 
-  // Check if optimization results exist for display
+  // Check if optimization results exist for display - but respect pending preference
   const hasOptimizationResults = canOptimize && model.optimizationReasoning && !isManual;
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
@@ -75,7 +75,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     // Clear pending preference after a short delay to allow the hook to process
     setTimeout(() => {
       setPendingPreference(null);
-    }, 500);
+    }, 100);
     
     // Note: The badge click changes the preference, and the useUnifiedModelManagement hook
     // will detect this change and update the model with the appropriate cached results
@@ -252,7 +252,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
               )}
 
               {/* Status indicator when no optimization results are loaded - context aware */}
-              {canOptimize && !isManual && !model.optimizationReasoning && (
+              {canOptimize && !isManual && !model.optimizationReasoning && !pendingPreference && (
                 <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
                   <p className="text-sm text-yellow-700">
                     {isAI && !grokApiEnabled ? (
