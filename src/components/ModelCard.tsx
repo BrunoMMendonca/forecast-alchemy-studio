@@ -8,6 +8,7 @@ import { ParameterControl } from './ParameterControl';
 
 interface ModelCardProps {
   model: ModelConfig;
+  selectedSKU: string;
   onToggle: () => void;
   onParameterUpdate: (parameter: string, value: number) => void;
   onUseAI: () => void;
@@ -17,6 +18,7 @@ interface ModelCardProps {
 
 export const ModelCard: React.FC<ModelCardProps> = ({
   model,
+  selectedSKU,
   onToggle,
   onParameterUpdate,
   onUseAI,
@@ -50,6 +52,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
       {model.enabled && (
         <ParameterControl
           model={model}
+          selectedSKU={selectedSKU}
           onParameterUpdate={onParameterUpdate}
           onUseAI={onUseAI}
           onUseGrid={onUseGrid}

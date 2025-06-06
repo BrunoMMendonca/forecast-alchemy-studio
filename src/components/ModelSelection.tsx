@@ -6,6 +6,7 @@ import { ModelCard } from './ModelCard';
 
 interface ModelSelectionProps {
   models: ModelConfig[];
+  selectedSKU: string;
   onToggleModel: (modelId: string) => void;
   onUpdateParameter: (modelId: string, parameter: string, value: number) => void;
   onUseAI: (modelId: string) => void;
@@ -15,6 +16,7 @@ interface ModelSelectionProps {
 
 export const ModelSelection: React.FC<ModelSelectionProps> = ({
   models,
+  selectedSKU,
   onToggleModel,
   onUpdateParameter,
   onUseAI,
@@ -34,6 +36,7 @@ export const ModelSelection: React.FC<ModelSelectionProps> = ({
           <ModelCard
             key={model.id}
             model={model}
+            selectedSKU={selectedSKU}
             onToggle={() => onToggleModel(model.id)}
             onParameterUpdate={(parameter, value) => onUpdateParameter(model.id, parameter, value)}
             onUseAI={() => onUseAI(model.id)}
