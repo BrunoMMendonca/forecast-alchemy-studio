@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -68,16 +69,6 @@ const Index = () => {
   });
 
   useEffect(() => {
-    if (cleanedData.length > 0) {
-      const skus = Array.from(new Set(cleanedData.map(d => d.sku))).sort();
-      if (skus.length > 0 && (!selectedSKUForResults || !skus.includes(selectedSKUForResults))) {
-        console.log('🎯 INDEX: Auto-selecting first SKU:', skus[0]);
-        setSelectedSKUForResults(skus[0]);
-      }
-    }
-  }, [cleanedData, selectedSKUForResults]);
-
-  useEffect(() => {
     const handleProceedToForecasting = () => {
       setCurrentStep(3);
     };
@@ -98,6 +89,7 @@ const Index = () => {
     setCurrentStep(1);
     
     setForecastResults([]);
+    setSelectedSKUForResults('');
     
     const skusInOrder: string[] = [];
     const seenSKUs = new Set<string>();
@@ -107,11 +99,6 @@ const Index = () => {
         skusInOrder.push(item.sku);
         seenSKUs.add(item.sku);
       }
-    }
-    
-    if (skusInOrder.length > 0) {
-      console.log('🎯 INDEX: Setting initial SKU on upload:', skusInOrder[0]);
-      setSelectedSKUForResults(skusInOrder[0]);
     }
     
     addSKUsToQueue(skusInOrder, 'csv_upload');
@@ -175,12 +162,6 @@ const Index = () => {
           {salesData.length > 0 && queueSize > 0 && (
             <div className="mt-4 text-sm text-blue-600 bg-blue-50 rounded-lg px-4 py-2 inline-block">
               📋 {queueSize} SKU{queueSize !== 1 ? 's' : ''} queued for optimization
-            </div>
-          )}
-          {/* DEBUG INFO */}
-          {cleanedData.length > 0 && (
-            <div className="mt-2 text-xs text-gray-500 bg-gray-50 rounded px-2 py-1 inline-block">
-              Debug: Selected SKU = "{selectedSKUForResults}" | Available SKUs: {Array.from(new Set(cleanedData.map(d => d.sku))).length}
             </div>
           )}
         </div>
