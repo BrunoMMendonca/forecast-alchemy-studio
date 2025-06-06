@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData, ForecastResult } from '@/pages/Index';
@@ -22,7 +21,6 @@ export const useUnifiedModelManagement = (
   const lastProcessedSKURef = useRef<string>('');
   const forecastGenerationInProgressRef = useRef<boolean>(false);
   const lastForecastGenerationHashRef = useRef<string>('');
-  const methodSwitchInProgressRef = useRef<boolean>(false);
 
   const { 
     cache,
@@ -38,37 +36,24 @@ export const useUnifiedModelManagement = (
   });
 
   // Create a stable hash of model state to prevent unnecessary re-renders
-  // IMPROVED: Only include the actual parameters that will be used, not the method selection
   const modelsHash = useMemo(() => {
     const enabledModels = models.filter(m => m.enabled);
     if (enabledModels.length === 0) return 'no-enabled-models';
     
-    const hashData = enabledModels.map(m => {
-      // Determine which parameters will actually be used
-      const cached = cache[selectedSKU]?.[m.id];
-      const userSelectedMethod = cached?.selected;
-      const isManual = userSelectedMethod === 'manual';
-      
-      // Use the actual parameters that will be used for forecasting
-      const effectiveParams = isManual ? m.parameters : (m.optimizedParameters || m.parameters);
-      
-      return {
-        id: m.id,
-        enabled: m.enabled,
-        params: effectiveParams,
-        // Only include method if it affects which parameters are used
-        method: m.optimizedParameters ? (isManual ? 'manual' : 'optimized') : 'manual'
-      };
-    });
+    const hashData = enabledModels.map(m => ({
+      id: m.id,
+      enabled: m.enabled,
+      params: m.optimizedParameters || m.parameters,
+      method: m.optimizationMethod
+    }));
     
     return JSON.stringify(hashData);
-  }, [models, cache, selectedSKU]);
+  }, [models]);
 
   // Generate forecasts when models actually change (not just re-render)
   const generateForecasts = useCallback(async () => {
     if (!selectedSKU || models.length === 0) return;
-    if (forecastGenerationInProgressRef.current || methodSwitchInProgressRef.current) {
-      console.log('🔄 FORECAST: Skipping generation - operation in progress');
+    if (forecastGenerationInProgressRef.current) {
       return;
     }
 
@@ -83,8 +68,6 @@ export const useUnifiedModelManagement = (
     try {
       forecastGenerationInProgressRef.current = true;
       lastForecastGenerationHashRef.current = modelsHash;
-      
-      console.log('🔄 FORECAST: Generating forecasts with hash:', modelsHash.substring(0, 100));
       
       const results = await generateForecastsForSKU(
         selectedSKU,
@@ -162,12 +145,6 @@ export const useUnifiedModelManagement = (
   useEffect(() => {
     if (!selectedSKU) return;
 
-    // Skip processing during method switches to prevent unnecessary updates
-    if (isTogglingAIManualRef.current || methodSwitchInProgressRef.current) {
-      console.log('🔄 CACHE: Skipping cache processing - method switch in progress');
-      return;
-    }
-
     // Prevent unnecessary processing
     const shouldProcess = (
       cacheVersion !== lastProcessedCacheVersionRef.current || 
@@ -235,20 +212,14 @@ export const useUnifiedModelManagement = (
     const enabledModels = models.filter(m => m.enabled);
     if (enabledModels.length === 0) return;
 
-    // Skip during method switches or if already processing
-    if (isTogglingAIManualRef.current || methodSwitchInProgressRef.current || forecastGenerationInProgressRef.current) {
-      console.log('🔄 FORECAST: Skipping generation - operation in progress');
-      return;
-    }
-
-    // Only generate if the hash has actually changed
-    if (lastForecastGenerationHashRef.current !== modelsHash) {
-      // Use a longer timeout to debounce method switches more aggressively
+    // Only generate if the hash has actually changed and we're not currently processing
+    if (lastForecastGenerationHashRef.current !== modelsHash && !forecastGenerationInProgressRef.current) {
+      // Use a timeout to debounce rapid changes
       const timeoutId = setTimeout(() => {
-        if (lastForecastGenerationHashRef.current !== modelsHash && !methodSwitchInProgressRef.current) {
+        if (lastForecastGenerationHashRef.current !== modelsHash) {
           generateForecasts();
         }
-      }, 300);
+      }, 100);
 
       return () => clearTimeout(timeoutId);
     }
@@ -263,7 +234,6 @@ export const useUnifiedModelManagement = (
 
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
     isTogglingAIManualRef.current = true;
-    methodSwitchInProgressRef.current = true;
     
     // Set explicit user selection to manual in cache
     setSelectedMethod(selectedSKU, modelId, 'manual');
@@ -282,15 +252,11 @@ export const useUnifiedModelManagement = (
 
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
-      methodSwitchInProgressRef.current = false;
-    }, 200);
+    }, 100);
   }, [selectedSKU, setSelectedMethod]);
 
   const resetToManual = useCallback((modelId: string) => {
     isTogglingAIManualRef.current = true;
-    methodSwitchInProgressRef.current = true;
-    
-    console.log('🔄 RESET: Setting method to manual for', modelId);
     
     // Only set the method to manual - don't clear optimization data
     // The cache preserves all optimization results for instant switching
@@ -300,9 +266,7 @@ export const useUnifiedModelManagement = (
     
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
-      methodSwitchInProgressRef.current = false;
-      console.log('🔄 RESET: Method switch completed for', modelId);
-    }, 200);
+    }, 100);
   }, [selectedSKU, setSelectedMethod]);
 
   return {
