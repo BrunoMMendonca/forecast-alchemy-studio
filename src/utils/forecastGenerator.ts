@@ -47,7 +47,8 @@ export const generateForecastsForSKU = async (
   forecastPeriods: number,
   getCachedForecast: (sku: string, model: string, hash: string, periods: number) => ForecastResult | null,
   setCachedForecast: (result: ForecastResult, hash: string, periods: number) => void,
-  generateParametersHash: (params?: Record<string, number>, optimized?: Record<string, number>) => string
+  generateParametersHash: (params?: Record<string, number>, optimized?: Record<string, number>) => string,
+  grokApiEnabled: boolean = true
 ): Promise<ForecastResult[]> => {
   const enabledModels = models.filter(m => m.enabled);
   if (enabledModels.length === 0) return [];
