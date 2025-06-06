@@ -18,7 +18,6 @@ interface ForecastEngineProps {
   selectedSKU: string;
   onSKUChange: (sku: string) => void;
   businessContext?: BusinessContext;
-  grokApiEnabled?: boolean;
 }
 
 export const ForecastEngine: React.FC<ForecastEngineProps> = ({
@@ -27,8 +26,7 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
   onForecastGeneration,
   selectedSKU,
   onSKUChange,
-  businessContext,
-  grokApiEnabled = true
+  businessContext
 }) => {
   const { models, toggleModel, updateParameter, updateModelOptimization, resetModel } = useModelParameters();
   
@@ -38,8 +36,7 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
     validSKU ? selectedSKU : '', 
     data, 
     models, 
-    forecastPeriods,
-    grokApiEnabled
+    forecastPeriods
   );
   const { isOptimizing, optimizingModel, optimizeModel } = useOptimization(
     validSKU ? selectedSKU : '', 
@@ -59,12 +56,6 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
     if (!validSKU) {
       console.log('ForecastEngine: Cannot optimize without valid SKU');
       return;
-    }
-
-    // If AI method is requested but Grok API is disabled, use grid instead
-    if (method === 'ai' && !grokApiEnabled) {
-      console.log('ForecastEngine: Grok API disabled, falling back to grid optimization');
-      method = 'grid';
     }
 
     const model = models.find(m => m.id === modelId);
@@ -134,7 +125,6 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
             onResetModel={resetModel}
             isOptimizing={isOptimizing}
             optimizingModel={optimizingModel}
-            grokApiEnabled={grokApiEnabled}
           />
         )}
       </CardContent>
