@@ -7,10 +7,12 @@ import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimi
 import { useModelManagement } from '@/hooks/useModelManagement';
 import { OptimizationFactors } from '@/types/optimizationTypes';
 import { PreferenceValue } from '@/hooks/useManualAIPreferences';
+import { hasOptimizableParameters } from '@/utils/modelConfig';
 
 interface OptimizationQueue {
   getSKUsInQueue: () => string[];
   removeSKUsFromQueue: (skus: string[]) => void;
+  removeUnnecessarySKUs: (skus: string[]) => void;
   clearCacheAndPreferencesForSKU?: (sku: string) => void;
 }
 
@@ -42,22 +44,57 @@ export const useOptimizationHandler = (
 
   const handleQueueOptimization = useCallback(async () => {
     if (!optimizationQueue) {
+      console.log('🔧 HANDLER: No optimization queue provided');
       return;
     }
 
     const queuedSKUs = optimizationQueue.getSKUsInQueue();
     if (queuedSKUs.length === 0) {
+      console.log('🔧 HANDLER: Queue is empty');
       return;
     }
 
+    console.log('🔧 HANDLER: Starting optimization for queued SKUs:', queuedSKUs);
+
     const enabledModels = models.filter(m => m.enabled);
+    const modelsWithOptimizableParams = enabledModels.filter(m => hasOptimizableParameters(m));
+    
+    console.log('🔧 HANDLER: Models with optimizable parameters:', modelsWithOptimizableParams.map(m => m.id));
+
+    // If no models have optimizable parameters, remove all SKUs immediately
+    if (modelsWithOptimizableParams.length === 0) {
+      console.log('🔧 HANDLER: No models with optimizable parameters - removing all SKUs from queue');
+      optimizationQueue.removeSKUsFromQueue(queuedSKUs);
+      return;
+    }
+
+    // Check which SKUs actually need optimization
+    const skusNeedingOptimization = getSKUsNeedingOptimization(data, modelsWithOptimizableParams);
+    const skusNeedingOptimizationList = skusNeedingOptimization.map(item => item.sku);
+    
+    // Remove SKUs that don't need optimization
+    const skusNotNeedingOptimization = queuedSKUs.filter(sku => !skusNeedingOptimizationList.includes(sku));
+    if (skusNotNeedingOptimization.length > 0) {
+      console.log('🔧 HANDLER: Removing SKUs that don\'t need optimization:', skusNotNeedingOptimization);
+      optimizationQueue.removeSKUsFromQueue(skusNotNeedingOptimization);
+    }
+
+    // Get the final list of SKUs to optimize
+    const finalSKUsToOptimize = queuedSKUs.filter(sku => skusNeedingOptimizationList.includes(sku));
+    
+    if (finalSKUsToOptimize.length === 0) {
+      console.log('🔧 HANDLER: No SKUs need optimization after filtering');
+      return;
+    }
+
+    console.log('🔧 HANDLER: Final SKUs to optimize:', finalSKUsToOptimize);
     
     markOptimizationStarted(data, '/');
     
     await optimizeQueuedSKUs(
       data, 
-      enabledModels,
-      queuedSKUs,
+      modelsWithOptimizableParams,
+      finalSKUsToOptimize,
       (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method, bothResults) => {
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
@@ -129,23 +166,23 @@ export const useOptimizationHandler = (
         ));
       },
       (sku) => {
-        // Delay queue removal to ensure UI updates are complete
-        setTimeout(() => {
-          optimizationQueue.removeSKUsFromQueue([sku]);
-          
-          if (sku === selectedSKU && onOptimizationComplete) {
-            setTimeout(() => {
-              onOptimizationComplete();
-            }, 200);
-          }
-        }, 500); // Give more time for UI updates
+        // SKU completion callback - remove immediately when called
+        console.log('🔧 HANDLER: SKU optimization completed:', sku);
+        optimizationQueue.removeSKUsFromQueue([sku]);
+        
+        if (sku === selectedSKU && onOptimizationComplete) {
+          setTimeout(() => {
+            onOptimizationComplete();
+          }, 200);
+        }
       },
       getSKUsNeedingOptimization
     );
 
-    // Mark optimization completed after a slight delay to ensure all updates are processed
+    // Mark optimization completed after all SKUs are processed
     setTimeout(() => {
       markOptimizationCompleted(data, '/');
+      console.log('🔧 HANDLER: Optimization session completed');
     }, 1000);
   }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete]);
 

@@ -19,6 +19,7 @@ interface ForecastModelsProps {
   optimizationQueue?: {
     getSKUsInQueue: () => string[];
     removeSKUsFromQueue: (skus: string[]) => void;
+    removeUnnecessarySKUs: (skus: string[]) => void;
   };
 }
 
@@ -74,6 +75,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         // Add delay to ensure all components are ready
         setTimeout(() => {
           if (componentMountedRef.current) {
+            console.log('🔧 FORECAST: Starting auto-optimization for queued SKUs');
             handleQueueOptimization();
             if (onOptimizationStarted) {
               onOptimizationStarted();
@@ -97,6 +99,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   useEffect(() => {
     if (shouldStartOptimization && !isOptimizing && !hasTriggeredOptimizationRef.current && componentMountedRef.current) {
       hasTriggeredOptimizationRef.current = true;
+      console.log('🔧 FORECAST: Starting controlled optimization');
       handleQueueOptimization();
       if (onOptimizationStarted) {
         onOptimizationStarted();

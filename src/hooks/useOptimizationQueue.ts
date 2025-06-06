@@ -74,8 +74,18 @@ export const useOptimizationQueue = () => {
   }, [clearCacheAndPreferencesForSKU]);
 
   const removeSKUsFromQueue = useCallback((skus: string[]) => {
-    setQueue(prevQueue => prevQueue.filter(item => !skus.includes(item.sku)));
+    console.log('🗄️ QUEUE: Removing SKUs from queue:', skus);
+    setQueue(prevQueue => {
+      const newQueue = prevQueue.filter(item => !skus.includes(item.sku));
+      console.log('🗄️ QUEUE: Queue after removal:', newQueue.map(item => item.sku));
+      return newQueue;
+    });
   }, []);
+
+  const removeUnnecessarySKUs = useCallback((skus: string[]) => {
+    console.log('🗄️ QUEUE: Removing unnecessary SKUs from queue:', skus);
+    removeSKUsFromQueue(skus);
+  }, [removeSKUsFromQueue]);
 
   const clearQueue = useCallback(() => {
     setQueue([]);
@@ -92,6 +102,7 @@ export const useOptimizationQueue = () => {
     queue,
     addSKUsToQueue,
     removeSKUsFromQueue,
+    removeUnnecessarySKUs,
     clearQueue,
     getSKUsInQueue,
     isQueueEmpty,
