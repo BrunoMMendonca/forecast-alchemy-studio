@@ -28,9 +28,11 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const isManual = !model.optimizedParameters;
-  const isAI = model.optimizationMethod === 'ai';
-  const isGrid = model.optimizationMethod === 'grid_search';
+  // Fix the logic to properly determine the current method
+  const currentMethod = model.optimizationMethod;
+  const isManual = !currentMethod || currentMethod === 'manual';
+  const isAI = currentMethod === 'ai' || currentMethod === 'ai_optimization';
+  const isGrid = currentMethod === 'grid_search' || currentMethod === 'grid';
 
   const currentParameters = model.optimizedParameters || model.parameters;
   const canOptimize = hasOptimizableParameters(model);
@@ -130,7 +132,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
             </div>
 
             {/* Optimization Status Summary - only for optimizable models */}
-            {canOptimize && model.optimizationConfidence && (
+            {canOptimize && model.optimizationConfidence && !isManual && (
               <div className="mt-2 flex items-center space-x-4 text-sm">
                 <span className="text-slate-600">
                   Confidence: <span className="font-medium">{model.optimizationConfidence.toFixed(0)}%</span>
@@ -179,7 +181,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
               </div>
 
               {/* Reasoning Display - Only show if optimization was performed and model can be optimized */}
-              {canOptimize && hasOptimizationResults && (
+              {canOptimize && hasOptimizationResults && !isManual && (
                 <div className="mt-6 pt-4 border-t">
                   <ReasoningDisplay
                     reasoning={model.optimizationReasoning}
@@ -195,6 +197,15 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 <div className="mt-4 p-3 bg-blue-50 rounded-lg">
                   <p className="text-sm text-blue-700">
                     This model uses a fixed algorithm and doesn't require parameter optimization.
+                  </p>
+                </div>
+              )}
+
+              {/* Manual mode indicator */}
+              {canOptimize && isManual && (
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-700">
+                    Manual mode: You can adjust parameters using the sliders above.
                   </p>
                 </div>
               )}
