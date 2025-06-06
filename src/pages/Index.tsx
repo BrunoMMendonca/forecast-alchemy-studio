@@ -1,19 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { FileUpload } from '@/components/FileUpload';
-import { DataVisualization } from '@/components/DataVisualization';
-import { OutlierDetection } from '@/components/OutlierDetection';
-import { ForecastModels } from '@/components/ForecastModels';
-import { ForecastResults } from '@/components/ForecastResults';
-import { ForecastFinalization } from '@/components/ForecastFinalization';
-import { StepNavigation } from '@/components/StepNavigation';
-import { FloatingSettingsButton } from '@/components/FloatingSettingsButton';
+
+import React, { useEffect } from 'react';
 import { OptimizationQueuePopup } from '@/components/OptimizationQueuePopup';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, TrendingUp, Upload, Zap, Eye, List } from 'lucide-react';
+import { MainLayout } from '@/components/MainLayout';
+import { StepContent } from '@/components/StepContent';
 import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 import { useGlobalForecastSettings } from '@/hooks/useGlobalForecastSettings';
+import { useAppState } from '@/hooks/useAppState';
+import { useDataHandlers } from '@/hooks/useDataHandlers';
 import { useToast } from '@/hooks/use-toast';
 
 export interface SalesData {
@@ -32,16 +26,36 @@ export interface ForecastResult {
 }
 
 const Index = () => {
-  const [salesData, setSalesData] = useState<SalesData[]>([]);
-  const [cleanedData, setCleanedData] = useState<SalesData[]>([]);
-  const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
-  const [selectedSKUForResults, setSelectedSKUForResults] = useState<string>('');
-  const [currentStep, setCurrentStep] = useState(0);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [isQueuePopupOpen, setIsQueuePopupOpen] = useState(false);
   const { toast } = useToast();
+  const {
+    salesData,
+    setSalesData,
+    cleanedData,
+    setCleanedData,
+    forecastResults,
+    setForecastResults,
+    selectedSKUForResults,
+    setSelectedSKUForResults,
+    currentStep,
+    setCurrentStep,
+    settingsOpen,
+    setSettingsOpen,
+    isQueuePopupOpen,
+    setIsQueuePopupOpen
+  } = useAppState();
 
-  const { addSKUsToQueue, removeSKUsFromQueue, removeSKUModelPairsFromQueue, getSKUsInQueue, queueSize, uniqueSKUCount, getQueuedCombinations, getModelsForSKU, clearQueue } = useOptimizationQueue();
+  const { 
+    addSKUsToQueue, 
+    removeSKUsFromQueue, 
+    removeSKUModelPairsFromQueue, 
+    getSKUsInQueue, 
+    queueSize, 
+    uniqueSKUCount, 
+    getQueuedCombinations, 
+    getModelsForSKU, 
+    clearQueue 
+  } = useOptimizationQueue();
+  
   const { clearManualAIPreferences } = useManualAIPreferences();
 
   // Listen for the global queue popup event
@@ -55,7 +69,7 @@ const Index = () => {
     return () => {
       window.removeEventListener('openGlobalQueuePopup', handleOpenGlobalQueuePopup);
     };
-  }, []);
+  }, [setIsQueuePopupOpen]);
 
   const handleGlobalSettingsChange = (changedSetting: 'forecastPeriods' | 'businessContext' | 'grokApiEnabled') => {
     if (cleanedData.length > 0) {
@@ -82,6 +96,23 @@ const Index = () => {
     onSettingsChange: handleGlobalSettingsChange
   });
 
+  const {
+    handleDataUpload,
+    handleDataCleaning,
+    handleImportDataCleaning,
+    handleForecastGeneration
+  } = useDataHandlers({
+    setSalesData,
+    setCleanedData,
+    setCurrentStep,
+    setForecastResults,
+    setSelectedSKUForResults,
+    cleanedData,
+    addSKUsToQueue,
+    clearManualAIPreferences,
+    clearQueue
+  });
+
   useEffect(() => {
     const handleProceedToForecasting = () => {
       setCurrentStep(3);
@@ -92,277 +123,67 @@ const Index = () => {
     return () => {
       window.removeEventListener('proceedToForecasting', handleProceedToForecasting);
     };
-  }, []);
+  }, [setCurrentStep]);
 
-  const handleDataUpload = (data: SalesData[]) => {
-    clearManualAIPreferences();
-    clearQueue();
-    
-    setSalesData(data);
-    setCleanedData(data);
-    setCurrentStep(1);
-    
-    setForecastResults([]);
-    setSelectedSKUForResults('');
-    
-    const skusInOrder: string[] = [];
-    const seenSKUs = new Set<string>();
-    
-    for (const item of data) {
-      if (!seenSKUs.has(item.sku)) {
-        skusInOrder.push(item.sku);
-        seenSKUs.add(item.sku);
-      }
-    }
-    
-    addSKUsToQueue(skusInOrder, 'csv_upload');
-    
-    toast({
-      title: "Data Uploaded",
-      description: `${skusInOrder.length} SKU${skusInOrder.length > 1 ? 's' : ''} with optimizable models queued for optimization`,
-    });
-  };
-
-  const handleDataCleaning = (cleaned: SalesData[], changedSKUs?: string[]) => {
-    setCleanedData(cleaned);
-    
-    if (changedSKUs && changedSKUs.length > 0) {
-      const currentSKUs = Array.from(new Set(cleaned.map(d => d.sku)));
-      const validChangedSKUs = changedSKUs.filter(sku => currentSKUs.includes(sku));
-      
-      if (validChangedSKUs.length > 0) {
-        addSKUsToQueue(validChangedSKUs, 'data_cleaning');
-        
-        toast({
-          title: "Optimization Triggered",
-          description: `${validChangedSKUs.length} SKU${validChangedSKUs.length > 1 ? 's' : ''} queued for re-optimization due to data changes`,
-        });
-      }
-    }
-  };
-
-  const handleImportDataCleaning = (importedSKUs: string[]) => {
-    const currentSKUs = Array.from(new Set(cleanedData.map(d => d.sku)));
-    const validImportedSKUs = importedSKUs.filter(sku => currentSKUs.includes(sku));
-    
-    if (validImportedSKUs.length > 0) {
-      addSKUsToQueue(validImportedSKUs, 'csv_import');
-      
-      toast({
-        title: "Import Optimization Triggered",
-        description: `${validImportedSKUs.length} SKU${validImportedSKUs.length > 1 ? 's' : ''} queued for optimization after import`,
-      });
-    }
-  };
-
-  const handleForecastGeneration = (results: ForecastResult[], selectedSKU?: string) => {
-    setForecastResults(results);
-    if (selectedSKU) {
-      setSelectedSKUForResults(selectedSKU);
-    }
+  const optimizationQueue = {
+    getSKUsInQueue,
+    getQueuedCombinations,
+    getModelsForSKU,
+    removeSKUsFromQueue,
+    removeSKUModelPairsFromQueue,
+    removeUnnecessarySKUs: removeSKUsFromQueue,
+    queueSize,
+    uniqueSKUCount
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-slate-800 mb-4">
-            AI-Powered Sales Forecast Analytics
-          </h1>
-          <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-            Upload your historical sales data, leverage AI for optimization, and generate enterprise-ready forecasts for S&OP planning.
-          </p>
-          <div className="mt-4 flex items-center justify-center gap-4">
-            {salesData.length > 0 && queueSize > 0 && (
-              <div className="text-sm text-blue-600 bg-blue-50 rounded-lg px-4 py-2">
-                📋 {queueSize} optimization combinations queued ({uniqueSKUCount} SKUs)
-              </div>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsQueuePopupOpen(true)}
-              className="gap-2"
-            >
-              <List className="h-4 w-4" />
-              View Queue
-            </Button>
-          </div>
-        </div>
-
-        {/* Floating Settings Button */}
-        <FloatingSettingsButton
-          forecastPeriods={forecastPeriods}
-          setForecastPeriods={setForecastPeriods}
-          businessContext={businessContext}
-          setBusinessContext={setBusinessContext}
-          grokApiEnabled={grokApiEnabled}
-          setGrokApiEnabled={setGrokApiEnabled}
-          settingsOpen={settingsOpen}
-          setSettingsOpen={setSettingsOpen}
-        />
-
-        {/* Progress Steps */}
-        <StepNavigation
+    <>
+      <MainLayout
+        salesDataLength={salesData.length}
+        queueSize={queueSize}
+        uniqueSKUCount={uniqueSKUCount}
+        currentStep={currentStep}
+        forecastResultsLength={forecastResults.length}
+        onStepClick={setCurrentStep}
+        onQueuePopupOpen={() => setIsQueuePopupOpen(true)}
+        forecastPeriods={forecastPeriods}
+        setForecastPeriods={setForecastPeriods}
+        businessContext={businessContext}
+        setBusinessContext={setBusinessContext}
+        grokApiEnabled={grokApiEnabled}
+        setGrokApiEnabled={setGrokApiEnabled}
+        settingsOpen={settingsOpen}
+        setSettingsOpen={setSettingsOpen}
+      >
+        <StepContent
           currentStep={currentStep}
-          salesDataLength={salesData.length}
-          forecastResultsLength={forecastResults.length}
-          onStepClick={setCurrentStep}
+          salesData={salesData}
+          cleanedData={cleanedData}
+          forecastResults={forecastResults}
+          selectedSKUForResults={selectedSKUForResults}
+          queueSize={queueSize}
+          forecastPeriods={forecastPeriods}
+          grokApiEnabled={grokApiEnabled}
+          onDataUpload={handleDataUpload}
+          onDataCleaning={handleDataCleaning}
+          onImportDataCleaning={handleImportDataCleaning}
+          onForecastGeneration={handleForecastGeneration}
+          onSKUChange={setSelectedSKUForResults}
+          onStepChange={setCurrentStep}
+          optimizationQueue={optimizationQueue}
         />
+      </MainLayout>
 
-        {/* Main Content */}
-        <div className="w-full">
-          {currentStep === 0 && (
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="h-5 w-5 text-blue-600" />
-                  Upload Historical Sales Data
-                </CardTitle>
-                <CardDescription>
-                  Upload a CSV file containing your historical sales data with columns: Date, SKU, Sales
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <FileUpload 
-                  onDataUpload={handleDataUpload}
-                  hasExistingData={salesData.length > 0}
-                  dataCount={salesData.length}
-                  skuCount={new Set(salesData.map(d => d.sku)).size}
-                />
-              </CardContent>
-            </Card>
-          )}
-
-          {currentStep === 1 && (
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-blue-600" />
-                  Data Visualization
-                </CardTitle>
-                <CardDescription>
-                  Explore your historical sales data across different SKUs
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DataVisualization data={salesData} />
-                {salesData.length > 0 && (
-                  <div className="mt-6 flex justify-end">
-                    <Button onClick={() => setCurrentStep(2)}>
-                      Proceed to Data Cleaning
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {currentStep === 2 && (
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-blue-600" />
-                  Outlier Detection & Cleaning
-                </CardTitle>
-                <CardDescription>
-                  Identify and remove outliers from your data to improve forecast accuracy
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <OutlierDetection 
-                  data={salesData}
-                  cleanedData={cleanedData}
-                  onDataCleaning={handleDataCleaning}
-                  onImportDataCleaning={handleImportDataCleaning}
-                  queueSize={queueSize}
-                />
-              </CardContent>
-            </Card>
-          )}
-
-          {currentStep === 3 && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white/80 backdrop-blur-sm shadow-xl border-0 rounded-lg">
-                <ForecastModels
-                  data={cleanedData}
-                  forecastPeriods={forecastPeriods}
-                  onForecastGeneration={handleForecastGeneration}
-                  selectedSKU={selectedSKUForResults}
-                  onSKUChange={setSelectedSKUForResults}
-                  grokApiEnabled={grokApiEnabled}
-                  optimizationQueue={{
-                    getSKUsInQueue,
-                    getQueuedCombinations,
-                    getModelsForSKU,
-                    removeSKUsFromQueue,
-                    removeSKUModelPairsFromQueue,
-                    removeUnnecessarySKUs: removeSKUsFromQueue,
-                    queueSize,
-                    uniqueSKUCount
-                  }}
-                />
-              </div>
-
-              <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-                <CardHeader>
-                  <CardTitle>Forecast Results</CardTitle>
-                  <CardDescription>
-                    Compare predictions from different models for {selectedSKUForResults || 'selected product'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ForecastResults 
-                    results={forecastResults} 
-                    selectedSKU={selectedSKUForResults}
-                  />
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {currentStep === 4 && (
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Eye className="h-5 w-5 text-blue-600" />
-                  Finalize & Export Forecasts
-                </CardTitle>
-                <CardDescription>
-                  Review, edit, and export your forecasts for Sales & Operations Planning
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ForecastFinalization 
-                  historicalData={salesData}
-                  cleanedData={cleanedData}
-                  forecastResults={forecastResults}
-                />
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Global Optimization Queue Popup - Now the only one */}
-        <OptimizationQueuePopup
-          optimizationQueue={{
-            getSKUsInQueue,
-            getQueuedCombinations,
-            getModelsForSKU,
-            removeSKUsFromQueue,
-            removeUnnecessarySKUs: removeSKUsFromQueue,
-            queueSize,
-            uniqueSKUCount
-          }}
-          models={[]} // Empty models array when no data
-          isOptimizing={false}
-          progress={null}
-          isOpen={isQueuePopupOpen}
-          onOpenChange={setIsQueuePopupOpen}
-        />
-      </div>
-    </div>
+      {/* Global Optimization Queue Popup */}
+      <OptimizationQueuePopup
+        optimizationQueue={optimizationQueue}
+        models={[]} // Empty models array when no data
+        isOptimizing={false}
+        progress={null}
+        isOpen={isQueuePopupOpen}
+        onOpenChange={setIsQueuePopupOpen}
+      />
+    </>
   );
 };
 
