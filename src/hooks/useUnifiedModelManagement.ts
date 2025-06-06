@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData, ForecastResult } from '@/pages/Index';
@@ -19,8 +20,6 @@ export const useUnifiedModelManagement = (
   const isTogglingAIManualRef = useRef<boolean>(false);
   const lastProcessedCacheVersionRef = useRef<number>(-1);
   const lastProcessedSKURef = useRef<string>('');
-  const forecastGenerationInProgressRef = useRef<boolean>(false);
-  const lastForecastGenerationHashRef = useRef<string>('');
 
   const { 
     cache,
@@ -35,39 +34,15 @@ export const useUnifiedModelManagement = (
     return getDefaultModels();
   });
 
-  // Create a stable hash of model state to prevent unnecessary re-renders
-  const modelsHash = useMemo(() => {
-    const enabledModels = models.filter(m => m.enabled);
-    if (enabledModels.length === 0) return 'no-enabled-models';
-    
-    const hashData = enabledModels.map(m => ({
-      id: m.id,
-      enabled: m.enabled,
-      params: m.optimizedParameters || m.parameters,
-      method: m.optimizationMethod
-    }));
-    
-    return JSON.stringify(hashData);
-  }, [models]);
-
-  // Generate forecasts when models actually change (not just re-render)
+  // Generate forecasts when models change - no hash prevention
   const generateForecasts = useCallback(async () => {
     if (!selectedSKU || models.length === 0) return;
-    if (forecastGenerationInProgressRef.current) {
-      return;
-    }
-
-    // Check if we've already generated for this exact state
-    if (lastForecastGenerationHashRef.current === modelsHash) {
-      return;
-    }
 
     const enabledModels = models.filter(m => m.enabled);
     if (enabledModels.length === 0) return;
 
     try {
-      forecastGenerationInProgressRef.current = true;
-      lastForecastGenerationHashRef.current = modelsHash;
+      console.log('🎯 FORECASTS: Generating for SKU:', selectedSKU);
       
       const results = await generateForecastsForSKU(
         selectedSKU,
@@ -86,10 +61,8 @@ export const useUnifiedModelManagement = (
         description: error instanceof Error ? error.message : "Failed to generate forecasts. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      forecastGenerationInProgressRef.current = false;
     }
-  }, [selectedSKU, data, modelsHash, forecastPeriods, onForecastGeneration, toast]);
+  }, [selectedSKU, data, models, forecastPeriods, onForecastGeneration, toast]);
 
   // Helper function to get the best available method for automatic selection
   const getBestAvailableMethod = useCallback((sku: string, modelId: string, currentDataHash: string) => {
@@ -200,36 +173,24 @@ export const useUnifiedModelManagement = (
     });
     
     setModels(updatedModels);
-    
-    // Reset forecast generation hash when models are updated from cache
-    lastForecastGenerationHashRef.current = '';
   }, [cacheVersion, selectedSKU, data, cache, generateDataHash, updateAutoBestMethods]);
 
-  // CONTROLLED forecast generation - only when models hash actually changes
+  // Generate forecasts whenever models change - no prevention
   useEffect(() => {
     if (!selectedSKU || !models.length) return;
     
     const enabledModels = models.filter(m => m.enabled);
     if (enabledModels.length === 0) return;
 
-    // Only generate if the hash has actually changed and we're not currently processing
-    if (lastForecastGenerationHashRef.current !== modelsHash && !forecastGenerationInProgressRef.current) {
-      // Use a timeout to debounce rapid changes
-      const timeoutId = setTimeout(() => {
-        if (lastForecastGenerationHashRef.current !== modelsHash) {
-          generateForecasts();
-        }
-      }, 100);
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [modelsHash, selectedSKU, generateForecasts]);
+    console.log('🎯 FORECASTS: Models changed, generating forecasts');
+    generateForecasts();
+  }, [models, selectedSKU, generateForecasts]);
 
   const toggleModel = useCallback((modelId: string) => {
+    console.log('🎯 MODELS: Toggling model', modelId);
     setModels(prev => prev.map(model => 
       model.id === modelId ? { ...model, enabled: !model.enabled } : model
     ));
-    lastForecastGenerationHashRef.current = '';
   }, []);
 
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
@@ -248,8 +209,6 @@ export const useUnifiedModelManagement = (
         : model
     ));
 
-    lastForecastGenerationHashRef.current = '';
-
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
     }, 100);
@@ -261,8 +220,6 @@ export const useUnifiedModelManagement = (
     // Only set the method to manual - don't clear optimization data
     // The cache preserves all optimization results for instant switching
     setSelectedMethod(selectedSKU, modelId, 'manual');
-    
-    lastForecastGenerationHashRef.current = '';
     
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
