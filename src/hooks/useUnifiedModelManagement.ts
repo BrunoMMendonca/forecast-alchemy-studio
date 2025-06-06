@@ -33,32 +33,33 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
 
     console.log(`🔧 UNIFIED: Updating models for SKU: ${selectedSKU}, cache version: ${cacheVersion}`);
 
-    let optimizationCache = {};
-    let preferences = {};
-    
-    try {
-      const storedCache = localStorage.getItem('forecast_optimization_cache');
-      optimizationCache = storedCache ? JSON.parse(storedCache) : {};
-    } catch {
-      optimizationCache = {};
-    }
-    
-    try {
-      const storedPrefs = localStorage.getItem('manual_ai_preferences');
-      preferences = storedPrefs ? JSON.parse(storedPrefs) : {};
-    } catch {
-      preferences = {};
-    }
-
-    const skuData = data.filter(d => d.sku === selectedSKU);
-    const currentDataHash = generateDataHash(skuData);
-
     const updatedModels = getDefaultModels().map(model => {
-      // Skip optimization logic for models without parameters
+      // EARLY EXIT: Skip ALL cache/preference logic for models without parameters
       if (!hasOptimizableParameters(model)) {
-        console.log(`🔧 UNIFIED: Skipping optimization logic for ${model.id} - no parameters`);
+        console.log(`🔧 UNIFIED: Skipping ALL optimization logic for ${model.id} - no parameters`);
         return model;
       }
+
+      // Only do cache/preference operations for models WITH parameters
+      let optimizationCache = {};
+      let preferences = {};
+      
+      try {
+        const storedCache = localStorage.getItem('forecast_optimization_cache');
+        optimizationCache = storedCache ? JSON.parse(storedCache) : {};
+      } catch {
+        optimizationCache = {};
+      }
+      
+      try {
+        const storedPrefs = localStorage.getItem('manual_ai_preferences');
+        preferences = storedPrefs ? JSON.parse(storedPrefs) : {};
+      } catch {
+        preferences = {};
+      }
+
+      const skuData = data.filter(d => d.sku === selectedSKU);
+      const currentDataHash = generateDataHash(skuData);
 
       const preferenceKey = `${selectedSKU}:${model.id}`;
       const preference = preferences[preferenceKey] || 'ai';
