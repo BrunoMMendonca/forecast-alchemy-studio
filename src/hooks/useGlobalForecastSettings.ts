@@ -40,6 +40,46 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
     }
   }, []);
 
+  // Listen for localStorage changes from other hook instances
+  useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === GLOBAL_SETTINGS_KEY && event.newValue) {
+        try {
+          const settings: GlobalForecastSettings = JSON.parse(event.newValue);
+          setForecastPeriodsState(settings.forecastPeriods || DEFAULT_SETTINGS.forecastPeriods);
+          setBusinessContextState(settings.businessContext || DEFAULT_SETTINGS.businessContext);
+          setGrokApiEnabledState(settings.grokApiEnabled ?? DEFAULT_SETTINGS.grokApiEnabled);
+        } catch (error) {
+          // Silent error handling
+        }
+      }
+    };
+
+    // Listen for storage changes from other tabs/components
+    window.addEventListener('storage', handleStorageChange);
+
+    // Custom event for same-tab localStorage changes
+    const handleCustomStorageChange = (event: CustomEvent) => {
+      if (event.detail.key === GLOBAL_SETTINGS_KEY) {
+        try {
+          const settings: GlobalForecastSettings = JSON.parse(event.detail.newValue);
+          setForecastPeriodsState(settings.forecastPeriods || DEFAULT_SETTINGS.forecastPeriods);
+          setBusinessContextState(settings.businessContext || DEFAULT_SETTINGS.businessContext);
+          setGrokApiEnabledState(settings.grokApiEnabled ?? DEFAULT_SETTINGS.grokApiEnabled);
+        } catch (error) {
+          // Silent error handling
+        }
+      }
+    };
+
+    window.addEventListener('localStorageChange', handleCustomStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('localStorageChange', handleCustomStorageChange);
+    };
+  }, []);
+
   // Save settings to localStorage whenever they change
   const saveSettings = useCallback((periods: number, context: BusinessContext, grokEnabled: boolean) => {
     try {
@@ -48,7 +88,13 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
         businessContext: context,
         grokApiEnabled: grokEnabled
       };
-      localStorage.setItem(GLOBAL_SETTINGS_KEY, JSON.stringify(settings));
+      const newValue = JSON.stringify(settings);
+      localStorage.setItem(GLOBAL_SETTINGS_KEY, newValue);
+      
+      // Dispatch custom event for same-tab synchronization
+      window.dispatchEvent(new CustomEvent('localStorageChange', {
+        detail: { key: GLOBAL_SETTINGS_KEY, newValue }
+      }));
     } catch (error) {
       // Silent error handling
     }
