@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useUnifiedModelManagement } from '@/hooks/useUnifiedModelManagement';
@@ -7,6 +6,7 @@ import { ModelSelection } from './ModelSelection';
 import { ProductSelector } from './ProductSelector';
 import { QueueStatusDisplay } from './QueueStatusDisplay';
 import { OptimizationLogger } from './OptimizationLogger';
+import { OptimizationQueuePopup } from './OptimizationQueuePopup';
 
 interface ForecastModelsProps {
   data: SalesData[];
@@ -154,6 +154,15 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         isVisible={showOptimizationLog} 
         onClose={() => setShowOptimizationLog(false)} 
       />
+
+      {optimizationQueue && (
+        <OptimizationQueuePopup
+          optimizationQueue={optimizationQueue}
+          models={models}
+          isOptimizing={isOptimizing}
+          progress={progress}
+        />
+      )}
     </div>
   );
 });
