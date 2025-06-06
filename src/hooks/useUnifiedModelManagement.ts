@@ -22,6 +22,7 @@ export const useUnifiedModelManagement = (
   const lastProcessedCacheVersionRef = useRef<number>(-1);
   const lastProcessedMethodVersionRef = useRef<number>(-1);
   const lastProcessedSKURef = useRef<string>('');
+  const currentDataHashRef = useRef<string>(''); // Store hash to avoid regeneration
 
   const { 
     cache,
@@ -164,6 +165,7 @@ export const useUnifiedModelManagement = (
     
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
+    currentDataHashRef.current = currentDataHash; // Store for reuse
     
     // First, update automatic best method selections
     updateAutoBestMethods(selectedSKU, currentDataHash);
@@ -209,7 +211,7 @@ export const useUnifiedModelManagement = (
     lastForecastGenerationHashRef.current = '';
   }, [cacheVersion, selectedSKU, data, cache, generateDataHash, updateAutoBestMethods]);
 
-  // SEPARATE effect for method selection changes - lightweight UI updates only
+  // LIGHTWEIGHT method selection changes - minimal processing for UI responsiveness
   useEffect(() => {
     if (!selectedSKU) return;
 
@@ -223,56 +225,64 @@ export const useUnifiedModelManagement = (
       return;
     }
 
-    console.log(`🎯 METHOD: Processing method selection change: ${lastProcessedMethodVersionRef.current} -> ${methodSelectionVersion}`);
+    console.log(`🎯 METHOD: Processing method selection change (lightweight): ${lastProcessedMethodVersionRef.current} -> ${methodSelectionVersion}`);
     lastProcessedMethodVersionRef.current = methodSelectionVersion;
 
-    const skuData = data.filter(d => d.sku === selectedSKU);
-    const currentDataHash = generateDataHash(skuData);
+    // Use cached hash if available to avoid regeneration
+    const currentDataHash = currentDataHashRef.current || generateDataHash(data.filter(d => d.sku === selectedSKU));
 
-    // Lightweight model updates for method selection changes
-    const updatedModels = models.map(model => {
-      const cached = cache[selectedSKU]?.[model.id];
-      const userSelectedMethod = cached?.selected;
-      
-      if (!userSelectedMethod || userSelectedMethod === 'manual') {
-        // Clear optimization data for manual mode
-        return {
-          ...model,
-          optimizedParameters: undefined,
-          optimizationConfidence: undefined,
-          optimizationReasoning: undefined,
-          optimizationFactors: undefined,
-          expectedAccuracy: undefined,
-          optimizationMethod: undefined
-        };
-      }
+    // Only update models that actually changed their selection
+    setModels(prevModels => {
+      return prevModels.map(model => {
+        const cached = cache[selectedSKU]?.[model.id];
+        const userSelectedMethod = cached?.selected;
+        
+        // Check if this model's method selection actually changed
+        const currentIsManual = !model.optimizedParameters;
+        const newIsManual = !userSelectedMethod || userSelectedMethod === 'manual';
+        
+        // If switching to manual mode
+        if (!currentIsManual && newIsManual) {
+          console.log(`🎯 METHOD: Switching ${model.id} to manual (clearing optimization data)`);
+          return {
+            ...model,
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
+          };
+        }
+        
+        // If switching to AI/Grid mode
+        if (currentIsManual && !newIsManual) {
+          let selectedCache = null;
+          if (userSelectedMethod === 'ai' && cached?.ai) {
+            selectedCache = cached.ai;
+          } else if (userSelectedMethod === 'grid' && cached?.grid) {
+            selectedCache = cached.grid;
+          }
 
-      // Apply cached data for AI/Grid modes
-      let selectedCache = null;
-      if (userSelectedMethod === 'ai' && cached?.ai) {
-        selectedCache = cached.ai;
-      } else if (userSelectedMethod === 'grid' && cached?.grid) {
-        selectedCache = cached.grid;
-      }
-
-      if (selectedCache && selectedCache.dataHash === currentDataHash) {
-        return {
-          ...model,
-          optimizedParameters: selectedCache.parameters,
-          optimizationConfidence: selectedCache.confidence,
-          optimizationReasoning: selectedCache.reasoning,
-          optimizationFactors: selectedCache.factors,
-          expectedAccuracy: selectedCache.expectedAccuracy,
-          optimizationMethod: selectedCache.method
-        };
-      }
-
-      return model;
+          if (selectedCache && selectedCache.dataHash === currentDataHash) {
+            console.log(`🎯 METHOD: Switching ${model.id} to ${userSelectedMethod} (applying optimization data)`);
+            return {
+              ...model,
+              optimizedParameters: selectedCache.parameters,
+              optimizationConfidence: selectedCache.confidence,
+              optimizationReasoning: selectedCache.reasoning,
+              optimizationFactors: selectedCache.factors,
+              expectedAccuracy: selectedCache.expectedAccuracy,
+              optimizationMethod: selectedCache.method
+            };
+          }
+        }
+        
+        // No change needed for this model
+        return model;
+      });
     });
-
-    setModels(updatedModels);
-    // DO NOT reset forecast generation hash for method changes - they don't affect forecast parameters
-  }, [methodSelectionVersion, selectedSKU, models, cache, generateDataHash]);
+  }, [methodSelectionVersion, selectedSKU, cache]);
 
   // CONTROLLED forecast generation - only when models hash actually changes
   useEffect(() => {
@@ -298,7 +308,6 @@ export const useUnifiedModelManagement = (
     setModels(prev => prev.map(model => 
       model.id === modelId ? { ...model, enabled: !model.enabled } : model
     ));
-    lastForecastGenerationHashRef.current = '';
   }, []);
 
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
@@ -316,8 +325,6 @@ export const useUnifiedModelManagement = (
           }
         : model
     ));
-
-    // No need to clear forecast hash - modelsHash change will trigger regeneration
   }, [selectedSKU, setSelectedMethod]);
 
   const resetToManual = useCallback((modelId: string) => {
@@ -325,8 +332,6 @@ export const useUnifiedModelManagement = (
     
     // Only set the method to manual - the method selection effect will handle the UI update
     setSelectedMethod(selectedSKU, modelId, 'manual');
-    
-    // No need to clear forecast hash - method selection doesn't affect forecast parameters
   }, [selectedSKU, setSelectedMethod]);
 
   return {
