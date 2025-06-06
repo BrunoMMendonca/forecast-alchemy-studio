@@ -3,7 +3,7 @@ import { useState, useCallback } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { getDefaultModels } from '@/utils/modelConfig';
 
-export const useModelParameters = () => {
+export const useModelParameters = (grokApiEnabled: boolean = true) => {
   const [models, setModels] = useState<ModelConfig[]>(() => getDefaultModels());
 
   const toggleModel = useCallback((modelId: string) => {
@@ -35,6 +35,12 @@ export const useModelParameters = () => {
     reasoning?: string,
     method?: string
   ) => {
+    // If Grok API is disabled and the method is 'ai', don't update with AI results
+    if (!grokApiEnabled && method === 'ai') {
+      console.log('useModelParameters: Grok API disabled, ignoring AI optimization result');
+      return;
+    }
+
     setModels(prev => prev.map(model => 
       model.id === modelId 
         ? { 
@@ -46,7 +52,7 @@ export const useModelParameters = () => {
           }
         : model
     ));
-  }, []);
+  }, [grokApiEnabled]);
 
   const resetModel = useCallback((modelId: string) => {
     setModels(prev => prev.map(model => 

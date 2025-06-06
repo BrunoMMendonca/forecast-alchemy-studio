@@ -9,7 +9,8 @@ export const useForecastEngine = (
   selectedSKU: string,
   data: SalesData[],
   models: ModelConfig[],
-  forecastPeriods: number
+  forecastPeriods: number,
+  grokApiEnabled: boolean = true
 ) => {
   const [results, setResults] = useState<ForecastResult[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -35,7 +36,7 @@ export const useForecastEngine = (
       return;
     }
 
-    console.log('useForecastEngine: Generating forecasts for SKU:', selectedSKU);
+    console.log('useForecastEngine: Generating forecasts for SKU:', selectedSKU, 'Grok API enabled:', grokApiEnabled);
     setIsGenerating(true);
     
     try {
@@ -46,7 +47,8 @@ export const useForecastEngine = (
         forecastPeriods,
         getCachedForecast,
         setCachedForecast,
-        generateParametersHash
+        generateParametersHash,
+        grokApiEnabled
       );
       
       setResults(forecastResults);
@@ -56,7 +58,7 @@ export const useForecastEngine = (
     } finally {
       setIsGenerating(false);
     }
-  }, [selectedSKU, data, models, forecastPeriods, getCachedForecast, setCachedForecast, generateParametersHash]);
+  }, [selectedSKU, data, models, forecastPeriods, grokApiEnabled, getCachedForecast, setCachedForecast, generateParametersHash]);
 
   // Auto-generate forecasts when dependencies change, but only with valid SKU
   useEffect(() => {

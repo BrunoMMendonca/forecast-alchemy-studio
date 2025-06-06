@@ -9,7 +9,8 @@ import { hasOptimizableParameters } from '@/utils/modelConfig';
 export const useOptimization = (
   selectedSKU: string,
   data: SalesData[],
-  businessContext?: BusinessContext
+  businessContext?: BusinessContext,
+  grokApiEnabled: boolean = true
 ) => {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizingModel, setOptimizingModel] = useState<string | null>(null);
@@ -35,6 +36,12 @@ export const useOptimization = (
       return null;
     }
 
+    // If AI method is requested but Grok API is disabled, fall back to grid
+    if (method === 'ai' && !grokApiEnabled) {
+      console.log('useOptimization: Grok API disabled, falling back to grid optimization');
+      method = 'grid';
+    }
+
     console.log('useOptimization: Starting optimization for SKU:', selectedSKU, 'Model:', model.id, 'Method:', method);
     setIsOptimizing(true);
     setOptimizingModel(model.id);
@@ -46,7 +53,7 @@ export const useOptimization = (
         return null;
       }
 
-      const result = await getOptimizationByMethod(model, skuData, selectedSKU, method, businessContext);
+      const result = await getOptimizationByMethod(model, skuData, selectedSKU, method, businessContext, grokApiEnabled);
       
       return result ? {
         parameters: result.parameters,
@@ -61,7 +68,7 @@ export const useOptimization = (
       setIsOptimizing(false);
       setOptimizingModel(null);
     }
-  }, [selectedSKU, data, businessContext]);
+  }, [selectedSKU, data, businessContext, grokApiEnabled]);
 
   return {
     isOptimizing,
