@@ -31,16 +31,15 @@ export const useOptimizationCache = () => {
     clearCacheForSKU
   } = useCacheOperations(cache, setCache, setCacheStats, setCacheVersion);
 
-  // Load state from localStorage on mount
+  // Load state from localStorage on mount ONLY
   useEffect(() => {
     const loadedCache = loadCacheFromStorage();
     setCache(loadedCache);
+    console.log('🗄️ CACHE: Initial load from localStorage completed');
   }, []);
 
-  // Save cache to localStorage when it changes
-  useEffect(() => {
-    saveCacheToStorage(cache);
-  }, [cache]);
+  // REMOVED: The automatic save effect that was causing localStorage spam
+  // localStorage saves now only happen in specific functions when optimization results are stored
 
   const getSKUsNeedingOptimizationCallback = useCallback((
     data: SalesData[], 
@@ -55,6 +54,7 @@ export const useOptimizationCache = () => {
   ) => isCacheValid(sku, modelId, currentDataHash, cache, method), [cache]);
 
   const clearAllCache = useCallback(() => {
+    console.log('🗄️ CACHE: Clearing all cache and saving to localStorage');
     setCache({});
     setCacheStats({ hits: 0, misses: 0, skipped: 0 });
     setCacheVersion(0);

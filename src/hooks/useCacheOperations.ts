@@ -1,6 +1,6 @@
 
 import { useCallback } from 'react';
-import { OptimizationCache, OptimizedParameters } from '@/utils/cacheStorageUtils';
+import { OptimizationCache, OptimizedParameters, saveCacheToStorage } from '@/utils/cacheStorageUtils';
 import { CACHE_EXPIRY_HOURS } from '@/utils/cacheStorageUtils';
 
 export const useCacheOperations = (
@@ -144,10 +144,13 @@ export const useCacheOperations = (
       }
       
       console.log(`🗄️ CACHE: Successfully stored ${sku}:${modelId}:${cacheMethod}`);
+      
+      // SAVE TO LOCALSTORAGE: Only when optimization results are stored
+      console.log('🗄️ CACHE: Saving optimization results to localStorage');
+      saveCacheToStorage(newCache);
+      
       return newCache;
     });
-
-    console.log('🗄️ CACHE: Cache updated, triggering save');
   }, [setCache]);
 
   const setSelectedMethod = useCallback((
@@ -155,17 +158,17 @@ export const useCacheOperations = (
     modelId: string,
     method: 'ai' | 'grid' | 'manual'
   ) => {
-    console.log(`🗄️ CACHE: Setting user selected method ${sku}:${modelId} to ${method}`);
+    console.log(`🗄️ CACHE: Setting user selected method ${sku}:${modelId} to ${method} (memory only)`);
     setCache(prev => {
       const newCache = JSON.parse(JSON.stringify(prev));
       
       if (!newCache[sku]) newCache[sku] = {};
       if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
       
-      // This is the user's explicit choice - always store it
+      // This is the user's explicit choice - store in memory only (no localStorage save)
       newCache[sku][modelId].selected = method;
       
-      console.log(`🗄️ CACHE: User selected method stored: ${sku}:${modelId} = ${method}`);
+      console.log(`🗄️ CACHE: User selected method stored in memory: ${sku}:${modelId} = ${method}`);
       return newCache;
     });
 
@@ -176,6 +179,11 @@ export const useCacheOperations = (
     setCache(prev => {
       const newCache = JSON.parse(JSON.stringify(prev));
       delete newCache[sku];
+      
+      // SAVE TO LOCALSTORAGE: Only when cache is cleared
+      console.log('🗄️ CACHE: Saving after clearing SKU cache to localStorage');
+      saveCacheToStorage(newCache);
+      
       return newCache;
     });
     setCacheVersion(prev => prev + 1);
