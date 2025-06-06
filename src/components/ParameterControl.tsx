@@ -103,7 +103,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
               
               {/* Badge order: AI, Grid, Manual */}
               <div className="flex items-center gap-2">
-                {/* AI Badge - Only clickable if cache available */}
+                {/* AI Badge - First */}
                 <Badge 
                   variant={isAI ? "default" : "outline"} 
                   className={`text-xs ${
@@ -122,7 +122,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   AI
                 </Badge>
 
-                {/* Grid Badge - Only clickable if cache available */}
+                {/* Grid Badge - Second */}
                 <Badge 
                   variant={isGrid ? "default" : "outline"} 
                   className={`text-xs ${
@@ -141,7 +141,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   Grid
                 </Badge>
 
-                {/* Manual Badge - Always clickable */}
+                {/* Manual Badge - Third */}
                 <Badge 
                   variant={isManual ? "default" : "outline"} 
                   className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
