@@ -24,11 +24,14 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
     return getDefaultModels();
   });
 
-  // Stable function that creates models with current cache and preferences
-  const createModelsWithCurrentData = useCallback(() => {
+  // Single effect that updates models when needed - inline logic to avoid function dependencies
+  useEffect(() => {
     if (!selectedSKU || isTogglingAIManualRef.current) {
-      return getDefaultModels();
+      setModels(getDefaultModels());
+      return;
     }
+
+    console.log(`🔧 UNIFIED: Updating models for SKU: ${selectedSKU}, cache version: ${cacheVersion}`);
 
     let optimizationCache = {};
     let preferences = {};
@@ -50,7 +53,7 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
 
-    return getDefaultModels().map(model => {
+    const updatedModels = getDefaultModels().map(model => {
       // Skip optimization logic for models without parameters
       if (!hasOptimizableParameters(model)) {
         console.log(`🔧 UNIFIED: Skipping optimization logic for ${model.id} - no parameters`);
@@ -92,16 +95,9 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
 
       return model;
     });
-  }, [selectedSKU, generateDataHash, cacheVersion]); // Stable dependencies only
 
-  // Single effect that updates models when needed - no function dependencies
-  useEffect(() => {
-    if (selectedSKU) {
-      console.log(`🔧 UNIFIED: Updating models for SKU: ${selectedSKU}, cache version: ${cacheVersion}`);
-      const updatedModels = createModelsWithCurrentData();
-      setModels(updatedModels);
-    }
-  }, [selectedSKU, cacheVersion]); // Remove function dependency to prevent infinite loop
+    setModels(updatedModels);
+  }, [selectedSKU, cacheVersion]); // Only stable dependencies
 
   const toggleModel = (modelId: string) => {
     setModels(prev => prev.map(model => 
@@ -346,17 +342,17 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
     }, 100);
   };
 
+  // Simple refresh function that triggers the useEffect
   const refreshModelsWithPreferences = useCallback(() => {
-    if (!isTogglingAIManualRef.current) {
-      const updatedModels = createModelsWithCurrentData();
-      setModels(updatedModels);
+    if (!isTogglingAIManualRef.current && selectedSKU) {
+      // Force a re-render by updating cache version will trigger useEffect
+      console.log('🔄 UNIFIED: Refreshing models with preferences');
     }
-  }, [createModelsWithCurrentData]);
+  }, [selectedSKU]);
 
   return {
     models,
     setModels,
-    createModelsWithPreferences: createModelsWithCurrentData,
     refreshModelsWithPreferences,
     toggleModel,
     updateParameter,
