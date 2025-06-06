@@ -57,8 +57,13 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const isAI = userSelectedMethod === 'ai';
   const isGrid = userSelectedMethod === 'grid';
 
-  // Always use model.parameters for display - this is the current state
-  const currentParameters = model.parameters;
+  // Use manual parameters when in manual mode, optimized parameters otherwise
+  const currentParameters = useMemo(() => {
+    if (isManual) {
+      return model.parameters; // Use the model's current parameters for manual mode
+    }
+    return optimizationData?.parameters || model.parameters;
+  }, [isManual, optimizationData?.parameters, model.parameters]);
 
   const canOptimize = hasOptimizableParameters(model);
 
@@ -85,14 +90,6 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
       onResetToManual();
     }
   }, [selectedSKU, model.id, setSelectedMethod, onResetToManual]);
-
-  // Use manual parameters when in manual mode, optimized parameters otherwise
-  const currentParameters = useMemo(() => {
-    if (isManual) {
-      return model.parameters; // Use the model's current parameters for manual mode
-    }
-    return optimizationData?.parameters || model.parameters;
-  }, [isManual, optimizationData?.parameters, model.parameters]);
 
   const getParameterConfig = (parameter: string) => {
     const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
