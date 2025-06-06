@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -46,12 +47,6 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
   const defaultModels = getDefaultModels();
   const optimizableModels = defaultModels.filter(hasOptimizableParameters);
 
-  // Debug logging
-  console.log('🔍 QUEUE POPUP: isOptimizing:', isOptimizing);
-  console.log('🔍 QUEUE POPUP: progress:', progress);
-  console.log('🔍 QUEUE POPUP: currentSKU:', progress?.currentSKU);
-  console.log('🔍 QUEUE POPUP: optimizableModels:', optimizableModels.map(m => m.name));
-
   // Don't render if there's nothing to show
   if (queuedCombinations.length === 0 && !isOptimizing) {
     return null;
@@ -78,15 +73,6 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Debug Info Section */}
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs">
-            <h4 className="font-medium mb-1">Debug Info:</h4>
-            <div>Is Optimizing: {isOptimizing ? 'Yes' : 'No'}</div>
-            <div>Current SKU: {progress?.currentSKU || 'None'}</div>
-            <div>Progress: {progress ? `${progress.completedSKUs}/${progress.totalSKUs}` : 'No progress'}</div>
-            <div>Optimizable Models: {optimizableModels.length} ({optimizableModels.map(m => m.name).join(', ')})</div>
-          </div>
-
           {isOptimizing && progress && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
@@ -104,33 +90,17 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
                 <div className="mt-3 pt-3 border-t border-blue-200">
                   <h4 className="text-sm font-medium text-blue-700 mb-2 flex items-center gap-1">
                     <Play className="h-3 w-3" />
-                    Currently Running Optimizations:
+                    Running Optimizations:
                   </h4>
                   <div className="flex flex-wrap gap-1">
                     {optimizableModels.map(model => (
-                      <Badge key={model.id} variant="outline" className="text-xs bg-blue-100 border-blue-300 text-blue-700">
+                      <Badge key={model.id} variant="outline" className="text-xs bg-blue-100 border-blue-300">
                         {progress.currentSKU}:{model.name}
                       </Badge>
                     ))}
                   </div>
-                  {optimizableModels.length === 0 && (
-                    <p className="text-xs text-red-600">No optimizable models found!</p>
-                  )}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Show message when not optimizing but should be */}
-          {!isOptimizing && queuedCombinations.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Clock className="h-4 w-4 text-amber-600" />
-                <span className="font-medium text-amber-800">Optimization Not Running</span>
-              </div>
-              <p className="text-sm text-amber-700">
-                {queuedCombinations.length} combinations are queued but optimization hasn't started yet.
-              </p>
             </div>
           )}
 
