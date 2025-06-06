@@ -36,9 +36,14 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
   
   const skus = Array.from(new Set(data.map(d => d.sku))).sort();
   
+  console.log('🎯 FORECAST ENGINE: Rendering with data length:', data.length);
+  console.log('🎯 FORECAST ENGINE: Available SKUs:', skus);
+  console.log('🎯 FORECAST ENGINE: Selected SKU:', selectedSKU);
+  
   // Auto-select first SKU if none selected and data is available
   useEffect(() => {
     if (!selectedSKU && skus.length > 0) {
+      console.log('🎯 FORECAST ENGINE: Auto-selecting first SKU:', skus[0]);
       setSelectedSKU(skus[0]);
     }
   }, [skus, selectedSKU]);
@@ -55,8 +60,7 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
   const { isOptimizing, progress, handleQueueOptimization } = useOptimizationHandler(
     data,
     selectedSKU,
-    optimizationQueue,
-    onOptimizationComplete
+    optimizationQueue
   );
 
   const handleOptimizeModel = async (modelId: string, method: 'ai' | 'grid') => {
@@ -87,6 +91,11 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Debug Info */}
+      <div className="bg-blue-50 p-3 rounded text-sm">
+        <strong>Debug Info:</strong> Data length: {data.length}, SKUs: {skus.length}, Selected: {selectedSKU || 'None'}
+      </div>
+
       {/* SKU Selector - Always show when data is available */}
       {data.length > 0 && (
         <Card>
@@ -95,7 +104,7 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
           </CardHeader>
           <CardContent>
             <ProductSelector
-              skus={skus}
+              data={data}
               selectedSKU={selectedSKU}
               onSKUChange={setSelectedSKU}
             />
@@ -155,8 +164,8 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
 
               {isOptimizing && progress && (
                 <div className="text-sm text-muted-foreground">
-                  Optimizing: {progress.currentSKU} - {progress.currentModel} 
-                  ({progress.completed}/{progress.total})
+                  Optimizing: {progress.currentSKU || 'Processing'} - {progress.currentModel || 'Model'} 
+                  ({progress.skuIndex || 0}/{progress.totalSKUs || 0})
                 </div>
               )}
             </CardContent>

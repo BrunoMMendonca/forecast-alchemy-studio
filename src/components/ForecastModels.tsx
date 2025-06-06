@@ -44,22 +44,21 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     updateParameter,
     useAIOptimization,
     useGridOptimization,
-    resetToManual,
-    generateForecasts
+    resetToManual
   } = useUnifiedModelManagement(
     selectedSKU,
     data,
+    undefined, // businessContext
     forecastPeriods,
-    undefined,
     onForecastGeneration
   );
 
-  // Use optimization handler for queue management
+  // Use optimization handler for queue management - fix the arguments
   const {
     isOptimizing,
     progress,
     handleQueueOptimization
-  } = useOptimizationHandler(data, selectedSKU, optimizationQueue, generateForecasts);
+  } = useOptimizationHandler(data, selectedSKU, optimizationQueue);
 
   // Mark component as mounted and handle initial optimization
   useEffect(() => {
