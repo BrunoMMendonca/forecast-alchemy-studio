@@ -58,8 +58,14 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const isAI = userSelectedMethod === 'ai';
   const isGrid = userSelectedMethod === 'grid';
 
-  // Use optimized parameters from cache if available, otherwise use model's base parameters
-  const currentParameters = optimizationData?.parameters || model.parameters;
+  // Use manual parameters when in manual mode, optimized parameters otherwise
+  const currentParameters = useMemo(() => {
+    if (isManual) {
+      return model.parameters; // Use the model's current parameters for manual mode
+    }
+    return optimizationData?.parameters || model.parameters;
+  }, [isManual, optimizationData?.parameters, model.parameters]);
+
   const canOptimize = hasOptimizableParameters(model);
 
   // Only show parameters section if model actually has parameters
