@@ -26,9 +26,13 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
 
   // Create models with current cache and preferences - always read fresh from localStorage
   const createModelsWithCurrentData = useCallback(() => {
-    if (!selectedSKU || isTogglingAIManualRef.current) {
+    // CRITICAL GUARD: Prevent cache operations with invalid SKU
+    if (!selectedSKU || selectedSKU.trim() === '' || isTogglingAIManualRef.current) {
+      console.log('🔧 UNIFIED: Returning default models - SKU invalid or toggling in progress. SKU:', selectedSKU);
       return getDefaultModels();
     }
+
+    console.log('🔧 UNIFIED: Creating models with current data for SKU:', selectedSKU);
 
     let optimizationCache = {};
     let preferences = {};
@@ -48,6 +52,13 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
     }
 
     const skuData = data.filter(d => d.sku === selectedSKU);
+    
+    // Additional guard: ensure we have valid data for the SKU
+    if (skuData.length === 0) {
+      console.log('🔧 UNIFIED: No data for SKU, returning default models. SKU:', selectedSKU);
+      return getDefaultModels();
+    }
+
     const currentDataHash = generateDataHash(skuData);
 
     return getDefaultModels().map(model => {
@@ -96,7 +107,9 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
 
   // Single effect that updates models when cache version changes
   useEffect(() => {
-    if (selectedSKU && cacheVersion > 0) {
+    // CRITICAL GUARD: Only proceed if we have a valid SKU
+    if (selectedSKU && selectedSKU.trim() !== '' && cacheVersion > 0) {
+      console.log(`🔧 UNIFIED: Cache version changed (${cacheVersion}), updating models for SKU: ${selectedSKU}`);
       const updatedModels = createModelsWithCurrentData();
       setModels(updatedModels);
     }
@@ -104,9 +117,14 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
 
   // Effect for SKU changes
   useEffect(() => {
-    if (selectedSKU) {
+    // CRITICAL GUARD: Only proceed if we have a valid SKU
+    if (selectedSKU && selectedSKU.trim() !== '') {
+      console.log(`🔧 UNIFIED: SKU changed to: "${selectedSKU}", creating models`);
       const updatedModels = createModelsWithCurrentData();
       setModels(updatedModels);
+    } else {
+      console.log(`🔧 UNIFIED: Invalid SKU: "${selectedSKU}", setting default models`);
+      setModels(getDefaultModels());
     }
   }, [selectedSKU, createModelsWithCurrentData]);
 
@@ -117,6 +135,12 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
   };
 
   const updateParameter = (modelId: string, parameter: string, value: number) => {
+    // CRITICAL GUARD: Prevent operations with invalid SKU
+    if (!selectedSKU || selectedSKU.trim() === '') {
+      console.log(`⚠️ UNIFIED: Cannot update parameter - invalid SKU: "${selectedSKU}"`);
+      return;
+    }
+
     const model = models.find(m => m.id === modelId);
     
     // Add parameter check to prevent optimization logic for models without parameters
@@ -154,6 +178,12 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
   };
 
   const useAIOptimization = async (modelId: string) => {
+    // CRITICAL GUARD: Prevent operations with invalid SKU
+    if (!selectedSKU || selectedSKU.trim() === '') {
+      console.log(`⚠️ UNIFIED: Cannot use AI optimization - invalid SKU: "${selectedSKU}"`);
+      return;
+    }
+
     const model = models.find(m => m.id === modelId);
     
     // Add parameter check to prevent optimization for models without parameters
@@ -162,7 +192,7 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
       return;
     }
 
-    console.log(`🤖 AI button clicked for ${modelId} (unified hook)`);
+    console.log(`🤖 AI button clicked for ${modelId} with SKU: ${selectedSKU} (unified hook)`);
     isTogglingAIManualRef.current = true;
     
     const skuData = data.filter(d => d.sku === selectedSKU);
@@ -235,6 +265,12 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
   };
 
   const useGridOptimization = async (modelId: string) => {
+    // CRITICAL GUARD: Prevent operations with invalid SKU
+    if (!selectedSKU || selectedSKU.trim() === '') {
+      console.log(`⚠️ UNIFIED: Cannot use Grid optimization - invalid SKU: "${selectedSKU}"`);
+      return;
+    }
+
     const model = models.find(m => m.id === modelId);
     
     // Add parameter check to prevent optimization for models without parameters
@@ -243,7 +279,7 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
       return;
     }
 
-    console.log(`📊 Grid button clicked for ${modelId} (unified hook)`);
+    console.log(`📊 Grid button clicked for ${modelId} with SKU: ${selectedSKU} (unified hook)`);
     isTogglingAIManualRef.current = true;
     
     const skuData = data.filter(d => d.sku === selectedSKU);
@@ -316,16 +352,21 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
   };
 
   const resetToManual = (modelId: string) => {
+    // CRITICAL GUARD: Prevent operations with invalid SKU  
+    if (!selectedSKU || selectedSKU.trim() === '') {
+      console.log(`⚠️ UNIFIED: Cannot reset to manual - invalid SKU: "${selectedSKU}"`);
+      return;
+    }
+
     const model = models.find(m => m.id === modelId);
     
-    // Add parameter check - though manual mode should work for all models
     if (!model) {
       console.log(`⚠️ UNIFIED: Model ${modelId} not found`);
       return;
     }
 
     // Allow manual mode even for models without parameters (they just won't show parameter controls)
-    console.log(`👤 Manual reset for ${modelId} (unified hook)`);
+    console.log(`👤 Manual reset for ${modelId} with SKU: ${selectedSKU} (unified hook)`);
     isTogglingAIManualRef.current = true;
     
     const preferences = loadManualAIPreferences();

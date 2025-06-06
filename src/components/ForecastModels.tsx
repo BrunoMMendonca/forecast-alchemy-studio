@@ -37,7 +37,18 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   const componentMountedRef = useRef(false);
   const autoOptimizationDoneRef = useRef(false);
   
-  // Use the unified model management hook - fix the arguments
+  // CRITICAL: Only initialize unified model management if we have a valid SKU
+  const shouldUseUnifiedHook = selectedSKU && selectedSKU.trim() !== '';
+  
+  console.log('🎯 FORECAST MODELS: Render with selectedSKU:', selectedSKU, 'shouldUseUnifiedHook:', shouldUseUnifiedHook);
+  
+  // Use the unified model management hook - but only if SKU is valid
+  const unifiedHookResult = useUnifiedModelManagement(
+    shouldUseUnifiedHook ? selectedSKU : '',
+    shouldUseUnifiedHook ? data : [],
+    undefined // businessContext
+  );
+
   const {
     models,
     toggleModel,
@@ -45,28 +56,40 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     useAIOptimization,
     useGridOptimization,
     resetToManual
-  } = useUnifiedModelManagement(
-    selectedSKU,
-    data,
-    undefined // businessContext
+  } = unifiedHookResult;
+
+  // Use optimization handler for queue management - but only if SKU is valid
+  const optimizationHandlerResult = useOptimizationHandler(
+    shouldUseUnifiedHook ? data : [], 
+    shouldUseUnifiedHook ? selectedSKU : '', 
+    optimizationQueue
   );
 
-  // Use optimization handler for queue management - fix the arguments
   const {
     isOptimizing,
     progress,
     handleQueueOptimization
-  } = useOptimizationHandler(data, selectedSKU, optimizationQueue);
+  } = optimizationHandlerResult;
 
   // Mark component as mounted and handle initial optimization
   useEffect(() => {
     componentMountedRef.current = true;
     
-    // Only auto-trigger once per mount
-    if (optimizationQueue && !autoOptimizationDoneRef.current) {
+    console.log('🎯 FORECAST MODELS: Component mounted');
+    
+    return () => {
+      componentMountedRef.current = false;
+    };
+  }, []); // Only run on mount
+
+  // CRITICAL: Only trigger optimization if we have a valid SKU
+  useEffect(() => {
+    if (optimizationQueue && !autoOptimizationDoneRef.current && selectedSKU && selectedSKU.trim() !== '') {
       const queuedSKUs = optimizationQueue.getSKUsInQueue();
       if (queuedSKUs.length > 0 && !isOptimizing) {
         autoOptimizationDoneRef.current = true;
+        
+        console.log('🎯 FORECAST MODELS: Auto-triggering optimization for queued SKUs');
         
         // Add delay to ensure all components are ready
         setTimeout(() => {
@@ -79,11 +102,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         }, 1000);
       }
     }
-    
-    return () => {
-      componentMountedRef.current = false;
-    };
-  }, []); // Only run on mount
+  }, [selectedSKU, optimizationQueue, isOptimizing, handleQueueOptimization, onOptimizationStarted]);
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
@@ -92,14 +111,14 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 
   // CONTROLLED shouldStartOptimization trigger - only once per change
   useEffect(() => {
-    if (shouldStartOptimization && !isOptimizing && !hasTriggeredOptimizationRef.current && componentMountedRef.current) {
+    if (shouldStartOptimization && !isOptimizing && !hasTriggeredOptimizationRef.current && componentMountedRef.current && selectedSKU && selectedSKU.trim() !== '') {
       hasTriggeredOptimizationRef.current = true;
       handleQueueOptimization();
       if (onOptimizationStarted) {
         onOptimizationStarted();
       }
     }
-  }, [shouldStartOptimization]);
+  }, [shouldStartOptimization, selectedSKU]);
 
   // Reset trigger flags when optimization completes or queue is empty
   useEffect(() => {
@@ -113,16 +132,22 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     }
   }, [isOptimizing, optimizationQueue?.getSKUsInQueue().length]);
 
-  // Auto-select first SKU when data changes (only if no SKU selected)
-  useEffect(() => {
-    const skus = Array.from(new Set(data.map(d => d.sku))).sort();
-    if (skus.length > 0 && !selectedSKU) {
-      onSKUChange(skus[0]);
-    }
-  }, [data, selectedSKU, onSKUChange]);
+  // CRITICAL: Only show UI if we have data
+  if (!data || data.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500">No data available for forecasting</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
+      {/* Debug Info */}
+      <div className="bg-blue-50 p-3 rounded text-sm">
+        <strong>Debug:</strong> Data: {data.length} rows, SKU: "{selectedSKU}", Hook Active: {shouldUseUnifiedHook ? 'Yes' : 'No'}
+      </div>
+
       <div className="space-y-4">
         <ProductSelector
           data={data}
@@ -140,15 +165,18 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         )}
       </div>
 
-      <ModelSelection
-        models={models}
-        selectedSKU={selectedSKU}
-        onToggleModel={toggleModel}
-        onUpdateParameter={updateParameter}
-        onUseAI={useAIOptimization}
-        onUseGrid={useGridOptimization}
-        onResetToManual={resetToManual}
-      />
+      {/* Only show ModelSelection if we have a valid SKU */}
+      {selectedSKU && selectedSKU.trim() !== '' && (
+        <ModelSelection
+          models={models}
+          selectedSKU={selectedSKU}
+          onToggleModel={toggleModel}
+          onUpdateParameter={updateParameter}
+          onUseAI={useAIOptimization}
+          onUseGrid={useGridOptimization}
+          onResetToManual={resetToManual}
+        />
+      )}
 
       <OptimizationLogger 
         isVisible={showOptimizationLog} 
