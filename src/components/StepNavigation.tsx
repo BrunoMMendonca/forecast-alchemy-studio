@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Upload, BarChart3, Zap, TrendingUp, Eye, LucideProps } from 'lucide-react';
 
@@ -52,20 +53,24 @@ export const StepNavigation: React.FC<StepNavigationProps> = ({
                 onClick={() => handleStepClick(index)}
                 disabled={!isClickable}
                 className={`
-                  flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all duration-300
+                  flex items-center gap-2 transition-all duration-300
+                  ${isClickable ? 'cursor-pointer hover:scale-105' : 'cursor-not-allowed opacity-50'}
+                `}
+              >
+                <div className={`
+                  flex items-center justify-center w-12 h-12 rounded-full border-2
                   ${isActive 
                     ? 'bg-blue-600 border-blue-600 text-white shadow-lg' 
                     : 'bg-white border-slate-300 text-slate-400'
                   }
                   ${isCurrent ? 'ring-4 ring-blue-200' : ''}
-                  ${isClickable ? 'cursor-pointer hover:scale-105' : 'cursor-not-allowed opacity-50'}
-                `}
-              >
-                <Icon size={20} />
+                `}>
+                  <Icon size={20} />
+                </div>
+                <span className={`font-medium ${isActive ? 'text-slate-800' : 'text-slate-400'}`}>
+                  {step.title}
+                </span>
               </button>
-              <span className={`ml-2 font-medium ${isActive ? 'text-slate-800' : 'text-slate-400'}`}>
-                {step.title}
-              </span>
               {index < steps.length - 1 && (
                 <div className={`w-8 h-0.5 ml-4 ${index < currentStep ? 'bg-blue-600' : 'bg-slate-300'}`} />
               )}
