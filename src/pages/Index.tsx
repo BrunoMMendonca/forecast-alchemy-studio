@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -10,7 +11,7 @@ import { FloatingSettingsButton } from '@/components/FloatingSettingsButton';
 import { OptimizationQueuePopup } from '@/components/OptimizationQueuePopup';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, TrendingUp, Upload, Zap, Eye, Queue } from 'lucide-react';
+import { BarChart3, TrendingUp, Upload, Zap, Eye, List } from 'lucide-react';
 import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 import { useGlobalForecastSettings } from '@/hooks/useGlobalForecastSettings';
@@ -172,7 +173,7 @@ const Index = () => {
               onClick={() => setIsQueuePopupOpen(true)}
               className="gap-2"
             >
-              <Queue className="h-4 w-4" />
+              <List className="h-4 w-4" />
               View Queue
             </Button>
           </div>
