@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { OptimizationCache, OptimizedParameters } from '@/utils/cacheStorageUtils';
 import { CACHE_EXPIRY_HOURS } from '@/utils/cacheStorageUtils';
@@ -43,15 +42,12 @@ export const useCacheOperations = (
       return result;
     }
 
-    // If no specific method requested, use selected or fallback to available
     const selectedMethod = cached.selected || 'ai';
     let result = cached[selectedMethod];
     
-    // If selected method doesn't exist or is invalid, try alternatives
     if (!isValidEntry(result)) {
       result = cached.ai || cached.grid;
       
-      // Check if the fallback is also invalid
       if (!isValidEntry(result)) {
         result = undefined;
       }
@@ -131,15 +127,17 @@ export const useCacheOperations = (
     modelId: string,
     method: 'ai' | 'grid' | 'manual'
   ) => {
-    console.log(`🗄️ CACHE: Setting selected method ${sku}:${modelId} to ${method}`);
+    console.log(`🗄️ CACHE: Setting user selected method ${sku}:${modelId} to ${method}`);
     setCache(prev => {
       const newCache = JSON.parse(JSON.stringify(prev));
       
       if (!newCache[sku]) newCache[sku] = {};
       if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
       
+      // This is the user's explicit choice - always store it
       newCache[sku][modelId].selected = method;
       
+      console.log(`🗄️ CACHE: User selected method stored: ${sku}:${modelId} = ${method}`);
       return newCache;
     });
 

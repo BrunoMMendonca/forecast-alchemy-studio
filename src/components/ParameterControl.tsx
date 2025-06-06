@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -10,7 +9,7 @@ import { ChevronDown, ChevronRight, Settings, Bot, Grid3X3, User } from 'lucide-
 import { ModelConfig } from '@/types/forecast';
 import { ReasoningDisplay } from './ReasoningDisplay';
 import { hasOptimizableParameters } from '@/utils/modelConfig';
-import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
+import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 
 interface ParameterControlProps {
   model: ModelConfig;
@@ -30,17 +29,16 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   grokApiEnabled = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
+  const { cache, setSelectedMethod } = useOptimizationCache();
 
-  // Get current preference for this model
-  const preferences = loadManualAIPreferences();
-  const preferenceKey = `${selectedSKU}:${model.id}`;
-  const currentPreference = preferences[preferenceKey] || 'manual';
-
-  // Determine which method is currently active
-  const isManual = currentPreference === 'manual';
-  const isAI = currentPreference === 'ai';
-  const isGrid = currentPreference === 'grid';
+  // Get current user selection from cache
+  const cacheEntry = cache[selectedSKU]?.[model.id];
+  const userSelectedMethod = cacheEntry?.selected;
+  
+  // Determine which method is currently active based on user selection
+  const isManual = userSelectedMethod === 'manual';
+  const isAI = userSelectedMethod === 'ai';
+  const isGrid = userSelectedMethod === 'grid';
 
   const currentParameters = model.optimizedParameters || model.parameters;
   const canOptimize = hasOptimizableParameters(model);
@@ -55,22 +53,18 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     onParameterUpdate(parameter, values[0]);
   }, [onParameterUpdate]);
 
-  // Handle badge clicks - update preference and trigger model update
-  const handlePreferenceChange = useCallback((newPreference: 'manual' | 'ai' | 'grid') => {
-    console.log(`🎯 BADGE CLICK: Switching to ${newPreference} view for ${model.id}`);
+  // Handle badge clicks - update cache "selected" field directly
+  const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
+    console.log(`🎯 BADGE CLICK: Switching to ${newMethod} for ${model.id}`);
     
-    const updatedPreferences = { ...preferences };
-    updatedPreferences[preferenceKey] = newPreference;
-    saveManualAIPreferences(updatedPreferences);
+    // Update the cache's "selected" field directly
+    setSelectedMethod(selectedSKU, model.id, newMethod);
     
     // If switching to manual, reset the model to clear optimization results
-    if (newPreference === 'manual') {
+    if (newMethod === 'manual') {
       onResetToManual();
     }
-    
-    // Note: The badge click changes the preference, and the useUnifiedModelManagement hook
-    // will detect this change and update the model with the appropriate cached results
-  }, [preferences, preferenceKey, saveManualAIPreferences, onResetToManual, model.id]);
+  }, [selectedSKU, model.id, setSelectedMethod, onResetToManual]);
 
   const getParameterConfig = (parameter: string) => {
     const configs: Record<string, { min: number; max: number; step: number; description: string }> = {

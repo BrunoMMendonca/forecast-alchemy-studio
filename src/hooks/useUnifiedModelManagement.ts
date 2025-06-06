@@ -1,10 +1,9 @@
-
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
-import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
+import { useAutoBestMethod } from '@/hooks/useAutoBestMethod';
 import { BusinessContext } from '@/types/businessContext';
 import { generateForecastsForSKU } from '@/utils/forecastGenerator';
 import { useToast } from '@/hooks/use-toast';
@@ -30,7 +29,7 @@ export const useUnifiedModelManagement = (
     cacheVersion
   } = useOptimizationCache();
   
-  const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
+  const { loadAutoBestMethod, saveAutoBestMethod } = useAutoBestMethod();
 
   const [models, setModels] = useState<ModelConfig[]>(() => {
     return getDefaultModels();
@@ -92,7 +91,7 @@ export const useUnifiedModelManagement = (
     }
   }, [selectedSKU, data, modelsHash, forecastPeriods, onForecastGeneration, toast]);
 
-  // Helper function to get the best available method for a model
+  // Helper function to get the best available method for automatic selection
   const getBestAvailableMethod = useCallback((sku: string, modelId: string, currentDataHash: string) => {
     const cached = cache[sku]?.[modelId];
     if (!cached) return 'manual';
@@ -106,41 +105,41 @@ export const useUnifiedModelManagement = (
     return 'manual';
   }, [cache]);
 
-  // Function to update preferences to best available method
-  const updatePreferencesToBestAvailable = useCallback((sku: string, currentDataHash: string) => {
-    const preferences = loadManualAIPreferences();
-    let preferencesUpdated = false;
+  // Function to update automatic best method selections
+  const updateAutoBestMethods = useCallback((sku: string, currentDataHash: string) => {
+    const autoMethods = loadAutoBestMethod();
+    let methodsUpdated = false;
 
     // Get all models that have cache entries for this SKU
     const skuCache = cache[sku];
     if (!skuCache) return;
 
     Object.keys(skuCache).forEach(modelId => {
-      const preferenceKey = `${sku}:${modelId}`;
-      const currentPreference = preferences[preferenceKey];
+      const autoKey = `${sku}:${modelId}`;
+      const currentAutoMethod = autoMethods[autoKey];
       const bestAvailableMethod = getBestAvailableMethod(sku, modelId, currentDataHash);
 
-      // Only update if we have a better method available than current preference
+      // Only update if we have a better method available than current auto method
       const shouldUpdate = (
-        !currentPreference || // No preference set
-        (currentPreference === 'manual' && bestAvailableMethod !== 'manual') || // Manual -> Better method
-        (currentPreference === 'grid' && bestAvailableMethod === 'ai') // Grid -> AI
+        !currentAutoMethod || // No auto method set
+        (currentAutoMethod === 'manual' && bestAvailableMethod !== 'manual') || // Manual -> Better method
+        (currentAutoMethod === 'grid' && bestAvailableMethod === 'ai') // Grid -> AI
       );
 
-      if (shouldUpdate && bestAvailableMethod !== currentPreference) {
-        preferences[preferenceKey] = bestAvailableMethod;
-        preferencesUpdated = true;
-        console.log(`🎯 AUTO-PREFERENCE UPDATE: ${preferenceKey} -> ${bestAvailableMethod} (was: ${currentPreference || 'none'})`);
+      if (shouldUpdate && bestAvailableMethod !== currentAutoMethod) {
+        autoMethods[autoKey] = bestAvailableMethod;
+        methodsUpdated = true;
+        console.log(`🎯 AUTO-METHOD UPDATE: ${autoKey} -> ${bestAvailableMethod} (was: ${currentAutoMethod || 'none'})`);
       }
     });
 
-    if (preferencesUpdated) {
-      saveManualAIPreferences(preferences);
-      console.log(`💾 PREFERENCES: Updated to best available methods for ${sku}`);
+    if (methodsUpdated) {
+      saveAutoBestMethod(autoMethods);
+      console.log(`💾 AUTO-METHODS: Updated to best available methods for ${sku}`);
     }
 
-    return preferencesUpdated;
-  }, [cache, loadManualAIPreferences, saveManualAIPreferences, getBestAvailableMethod]);
+    return methodsUpdated;
+  }, [cache, loadAutoBestMethod, saveAutoBestMethod, getBestAvailableMethod]);
 
   // CONTROLLED cache version updates - only process when actually needed
   useEffect(() => {
@@ -162,22 +161,26 @@ export const useUnifiedModelManagement = (
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
     
-    // First, update preferences to best available methods
-    const preferencesWereUpdated = updatePreferencesToBestAvailable(selectedSKU, currentDataHash);
+    // First, update automatic best method selections
+    updateAutoBestMethods(selectedSKU, currentDataHash);
     
-    // Load preferences (potentially updated)
-    const preferences = loadManualAIPreferences();
+    // Load automatic best methods
+    const autoMethods = loadAutoBestMethod();
 
     const updatedModels = getDefaultModels().map(model => {
-      const preferenceKey = `${selectedSKU}:${model.id}`;
-      const actualPreference = preferences[preferenceKey] || getBestAvailableMethod(selectedSKU, model.id, currentDataHash);
-
+      const autoKey = `${selectedSKU}:${model.id}`;
       const cached = cache[selectedSKU]?.[model.id];
-      let selectedCache = null;
+      
+      // Priority: Use user's explicit "selected" choice, fallback to automatic best method
+      let effectiveMethod = cached?.selected;
+      if (!effectiveMethod) {
+        effectiveMethod = autoMethods[autoKey] || getBestAvailableMethod(selectedSKU, model.id, currentDataHash);
+      }
 
-      if (actualPreference === 'ai' && cached?.ai) {
+      let selectedCache = null;
+      if (effectiveMethod === 'ai' && cached?.ai) {
         selectedCache = cached.ai;
-      } else if (actualPreference === 'grid' && cached?.grid) {
+      } else if (effectiveMethod === 'grid' && cached?.grid) {
         selectedCache = cached.grid;
       }
 
@@ -200,7 +203,7 @@ export const useUnifiedModelManagement = (
     
     // Reset forecast generation hash when models are updated from cache
     lastForecastGenerationHashRef.current = '';
-  }, [cacheVersion, selectedSKU, data, cache, generateDataHash, updatePreferencesToBestAvailable]);
+  }, [cacheVersion, selectedSKU, data, cache, generateDataHash, updateAutoBestMethods]);
 
   // CONTROLLED forecast generation - only when models hash actually changes
   useEffect(() => {
@@ -226,17 +229,13 @@ export const useUnifiedModelManagement = (
     setModels(prev => prev.map(model => 
       model.id === modelId ? { ...model, enabled: !model.enabled } : model
     ));
-    // Reset forecast hash to trigger regeneration
     lastForecastGenerationHashRef.current = '';
   }, []);
 
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
     isTogglingAIManualRef.current = true;
     
-    const preferences = loadManualAIPreferences();
-    const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = 'manual';
-    saveManualAIPreferences(preferences);
+    // Set explicit user selection to manual in cache
     setSelectedMethod(selectedSKU, modelId, 'manual');
 
     setModels(prev => prev.map(model => 
@@ -254,21 +253,17 @@ export const useUnifiedModelManagement = (
         : model
     ));
 
-    // Reset forecast hash to trigger regeneration
     lastForecastGenerationHashRef.current = '';
 
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
     }, 100);
-  }, [selectedSKU, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod]);
+  }, [selectedSKU, setSelectedMethod]);
 
   const resetToManual = useCallback((modelId: string) => {
     isTogglingAIManualRef.current = true;
     
-    const preferences = loadManualAIPreferences();
-    const preferenceKey = `${selectedSKU}:${modelId}`;
-    preferences[preferenceKey] = 'manual';
-    saveManualAIPreferences(preferences);
+    // Set explicit user selection to manual in cache
     setSelectedMethod(selectedSKU, modelId, 'manual');
 
     setModels(prev => prev.map(model => 
@@ -285,13 +280,12 @@ export const useUnifiedModelManagement = (
         : model
     ));
     
-    // Reset forecast hash to trigger regeneration
     lastForecastGenerationHashRef.current = '';
     
     setTimeout(() => {
       isTogglingAIManualRef.current = false;
     }, 100);
-  }, [selectedSKU, loadManualAIPreferences, saveManualAIPreferences, setSelectedMethod]);
+  }, [selectedSKU, setSelectedMethod]);
 
   return {
     models,
