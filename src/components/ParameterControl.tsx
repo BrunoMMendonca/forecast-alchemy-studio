@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react';
+
+import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
@@ -35,19 +36,37 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const cacheEntry = cache[selectedSKU]?.[model.id];
   const userSelectedMethod = cacheEntry?.selected;
   
+  // Load optimization data from cache based on user selection
+  const optimizationData = useMemo(() => {
+    if (!cacheEntry || userSelectedMethod === 'manual') {
+      return null;
+    }
+
+    // Try to get data for the selected method first
+    if (userSelectedMethod === 'ai' && cacheEntry.ai) {
+      return cacheEntry.ai;
+    } else if (userSelectedMethod === 'grid' && cacheEntry.grid) {
+      return cacheEntry.grid;
+    }
+
+    // Fallback to any available optimization data
+    return cacheEntry.ai || cacheEntry.grid || null;
+  }, [cacheEntry, userSelectedMethod]);
+
   // Determine which method is currently active based on user selection
   const isManual = userSelectedMethod === 'manual';
   const isAI = userSelectedMethod === 'ai';
   const isGrid = userSelectedMethod === 'grid';
 
-  const currentParameters = model.optimizedParameters || model.parameters;
+  // Use optimized parameters from cache if available, otherwise use model's base parameters
+  const currentParameters = optimizationData?.parameters || model.parameters;
   const canOptimize = hasOptimizableParameters(model);
 
   // Only show parameters section if model actually has parameters
   const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
 
   // Check if optimization results exist for display
-  const hasOptimizationResults = canOptimize && model.optimizationReasoning && !isManual;
+  const hasOptimizationResults = canOptimize && optimizationData && !isManual;
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     onParameterUpdate(parameter, values[0]);
@@ -158,14 +177,14 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
             </div>
 
             {/* Optimization Status Summary - only for optimizable models */}
-            {canOptimize && model.optimizationConfidence && !isManual && (
+            {canOptimize && optimizationData && !isManual && (
               <div className="mt-2 flex items-center space-x-4 text-sm">
                 <span className="text-slate-600">
-                  Confidence: <span className="font-medium">{model.optimizationConfidence.toFixed(0)}%</span>
+                  Confidence: <span className="font-medium">{optimizationData.confidence?.toFixed(0)}%</span>
                 </span>
-                {model.expectedAccuracy && (
+                {optimizationData.expectedAccuracy && (
                   <span className="text-slate-600">
-                    Expected Accuracy: <span className="font-medium">{model.expectedAccuracy.toFixed(1)}%</span>
+                    Expected Accuracy: <span className="font-medium">{optimizationData.expectedAccuracy.toFixed(1)}%</span>
                   </span>
                 )}
               </div>
@@ -207,13 +226,14 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
               </div>
 
               {/* Reasoning Display - Only show if optimization results exist */}
-              {hasOptimizationResults && (
+              {hasOptimizationResults && optimizationData.reasoning && (
                 <div className="mt-6 pt-4 border-t">
                   <ReasoningDisplay
-                    reasoning={model.optimizationReasoning}
-                    factors={model.optimizationFactors}
-                    method={model.optimizationMethod}
-                    confidence={model.optimizationConfidence}
+                    reasoning={optimizationData.reasoning}
+                    factors={optimizationData.factors}
+                    method={optimizationData.method || 'unknown'}
+                    confidence={optimizationData.confidence || 0}
+                    expectedAccuracy={optimizationData.expectedAccuracy}
                   />
                 </div>
               )}
@@ -237,7 +257,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
               )}
 
               {/* Status indicator when no optimization results are loaded */}
-              {canOptimize && !isManual && !model.optimizationReasoning && (
+              {canOptimize && !isManual && !optimizationData && (
                 <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
                   <p className="text-sm text-yellow-700">
                     No {isAI ? 'AI' : 'Grid'} optimization results are currently loaded for this model. 
