@@ -1,14 +1,17 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronRight, Settings } from 'lucide-react';
+import { ChevronDown, ChevronRight, Settings, Bot, Grid3X3, User } from 'lucide-react';
 import { ModelConfig } from '@/types/forecast';
+import { ReasoningDisplay } from './ReasoningDisplay';
 import { hasOptimizableParameters } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useOptimizationMethodManagement } from '@/hooks/useOptimizationMethodManagement';
-import { ParameterBadges } from './ParameterBadges';
-import { ParameterSliders } from './ParameterSliders';
-import { ParameterStatusDisplay } from './ParameterStatusDisplay';
+import { generateDataHash } from '@/utils/cacheHashUtils';
 
 interface ParameterControlProps {
   model: ModelConfig;
@@ -47,7 +50,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     return method;
   }, [cacheEntry, selectedSKU, model.id, cacheVersion]);
 
-  // Compute the effective selected method - combines user choice with best available
+  // NEW: Compute the effective selected method - combines user choice with best available
   const effectiveSelectedMethod = useMemo(() => {
     // If user has made an explicit choice, use that
     if (userSelectedMethod) {
@@ -56,6 +59,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     }
 
     // Otherwise, use the best available method based on current cache state
+    // We need to generate a current data hash for this computation
     const currentDataHash = 'current'; // Simplified for now - in real usage this would be the actual data hash
     const bestMethod = getBestAvailableMethod(selectedSKU, model.id, currentDataHash);
     console.log(`🎯 PARAM_CONTROL: Using best available method: ${bestMethod} for ${selectedSKU}:${model.id}`);
@@ -155,6 +159,23 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     }
   }, [localSelectedMethod, model.id, onMethodSelection, onResetToManual]);
 
+  // ... keep existing code (getParameterConfig function, hasParameters check, etc)
+  const getParameterConfig = (parameter: string) => {
+    const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
+      alpha: { min: 0.1, max: 0.9, step: 0.05, description: "Level smoothing parameter" },
+      beta: { min: 0.1, max: 0.9, step: 0.05, description: "Trend smoothing parameter" },
+      gamma: { min: 0.1, max: 0.9, step: 0.05, description: "Seasonal smoothing parameter" },
+      phi: { min: 0.8, max: 1.0, step: 0.02, description: "Damping parameter" },
+      seasonalPeriods: { min: 2, max: 52, step: 1, description: "Number of periods in a season" },
+      trend: { min: 0, max: 2, step: 1, description: "Trend component (0=none, 1=additive, 2=multiplicative)" },
+      seasonal: { min: 0, max: 2, step: 1, description: "Seasonal component (0=none, 1=additive, 2=multiplicative)" },
+      damped: { min: 0, max: 1, step: 1, description: "Damped trend (0=false, 1=true)" },
+      window: { min: 1, max: 12, step: 1, description: "Number of periods to average" },
+    };
+    
+    return configs[parameter] || { min: 0, max: 1, step: 0.1, description: "Parameter" };
+  };
+
   // If model has no parameters, don't render anything
   if (!hasParameters) {
     return null;
@@ -176,45 +197,161 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 <Settings className="h-4 w-4" />
                 <span className="font-medium">Parameters</span>
+                {!canOptimize && (
+                  <Badge variant="outline" className="text-xs">
+                    No Optimization
+                  </Badge>
+                )}
               </div>
               
-              <ParameterBadges
-                canOptimize={canOptimize}
-                grokApiEnabled={grokApiEnabled}
-                localSelectedMethod={localSelectedMethod}
-                cacheVersion={cacheVersion}
-                onMethodChange={handlePreferenceChange}
-              />
+              {/* Show optimization badges for models with optimizable parameters */}
+              {canOptimize && (
+                <div className="flex items-center gap-2">
+                  {/* AI Badge - Only show when Grok API is enabled */}
+                  {grokApiEnabled && (
+                    <Badge 
+                      key={`ai-${localSelectedMethod}-${cacheVersion}`}
+                      variant={isAI ? "default" : "outline"} 
+                      className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        console.log(`🎯 AI BADGE CLICK: Current method = ${localSelectedMethod}, isAI = ${isAI}`);
+                        handlePreferenceChange('ai');
+                      }}
+                    >
+                      <Bot className="h-3 w-3 mr-1" />
+                      AI
+                    </Badge>
+                  )}
+
+                  {/* Grid Badge - Always show */}
+                  <Badge 
+                    key={`grid-${localSelectedMethod}-${cacheVersion}`}
+                    variant={isGrid ? "default" : "outline"} 
+                    className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      console.log(`🎯 GRID BADGE CLICK: Current method = ${localSelectedMethod}, isGrid = ${isGrid}`);
+                      handlePreferenceChange('grid');
+                    }}
+                  >
+                    <Grid3X3 className="h-3 w-3 mr-1" />
+                    Grid
+                  </Badge>
+
+                  {/* Manual Badge - Always show */}
+                  <Badge 
+                    key={`manual-${localSelectedMethod}-${cacheVersion}`}
+                    variant={isManual ? "default" : "outline"} 
+                    className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      console.log(`🎯 MANUAL BADGE CLICK: Current method = ${localSelectedMethod}, isManual = ${isManual}`);
+                      handlePreferenceChange('manual');
+                    }}
+                  >
+                    <User className="h-3 w-3 mr-1" />
+                    Manual
+                  </Badge>
+                </div>
+              )}
             </div>
 
-            <ParameterStatusDisplay
-              canOptimize={canOptimize}
-              isManual={isManual}
-              optimizationData={optimizationData}
-              hasOptimizationResults={false}
-              localSelectedMethod={localSelectedMethod}
-            />
+            {/* Optimization Status Summary - only for optimizable models */}
+            {canOptimize && optimizationData && !isManual && (
+              <div className="mt-2 flex items-center space-x-4 text-sm">
+                <span className="text-slate-600">
+                  Confidence: <span className="font-medium">{optimizationData.confidence?.toFixed(1)}%</span>
+                </span>
+                {optimizationData.expectedAccuracy && (
+                  <span className="text-slate-600">
+                    Expected Accuracy: <span className="font-medium">{optimizationData.expectedAccuracy.toFixed(1)}%</span>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </CollapsibleTrigger>
 
         <CollapsibleContent>
           <CardContent className="pt-0">
+            {/* Parameter Controls */}
             <div className="space-y-4">
-              <ParameterSliders
-                model={model}
-                isManual={isManual}
-                disabled={disabled}
-                getParameterValue={getParameterValue}
-                onParameterChange={handleParameterChange}
-              />
+              <div className="grid gap-4">
+                {Object.entries(model.parameters || {}).map(([parameter, _]) => {
+                  const config = getParameterConfig(parameter);
+                  const currentValue = getParameterValue(parameter);
+                  const safeValue = typeof currentValue === 'number' ? currentValue : config.min;
+                  
+                  return (
+                    <div key={parameter} className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <Label htmlFor={`${model.id}-${parameter}`} className="text-sm font-medium">
+                          {parameter}
+                        </Label>
+                        <span className="text-sm font-mono bg-slate-100 px-2 py-1 rounded">
+                          {safeValue.toFixed(config.step < 1 ? 2 : 0)}
+                        </span>
+                      </div>
+                      <Slider
+                        id={`${model.id}-${parameter}`}
+                        min={config.min}
+                        max={config.max}
+                        step={config.step}
+                        value={[safeValue]}
+                        onValueChange={(values) => handleParameterChange(parameter, values)}
+                        className="w-full"
+                        disabled={!isManual || disabled}
+                      />
+                      <p className="text-xs text-slate-500">{config.description}</p>
+                    </div>
+                  );
+                })}
+              </div>
 
-              <ParameterStatusDisplay
-                canOptimize={canOptimize}
-                isManual={isManual}
-                optimizationData={optimizationData}
-                hasOptimizationResults={hasOptimizationResults}
-                localSelectedMethod={localSelectedMethod}
-              />
+              {/* Reasoning Display - Only show if optimization results exist */}
+              {hasOptimizationResults && optimizationData.reasoning && (
+                <div className="mt-6 pt-4 border-t">
+                  <ReasoningDisplay
+                    reasoning={optimizationData.reasoning}
+                    factors={optimizationData.factors}
+                    method={optimizationData.method || 'unknown'}
+                    confidence={optimizationData.confidence || 0}
+                    expectedAccuracy={optimizationData.expectedAccuracy}
+                  />
+                </div>
+              )}
+
+              {/* Information for non-optimizable models */}
+              {!canOptimize && (
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                  <p className="text-sm text-blue-700">
+                    This model uses a fixed algorithm and doesn't require parameter optimization.
+                  </p>
+                </div>
+              )}
+
+              {/* Manual mode indicator */}
+              {canOptimize && isManual && (
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-700">
+                    Manual mode: You can adjust parameters using the sliders above.
+                  </p>
+                </div>
+              )}
+
+              {/* Status indicator when no optimization results are loaded */}
+              {canOptimize && !isManual && !optimizationData && (
+                <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+                  <p className="text-sm text-yellow-700">
+                    No {isAI ? 'AI' : 'Grid'} optimization results are currently loaded for this model. 
+                    If optimization has been run, try refreshing or check if results are available for this SKU.
+                  </p>
+                </div>
+              )}
             </div>
           </CardContent>
         </CollapsibleContent>
