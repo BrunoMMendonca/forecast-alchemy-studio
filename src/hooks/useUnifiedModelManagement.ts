@@ -19,19 +19,14 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
   } = useOptimizationCache();
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
   const isTogglingAIManualRef = useRef<boolean>(false);
-  const lastProcessedSKURef = useRef<string>('');
-  const lastCacheVersionRef = useRef<number>(-1);
 
   const [models, setModels] = useState<ModelConfig[]>(() => {
     return getDefaultModels();
   });
 
-  // Stable function that doesn't depend on cacheVersion to prevent loops
+  // Create models with current cache and preferences - always read fresh from localStorage
   const createModelsWithCurrentData = useCallback(() => {
-    console.log(`🔧 UNIFIED: Creating models for SKU: ${selectedSKU}`);
-    
-    if (!selectedSKU || selectedSKU.trim() === '' || isTogglingAIManualRef.current) {
-      console.log(`🔧 UNIFIED: Skipping model creation - invalid SKU or toggling`);
+    if (!selectedSKU || isTogglingAIManualRef.current) {
       return getDefaultModels();
     }
 
@@ -97,38 +92,23 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
 
       return model;
     });
-  }, [selectedSKU, data, generateDataHash]); // Removed cacheVersion from dependencies
+  }, [selectedSKU, data, generateDataHash, cacheVersion]);
 
-  // Single consolidated effect that handles both SKU changes and cache updates
+  // Single effect that updates models when cache version changes
   useEffect(() => {
-    console.log(`🔧 UNIFIED: Effect triggered - SKU: ${selectedSKU}, cacheVersion: ${cacheVersion}`);
-    
-    // Prevent infinite loops by checking if we need to update
-    const shouldUpdate = selectedSKU !== lastProcessedSKURef.current || 
-                        cacheVersion !== lastCacheVersionRef.current;
-    
-    if (!shouldUpdate) {
-      console.log(`🔧 UNIFIED: Skipping update - no changes detected`);
-      return;
-    }
-
-    // Only process if we have a valid SKU
-    if (selectedSKU && selectedSKU.trim() !== '') {
-      console.log(`🔧 UNIFIED: Processing update for SKU: ${selectedSKU}`);
-      
+    if (selectedSKU && cacheVersion > 0) {
       const updatedModels = createModelsWithCurrentData();
       setModels(updatedModels);
-      
-      // Update refs to prevent future unnecessary updates
-      lastProcessedSKURef.current = selectedSKU;
-      lastCacheVersionRef.current = cacheVersion;
-    } else {
-      console.log(`🔧 UNIFIED: Invalid SKU, using default models`);
-      setModels(getDefaultModels());
-      lastProcessedSKURef.current = '';
-      lastCacheVersionRef.current = cacheVersion;
     }
-  }, [selectedSKU, cacheVersion, createModelsWithCurrentData]);
+  }, [cacheVersion, selectedSKU, createModelsWithCurrentData]);
+
+  // Effect for SKU changes
+  useEffect(() => {
+    if (selectedSKU) {
+      const updatedModels = createModelsWithCurrentData();
+      setModels(updatedModels);
+    }
+  }, [selectedSKU, createModelsWithCurrentData]);
 
   const toggleModel = (modelId: string) => {
     setModels(prev => prev.map(model => 
