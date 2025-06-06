@@ -59,7 +59,8 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     data,
     forecastPeriods,
     undefined,
-    onForecastGeneration
+    onForecastGeneration,
+    grokApiEnabled // Add this missing parameter
   );
 
   // Memoize queue combinations to prevent infinite re-renders
