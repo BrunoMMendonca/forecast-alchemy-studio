@@ -7,6 +7,7 @@ import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimi
 import { useModelManagement } from '@/hooks/useModelManagement';
 import { OptimizationFactors } from '@/types/optimizationTypes';
 import { PreferenceValue } from '@/hooks/useManualAIPreferences';
+import { hasOptimizableParameters } from '@/utils/modelConfig';
 
 interface OptimizationQueue {
   getSKUsInQueue: () => string[];
@@ -18,7 +19,8 @@ export const useOptimizationHandler = (
   data: SalesData[],
   selectedSKU: string,
   optimizationQueue?: OptimizationQueue,
-  onOptimizationComplete?: () => void
+  onOptimizationComplete?: () => void,
+  grokApiEnabled: boolean = true
 ) => {
   const {
     generateDataHash,
@@ -50,14 +52,41 @@ export const useOptimizationHandler = (
       return;
     }
 
-    const enabledModels = models.filter(m => m.enabled);
+    // Filter models to only those with optimizable parameters
+    const enabledModels = models.filter(m => m.enabled && hasOptimizableParameters(m));
+    
+    // If no models have optimizable parameters, clear the queue
+    if (enabledModels.length === 0) {
+      console.log('🗄️ OPTIMIZATION: No models with optimizable parameters, clearing queue');
+      optimizationQueue.removeSKUsFromQueue(queuedSKUs);
+      return;
+    }
+
+    // Check which SKUs actually need optimization
+    const skusNeedingOptimization = getSKUsNeedingOptimization(data, models, undefined, grokApiEnabled);
+    const validQueuedSKUs = queuedSKUs.filter(sku => 
+      skusNeedingOptimization.some(item => item.sku === sku)
+    );
+
+    // Remove SKUs that don't need optimization
+    const skusToRemove = queuedSKUs.filter(sku => !validQueuedSKUs.includes(sku));
+    if (skusToRemove.length > 0) {
+      console.log('🗄️ OPTIMIZATION: Removing SKUs that don\'t need optimization:', skusToRemove);
+      optimizationQueue.removeSKUsFromQueue(skusToRemove);
+    }
+
+    // If no SKUs actually need optimization, return
+    if (validQueuedSKUs.length === 0) {
+      console.log('🗄️ OPTIMIZATION: No SKUs need optimization, queue cleared');
+      return;
+    }
     
     markOptimizationStarted(data, '/');
     
     await optimizeQueuedSKUs(
       data, 
       enabledModels,
-      queuedSKUs,
+      validQueuedSKUs,
       (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method, bothResults) => {
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
@@ -140,14 +169,14 @@ export const useOptimizationHandler = (
           }
         }, 500); // Give more time for UI updates
       },
-      getSKUsNeedingOptimization
+      (data, models, cache) => getSKUsNeedingOptimization(data, models, cache, grokApiEnabled)
     );
 
     // Mark optimization completed after a slight delay to ensure all updates are processed
     setTimeout(() => {
       markOptimizationCompleted(data, '/');
     }, 1000);
-  }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete]);
+  }, [optimizationQueue, models, data, selectedSKU, grokApiEnabled, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete]);
 
   return {
     isOptimizing,

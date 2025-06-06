@@ -16,6 +16,7 @@ interface ForecastModelsProps {
   onSKUChange: (sku: string) => void;
   shouldStartOptimization?: boolean;
   onOptimizationStarted?: () => void;
+  grokApiEnabled?: boolean;
   optimizationQueue?: {
     getSKUsInQueue: () => string[];
     removeSKUsFromQueue: (skus: string[]) => void;
@@ -30,6 +31,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   onSKUChange,
   shouldStartOptimization = false,
   onOptimizationStarted,
+  grokApiEnabled = true,
   optimizationQueue
 }, ref) => {
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
@@ -59,7 +61,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     isOptimizing,
     progress,
     handleQueueOptimization
-  } = useOptimizationHandler(data, selectedSKU, optimizationQueue, generateForecasts);
+  } = useOptimizationHandler(data, selectedSKU, optimizationQueue, generateForecasts, grokApiEnabled);
 
   // Mark component as mounted and handle initial optimization
   useEffect(() => {
