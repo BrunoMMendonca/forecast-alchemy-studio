@@ -43,8 +43,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     models,
     toggleModel,
     updateParameter,
-    useAIOptimization,
-    useGridOptimization,
     resetToManual,
     generateForecasts
   } = useUnifiedModelManagement(
@@ -149,8 +147,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         selectedSKU={selectedSKU}
         onToggleModel={toggleModel}
         onUpdateParameter={updateParameter}
-        onUseAI={useAIOptimization}
-        onUseGrid={useGridOptimization}
         onResetToManual={resetToManual}
       />
 

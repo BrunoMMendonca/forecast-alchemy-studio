@@ -9,7 +9,6 @@ import { useForecastEngine } from '@/hooks/useForecastEngine';
 import { useModelParameters } from '@/hooks/useModelParameters';
 import { useOptimization } from '@/hooks/useOptimization';
 import { BusinessContext } from '@/types/businessContext';
-import { hasOptimizableParameters } from '@/utils/modelConfig';
 
 interface ForecastEngineProps {
   data: SalesData[];
@@ -41,7 +40,7 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
     forecastPeriods,
     grokApiEnabled
   );
-  const { isOptimizing, optimizingModel, optimizeModel } = useOptimization(
+  const { isOptimizing, optimizingModel } = useOptimization(
     validSKU ? selectedSKU : '', 
     data, 
     businessContext
@@ -54,33 +53,6 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
       onForecastGeneration(results, selectedSKU);
     }
   }, [results, validSKU, selectedSKU, onForecastGeneration]);
-
-  const handleOptimizeModel = async (modelId: string, method: 'ai' | 'grid') => {
-    if (!validSKU) {
-      console.log('ForecastEngine: Cannot optimize without valid SKU');
-      return;
-    }
-
-    const model = models.find(m => m.id === modelId);
-    if (!model) return;
-
-    // Check if model has optimizable parameters before attempting optimization
-    if (!hasOptimizableParameters(model)) {
-      console.log('ForecastEngine: Model has no optimizable parameters, skipping optimization:', modelId);
-      return;
-    }
-
-    const result = await optimizeModel(model, method);
-    if (result) {
-      updateModelOptimization(
-        modelId,
-        result.parameters,
-        result.confidence,
-        result.reasoning,
-        result.method
-      );
-    }
-  };
 
   // Ensure we have a valid selectedSKU
   const availableSKUs = Array.from(new Set(data.map(d => d.sku))).sort();
@@ -124,7 +96,6 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
             selectedSKU={effectiveSelectedSKU}
             onToggleModel={toggleModel}
             onUpdateParameter={updateParameter}
-            onOptimizeModel={handleOptimizeModel}
             onResetModel={resetModel}
             isOptimizing={isOptimizing}
             optimizingModel={optimizingModel}
