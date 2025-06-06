@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -80,10 +81,18 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     const newValue = values[0];
+    console.log(`🎚️ SLIDER CHANGE: ${parameter} = ${newValue}, current mode: ${userSelectedMethod}`);
+    
+    // Only set method to manual if we're not already in manual mode
+    if (userSelectedMethod !== 'manual') {
+      console.log(`🔄 SWITCHING: Setting method to manual for ${model.id}`);
+      setSelectedMethod(selectedSKU, model.id, 'manual');
+    }
+    
     onParameterUpdate(parameter, newValue);
-  }, [onParameterUpdate]);
+  }, [onParameterUpdate, userSelectedMethod, selectedSKU, model.id, setSelectedMethod]);
 
-  // FIXED: Handle badge clicks with debouncing to prevent duplicate calls
+  // Handle badge clicks with debouncing to prevent duplicate calls
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
     // Prevent duplicate calls by checking if we're already in this method
     if (userSelectedMethod === newMethod) {
