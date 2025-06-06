@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { TrendingUp } from 'lucide-react';
-import { ForecastResult } from '@/pages/Index';
+import { ForecastResult } from '@/types/forecast';
 import { ModelAccuracyCards } from './ModelAccuracyCards';
 import { ForecastChart } from './ForecastChart';
 

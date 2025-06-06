@@ -12,6 +12,7 @@ import { OutlierDetection } from '@/components/OutlierDetection';
 import { StepNavigation } from '@/components/StepNavigation';
 import { useGlobalForecastSettings } from '@/hooks/useGlobalForecastSettings';
 import { Upload, BarChart3, Target, Settings2, AlertTriangle } from 'lucide-react';
+import { ForecastResult } from '@/types/forecast';
 
 export interface SalesData {
   date: string;
@@ -20,13 +21,8 @@ export interface SalesData {
   price?: number;
   promotion?: boolean;
   seasonality?: string;
-}
-
-export interface ForecastResult {
-  date: string;
-  value: number;
-  model: string;
-  confidence?: number;
+  isOutlier?: boolean;
+  note?: string;
 }
 
 const Index = () => {
@@ -128,8 +124,6 @@ const Index = () => {
             {data.length > 0 && (
               <DataVisualization 
                 data={data} 
-                selectedSKU={selectedSKU}
-                onSKUChange={handleSKUChange}
               />
             )}
           </TabsContent>
@@ -138,8 +132,6 @@ const Index = () => {
             {data.length > 0 && (
               <OutlierDetection 
                 data={data}
-                selectedSKU={selectedSKU}
-                onSKUChange={handleSKUChange}
                 onDataChange={setData}
               />
             )}
@@ -164,13 +156,19 @@ const Index = () => {
               <ForecastResults
                 results={forecastResults}
                 selectedSKU={selectedSKU}
-                data={data}
               />
             )}
           </TabsContent>
         </Tabs>
 
-        <FloatingSettingsButton>
+        <FloatingSettingsButton
+          forecastPeriods={forecastPeriods}
+          setForecastPeriods={setForecastPeriods}
+          businessContext={businessContext}
+          setBusinessContext={setBusinessContext}
+          grokApiEnabled={grokApiEnabled}
+          setGrokApiEnabled={setGrokApiEnabled}
+        >
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
