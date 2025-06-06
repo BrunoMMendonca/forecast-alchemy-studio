@@ -65,17 +65,15 @@ export const QueueStatusDisplay: React.FC<QueueStatusDisplayProps> = ({
           )}
         </div>
         
-        {onOpenQueuePopup && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onOpenQueuePopup}
-            className="gap-2"
-          >
-            <Eye className="h-4 w-4" />
-            View Details
-          </Button>
-        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onOpenQueuePopup}
+          className="gap-2"
+        >
+          <Eye className="h-4 w-4" />
+          View Details
+        </Button>
       </div>
     </div>
   );
