@@ -120,13 +120,17 @@ export const useModelOptimizationSync = (
         const cached = cache[selectedSKU]?.[model.id];
         const userSelectedMethod = cached?.selected;
         
-        // Check if this model's method selection actually changed
-        const currentIsManual = !model.optimizedParameters;
-        const newIsManual = !userSelectedMethod || userSelectedMethod === 'manual';
+        console.log(`🎯 METHOD: Processing ${model.id}, userSelectedMethod: ${userSelectedMethod}`);
         
-        // If switching to manual mode
-        if (!currentIsManual && newIsManual) {
-          console.log(`🎯 METHOD: Switching ${model.id} to manual (clearing optimization data)`);
+        // Check current state
+        const currentIsManual = !model.optimizedParameters;
+        const newIsManual = userSelectedMethod === 'manual';
+        
+        console.log(`🎯 METHOD: ${model.id} - currentIsManual: ${currentIsManual}, newIsManual: ${newIsManual}`);
+        
+        // If switching to manual mode OR already manual and user selected manual
+        if (newIsManual) {
+          console.log(`🎯 METHOD: Setting ${model.id} to manual (clearing optimization data)`);
           return {
             ...model,
             optimizedParameters: undefined,
@@ -138,8 +142,8 @@ export const useModelOptimizationSync = (
           };
         }
         
-        // If switching to AI/Grid mode
-        if (currentIsManual && !newIsManual) {
+        // If switching to AI/Grid mode from manual
+        if (currentIsManual && !newIsManual && userSelectedMethod) {
           let selectedCache = null;
           if (userSelectedMethod === 'ai' && cached?.ai) {
             selectedCache = cached.ai;

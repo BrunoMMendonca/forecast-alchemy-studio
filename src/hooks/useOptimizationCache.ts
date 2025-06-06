@@ -47,9 +47,15 @@ export const useOptimizationCache = () => {
     modelId: string,
     method: 'ai' | 'grid' | 'manual'
   ) => {
+    console.log(`🎯 METHOD: Setting method for ${sku}:${modelId} to ${method}`);
     _setSelectedMethod(sku, modelId, method);
-    setMethodSelectionVersion(prev => prev + 1);
-    console.log(`🎯 METHOD: Method selection version incremented to track UI change`);
+    
+    // Only increment method selection version to trigger UI updates
+    setMethodSelectionVersion(prev => {
+      const newVersion = prev + 1;
+      console.log(`🎯 METHOD: Method selection version incremented to ${newVersion} for UI update`);
+      return newVersion;
+    });
   }, [_setSelectedMethod]);
 
   const getSKUsNeedingOptimizationCallback = useCallback((
