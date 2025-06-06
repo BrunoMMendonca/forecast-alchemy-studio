@@ -1,7 +1,6 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
-import { useForecastCache } from '@/hooks/useForecastCache';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 
 interface OptimizationQueueItem {
@@ -14,7 +13,6 @@ interface OptimizationQueueItem {
 export const useOptimizationQueue = () => {
   const [queue, setQueue] = useState<OptimizationQueueItem[]>([]);
   const { clearCacheForSKU } = useOptimizationCache();
-  const { clearForecastCacheForSKU } = useForecastCache();
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
 
   // Load queue from localStorage on mount
@@ -37,7 +35,6 @@ export const useOptimizationQueue = () => {
 
   const clearCacheAndPreferencesForSKU = useCallback((sku: string) => {
     clearCacheForSKU(sku);
-    clearForecastCacheForSKU(sku);
     
     const preferences = loadManualAIPreferences();
     const updatedPreferences = Object.keys(preferences).reduce((acc, key) => {
@@ -48,7 +45,7 @@ export const useOptimizationQueue = () => {
     }, {} as Record<string, any>);
     
     saveManualAIPreferences(updatedPreferences);
-  }, [clearCacheForSKU, clearForecastCacheForSKU, loadManualAIPreferences, saveManualAIPreferences]);
+  }, [clearCacheForSKU, loadManualAIPreferences, saveManualAIPreferences]);
 
   const addSKUsToQueue = useCallback((skus: string[], reason: OptimizationQueueItem['reason'], skipCacheClear = false) => {
     const timestamp = Date.now();

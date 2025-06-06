@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trash2, Download, RefreshCw } from 'lucide-react';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
-import { useForecastCache } from '@/hooks/useForecastCache';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 
 export const CacheDebugger: React.FC = () => {
@@ -40,7 +40,6 @@ export const CacheDebugger: React.FC = () => {
     clearCacheForSKU 
   } = useOptimizationCache();
   
-  const { clearForecastCacheForSKU } = useForecastCache();
   const { clearManualAIPreferences } = useManualAIPreferences();
 
   // Function to refresh cache and preferences from localStorage
@@ -198,7 +197,6 @@ export const CacheDebugger: React.FC = () => {
                           variant="outline"
                           onClick={() => {
                             clearCacheForSKU(sku);
-                            clearForecastCacheForSKU(sku);
                             setTimeout(refreshData, 100);
                           }}
                         >
