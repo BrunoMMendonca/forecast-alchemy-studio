@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -30,12 +29,16 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   grokApiEnabled = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [pendingPreference, setPendingPreference] = useState<'manual' | 'ai' | 'grid' | null>(null);
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
 
   // Get current preference for this model
   const preferences = loadManualAIPreferences();
   const preferenceKey = `${selectedSKU}:${model.id}`;
-  const currentPreference = preferences[preferenceKey] || 'manual';
+  const storedPreference = preferences[preferenceKey] || 'manual';
+  
+  // Use pending preference if exists, otherwise use stored preference
+  const currentPreference = pendingPreference || storedPreference;
 
   // Determine which method is currently active
   const isManual = currentPreference === 'manual';
@@ -59,6 +62,9 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const handlePreferenceChange = useCallback((newPreference: 'manual' | 'ai' | 'grid') => {
     console.log(`🎯 BADGE CLICK: Switching to ${newPreference} view for ${model.id}`);
     
+    // Set pending preference for immediate visual feedback
+    setPendingPreference(newPreference);
+    
     const updatedPreferences = { ...preferences };
     updatedPreferences[preferenceKey] = newPreference;
     saveManualAIPreferences(updatedPreferences);
@@ -68,8 +74,10 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
       onResetToManual();
     }
     
-    // Note: The badge click changes the preference, and the useUnifiedModelManagement hook
-    // will detect this change and update the model with the appropriate cached results
+    // Clear pending preference after a short delay to allow state updates
+    setTimeout(() => {
+      setPendingPreference(null);
+    }, 100);
   }, [preferences, preferenceKey, saveManualAIPreferences, onResetToManual, model.id]);
 
   const getParameterConfig = (parameter: string) => {
@@ -88,6 +96,40 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     return configs[parameter] || { min: 0, max: 1, step: 0.1, description: "Parameter" };
   };
 
+  // Generate context-aware status message
+  const getStatusMessage = () => {
+    if (!canOptimize) return null;
+    
+    if (isManual) {
+      return {
+        type: 'manual',
+        text: 'Manual mode: You can adjust parameters using the sliders above.'
+      };
+    }
+    
+    if (!model.optimizationReasoning) {
+      if (grokApiEnabled && isAI) {
+        return {
+          type: 'pending',
+          text: 'No AI optimization results are currently loaded for this model. If optimization has been run, try refreshing or check if results are available for this SKU.'
+        };
+      } else if (isGrid) {
+        return {
+          type: 'pending',
+          text: 'No Grid optimization results are currently loaded for this model. If optimization has been run, try refreshing or check if results are available for this SKU.'
+        };
+      } else if (!grokApiEnabled && isAI) {
+        // User selected AI but Grok is disabled - fallback message
+        return {
+          type: 'unavailable',
+          text: 'AI optimization is not available. Grid optimization results will be used when available, or switch to Manual mode to adjust parameters.'
+        };
+      }
+    }
+    
+    return null;
+  };
+
   // If model has no parameters, don't render anything
   if (!hasParameters) {
     return null;
@@ -98,6 +140,8 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     console.log('ParameterControl: No selectedSKU provided');
     return null;
   }
+
+  const statusMessage = getStatusMessage();
 
   return (
     <Card className="w-full">
@@ -123,7 +167,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   {grokApiEnabled && (
                     <Badge 
                       variant={isAI ? "default" : "outline"} 
-                      className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
+                      className={`text-xs cursor-pointer transition-all ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         handlePreferenceChange('ai');
@@ -137,7 +181,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   {/* Grid Badge - Always show */}
                   <Badge 
                     variant={isGrid ? "default" : "outline"} 
-                    className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
+                    className={`text-xs cursor-pointer transition-all ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       handlePreferenceChange('grid');
@@ -150,7 +194,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                   {/* Manual Badge - Always show */}
                   <Badge 
                     variant={isManual ? "default" : "outline"} 
-                    className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
+                    className={`text-xs cursor-pointer transition-all ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       handlePreferenceChange('manual');
@@ -224,30 +268,30 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 </div>
               )}
 
+              {/* Status Messages */}
+              {statusMessage && (
+                <div className={`mt-4 p-3 rounded-lg ${
+                  statusMessage.type === 'manual' ? 'bg-gray-50' :
+                  statusMessage.type === 'pending' ? 'bg-yellow-50' :
+                  statusMessage.type === 'unavailable' ? 'bg-orange-50' :
+                  'bg-blue-50'
+                }`}>
+                  <p className={`text-sm ${
+                    statusMessage.type === 'manual' ? 'text-gray-700' :
+                    statusMessage.type === 'pending' ? 'text-yellow-700' :
+                    statusMessage.type === 'unavailable' ? 'text-orange-700' :
+                    'text-blue-700'
+                  }`}>
+                    {statusMessage.text}
+                  </p>
+                </div>
+              )}
+
               {/* Information for non-optimizable models */}
               {!canOptimize && (
                 <div className="mt-4 p-3 bg-blue-50 rounded-lg">
                   <p className="text-sm text-blue-700">
                     This model uses a fixed algorithm and doesn't require parameter optimization.
-                  </p>
-                </div>
-              )}
-
-              {/* Manual mode indicator */}
-              {canOptimize && isManual && (
-                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-700">
-                    Manual mode: You can adjust parameters using the sliders above.
-                  </p>
-                </div>
-              )}
-
-              {/* Status indicator when no optimization results are loaded */}
-              {canOptimize && !isManual && !model.optimizationReasoning && (
-                <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-                  <p className="text-sm text-yellow-700">
-                    No {isAI ? 'AI' : 'Grid'} optimization results are currently loaded for this model. 
-                    If optimization has been run, try refreshing or check if results are available for this SKU.
                   </p>
                 </div>
               )}
