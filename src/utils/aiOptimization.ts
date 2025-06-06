@@ -67,10 +67,16 @@ export const runAIOptimization = async (
 
     console.log(`🤖 AI: Starting optimization for ${sku}:${model.id}`);
     
+    // Extract parameter values from Parameter objects
+    const currentParameterValues = model.parameters ? 
+      Object.fromEntries(
+        Object.entries(model.parameters).map(([key, param]) => [key, param.value])
+      ) : {};
+    
     const grokResult = await optimizeParametersWithGrok({
       modelType: model.id,
       historicalData: skuData.map(d => d.sales),
-      currentParameters: model.parameters,
+      currentParameters: currentParameterValues,
       seasonalPeriod: frequency.seasonalPeriod,
       targetMetric: 'accuracy',
       businessContext: contextToUse

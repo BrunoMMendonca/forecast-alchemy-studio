@@ -1,3 +1,4 @@
+
 import { optimizationLogger } from '@/utils/optimizationLogger';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -107,12 +108,18 @@ const runBothOptimizations = async (
     };
   }
   
+  // Extract parameter values from Parameter objects
+  const currentParameterValues = model.parameters ? 
+    Object.fromEntries(
+      Object.entries(model.parameters).map(([key, param]) => [key, param.value])
+    ) : {};
+  
   optimizationLogger.logStep({
     sku,
     modelId: model.id,
     step: 'start',
     message: 'Starting dual optimization (Grid + AI)',
-    parameters: model.parameters
+    parameters: currentParameterValues
   });
 
   // Step 1: ALWAYS run Grid optimization first
