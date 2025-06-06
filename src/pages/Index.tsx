@@ -1,61 +1,41 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useCallback } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
-import { OutlierDetection } from '@/components/OutlierDetection';
 import { ForecastEngine } from '@/components/ForecastEngine';
 import { ForecastResults } from '@/components/ForecastResults';
-import { ForecastFinalization } from '@/components/ForecastFinalization';
-import { StepNavigation } from '@/components/StepNavigation';
+import { ForecastSettings } from '@/components/ForecastSettings';
 import { FloatingSettingsButton } from '@/components/FloatingSettingsButton';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, TrendingUp, Upload, Zap, Eye } from 'lucide-react';
-import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
-import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
+import { OutlierDetection } from '@/components/OutlierDetection';
+import { StepNavigation } from '@/components/StepNavigation';
 import { useGlobalForecastSettings } from '@/hooks/useGlobalForecastSettings';
-import { useToast } from '@/hooks/use-toast';
+import { Upload, BarChart3, Target, Settings2, AlertTriangle } from 'lucide-react';
 
 export interface SalesData {
   date: string;
   sku: string;
   sales: number;
-  isOutlier?: boolean;
-  note?: string;
+  price?: number;
+  promotion?: boolean;
+  seasonality?: string;
 }
 
 export interface ForecastResult {
-  sku: string;
+  date: string;
+  value: number;
   model: string;
-  predictions: { date: string; value: number }[];
-  accuracy?: number;
+  confidence?: number;
 }
 
 const Index = () => {
-  const [salesData, setSalesData] = useState<SalesData[]>([]);
-  const [cleanedData, setCleanedData] = useState<SalesData[]>([]);
+  const [data, setData] = useState<SalesData[]>([]);
+  const [selectedSKU, setSelectedSKU] = useState<string>('');
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
-  const [selectedSKUForResults, setSelectedSKUForResults] = useState<string>('');
-  const [currentStep, setCurrentStep] = useState(0);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const { toast } = useToast();
+  const [currentStep, setCurrentStep] = useState<'upload' | 'visualize' | 'outliers' | 'forecast' | 'results'>('upload');
 
-  const { addSKUsToQueue, removeSKUsFromQueue, getSKUsInQueue, queueSize, clearQueue } = useOptimizationQueue();
-  const { clearManualAIPreferences } = useManualAIPreferences();
-
-  const handleGlobalSettingsChange = (changedSetting: 'forecastPeriods' | 'businessContext' | 'grokApiEnabled') => {
-    if (cleanedData.length > 0) {
-      const allSKUs = Array.from(new Set(cleanedData.map(d => d.sku)));
-      
-      clearManualAIPreferences();
-      addSKUsToQueue(allSKUs, 'csv_upload');
-      
-      toast({
-        title: "Global Settings Changed",
-        description: `${allSKUs.length} SKU${allSKUs.length > 1 ? 's' : ''} queued for re-optimization due to ${changedSetting === 'forecastPeriods' ? 'forecast periods' : changedSetting === 'businessContext' ? 'business context' : 'Grok API'} change`,
-      });
-    }
-  };
-
+  // Use global settings hook
   const {
     forecastPeriods,
     setForecastPeriods,
@@ -63,250 +43,156 @@ const Index = () => {
     setBusinessContext,
     grokApiEnabled,
     setGrokApiEnabled
-  } = useGlobalForecastSettings({
-    onSettingsChange: handleGlobalSettingsChange
-  });
+  } = useGlobalForecastSettings();
 
-  useEffect(() => {
-    const handleProceedToForecasting = () => {
-      setCurrentStep(3);
-    };
-
-    window.addEventListener('proceedToForecasting', handleProceedToForecasting);
+  const handleDataUpload = useCallback((uploadedData: SalesData[]) => {
+    setData(uploadedData);
+    setCurrentStep('visualize');
     
-    return () => {
-      window.removeEventListener('proceedToForecasting', handleProceedToForecasting);
-    };
+    // Auto-select first SKU if none selected
+    if (uploadedData.length > 0) {
+      const firstSKU = uploadedData[0].sku;
+      if (!selectedSKU) {
+        setSelectedSKU(firstSKU);
+      }
+    }
+  }, [selectedSKU]);
+
+  const handleForecastGeneration = useCallback((results: ForecastResult[], sku: string) => {
+    console.log('Index: Received forecast results for SKU:', sku, 'Results:', results.length);
+    setForecastResults(results);
+    if (results.length > 0) {
+      setCurrentStep('results');
+    }
   }, []);
 
-  const handleDataUpload = (data: SalesData[]) => {
-    clearManualAIPreferences();
-    clearQueue();
-    
-    setSalesData(data);
-    setCleanedData(data);
-    setCurrentStep(1);
-    
+  const handleSKUChange = useCallback((sku: string) => {
+    console.log('Index: SKU changed to:', sku);
+    setSelectedSKU(sku);
+    // Clear previous results when SKU changes
     setForecastResults([]);
-    setSelectedSKUForResults('');
-    
-    const skusInOrder: string[] = [];
-    const seenSKUs = new Set<string>();
-    
-    for (const item of data) {
-      if (!seenSKUs.has(item.sku)) {
-        skusInOrder.push(item.sku);
-        seenSKUs.add(item.sku);
-      }
-    }
-    
-    addSKUsToQueue(skusInOrder, 'csv_upload');
-    
-    toast({
-      title: "Data Uploaded",
-      description: `${skusInOrder.length} SKU${skusInOrder.length > 1 ? 's' : ''} ready for optimization`,
-    });
-  };
+  }, []);
 
-  const handleDataCleaning = (cleaned: SalesData[], changedSKUs?: string[]) => {
-    setCleanedData(cleaned);
-    
-    if (changedSKUs && changedSKUs.length > 0) {
-      const currentSKUs = Array.from(new Set(cleaned.map(d => d.sku)));
-      const validChangedSKUs = changedSKUs.filter(sku => currentSKUs.includes(sku));
-      
-      if (validChangedSKUs.length > 0) {
-        addSKUsToQueue(validChangedSKUs, 'data_cleaning');
-        
-        toast({
-          title: "Optimization Triggered",
-          description: `${validChangedSKUs.length} SKU${validChangedSKUs.length > 1 ? 's' : ''} queued for re-optimization due to data changes`,
-        });
-      }
-    }
-  };
-
-  const handleImportDataCleaning = (importedSKUs: string[]) => {
-    const currentSKUs = Array.from(new Set(cleanedData.map(d => d.sku)));
-    const validImportedSKUs = importedSKUs.filter(sku => currentSKUs.includes(sku));
-    
-    if (validImportedSKUs.length > 0) {
-      addSKUsToQueue(validImportedSKUs, 'csv_import');
-      
-      toast({
-        title: "Import Optimization Triggered",
-        description: `${validImportedSKUs.length} SKU${validImportedSKUs.length > 1 ? 's' : ''} queued for optimization after import`,
-      });
-    }
-  };
-
-  const handleForecastGeneration = (results: ForecastResult[], selectedSKU?: string) => {
-    setForecastResults(results);
-    if (selectedSKU) {
-      setSelectedSKUForResults(selectedSKU);
-    }
-  };
+  const handleStepChange = useCallback((step: 'upload' | 'visualize' | 'outliers' | 'forecast' | 'results') => {
+    setCurrentStep(step);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-slate-800 mb-4">
-            AI-Powered Sales Forecast Analytics
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div className="text-center py-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            Sales Forecasting Platform
           </h1>
-          <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-            Upload your historical sales data, leverage AI for optimization, and generate enterprise-ready forecasts for S&OP planning.
+          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            Upload your sales data, detect outliers, and generate accurate forecasts using advanced machine learning models
           </p>
-          {salesData.length > 0 && queueSize > 0 && (
-            <div className="mt-4 text-sm text-blue-600 bg-blue-50 rounded-lg px-4 py-2 inline-block">
-              📋 {queueSize} SKU{queueSize !== 1 ? 's' : ''} queued for optimization
-            </div>
-          )}
         </div>
 
-        {/* Floating Settings Button */}
-        <FloatingSettingsButton
-          forecastPeriods={forecastPeriods}
-          setForecastPeriods={setForecastPeriods}
-          businessContext={businessContext}
-          setBusinessContext={setBusinessContext}
-          grokApiEnabled={grokApiEnabled}
-          setGrokApiEnabled={setGrokApiEnabled}
-          settingsOpen={settingsOpen}
-          setSettingsOpen={setSettingsOpen}
+        <StepNavigation 
+          currentStep={currentStep} 
+          onStepChange={handleStepChange}
+          hasData={data.length > 0}
+          hasResults={forecastResults.length > 0}
         />
 
-        {/* Progress Steps */}
-        <StepNavigation
-          currentStep={currentStep}
-          salesDataLength={salesData.length}
-          forecastResultsLength={forecastResults.length}
-          onStepClick={setCurrentStep}
-        />
+        <Tabs value={currentStep} onValueChange={handleStepChange} className="w-full">
+          <TabsList className="grid w-full grid-cols-5 mb-6">
+            <TabsTrigger value="upload" className="flex items-center gap-2">
+              <Upload className="h-4 w-4" />
+              Upload Data
+            </TabsTrigger>
+            <TabsTrigger value="visualize" disabled={data.length === 0} className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Visualize
+            </TabsTrigger>
+            <TabsTrigger value="outliers" disabled={data.length === 0} className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              Outliers
+            </TabsTrigger>
+            <TabsTrigger value="forecast" disabled={data.length === 0} className="flex items-center gap-2">
+              <Target className="h-4 w-4" />
+              Forecast
+            </TabsTrigger>
+            <TabsTrigger value="results" disabled={forecastResults.length === 0} className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Results
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Main Content */}
-        <div className="w-full">
-          {currentStep === 0 && (
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="h-5 w-5 text-blue-600" />
-                  Upload Historical Sales Data
-                </CardTitle>
-                <CardDescription>
-                  Upload a CSV file containing your historical sales data with columns: Date, SKU, Sales
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <FileUpload 
-                  onDataUpload={handleDataUpload}
-                  hasExistingData={salesData.length > 0}
-                  dataCount={salesData.length}
-                  skuCount={new Set(salesData.map(d => d.sku)).size}
-                />
-              </CardContent>
-            </Card>
-          )}
+          <TabsContent value="upload" className="space-y-6">
+            <FileUpload onDataUpload={handleDataUpload} />
+          </TabsContent>
 
-          {currentStep === 1 && (
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-blue-600" />
-                  Data Visualization
-                </CardTitle>
-                <CardDescription>
-                  Explore your historical sales data across different SKUs
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DataVisualization data={salesData} />
-                {salesData.length > 0 && (
-                  <div className="mt-6 flex justify-end">
-                    <Button onClick={() => setCurrentStep(2)}>
-                      Proceed to Data Cleaning
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+          <TabsContent value="visualize" className="space-y-6">
+            {data.length > 0 && (
+              <DataVisualization 
+                data={data} 
+                selectedSKU={selectedSKU}
+                onSKUChange={handleSKUChange}
+              />
+            )}
+          </TabsContent>
 
-          {currentStep === 2 && (
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-blue-600" />
-                  Outlier Detection & Cleaning
-                </CardTitle>
-                <CardDescription>
-                  Identify and remove outliers from your data to improve forecast accuracy
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <OutlierDetection 
-                  data={salesData}
-                  cleanedData={cleanedData}
-                  onDataCleaning={handleDataCleaning}
-                  onImportDataCleaning={handleImportDataCleaning}
-                  queueSize={queueSize}
-                />
-              </CardContent>
-            </Card>
-          )}
+          <TabsContent value="outliers" className="space-y-6">
+            {data.length > 0 && (
+              <OutlierDetection 
+                data={data}
+                selectedSKU={selectedSKU}
+                onSKUChange={handleSKUChange}
+                onDataChange={setData}
+              />
+            )}
+          </TabsContent>
 
-          {currentStep === 3 && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white/80 backdrop-blur-sm shadow-xl border-0 rounded-lg">
-                <ForecastEngine
-                  data={cleanedData}
-                  forecastPeriods={forecastPeriods}
-                  onForecastGeneration={handleForecastGeneration}
-                  selectedSKU={selectedSKUForResults}
-                  onSKUChange={setSelectedSKUForResults}
-                  businessContext={businessContext}
-                />
-              </div>
+          <TabsContent value="forecast" className="space-y-6">
+            {data.length > 0 && (
+              <ForecastEngine
+                data={data}
+                forecastPeriods={forecastPeriods}
+                onForecastGeneration={handleForecastGeneration}
+                selectedSKU={selectedSKU}
+                onSKUChange={handleSKUChange}
+                businessContext={businessContext}
+                grokApiEnabled={grokApiEnabled}
+              />
+            )}
+          </TabsContent>
 
-              <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-                <CardHeader>
-                  <CardTitle>Forecast Results</CardTitle>
-                  <CardDescription>
-                    Compare predictions from different models for {selectedSKUForResults || 'selected product'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ForecastResults 
-                    results={forecastResults} 
-                    selectedSKU={selectedSKUForResults}
-                  />
-                </CardContent>
-              </Card>
-            </div>
-          )}
+          <TabsContent value="results" className="space-y-6">
+            {forecastResults.length > 0 && (
+              <ForecastResults
+                results={forecastResults}
+                selectedSKU={selectedSKU}
+                data={data}
+              />
+            )}
+          </TabsContent>
+        </Tabs>
 
-          {currentStep === 4 && (
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Eye className="h-5 w-5 text-blue-600" />
-                  Finalize & Export Forecasts
-                </CardTitle>
-                <CardDescription>
-                  Review, edit, and export your forecasts for Sales & Operations Planning
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ForecastFinalization 
-                  historicalData={salesData}
-                  cleanedData={cleanedData}
-                  forecastResults={forecastResults}
-                />
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        <FloatingSettingsButton>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings2 className="h-5 w-5" />
+                Forecast Settings
+              </CardTitle>
+              <CardDescription>
+                Configure global parameters and business context
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ForecastSettings
+                forecastPeriods={forecastPeriods}
+                setForecastPeriods={setForecastPeriods}
+                businessContext={businessContext}
+                setBusinessContext={setBusinessContext}
+                grokApiEnabled={grokApiEnabled}
+                setGrokApiEnabled={setGrokApiEnabled}
+              />
+            </CardContent>
+          </Card>
+        </FloatingSettingsButton>
       </div>
     </div>
   );
