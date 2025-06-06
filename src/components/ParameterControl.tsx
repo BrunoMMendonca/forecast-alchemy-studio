@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -43,23 +44,33 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 
   const userSelectedMethod = useMemo(() => {
     const method = cacheEntry?.selected;
-    console.log(`🔄 PARAM_CONTROL: User selected method for ${selectedSKU}:${model.id} = ${method}`);
+    console.log(`🔄 PARAM_CONTROL: User selected method for ${selectedSKU}:${model.id} = ${method} (cache version: ${cacheVersion})`);
     return method;
-  }, [cacheEntry, selectedSKU, model.id]);
+  }, [cacheEntry, selectedSKU, model.id, cacheVersion]);
+
+  // Add effect to log when userSelectedMethod changes
+  useEffect(() => {
+    console.log(`🎯 PARAM_CONTROL: userSelectedMethod changed to ${userSelectedMethod} for ${selectedSKU}:${model.id}`);
+  }, [userSelectedMethod, selectedSKU, model.id]);
   
   // Load optimization data from cache based on user selection
   const optimizationData = useMemo(() => {
     if (!cacheEntry || userSelectedMethod === 'manual') {
+      console.log(`🔄 PARAM_CONTROL: No optimization data - manual mode or no cache entry`);
       return null;
     }
 
     if (userSelectedMethod === 'ai' && cacheEntry.ai) {
+      console.log(`🔄 PARAM_CONTROL: Using AI optimization data`);
       return cacheEntry.ai;
     } else if (userSelectedMethod === 'grid' && cacheEntry.grid) {
+      console.log(`🔄 PARAM_CONTROL: Using Grid optimization data`);
       return cacheEntry.grid;
     }
 
-    return cacheEntry.ai || cacheEntry.grid || null;
+    const fallback = cacheEntry.ai || cacheEntry.grid || null;
+    console.log(`🔄 PARAM_CONTROL: Using fallback optimization data:`, fallback ? 'found' : 'none');
+    return fallback;
   }, [cacheEntry, userSelectedMethod]);
 
   // Determine which method is currently active based on user selection
@@ -69,7 +80,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 
   // Log current state for debugging
   useEffect(() => {
-    console.log(`🎯 PARAM_CONTROL: Current state for ${selectedSKU}:${model.id}:`, {
+    console.log(`🎯 PARAM_CONTROL: Badge states for ${selectedSKU}:${model.id}:`, {
       userSelectedMethod,
       isManual,
       isAI,
@@ -179,6 +190,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
+                        console.log(`🎯 AI BADGE CLICK: Current method = ${userSelectedMethod}, isAI = ${isAI}`);
                         handlePreferenceChange('ai');
                       }}
                     >
@@ -194,6 +206,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
+                      console.log(`🎯 GRID BADGE CLICK: Current method = ${userSelectedMethod}, isGrid = ${isGrid}`);
                       handlePreferenceChange('grid');
                     }}
                   >
@@ -208,6 +221,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
+                      console.log(`🎯 MANUAL BADGE CLICK: Current method = ${userSelectedMethod}, isManual = ${isManual}`);
                       handlePreferenceChange('manual');
                     }}
                   >
