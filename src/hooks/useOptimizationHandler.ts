@@ -16,6 +16,7 @@ interface OptimizationQueue {
   removeSKUModelPairsFromQueue: (pairs: Array<{sku: string, modelId: string}>) => void;
   removeUnnecessarySKUs: (skus: string[]) => void;
   clearCacheAndPreferencesForSKU?: (sku: string) => void;
+  getModelsForSKU: (sku: string) => string[];
 }
 
 export const useOptimizationHandler = (
@@ -213,21 +214,36 @@ export const useOptimizationHandler = (
       },
       (sku) => {
         console.log('✅ OPTIMIZATION: SKU completed:', sku);
-        // Remove the completed SKU/model combinations from queue
-        setTimeout(() => {
-          if (optimizationQueue.removeSKUModelPairsFromQueue) {
-            const completedCombinations = combinationsToOptimize.filter(combo => combo.sku === sku);
-            optimizationQueue.removeSKUModelPairsFromQueue(completedCombinations);
-          } else {
-            optimizationQueue.removeSKUsFromQueue([sku]);
-          }
-          
-          if (sku === selectedSKU && onOptimizationComplete) {
-            setTimeout(() => {
-              onOptimizationComplete();
-            }, 200);
-          }
-        }, 500);
+        
+        // Get all models for this SKU from the current queue state
+        const modelsForSKU = optimizationQueue.getModelsForSKU(sku);
+        console.log(`🗑️ QUEUE: Found ${modelsForSKU.length} models for completed SKU ${sku}:`, modelsForSKU);
+        
+        // Create SKU/model pairs to remove
+        const pairsToRemove = modelsForSKU.map(modelId => ({ sku, modelId }));
+        console.log('🗑️ QUEUE: Removing pairs for completed SKU:', pairsToRemove);
+        
+        // Remove the completed SKU/model pairs immediately
+        if (optimizationQueue.removeSKUModelPairsFromQueue && pairsToRemove.length > 0) {
+          optimizationQueue.removeSKUModelPairsFromQueue(pairsToRemove);
+          console.log(`✅ QUEUE: Successfully removed ${pairsToRemove.length} pairs for SKU ${sku}`);
+        } else {
+          // Fallback to removing the entire SKU
+          optimizationQueue.removeSKUsFromQueue([sku]);
+          console.log(`✅ QUEUE: Fallback - removed entire SKU ${sku} from queue`);
+        }
+        
+        // Log queue state after removal
+        const remainingCombinations = optimizationQueue.getQueuedCombinations();
+        console.log(`📊 QUEUE: After removal - ${remainingCombinations.length} combinations remaining`);
+        
+        // Trigger forecast refresh if this is the selected SKU
+        if (sku === selectedSKU && onOptimizationComplete) {
+          console.log(`🔄 FORECAST: Triggering refresh for selected SKU ${sku}`);
+          setTimeout(() => {
+            onOptimizationComplete();
+          }, 200);
+        }
       },
       getSKUsNeedingOptimization
     );
