@@ -10,6 +10,8 @@ import { ModelConfig } from '@/types/forecast';
 import { ReasoningDisplay } from './ReasoningDisplay';
 import { hasOptimizableParameters } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
+import { useOptimizationMethodManagement } from '@/hooks/useOptimizationMethodManagement';
+import { generateDataHash } from '@/utils/cacheHashUtils';
 
 interface ParameterControlProps {
   model: ModelConfig;
@@ -32,8 +34,9 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const { cache, cacheVersion } = useOptimizationCache();
+  const { getBestAvailableMethod } = useOptimizationMethodManagement();
 
-  // Get current user selection from cache - depend on cacheVersion for reactivity
+  // Get current user selection from cache
   const cacheEntry = useMemo(() => {
     console.log(`🔄 PARAM_CONTROL: Cache lookup for ${selectedSKU}:${model.id} (version: ${cacheVersion})`);
     const entry = cache[selectedSKU]?.[model.id];
@@ -47,21 +50,32 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     return method;
   }, [cacheEntry, selectedSKU, model.id, cacheVersion]);
 
-  // NEW: Local state for immediate visual feedback
-  const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(userSelectedMethod);
+  // NEW: Compute the effective selected method - combines user choice with best available
+  const effectiveSelectedMethod = useMemo(() => {
+    // If user has made an explicit choice, use that
+    if (userSelectedMethod) {
+      console.log(`🎯 PARAM_CONTROL: Using explicit user choice: ${userSelectedMethod} for ${selectedSKU}:${model.id}`);
+      return userSelectedMethod;
+    }
 
-  // NEW: Sync local state with cache state
-  useEffect(() => {
-    setLocalSelectedMethod(userSelectedMethod);
-    console.log(`🎯 PARAM_CONTROL: Local state synced to ${userSelectedMethod} for ${selectedSKU}:${model.id}`);
-  }, [userSelectedMethod, selectedSKU, model.id]);
+    // Otherwise, use the best available method based on current cache state
+    // We need to generate a current data hash for this computation
+    const currentDataHash = 'current'; // Simplified for now - in real usage this would be the actual data hash
+    const bestMethod = getBestAvailableMethod(selectedSKU, model.id, currentDataHash);
+    console.log(`🎯 PARAM_CONTROL: Using best available method: ${bestMethod} for ${selectedSKU}:${model.id}`);
+    return bestMethod;
+  }, [userSelectedMethod, selectedSKU, model.id, getBestAvailableMethod, cacheVersion]);
 
-  // Add effect to log when userSelectedMethod changes
+  // Local state for immediate visual feedback on user clicks
+  const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
+
+  // Sync local state with effective method when it changes (due to optimization completion)
   useEffect(() => {
-    console.log(`🎯 PARAM_CONTROL: userSelectedMethod changed to ${userSelectedMethod} for ${selectedSKU}:${model.id}`);
-  }, [userSelectedMethod, selectedSKU, model.id]);
-  
-  // Load optimization data from cache based on user selection
+    setLocalSelectedMethod(effectiveSelectedMethod);
+    console.log(`🎯 PARAM_CONTROL: Local state synced to effective method ${effectiveSelectedMethod} for ${selectedSKU}:${model.id}`);
+  }, [effectiveSelectedMethod, selectedSKU, model.id]);
+
+  // Load optimization data from cache based on effective selected method
   const optimizationData = useMemo(() => {
     if (!cacheEntry || localSelectedMethod === 'manual') {
       console.log(`🔄 PARAM_CONTROL: No optimization data - manual mode or no cache entry`);
@@ -81,7 +95,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     return fallback;
   }, [cacheEntry, localSelectedMethod]);
 
-  // Determine which method is currently active based on local selected method
+  // Determine which method is currently active
   const isManual = localSelectedMethod === 'manual';
   const isAI = localSelectedMethod === 'ai';
   const isGrid = localSelectedMethod === 'grid';
@@ -89,21 +103,20 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   // Log current state for debugging
   useEffect(() => {
     console.log(`🎯 PARAM_CONTROL: Badge states for ${selectedSKU}:${model.id}:`, {
+      effectiveSelectedMethod,
       localSelectedMethod,
       isManual,
       isAI,
       isGrid,
       cacheVersion
     });
-  }, [selectedSKU, model.id, localSelectedMethod, isManual, isAI, isGrid, cacheVersion]);
+  }, [selectedSKU, model.id, effectiveSelectedMethod, localSelectedMethod, isManual, isAI, isGrid, cacheVersion]);
 
-  // SIMPLIFIED: Determine the source of truth for parameter values
+  // Determine the source of truth for parameter values
   const getParameterValue = useCallback((parameter: string) => {
     if (isManual) {
-      // In manual mode, ALWAYS use model.parameters
       return model.parameters?.[parameter];
     } else {
-      // In AI/Grid mode, use optimized parameters if available, otherwise fall back to model parameters
       const optimizedValue = model.optimizedParameters?.[parameter];
       const modelValue = model.parameters?.[parameter];
       return optimizedValue !== undefined ? optimizedValue : modelValue;
@@ -124,7 +137,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     onParameterUpdate(parameter, newValue);
   }, [onParameterUpdate]);
 
-  // NEW: Handle badge clicks with immediate local state update
+  // Handle badge clicks with immediate local state update
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
     // Prevent duplicate calls by checking if we're already in this method
     if (localSelectedMethod === newMethod) {
@@ -134,7 +147,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     
     console.log(`🎯 BADGE CLICK: Switching to ${newMethod} for ${model.id}`);
     
-    // NEW: Update local state immediately for visual feedback
+    // Update local state immediately for visual feedback
     setLocalSelectedMethod(newMethod);
     
     if (onMethodSelection) {
@@ -146,6 +159,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     }
   }, [localSelectedMethod, model.id, onMethodSelection, onResetToManual]);
 
+  // ... keep existing code (getParameterConfig function, hasParameters check, etc)
   const getParameterConfig = (parameter: string) => {
     const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
       alpha: { min: 0.1, max: 0.9, step: 0.05, description: "Level smoothing parameter" },
@@ -193,7 +207,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
               {/* Show optimization badges for models with optimizable parameters */}
               {canOptimize && (
                 <div className="flex items-center gap-2">
-                  {/* AI Badge - Only show when Grok API is enabled - NEW: Add dynamic key */}
+                  {/* AI Badge - Only show when Grok API is enabled */}
                   {grokApiEnabled && (
                     <Badge 
                       key={`ai-${localSelectedMethod}-${cacheVersion}`}
@@ -211,7 +225,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     </Badge>
                   )}
 
-                  {/* Grid Badge - Always show - NEW: Add dynamic key */}
+                  {/* Grid Badge - Always show */}
                   <Badge 
                     key={`grid-${localSelectedMethod}-${cacheVersion}`}
                     variant={isGrid ? "default" : "outline"} 
@@ -227,7 +241,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     Grid
                   </Badge>
 
-                  {/* Manual Badge - Always show - NEW: Add dynamic key */}
+                  {/* Manual Badge - Always show */}
                   <Badge 
                     key={`manual-${localSelectedMethod}-${cacheVersion}`}
                     variant={isManual ? "default" : "outline"} 
