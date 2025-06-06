@@ -15,6 +15,7 @@ interface ModelCardProps {
   onUseGrid?: () => void;
   onResetToManual: () => void;
   isOptimizing?: boolean;
+  grokApiEnabled?: boolean;
 }
 
 export const ModelCard: React.FC<ModelCardProps> = ({
@@ -25,7 +26,8 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   onUseAI,
   onUseGrid,
   onResetToManual,
-  isOptimizing = false
+  isOptimizing = false,
+  grokApiEnabled
 }) => {
   return (
     <div className="border border-slate-200 rounded-lg p-4 space-y-4">
@@ -65,6 +67,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
           onUseGrid={onUseGrid}
           onResetToManual={onResetToManual}
           disabled={isOptimizing}
+          grokApiEnabled={grokApiEnabled}
         />
       )}
     </div>
