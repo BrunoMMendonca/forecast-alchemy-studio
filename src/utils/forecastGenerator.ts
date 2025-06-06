@@ -138,7 +138,8 @@ export const generateForecastsForSKU = async (
         date,
         value: Math.round(predictions[i] || 0)
       })),
-      accuracy
+      accuracy,
+      parameters: effectiveParameters || {}
     };
 
     setCachedForecast(result, parametersHash, forecastPeriods);

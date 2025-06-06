@@ -30,6 +30,7 @@ const Index = () => {
   const [selectedSKU, setSelectedSKU] = useState<string>('');
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
   const [currentStep, setCurrentStep] = useState<'upload' | 'visualize' | 'outliers' | 'forecast' | 'results'>('upload');
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Use global settings hook
   const {
@@ -92,7 +93,7 @@ const Index = () => {
           hasResults={forecastResults.length > 0}
         />
 
-        <Tabs value={currentStep} onValueChange={handleStepChange} className="w-full">
+        <Tabs value={currentStep} onValueChange={(value) => handleStepChange(value as any)} className="w-full">
           <TabsList className="grid w-full grid-cols-5 mb-6">
             <TabsTrigger value="upload" className="flex items-center gap-2">
               <Upload className="h-4 w-4" />
@@ -168,29 +169,9 @@ const Index = () => {
           setBusinessContext={setBusinessContext}
           grokApiEnabled={grokApiEnabled}
           setGrokApiEnabled={setGrokApiEnabled}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings2 className="h-5 w-5" />
-                Forecast Settings
-              </CardTitle>
-              <CardDescription>
-                Configure global parameters and business context
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ForecastSettings
-                forecastPeriods={forecastPeriods}
-                setForecastPeriods={setForecastPeriods}
-                businessContext={businessContext}
-                setBusinessContext={setBusinessContext}
-                grokApiEnabled={grokApiEnabled}
-                setGrokApiEnabled={setGrokApiEnabled}
-              />
-            </CardContent>
-          </Card>
-        </FloatingSettingsButton>
+          settingsOpen={settingsOpen}
+          setSettingsOpen={setSettingsOpen}
+        />
       </div>
     </div>
   );
