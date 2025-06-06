@@ -34,7 +34,7 @@ export const getDefaultModels = (): ModelConfig[] => [
     description: 'Fits a linear regression line to historical data and extrapolates',
     icon: React.createElement(Target, { className: "h-4 w-4" }),
     enabled: true,
-    parameters: {}
+    parameters: {} // No parameters - should not be cached/optimized
   },
   {
     id: 'seasonal_moving_average',
@@ -60,7 +60,12 @@ export const getDefaultModels = (): ModelConfig[] => [
     description: 'Uses the same period from the previous season as the forecast',
     icon: React.createElement(BarChart3, { className: "h-4 w-4" }),
     enabled: true,
-    parameters: {},
+    parameters: {}, // No parameters - should not be cached/optimized
     isSeasonal: true
   }
 ];
+
+// Helper function to check if a model has optimizable parameters
+export const hasOptimizableParameters = (model: ModelConfig): boolean => {
+  return model.parameters && Object.keys(model.parameters).length > 0;
+};

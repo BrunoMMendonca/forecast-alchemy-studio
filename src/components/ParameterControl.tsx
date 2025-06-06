@@ -9,6 +9,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ChevronDown, ChevronRight, Settings, Bot, Grid3X3, User } from 'lucide-react';
 import { ModelConfig } from '@/types/forecast';
 import { ReasoningDisplay } from './ReasoningDisplay';
+import { hasOptimizableParameters } from '@/utils/modelConfig';
 
 interface ParameterControlProps {
   model: ModelConfig;
@@ -32,6 +33,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const isGrid = model.optimizationMethod === 'grid_search';
 
   const currentParameters = model.optimizedParameters || model.parameters;
+  const canOptimize = hasOptimizableParameters(model);
 
   // Only show parameters section if model actually has parameters
   const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
@@ -75,53 +77,60 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 <Settings className="h-4 w-4" />
                 <span className="font-medium">Parameters</span>
+                {!canOptimize && (
+                  <Badge variant="outline" className="text-xs">
+                    No Optimization
+                  </Badge>
+                )}
               </div>
               
-              {/* Badge order: AI, Grid, Manual */}
-              <div className="flex items-center gap-2">
-                {/* AI Badge - First */}
-                <Badge 
-                  variant={isAI ? "default" : "outline"} 
-                  className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUseAI();
-                  }}
-                >
-                  <Bot className="h-3 w-3 mr-1" />
-                  AI
-                </Badge>
+              {/* Only show optimization badges for models with optimizable parameters */}
+              {canOptimize && (
+                <div className="flex items-center gap-2">
+                  {/* AI Badge - First */}
+                  <Badge 
+                    variant={isAI ? "default" : "outline"} 
+                    className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUseAI();
+                    }}
+                  >
+                    <Bot className="h-3 w-3 mr-1" />
+                    AI
+                  </Badge>
 
-                {/* Grid Badge - Second */}
-                <Badge 
-                  variant={isGrid ? "default" : "outline"} 
-                  className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onUseGrid) onUseGrid();
-                  }}
-                >
-                  <Grid3X3 className="h-3 w-3 mr-1" />
-                  Grid
-                </Badge>
+                  {/* Grid Badge - Second */}
+                  <Badge 
+                    variant={isGrid ? "default" : "outline"} 
+                    className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onUseGrid) onUseGrid();
+                    }}
+                  >
+                    <Grid3X3 className="h-3 w-3 mr-1" />
+                    Grid
+                  </Badge>
 
-                {/* Manual Badge - Third */}
-                <Badge 
-                  variant={isManual ? "default" : "outline"} 
-                  className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onResetToManual();
-                  }}
-                >
-                  <User className="h-3 w-3 mr-1" />
-                  Manual
-                </Badge>
-              </div>
+                  {/* Manual Badge - Third */}
+                  <Badge 
+                    variant={isManual ? "default" : "outline"} 
+                    className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onResetToManual();
+                    }}
+                  >
+                    <User className="h-3 w-3 mr-1" />
+                    Manual
+                  </Badge>
+                </div>
+              )}
             </div>
 
-            {/* Optimization Status Summary */}
-            {model.optimizationConfidence && (
+            {/* Optimization Status Summary - only for optimizable models */}
+            {canOptimize && model.optimizationConfidence && (
               <div className="mt-2 flex items-center space-x-4 text-sm">
                 <span className="text-slate-600">
                   Confidence: <span className="font-medium">{model.optimizationConfidence.toFixed(0)}%</span>
@@ -161,7 +170,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                         value={[typeof value === 'number' ? value : config.min]}
                         onValueChange={(values) => handleParameterChange(parameter, values)}
                         className="w-full"
-                        disabled={!isManual}
+                        disabled={!isManual || !canOptimize}
                       />
                       <p className="text-xs text-slate-500">{config.description}</p>
                     </div>
@@ -169,8 +178,8 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 })}
               </div>
 
-              {/* Reasoning Display - Only show if optimization was performed */}
-              {hasOptimizationResults && (
+              {/* Reasoning Display - Only show if optimization was performed and model can be optimized */}
+              {canOptimize && hasOptimizationResults && (
                 <div className="mt-6 pt-4 border-t">
                   <ReasoningDisplay
                     reasoning={model.optimizationReasoning}
@@ -178,6 +187,15 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     method={model.optimizationMethod}
                     confidence={model.optimizationConfidence}
                   />
+                </div>
+              )}
+
+              {/* Information for non-optimizable models */}
+              {!canOptimize && (
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                  <p className="text-sm text-blue-700">
+                    This model uses a fixed algorithm and doesn't require parameter optimization.
+                  </p>
                 </div>
               )}
             </div>

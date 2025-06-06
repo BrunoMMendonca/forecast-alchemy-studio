@@ -4,7 +4,7 @@ import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences, PreferenceValue } from '@/hooks/useManualAIPreferences';
-import { getDefaultModels } from '@/utils/modelConfig';
+import { getDefaultModels, hasOptimizableParameters } from '@/utils/modelConfig';
 
 export const useModelPreferences = (selectedSKU: string, data: SalesData[]) => {
   const { 
@@ -15,7 +15,7 @@ export const useModelPreferences = (selectedSKU: string, data: SalesData[]) => {
   const { loadManualAIPreferences } = useManualAIPreferences();
 
   const createModelsWithPreferences = useCallback((): ModelConfig[] => {
-    console.log('🏗️ CREATING MODELS WITH AI-DEFAULT for SKU:', selectedSKU);
+    console.log('🏗️ CREATING MODELS WITH PREFERENCES for SKU:', selectedSKU);
     
     const defaultModels = getDefaultModels();
     
@@ -33,6 +33,12 @@ export const useModelPreferences = (selectedSKU: string, data: SalesData[]) => {
       console.log(`📋 Current data hash: ${currentDataHash.substring(0, 50)}...`);
       
       return defaultModels.map(model => {
+        // Skip optimization for models without parameters
+        if (!hasOptimizableParameters(model)) {
+          console.log(`⏭️ Skipping ${model.id} - no optimizable parameters`);
+          return model;
+        }
+
         const preferenceKey = `${selectedSKU}:${model.id}`;
         const preference: PreferenceValue = preferences[preferenceKey] || 'ai'; // Default to AI
         

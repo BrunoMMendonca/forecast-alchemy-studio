@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
 import { useDatasetOptimization } from '@/hooks/useDatasetOptimization';
+import { hasOptimizableParameters } from '@/utils/modelConfig';
 
 interface OptimizedParameters {
   parameters: Record<string, number>;
@@ -44,9 +45,28 @@ export const useOptimizationCache = () => {
     markOptimizationComplete
   } = useDatasetOptimization();
 
-  // Helper function to detect old hash format
-  const isOldHashFormat = useCallback((hash: string): boolean => {
-    return hash.includes('len:') || hash.includes('dates:') || hash.includes('sales:');
+  // UNIFIED HASH GENERATION - Single source of truth
+  const generateDataHash = useCallback((skuData: SalesData[]): string => {
+    if (!skuData || skuData.length === 0) {
+      console.log('🗄️ CACHE: Empty SKU data, returning empty hash');
+      return 'empty';
+    }
+
+    // Sort by date to ensure consistent ordering
+    const sorted = [...skuData].sort((a, b) => a.date.localeCompare(b.date));
+    
+    // Create a deterministic hash from the data
+    const dataPoints = sorted.map(d => {
+      const sales = Math.round(d.sales * 1000) / 1000; // Round to 3 decimals for consistency
+      const outlier = d.isOutlier ? '1' : '0';
+      const note = d.note ? '1' : '0';
+      return `${d.date}:${sales}:${outlier}:${note}`;
+    });
+    
+    const hash = `v2-${sorted.length}-${dataPoints.join('|')}`;
+    
+    console.log('🗄️ CACHE: Generated unified hash:', hash.substring(0, 100), '...');
+    return hash;
   }, []);
 
   // Load state from localStorage on mount
@@ -64,12 +84,13 @@ export const useOptimizationCache = () => {
           Object.keys(parsedCache[sku]).forEach(modelId => {
             const entry = parsedCache[sku][modelId];
             
+            // Handle both old and new cache structures
             if (entry.parameters) {
               const method = entry.method?.startsWith('ai_') ? 'ai' : 
                            entry.method === 'grid_search' ? 'grid' : 'ai';
               
-              // Skip entries with old hash format
-              if (entry.dataHash && isOldHashFormat(entry.dataHash)) {
+              // Skip entries that don't have the new hash format (v2-)
+              if (!entry.dataHash?.startsWith('v2-')) {
                 console.log(`🗄️ CACHE: Skipping old format entry ${sku}:${modelId}:${method}`);
                 return;
               }
@@ -87,10 +108,10 @@ export const useOptimizationCache = () => {
             } else {
               // Handle new cache structure
               const hasValidAI = entry.ai && 
-                                !isOldHashFormat(entry.ai.dataHash) &&
+                                entry.ai.dataHash?.startsWith('v2-') &&
                                 now - entry.ai.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
               const hasValidGrid = entry.grid && 
-                                  !isOldHashFormat(entry.grid.dataHash) &&
+                                  entry.grid.dataHash?.startsWith('v2-') &&
                                   now - entry.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
               
               if (hasValidAI || hasValidGrid) {
@@ -118,7 +139,7 @@ export const useOptimizationCache = () => {
     } catch (error) {
       console.error('🗄️ CACHE: Error loading from localStorage:', error);
     }
-  }, [isOldHashFormat]);
+  }, []);
 
   // Save cache to localStorage when it changes
   useEffect(() => {
@@ -133,34 +154,16 @@ export const useOptimizationCache = () => {
     }
   }, [cache]);
 
-  const generateDataHash = useCallback((skuData: SalesData[]): string => {
-    if (!skuData || skuData.length === 0) {
-      console.log('🗄️ CACHE: Empty SKU data, returning empty hash');
-      return 'empty';
-    }
-
-    // Sort by date to ensure consistent ordering
-    const sorted = [...skuData].sort((a, b) => a.date.localeCompare(b.date));
-    
-    // Create a simple, consistent hash format
-    const salesValues = sorted.map(d => Math.round(d.sales * 1000) / 1000);
-    const outlierFlags = sorted.map(d => d.isOutlier ? '1' : '0').join('');
-    const noteFlags = sorted.map(d => d.note ? '1' : '0').join('');
-    
-    // Use a simple format that's consistent between calls
-    const hash = `${sorted.length}-${salesValues.join('-')}-${outlierFlags}-${noteFlags}`;
-    
-    console.log('🗄️ CACHE: Generated data hash:', hash.substring(0, 100), '...');
-    return hash;
-  }, []);
-
   const getSKUsNeedingOptimization = useCallback((
     data: SalesData[], 
     models: ModelConfig[]
   ): { sku: string; models: string[] }[] => {
+    // Only consider models that have optimizable parameters
     const enabledModelsWithParams = models.filter(m => 
-      m.enabled && m.parameters && Object.keys(m.parameters).length > 0
+      m.enabled && hasOptimizableParameters(m)
     );
+    
+    console.log('🗄️ CACHE: Models with optimizable parameters:', enabledModelsWithParams.map(m => m.id));
     
     const skus = Array.from(new Set(data.map(d => d.sku))).sort();
     const result: { sku: string; models: string[] }[] = [];
@@ -187,10 +190,10 @@ export const useOptimizationCache = () => {
                               (Date.now() - cached.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000);
           
           if (!hasValidAI) {
-            console.log(`🗄️ CACHE: ${sku}:${m.id} - No valid AI cache (hash: ${cached.ai?.dataHash?.substring(0, 30)} vs ${currentDataHash.substring(0, 30)})`);
+            console.log(`🗄️ CACHE: ${sku}:${m.id} - No valid AI cache`);
           }
           if (!hasValidGrid) {
-            console.log(`🗄️ CACHE: ${sku}:${m.id} - No valid Grid cache (hash: ${cached.grid?.dataHash?.substring(0, 30)} vs ${currentDataHash.substring(0, 30)})`);
+            console.log(`🗄️ CACHE: ${sku}:${m.id} - No valid Grid cache`);
           }
           
           return !hasValidAI || !hasValidGrid;
@@ -219,36 +222,17 @@ export const useOptimizationCache = () => {
       return null;
     }
 
-    console.log(`🗄️ CACHE: Cache entry exists for ${sku}:${modelId}:`, {
-      hasAI: !!cached.ai,
-      hasGrid: !!cached.grid,
-      selected: cached.selected,
-      aiTimestamp: cached.ai?.timestamp,
-      gridTimestamp: cached.grid?.timestamp,
-      aiHash: cached.ai?.dataHash?.substring(0, 50),
-      gridHash: cached.grid?.dataHash?.substring(0, 50)
-    });
-
     const now = Date.now();
     const isExpired = (entry: OptimizedParameters) => 
       now - entry.timestamp > CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
     
     const isValidEntry = (entry: OptimizedParameters) => 
-      entry && entry.dataHash && !isExpired(entry) && !isOldHashFormat(entry.dataHash);
+      entry && entry.dataHash?.startsWith('v2-') && !isExpired(entry);
 
     if (method) {
       const result = cached[method];
-      if (!result) {
-        console.log(`🗄️ CACHE: MISS - No ${method} method for ${sku}:${modelId}`);
-        setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
-        return null;
-      }
-
-      if (!isValidEntry(result)) {
-        const reason = !result.dataHash ? 'missing dataHash' : 
-                     isExpired(result) ? 'expired' : 
-                     isOldHashFormat(result.dataHash) ? 'old hash format' : 'invalid';
-        console.log(`🗄️ CACHE: MISS - ${method} method invalid for ${sku}:${modelId} (${reason})`);
+      if (!result || !isValidEntry(result)) {
+        console.log(`🗄️ CACHE: MISS - No valid ${method} method for ${sku}:${modelId}`);
         setCacheStats(prev => ({ ...prev, misses: prev.misses + 1 }));
         return null;
       }
@@ -281,7 +265,7 @@ export const useOptimizationCache = () => {
     console.log(`🗄️ CACHE: HIT - Found valid ${sku}:${modelId} with method ${result.method}`);
     setCacheStats(prev => ({ ...prev, hits: prev.hits + 1 }));
     return result;
-  }, [cache, isOldHashFormat]);
+  }, [cache]);
 
   const setCachedParameters = useCallback((
     sku: string, 
@@ -369,7 +353,7 @@ export const useOptimizationCache = () => {
     }
     
     const isValid = cached.dataHash === currentDataHash;
-    console.log(`🗄️ CACHE: Hash validation for ${sku}:${modelId}:${method || 'any'}: ${isValid} (cached: ${cached.dataHash.substring(0, 30)}... vs current: ${currentDataHash.substring(0, 30)}...)`);
+    console.log(`🗄️ CACHE: Hash validation for ${sku}:${modelId}:${method || 'any'}: ${isValid}`);
     return isValid;
   }, [getCachedParameters]);
 
