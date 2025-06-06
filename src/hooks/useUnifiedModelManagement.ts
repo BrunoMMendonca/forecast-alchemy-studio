@@ -238,17 +238,12 @@ export const useUnifiedModelManagement = (
     // Set explicit user selection to manual in cache
     setSelectedMethod(selectedSKU, modelId, 'manual');
 
+    // Update the parameter without clearing optimization data
     setModels(prev => prev.map(model => 
       model.id === modelId 
         ? { 
             ...model, 
-            parameters: { ...model.parameters, [parameter]: value },
-            optimizedParameters: undefined,
-            optimizationConfidence: undefined,
-            optimizationReasoning: undefined,
-            optimizationFactors: undefined,
-            expectedAccuracy: undefined,
-            optimizationMethod: undefined
+            parameters: { ...model.parameters, [parameter]: value }
           }
         : model
     ));
@@ -263,22 +258,9 @@ export const useUnifiedModelManagement = (
   const resetToManual = useCallback((modelId: string) => {
     isTogglingAIManualRef.current = true;
     
-    // Set explicit user selection to manual in cache
+    // Only set the method to manual - don't clear optimization data
+    // The cache preserves all optimization results for instant switching
     setSelectedMethod(selectedSKU, modelId, 'manual');
-
-    setModels(prev => prev.map(model => 
-      model.id === modelId 
-        ? { 
-            ...model, 
-            optimizedParameters: undefined,
-            optimizationConfidence: undefined,
-            optimizationReasoning: undefined,
-            optimizationFactors: undefined,
-            expectedAccuracy: undefined,
-            optimizationMethod: undefined
-          }
-        : model
-    ));
     
     lastForecastGenerationHashRef.current = '';
     
