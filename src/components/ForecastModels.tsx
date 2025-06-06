@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useUnifiedModelManagement } from '@/hooks/useUnifiedModelManagement';
@@ -43,6 +44,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   const [isQueuePopupOpen, setIsQueuePopupOpen] = useState(false);
   const hasTriggeredOptimizationRef = useRef(false);
   const componentMountedRef = useRef(false);
+  const lastQueueSizeRef = useRef(0);
   
   // Use the unified model management hook
   const {
@@ -85,31 +87,51 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 
     const queueSize = optimizationQueue.queueSize;
     const queuedSKUs = optimizationQueue.getSKUsInQueue();
+    const previousQueueSize = lastQueueSizeRef.current;
     
-    console.log('🚀 AUTO-OPTIMIZATION: Checking queue state');
-    console.log('🚀 AUTO-OPTIMIZATION: Queue size:', queueSize);
+    console.log('🚀 AUTO-OPTIMIZATION: Detailed queue state check');
+    console.log('🚀 AUTO-OPTIMIZATION: Current queue size:', queueSize);
+    console.log('🚀 AUTO-OPTIMIZATION: Previous queue size:', previousQueueSize);
     console.log('🚀 AUTO-OPTIMIZATION: Is optimizing:', isOptimizing);
-    console.log('🚀 AUTO-OPTIMIZATION: Has triggered:', hasTriggeredOptimizationRef.current);
+    console.log('🚀 AUTO-OPTIMIZATION: Has triggered flag:', hasTriggeredOptimizationRef.current);
+    console.log('🚀 AUTO-OPTIMIZATION: Component mounted:', componentMountedRef.current);
     console.log('🚀 AUTO-OPTIMIZATION: Queued SKUs:', queuedSKUs);
+
+    // Update the tracked queue size
+    lastQueueSizeRef.current = queueSize;
+
+    // Reset trigger flag if queue size increased (new items added)
+    if (queueSize > previousQueueSize) {
+      console.log('🚀 AUTO-OPTIMIZATION: Queue size increased, resetting trigger flag');
+      hasTriggeredOptimizationRef.current = false;
+    }
 
     // Start optimization if:
     // 1. There are items in the queue
     // 2. Not currently optimizing
     // 3. Haven't already triggered for this queue state
     if (queueSize > 0 && !isOptimizing && !hasTriggeredOptimizationRef.current) {
-      console.log('🚀 AUTO-OPTIMIZATION: Starting auto-optimization');
+      console.log('🚀 AUTO-OPTIMIZATION: All conditions met, starting auto-optimization');
       hasTriggeredOptimizationRef.current = true;
       
       // Small delay to ensure everything is ready
       setTimeout(() => {
-        if (componentMountedRef.current) {
+        if (componentMountedRef.current && optimizationQueue.queueSize > 0) {
           console.log('🚀 AUTO-OPTIMIZATION: Executing handleQueueOptimization');
           handleQueueOptimization();
           if (onOptimizationStarted) {
             onOptimizationStarted();
           }
+        } else {
+          console.log('🚀 AUTO-OPTIMIZATION: Conditions changed during delay, aborting');
+          hasTriggeredOptimizationRef.current = false;
         }
-      }, 500);
+      }, 200);
+    } else {
+      console.log('🚀 AUTO-OPTIMIZATION: Conditions not met for auto-start');
+      if (queueSize === 0) console.log('  - Queue is empty');
+      if (isOptimizing) console.log('  - Already optimizing');
+      if (hasTriggeredOptimizationRef.current) console.log('  - Already triggered');
     }
   }, [optimizationQueue?.queueSize, isOptimizing, handleQueueOptimization, onOptimizationStarted]);
 
@@ -199,3 +221,4 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 });
 
 ForecastModels.displayName = 'ForecastModels';
+
