@@ -4,6 +4,7 @@ import { SalesData } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
 import { getOptimizationByMethod } from '@/utils/singleModelOptimization';
 import { BusinessContext } from '@/types/businessContext';
+import { hasOptimizableParameters } from '@/utils/modelConfig';
 
 export const useOptimization = (
   selectedSKU: string,
@@ -25,6 +26,12 @@ export const useOptimization = (
     // Guard against empty or invalid SKU
     if (!selectedSKU || selectedSKU.trim() === '' || !data.length) {
       console.log('useOptimization: No valid SKU or data, skipping optimization');
+      return null;
+    }
+
+    // Guard against models without optimizable parameters
+    if (!hasOptimizableParameters(model)) {
+      console.log('useOptimization: Model has no optimizable parameters, skipping optimization:', model.id);
       return null;
     }
 

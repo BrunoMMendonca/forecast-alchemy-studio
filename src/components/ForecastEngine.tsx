@@ -9,6 +9,7 @@ import { useForecastEngine } from '@/hooks/useForecastEngine';
 import { useModelParameters } from '@/hooks/useModelParameters';
 import { useOptimization } from '@/hooks/useOptimization';
 import { BusinessContext } from '@/types/businessContext';
+import { hasOptimizableParameters } from '@/utils/modelConfig';
 
 interface ForecastEngineProps {
   data: SalesData[];
@@ -59,6 +60,12 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
 
     const model = models.find(m => m.id === modelId);
     if (!model) return;
+
+    // Check if model has optimizable parameters before attempting optimization
+    if (!hasOptimizableParameters(model)) {
+      console.log('ForecastEngine: Model has no optimizable parameters, skipping optimization:', modelId);
+      return;
+    }
 
     const result = await optimizeModel(model, method);
     if (result) {
