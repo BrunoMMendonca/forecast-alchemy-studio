@@ -43,7 +43,7 @@ const Index = () => {
   const { addSKUsToQueue, removeSKUsFromQueue, getSKUsInQueue, queueSize, clearQueue } = useOptimizationQueue();
   const { clearManualAIPreferences } = useManualAIPreferences();
 
-  const handleGlobalSettingsChange = (changedSetting: 'forecastPeriods' | 'businessContext') => {
+  const handleGlobalSettingsChange = (changedSetting: 'forecastPeriods' | 'businessContext' | 'grokApiEnabled') => {
     if (cleanedData.length > 0) {
       const allSKUs = Array.from(new Set(cleanedData.map(d => d.sku)));
       
@@ -52,7 +52,7 @@ const Index = () => {
       
       toast({
         title: "Global Settings Changed",
-        description: `${allSKUs.length} SKU${allSKUs.length > 1 ? 's' : ''} queued for re-optimization due to ${changedSetting === 'forecastPeriods' ? 'forecast periods' : 'business context'} change`,
+        description: `${allSKUs.length} SKU${allSKUs.length > 1 ? 's' : ''} queued for re-optimization due to ${changedSetting === 'forecastPeriods' ? 'forecast periods' : changedSetting === 'businessContext' ? 'business context' : 'Grok API'} change`,
       });
     }
   };
@@ -61,7 +61,9 @@ const Index = () => {
     forecastPeriods,
     setForecastPeriods,
     businessContext,
-    setBusinessContext
+    setBusinessContext,
+    grokApiEnabled,
+    setGrokApiEnabled
   } = useGlobalForecastSettings({
     onSettingsChange: handleGlobalSettingsChange
   });
@@ -170,6 +172,8 @@ const Index = () => {
           setForecastPeriods={setForecastPeriods}
           businessContext={businessContext}
           setBusinessContext={setBusinessContext}
+          grokApiEnabled={grokApiEnabled}
+          setGrokApiEnabled={setGrokApiEnabled}
           settingsOpen={settingsOpen}
           setSettingsOpen={setSettingsOpen}
         />
