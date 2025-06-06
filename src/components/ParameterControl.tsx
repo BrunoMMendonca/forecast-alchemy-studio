@@ -37,7 +37,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const preferenceKey = `${selectedSKU}:${model.id}`;
   const currentPreference = preferences[preferenceKey] || 'manual';
 
-  // Fix the logic to properly determine the current method
+  // Determine which method is currently active
   const isManual = currentPreference === 'manual';
   const isAI = currentPreference === 'ai';
   const isGrid = currentPreference === 'grid';
@@ -48,27 +48,29 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   // Only show parameters section if model actually has parameters
   const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
 
-  // Check if optimization results exist - use model's optimization data instead of cache
+  // Check if optimization results exist for display
   const hasOptimizationResults = canOptimize && model.optimizationReasoning && !isManual;
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     onParameterUpdate(parameter, values[0]);
   }, [onParameterUpdate]);
 
-  // Handle badge clicks - only update preference, don't trigger optimization
+  // Handle badge clicks - update preference to switch view to cached results
   const handlePreferenceChange = useCallback((newPreference: 'manual' | 'ai' | 'grid') => {
+    console.log(`🎯 BADGE CLICK: Switching to ${newPreference} view for ${model.id}`);
+    
     const updatedPreferences = { ...preferences };
     updatedPreferences[preferenceKey] = newPreference;
     saveManualAIPreferences(updatedPreferences);
     
-    // If switching to manual, reset the model
+    // If switching to manual, reset the model to clear optimization results
     if (newPreference === 'manual') {
       onResetToManual();
     }
     
-    // Note: No optimization is triggered here - we only change display preference
-    // The model should already have cached results from batch optimization
-  }, [preferences, preferenceKey, saveManualAIPreferences, onResetToManual]);
+    // Note: This only changes the view preference - all optimization results 
+    // should already be cached from batch optimization
+  }, [preferences, preferenceKey, saveManualAIPreferences, onResetToManual, model.id]);
 
   const getParameterConfig = (parameter: string) => {
     const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
@@ -240,11 +242,12 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 </div>
               )}
 
-              {/* No cached results indicator */}
+              {/* No cached results indicator - only show when not in manual mode */}
               {canOptimize && !isManual && !model.optimizationReasoning && (
                 <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
                   <p className="text-sm text-yellow-700">
-                    No {isAI ? 'AI' : 'Grid'} optimization results available. Results will appear after batch optimization runs.
+                    No {isAI ? 'AI' : 'Grid'} optimization results available for this model. 
+                    Results will appear after batch optimization runs in the background.
                   </p>
                 </div>
               )}
