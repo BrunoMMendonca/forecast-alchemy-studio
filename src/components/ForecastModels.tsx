@@ -49,6 +49,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     toggleModel,
     updateParameter,
     resetToManual,
+    handleMethodSelection,
     generateForecasts
   } = useUnifiedModelManagement(
     selectedSKU,
@@ -127,6 +128,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         onToggleModel={toggleModel}
         onUpdateParameter={updateParameter}
         onResetToManual={resetToManual}
+        onMethodSelection={handleMethodSelection}
         grokApiEnabled={grokApiEnabled}
       />
 

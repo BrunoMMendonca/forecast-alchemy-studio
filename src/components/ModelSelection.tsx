@@ -10,6 +10,7 @@ interface ModelSelectionProps {
   onToggleModel: (modelId: string) => void;
   onUpdateParameter: (modelId: string, parameter: string, value: number) => void;
   onResetToManual: (modelId: string) => void;
+  onMethodSelection?: (modelId: string, method: 'ai' | 'grid' | 'manual') => void;
   grokApiEnabled?: boolean;
 }
 
@@ -19,6 +20,7 @@ export const ModelSelection: React.FC<ModelSelectionProps> = ({
   onToggleModel,
   onUpdateParameter,
   onResetToManual,
+  onMethodSelection,
   grokApiEnabled,
 }) => {
   return (
@@ -38,6 +40,7 @@ export const ModelSelection: React.FC<ModelSelectionProps> = ({
             onToggle={() => onToggleModel(model.id)}
             onParameterUpdate={(parameter, value) => onUpdateParameter(model.id, parameter, value)}
             onResetToManual={() => onResetToManual(model.id)}
+            onMethodSelection={onMethodSelection ? (method) => onMethodSelection(model.id, method) : undefined}
             grokApiEnabled={grokApiEnabled}
           />
         ))}

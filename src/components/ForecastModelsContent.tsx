@@ -27,6 +27,7 @@ interface ForecastModelsContentProps {
   onToggleModel: (modelId: string) => void;
   onUpdateParameter: (modelId: string, parameter: string, value: number) => void;
   onResetToManual: (modelId: string) => void;
+  onMethodSelection?: (modelId: string, method: 'ai' | 'grid' | 'manual') => void;
   grokApiEnabled: boolean;
 }
 
@@ -42,6 +43,7 @@ export const ForecastModelsContent: React.FC<ForecastModelsContentProps> = ({
   onToggleModel,
   onUpdateParameter,
   onResetToManual,
+  onMethodSelection,
   grokApiEnabled
 }) => {
   return (
@@ -78,6 +80,7 @@ export const ForecastModelsContent: React.FC<ForecastModelsContentProps> = ({
         onToggleModel={onToggleModel}
         onUpdateParameter={onUpdateParameter}
         onResetToManual={onResetToManual}
+        onMethodSelection={onMethodSelection}
         grokApiEnabled={grokApiEnabled}
       />
     </>

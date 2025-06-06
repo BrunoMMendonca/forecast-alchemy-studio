@@ -14,7 +14,7 @@ export const useUnifiedModelManagement = (
   businessContext?: BusinessContext,
   onForecastGeneration?: (results: ForecastResult[], selectedSKU: string) => void
 ) => {
-  const { setSelectedMethod } = useOptimizationCache();
+  const { cache, setSelectedMethod } = useOptimizationCache();
   
   const {
     models,
@@ -44,19 +44,99 @@ export const useUnifiedModelManagement = (
   );
 
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
-    // Set explicit user selection to manual in cache (this will trigger method selection effect)
+    console.log(`🎚️ PARAMETER UPDATE: ${parameter} = ${value} for ${modelId} - switching to manual`);
+    
+    // Set explicit user selection to manual in cache
     setSelectedMethod(selectedSKU, modelId, 'manual');
     
-    // Update the parameter - this will trigger forecast regeneration via modelsHash change
-    baseUpdateParameter(modelId, parameter, value);
-  }, [selectedSKU, setSelectedMethod, baseUpdateParameter]);
+    // Immediately update the model state to manual mode (clear optimization data)
+    setModels(prev => prev.map(model => 
+      model.id === modelId 
+        ? { 
+            ...model, 
+            parameters: { ...model.parameters, [parameter]: value },
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
+          }
+        : model
+    ));
+  }, [selectedSKU, setSelectedMethod, setModels]);
 
   const resetToManual = useCallback((modelId: string) => {
     console.log(`🔄 RESET TO MANUAL: ${modelId}`);
     
-    // Only set the method to manual - the method selection effect will handle the UI update
+    // Set the method to manual in cache
     setSelectedMethod(selectedSKU, modelId, 'manual');
-  }, [selectedSKU, setSelectedMethod]);
+    
+    // Immediately clear optimization data from the model
+    setModels(prev => prev.map(model => 
+      model.id === modelId 
+        ? { 
+            ...model,
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
+          }
+        : model
+    ));
+  }, [selectedSKU, setSelectedMethod, setModels]);
+
+  // Method selection handler for badge clicks
+  const handleMethodSelection = useCallback((modelId: string, method: 'ai' | 'grid' | 'manual') => {
+    console.log(`🎯 METHOD SELECTION: ${modelId} -> ${method}`);
+    
+    // Update cache
+    setSelectedMethod(selectedSKU, modelId, method);
+    
+    // Immediately update model state based on method
+    setModels(prev => prev.map(model => {
+      if (model.id !== modelId) return model;
+      
+      const cached = cache[selectedSKU]?.[modelId];
+      
+      if (method === 'manual') {
+        // Clear optimization data for manual mode
+        return {
+          ...model,
+          optimizedParameters: undefined,
+          optimizationConfidence: undefined,
+          optimizationReasoning: undefined,
+          optimizationFactors: undefined,
+          expectedAccuracy: undefined,
+          optimizationMethod: undefined
+        };
+      } else {
+        // Apply cached optimization data if available
+        let selectedCache = null;
+        if (method === 'ai' && cached?.ai) {
+          selectedCache = cached.ai;
+        } else if (method === 'grid' && cached?.grid) {
+          selectedCache = cached.grid;
+        }
+
+        if (selectedCache) {
+          return {
+            ...model,
+            optimizedParameters: selectedCache.parameters,
+            optimizationConfidence: selectedCache.confidence,
+            optimizationReasoning: selectedCache.reasoning,
+            optimizationFactors: selectedCache.factors,
+            expectedAccuracy: selectedCache.expectedAccuracy,
+            optimizationMethod: selectedCache.method
+          };
+        }
+      }
+      
+      return model;
+    }));
+  }, [selectedSKU, setSelectedMethod, setModels, cache]);
 
   // CONTROLLED forecast generation - only when models hash actually changes
   useEffect(() => {
@@ -83,6 +163,7 @@ export const useUnifiedModelManagement = (
     toggleModel,
     updateParameter,
     resetToManual,
+    handleMethodSelection,
     generateForecasts
   };
 };

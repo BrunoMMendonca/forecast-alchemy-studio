@@ -18,7 +18,6 @@ export const useOptimizationCache = () => {
   const [cache, setCache] = useState<OptimizationCache>({});
   const [cacheStats, setCacheStats] = useState({ hits: 0, misses: 0, skipped: 0 });
   const [cacheVersion, setCacheVersion] = useState(0);
-  const [methodSelectionVersion, setMethodSelectionVersion] = useState(0);
   
   // All custom hooks must be called after useState hooks and in the same order
   const {
@@ -49,13 +48,6 @@ export const useOptimizationCache = () => {
   ) => {
     console.log(`🎯 METHOD: Setting method for ${sku}:${modelId} to ${method}`);
     _setSelectedMethod(sku, modelId, method);
-    
-    // Only increment method selection version to trigger UI updates
-    setMethodSelectionVersion(prev => {
-      const newVersion = prev + 1;
-      console.log(`🎯 METHOD: Method selection version incremented to ${newVersion} for UI update`);
-      return newVersion;
-    });
   }, [_setSelectedMethod]);
 
   const getSKUsNeedingOptimizationCallback = useCallback((
@@ -75,7 +67,6 @@ export const useOptimizationCache = () => {
     setCache({});
     setCacheStats({ hits: 0, misses: 0, skipped: 0 });
     setCacheVersion(0);
-    setMethodSelectionVersion(0);
     clearCacheStorage();
   }, []);
 
@@ -83,7 +74,6 @@ export const useOptimizationCache = () => {
     cache,
     cacheStats,
     cacheVersion,
-    methodSelectionVersion,
     generateDataHash,
     getCachedParameters,
     setCachedParameters,

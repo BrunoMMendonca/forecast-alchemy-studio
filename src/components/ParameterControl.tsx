@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -17,6 +16,7 @@ interface ParameterControlProps {
   selectedSKU: string;
   onParameterUpdate: (parameter: string, value: number) => void;
   onResetToManual: () => void;
+  onMethodSelection?: (method: 'ai' | 'grid' | 'manual') => void;
   disabled?: boolean;
   grokApiEnabled?: boolean;
 }
@@ -26,11 +26,12 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   selectedSKU,
   onParameterUpdate,
   onResetToManual,
+  onMethodSelection,
   disabled = false,
   grokApiEnabled = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { cache, setSelectedMethod } = useOptimizationCache();
+  const { cache } = useOptimizationCache();
 
   // Get current user selection from cache
   const cacheEntry = cache[selectedSKU]?.[model.id];
@@ -81,18 +82,11 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     const newValue = values[0];
-    console.log(`🎚️ SLIDER CHANGE: ${parameter} = ${newValue}, current mode: ${userSelectedMethod}`);
-    
-    // Only set method to manual if we're not already in manual mode
-    if (userSelectedMethod !== 'manual') {
-      console.log(`🔄 SWITCHING: Setting method to manual for ${model.id}`);
-      setSelectedMethod(selectedSKU, model.id, 'manual');
-    }
-    
+    console.log(`🎚️ SLIDER CHANGE: ${parameter} = ${newValue}, switching to manual mode`);
     onParameterUpdate(parameter, newValue);
-  }, [onParameterUpdate, userSelectedMethod, selectedSKU, model.id, setSelectedMethod]);
+  }, [onParameterUpdate]);
 
-  // Handle badge clicks with debouncing to prevent duplicate calls
+  // Handle badge clicks - use the new method selection handler if available, otherwise fallback
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
     // Prevent duplicate calls by checking if we're already in this method
     if (userSelectedMethod === newMethod) {
@@ -101,14 +95,16 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     
     console.log(`🎯 BADGE CLICK: Switching to ${newMethod} for ${model.id}`);
     
-    if (newMethod === 'manual') {
-      // For manual mode, only call onResetToManual - it handles the cache update
-      onResetToManual();
+    if (onMethodSelection) {
+      // Use the new direct method selection handler
+      onMethodSelection(newMethod);
     } else {
-      // For AI/Grid modes, update the cache's "selected" field directly
-      setSelectedMethod(selectedSKU, model.id, newMethod);
+      // Fallback to the old approach
+      if (newMethod === 'manual') {
+        onResetToManual();
+      }
     }
-  }, [selectedSKU, model.id, userSelectedMethod, setSelectedMethod, onResetToManual]);
+  }, [userSelectedMethod, model.id, onMethodSelection, onResetToManual]);
 
   const getParameterConfig = (parameter: string) => {
     const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
