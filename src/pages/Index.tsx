@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
 import { OutlierDetection } from '@/components/OutlierDetection';
-import { ForecastEngine } from '@/components/ForecastEngine';
+import { ForecastModels } from '@/components/ForecastModels';
 import { ForecastResults } from '@/components/ForecastResults';
 import { ForecastFinalization } from '@/components/ForecastFinalization';
 import { StepNavigation } from '@/components/StepNavigation';
@@ -41,7 +41,7 @@ const Index = () => {
   const [isQueuePopupOpen, setIsQueuePopupOpen] = useState(false);
   const { toast } = useToast();
 
-  const { addSKUsToQueue, removeSKUsFromQueue, getSKUsInQueue, queueSize, uniqueSKUCount, getQueuedCombinations, getModelsForSKU, clearQueue } = useOptimizationQueue();
+  const { addSKUsToQueue, removeSKUsFromQueue, removeSKUModelPairsFromQueue, getSKUsInQueue, queueSize, uniqueSKUCount, getQueuedCombinations, getModelsForSKU, clearQueue } = useOptimizationQueue();
   const { clearManualAIPreferences } = useManualAIPreferences();
 
   const handleGlobalSettingsChange = (changedSetting: 'forecastPeriods' | 'businessContext' | 'grokApiEnabled') => {
@@ -272,14 +272,22 @@ const Index = () => {
           {currentStep === 3 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white/80 backdrop-blur-sm shadow-xl border-0 rounded-lg">
-                <ForecastEngine
+                <ForecastModels
                   data={cleanedData}
                   forecastPeriods={forecastPeriods}
                   onForecastGeneration={handleForecastGeneration}
                   selectedSKU={selectedSKUForResults}
                   onSKUChange={setSelectedSKUForResults}
-                  businessContext={businessContext}
-                  grokApiEnabled={grokApiEnabled}
+                  optimizationQueue={{
+                    getSKUsInQueue,
+                    getQueuedCombinations,
+                    getModelsForSKU,
+                    removeSKUsFromQueue,
+                    removeSKUModelPairsFromQueue,
+                    removeUnnecessarySKUs: removeSKUsFromQueue,
+                    queueSize,
+                    uniqueSKUCount
+                  }}
                 />
               </div>
 
