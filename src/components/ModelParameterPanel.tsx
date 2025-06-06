@@ -8,6 +8,7 @@ interface ModelParameterPanelProps {
   model: ModelConfig;
   selectedSKU: string;
   onParameterUpdate: (parameter: string, value: number) => void;
+  onResetToManual?: () => void;
   grokApiEnabled?: boolean;
 }
 
@@ -15,6 +16,7 @@ export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
   model,
   selectedSKU,
   onParameterUpdate,
+  onResetToManual,
   grokApiEnabled = true,
 }) => {
   const { cache } = useOptimizationCache();
@@ -46,6 +48,7 @@ export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
             selectedSKU={selectedSKU}
             modelId={model.id}
             cacheEntry={cacheEntry}
+            onResetToManual={onResetToManual}
             grokApiEnabled={grokApiEnabled}
           />
         ))}

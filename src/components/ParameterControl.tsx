@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +20,7 @@ interface ParameterControlProps {
     selected?: 'ai' | 'grid' | 'manual';
   } | null;
   grokApiEnabled?: boolean;
+  onResetToManual?: () => void;
 }
 
 export const ParameterControl: React.FC<ParameterControlProps> = ({
@@ -32,6 +32,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   modelId,
   cacheEntry,
   grokApiEnabled = true,
+  onResetToManual,
 }) => {
   const { setSelectedMethod } = useCacheOperations(
     {}, // cache - not used in this component
@@ -71,8 +72,12 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
       onChange(cacheEntry.ai.parameters[name]);
     } else if (method === 'grid' && cacheEntry?.grid?.parameters?.[name] !== undefined) {
       onChange(cacheEntry.grid.parameters[name]);
+    } else if (method === 'manual') {
+      // For manual, trigger the reset to manual callback to clear optimized parameters
+      if (onResetToManual) {
+        onResetToManual();
+      }
     }
-    // For manual, we keep the current value
   };
 
   const getMethodIcon = (method: string) => {

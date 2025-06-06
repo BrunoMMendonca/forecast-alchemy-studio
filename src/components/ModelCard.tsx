@@ -79,6 +79,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
                 model={model}
                 selectedSKU={selectedSKU}
                 onParameterUpdate={onParameterUpdate}
+                onResetToManual={onResetToManual}
                 grokApiEnabled={grokApiEnabled}
               />
 
