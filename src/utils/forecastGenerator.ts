@@ -124,6 +124,7 @@ export const generateForecastsForSKU = async (
     const result: ForecastResult = {
       sku: selectedSKU,
       model: model.name,
+      modelId: model.id, // Added missing modelId property
       predictions: forecastDates.map((date, i) => ({
         date,
         value: Math.round(predictions[i] || 0)
@@ -136,3 +137,4 @@ export const generateForecastsForSKU = async (
 
   return results;
 };
+

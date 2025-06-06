@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 import { FloatingSettingsButton } from '@/components/FloatingSettingsButton';
 import { OptimizationQueuePopup } from '@/components/OptimizationQueuePopup';
+import { DEFAULT_BUSINESS_CONTEXT } from '@/types/businessContext';
 
 export interface SalesData {
   sku: string;
@@ -48,6 +50,9 @@ const Index = () => {
   const [forecastPeriods, setForecastPeriods] = useState<number>(12);
   const [shouldStartOptimization, setShouldStartOptimization] = useState<boolean>(false);
   const [isQueuePopupOpen, setIsQueuePopupOpen] = useState<boolean>(false);
+  const [businessContext, setBusinessContext] = useState(DEFAULT_BUSINESS_CONTEXT);
+  const [grokApiEnabled, setGrokApiEnabled] = useState<boolean>(true);
+  const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
 
   const { 
     addSKUsToQueue, 
@@ -108,10 +113,9 @@ const Index = () => {
     
     addSKUsToQueue(skusInOrder, 'csv_upload');
     
-    toast({
-      title: "Data Uploaded",
-      description: `${skusInOrder.length} SKU${skusInOrder.length > 1 ? 's' : ''} with optimizable models queued for optimization`,
-    });
+    toast(
+      `Data Uploaded - ${skusInOrder.length} SKU${skusInOrder.length > 1 ? 's' : ''} with optimizable models queued for optimization`
+    );
   };
 
   const handleDataCleaning = (cleanedData: SalesData[]) => {
@@ -123,10 +127,9 @@ const Index = () => {
     const skus = Array.from(new Set(cleanedData.map(d => d.sku)));
     addSKUsToQueue(skus, 'data_cleaning');
     
-    toast({
-      title: "Data Cleaned",
-      description: `${skus.length} SKU${skus.length > 1 ? 's' : ''} queued for optimization after data cleaning`,
-    });
+    toast(
+      `Data Cleaned - ${skus.length} SKU${skus.length > 1 ? 's' : ''} queued for optimization after data cleaning`
+    );
   };
 
   const handleImportDataCleaning = (cleanedData: SalesData[]) => {
@@ -139,10 +142,9 @@ const Index = () => {
     const skus = Array.from(new Set(cleanedData.map(d => d.sku)));
     addSKUsToQueue(skus, 'csv_import');
     
-    toast({
-      title: "Data Imported",
-      description: `${skus.length} SKU${skus.length > 1 ? 's' : ''} queued for optimization after data import`,
-    });
+    toast(
+      `Data Imported - ${skus.length} SKU${skus.length > 1 ? 's' : ''} queued for optimization after data import`
+    );
   };
 
   const handleForecastGeneration = (results: ForecastResult[], selectedSKU: string) => {
@@ -150,10 +152,18 @@ const Index = () => {
     setSelectedSKUForResults(selectedSKU);
     setCurrentStep(3);
     
-    toast({
-      title: "Forecast Generated",
-      description: `Forecast results generated for ${results.length} periods`,
-    });
+    toast(
+      `Forecast Generated - Forecast results generated for ${results.length} periods`
+    );
+  };
+
+  const handleStepClick = (stepIndex: number) => {
+    // Allow navigation to any step if data is uploaded
+    if (stepIndex === 0 || salesData.length > 0) {
+      // Don't allow finalization step without forecasts
+      if (stepIndex === 4 && forecastResults.length === 0) return;
+      setCurrentStep(stepIndex);
+    }
   };
 
   // Create complete optimization queue object
@@ -200,13 +210,20 @@ const Index = () => {
         <FloatingSettingsButton
           forecastPeriods={forecastPeriods}
           setForecastPeriods={setForecastPeriods}
-          businessContext={{}}
-          setBusinessContext={() => {}}
-          manualAIPreferences={{}}
-          setManualAIPreferences={() => {}}
+          businessContext={businessContext}
+          setBusinessContext={setBusinessContext}
+          grokApiEnabled={grokApiEnabled}
+          setGrokApiEnabled={setGrokApiEnabled}
+          settingsOpen={settingsOpen}
+          setSettingsOpen={setSettingsOpen}
         />
 
-        <StepNavigation currentStep={currentStep} />
+        <StepNavigation 
+          currentStep={currentStep}
+          salesDataLength={salesData.length}
+          forecastResultsLength={forecastResults.length}
+          onStepClick={handleStepClick}
+        />
 
         {/* Step 1: Data Upload */}
         {currentStep === 0 && (
@@ -259,3 +276,4 @@ const Index = () => {
 };
 
 export default Index;
+
