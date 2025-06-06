@@ -266,6 +266,7 @@ const Index = () => {
                   selectedSKU={selectedSKUForResults}
                   onSKUChange={setSelectedSKUForResults}
                   businessContext={businessContext}
+                  grokApiEnabled={grokApiEnabled}
                 />
               </div>
 
