@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useUnifiedModelManagement } from '@/hooks/useUnifiedModelManagement';
@@ -144,8 +145,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 
       <ModelSelection
         models={models}
-        selectedSKU={selectedSKU}
-        data={data}
         onToggleModel={toggleModel}
         onUpdateParameter={updateParameter}
         onUseAI={useAIOptimization}
