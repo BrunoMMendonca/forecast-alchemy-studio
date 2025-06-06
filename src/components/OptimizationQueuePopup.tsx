@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,41 +23,28 @@ interface OptimizationQueuePopupProps {
     completedSKUs: number;
     totalSKUs: number;
   } | null;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
   optimizationQueue,
   models,
   isOptimizing,
-  progress
+  progress,
+  isOpen,
+  onOpenChange
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  // Auto-open when there are items in queue or optimization is running
-  useEffect(() => {
-    const queuedSKUs = optimizationQueue.getSKUsInQueue();
-    if (queuedSKUs.length > 0 || isOptimizing) {
-      setIsOpen(true);
-    }
-  }, [optimizationQueue.getSKUsInQueue().length, isOptimizing]);
-
-  // Auto-close when queue is empty and not optimizing
-  useEffect(() => {
-    const queuedSKUs = optimizationQueue.getSKUsInQueue();
-    if (queuedSKUs.length === 0 && !isOptimizing) {
-      setTimeout(() => setIsOpen(false), 2000); // Close after 2 seconds
-    }
-  }, [optimizationQueue.getSKUsInQueue().length, isOptimizing]);
-
   const queuedSKUs = optimizationQueue.getSKUsInQueue();
   const enabledModels = models.filter(m => m.enabled);
 
+  // Don't render if there's nothing to show
   if (queuedSKUs.length === 0 && !isOptimizing) {
     return null;
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -151,7 +138,7 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
             </p>
             <Button
               variant="outline"
-              onClick={() => setIsOpen(false)}
+              onClick={() => onOpenChange(false)}
             >
               Close
             </Button>

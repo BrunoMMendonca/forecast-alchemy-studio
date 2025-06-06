@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useUnifiedModelManagement } from '@/hooks/useUnifiedModelManagement';
@@ -34,6 +35,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   optimizationQueue
 }, ref) => {
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
+  const [isQueuePopupOpen, setIsQueuePopupOpen] = useState(false);
   const hasTriggeredOptimizationRef = useRef(false);
   const componentMountedRef = useRef(false);
   const autoOptimizationDoneRef = useRef(false);
@@ -138,6 +140,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
             isOptimizing={isOptimizing}
             progress={progress}
             hasTriggeredOptimization={hasTriggeredOptimizationRef.current}
+            onOpenQueuePopup={() => setIsQueuePopupOpen(true)}
           />
         )}
       </div>
@@ -161,6 +164,8 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
           models={models}
           isOptimizing={isOptimizing}
           progress={progress}
+          isOpen={isQueuePopupOpen}
+          onOpenChange={setIsQueuePopupOpen}
         />
       )}
     </div>

@@ -1,7 +1,8 @@
 
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Zap } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Clock, Zap, Eye } from 'lucide-react';
 
 interface QueueStatusDisplayProps {
   optimizationQueue: {
@@ -15,6 +16,7 @@ interface QueueStatusDisplayProps {
     totalSKUs: number;
   } | null;
   hasTriggeredOptimization: boolean;
+  onOpenQueuePopup?: () => void;
 }
 
 export const QueueStatusDisplay: React.FC<QueueStatusDisplayProps> = ({
@@ -22,8 +24,8 @@ export const QueueStatusDisplay: React.FC<QueueStatusDisplayProps> = ({
   isOptimizing,
   progress,
   hasTriggeredOptimization,
+  onOpenQueuePopup,
 }) => {
-  // Show status if we're actively optimizing OR if there are items in queue
   const queuedSKUs = optimizationQueue.getSKUsInQueue();
   const shouldShow = isOptimizing || queuedSKUs.length > 0;
 
@@ -37,28 +39,42 @@ export const QueueStatusDisplay: React.FC<QueueStatusDisplayProps> = ({
         ? 'bg-blue-50 border-blue-200' 
         : 'bg-amber-50 border-amber-200'
     }`}>
-      <div className="flex items-center gap-3">
-        {isOptimizing ? (
-          <>
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-            <Zap className="h-4 w-4 text-blue-600" />
-            <span className="font-medium text-blue-800">
-              Currently optimizing: {progress?.currentSKU || 'Processing...'}
-            </span>
-            <Badge variant="secondary" className="text-xs">
-              {progress ? `${progress.completedSKUs + 1}/${progress.totalSKUs}` : 'Processing...'}
-            </Badge>
-          </>
-        ) : (
-          <>
-            <Clock className="h-5 w-5 text-amber-600" />
-            <span className="font-medium text-amber-800">
-              {queuedSKUs.length} SKUs queued for optimization
-            </span>
-            <Badge variant="outline" className="text-xs border-amber-300 text-amber-700">
-              {hasTriggeredOptimization ? 'Starting...' : 'Pending'}
-            </Badge>
-          </>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {isOptimizing ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+              <Zap className="h-4 w-4 text-blue-600" />
+              <span className="font-medium text-blue-800">
+                Currently optimizing: {progress?.currentSKU || 'Processing...'}
+              </span>
+              <Badge variant="secondary" className="text-xs">
+                {progress ? `${progress.completedSKUs + 1}/${progress.totalSKUs}` : 'Processing...'}
+              </Badge>
+            </>
+          ) : (
+            <>
+              <Clock className="h-5 w-5 text-amber-600" />
+              <span className="font-medium text-amber-800">
+                {queuedSKUs.length} SKUs queued for optimization
+              </span>
+              <Badge variant="outline" className="text-xs border-amber-300 text-amber-700">
+                {hasTriggeredOptimization ? 'Starting...' : 'Pending'}
+              </Badge>
+            </>
+          )}
+        </div>
+        
+        {onOpenQueuePopup && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenQueuePopup}
+            className="gap-2"
+          >
+            <Eye className="h-4 w-4" />
+            View Details
+          </Button>
         )}
       </div>
     </div>
