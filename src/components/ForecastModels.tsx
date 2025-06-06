@@ -145,6 +145,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 
       <ModelSelection
         models={models}
+        selectedSKU={selectedSKU}
         onToggleModel={toggleModel}
         onUpdateParameter={updateParameter}
         onUseAI={useAIOptimization}
