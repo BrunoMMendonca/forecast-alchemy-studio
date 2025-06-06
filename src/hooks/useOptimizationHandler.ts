@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { SalesData } from '@/pages/Index';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
@@ -247,8 +246,7 @@ export const useOptimizationHandler = (
           }, 200);
         }
       },
-      getSKUsNeedingOptimization,
-      grokApiEnabled // Pass grokApiEnabled to the batch optimization
+      getSKUsNeedingOptimization
     );
 
     // Mark optimization completed after a slight delay to ensure all updates are processed
