@@ -1,4 +1,3 @@
-
 import { optimizationLogger } from '@/utils/optimizationLogger';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -41,10 +40,11 @@ export const optimizeSingleModel = async (
     console.log(`🚫 SINGLE: Model ${model.id} has no optimizable parameters, skipping optimization entirely`);
     
     const defaultResult = { 
-      parameters: model.parameters || {}, 
+      parameters: {}, 
       confidence: 70, 
       method: 'default',
       accuracy: 70,
+      expectedAccuracy: 70,
       reasoning: 'No parameters available for optimization. Using default configuration.',
       factors: {
         stability: 70,

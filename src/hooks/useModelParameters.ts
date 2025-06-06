@@ -17,7 +17,13 @@ export const useModelParameters = (grokApiEnabled: boolean = true) => {
       model.id === modelId 
         ? { 
             ...model, 
-            parameters: { ...model.parameters, [parameter]: value },
+            parameters: { 
+              ...model.parameters, 
+              [parameter]: { 
+                ...model.parameters![parameter], 
+                value 
+              } 
+            },
             // Clear optimization data when manually changing parameters
             optimizedParameters: undefined,
             optimizationConfidence: undefined,

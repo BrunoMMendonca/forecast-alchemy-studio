@@ -242,7 +242,13 @@ export const useUnifiedModelManagement = (
       model.id === modelId 
         ? { 
             ...model, 
-            parameters: { ...model.parameters, [parameter]: value },
+            parameters: { 
+              ...model.parameters, 
+              [parameter]: { 
+                ...model.parameters![parameter], 
+                value 
+              } 
+            },
             optimizedParameters: undefined,
             optimizationConfidence: undefined,
             optimizationReasoning: undefined,

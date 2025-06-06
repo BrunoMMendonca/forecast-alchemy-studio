@@ -64,7 +64,11 @@ export const generateForecastsForSKU = async (
   const results: ForecastResult[] = [];
 
   for (const model of enabledModels) {
-    const effectiveParameters = model.optimizedParameters || model.parameters;
+    // Use optimized parameters if available, otherwise extract values from parameter objects
+    const effectiveParameters = model.optimizedParameters || 
+      (model.parameters ? Object.fromEntries(
+        Object.entries(model.parameters).map(([key, param]) => [key, param.value])
+      ) : {});
 
     let predictions: number[] = [];
 
