@@ -19,6 +19,7 @@ interface ParameterControlProps {
   onUseAI: () => void;
   onUseGrid?: () => void;
   onResetToManual: () => void;
+  disabled?: boolean;
 }
 
 export const ParameterControl: React.FC<ParameterControlProps> = ({
@@ -28,6 +29,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   onUseAI,
   onUseGrid,
   onResetToManual,
+  disabled = false,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const { getCachedParameters } = useOptimizationCache();
