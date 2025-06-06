@@ -4,7 +4,7 @@ import { SalesData, ForecastResult } from '@/pages/Index';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp } from 'lucide-react';
 import { ProductSelector } from './ProductSelector';
-import { ModelParameterPanel } from './ModelParameterPanel';
+import { ModelSelection } from './ModelSelection';
 import { useForecastEngine } from '@/hooks/useForecastEngine';
 import { useModelParameters } from '@/hooks/useModelParameters';
 import { useOptimization } from '@/hooks/useOptimization';
@@ -91,14 +91,12 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
         )}
 
         {effectiveSelectedSKU && effectiveSelectedSKU.trim() !== '' && (
-          <ModelParameterPanel
+          <ModelSelection
             models={models}
             selectedSKU={effectiveSelectedSKU}
             onToggleModel={toggleModel}
             onUpdateParameter={updateParameter}
-            onResetModel={resetModel}
-            isOptimizing={isOptimizing}
-            optimizingModel={optimizingModel}
+            onResetToManual={resetModel}
             grokApiEnabled={grokApiEnabled}
           />
         )}

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Calculator, TrendingUp, Target, Calendar, Activity, BarChart3, ArrowRight } from 'lucide-react';
-import { ModelConfig } from '@/types/forecast';
+import { ModelConfig, Parameter } from '@/types/forecast';
 
 export const getDefaultModels = (): ModelConfig[] => [
   {
@@ -10,7 +10,16 @@ export const getDefaultModels = (): ModelConfig[] => [
     description: 'Uses the average of the last N data points to predict future values',
     icon: React.createElement(Calculator, { className: "h-4 w-4" }),
     enabled: true,
-    parameters: { window: 3 }
+    parameters: { 
+      window: {
+        value: 3,
+        min: 1,
+        max: 20,
+        step: 1,
+        label: 'Window Size',
+        description: 'Number of periods to average'
+      }
+    }
   },
   {
     id: 'simple_exponential_smoothing',
@@ -18,7 +27,16 @@ export const getDefaultModels = (): ModelConfig[] => [
     description: 'Gives more weight to recent observations for stable data without trend',
     icon: React.createElement(TrendingUp, { className: "h-4 w-4" }),
     enabled: true,
-    parameters: { alpha: 0.3 }
+    parameters: { 
+      alpha: {
+        value: 0.3,
+        min: 0.01,
+        max: 1.0,
+        step: 0.01,
+        label: 'Alpha (Smoothing)',
+        description: 'Smoothing parameter for level'
+      }
+    }
   },
   {
     id: 'double_exponential_smoothing',
@@ -26,7 +44,24 @@ export const getDefaultModels = (): ModelConfig[] => [
     description: 'Handles both level and trend for data with trend but no seasonality',
     icon: React.createElement(ArrowRight, { className: "h-4 w-4" }),
     enabled: true,
-    parameters: { alpha: 0.3, beta: 0.1 }
+    parameters: { 
+      alpha: {
+        value: 0.3,
+        min: 0.01,
+        max: 1.0,
+        step: 0.01,
+        label: 'Alpha (Level)',
+        description: 'Smoothing parameter for level'
+      },
+      beta: {
+        value: 0.1,
+        min: 0.01,
+        max: 1.0,
+        step: 0.01,
+        label: 'Beta (Trend)',
+        description: 'Smoothing parameter for trend'
+      }
+    }
   },
   {
     id: 'linear_trend',
@@ -42,7 +77,24 @@ export const getDefaultModels = (): ModelConfig[] => [
     description: 'Moving average that accounts for seasonal patterns in your data',
     icon: React.createElement(Calendar, { className: "h-4 w-4" }),
     enabled: true,
-    parameters: { window: 3, seasonalPeriods: 12 },
+    parameters: { 
+      window: {
+        value: 3,
+        min: 1,
+        max: 20,
+        step: 1,
+        label: 'Window Size',
+        description: 'Number of periods to average'
+      },
+      seasonalPeriods: {
+        value: 12,
+        min: 2,
+        max: 52,
+        step: 1,
+        label: 'Seasonal Periods',
+        description: 'Number of periods in one season'
+      }
+    },
     isSeasonal: true
   },
   {
@@ -51,7 +103,40 @@ export const getDefaultModels = (): ModelConfig[] => [
     description: 'Advanced model that handles trend and seasonality simultaneously',
     icon: React.createElement(Activity, { className: "h-4 w-4" }),
     enabled: true,
-    parameters: { alpha: 0.3, beta: 0.1, gamma: 0.1, seasonalPeriods: 12 },
+    parameters: { 
+      alpha: {
+        value: 0.3,
+        min: 0.01,
+        max: 1.0,
+        step: 0.01,
+        label: 'Alpha (Level)',
+        description: 'Smoothing parameter for level'
+      },
+      beta: {
+        value: 0.1,
+        min: 0.01,
+        max: 1.0,
+        step: 0.01,
+        label: 'Beta (Trend)',
+        description: 'Smoothing parameter for trend'
+      },
+      gamma: {
+        value: 0.1,
+        min: 0.01,
+        max: 1.0,
+        step: 0.01,
+        label: 'Gamma (Seasonal)',
+        description: 'Smoothing parameter for seasonality'
+      },
+      seasonalPeriods: {
+        value: 12,
+        min: 2,
+        max: 52,
+        step: 1,
+        label: 'Seasonal Periods',
+        description: 'Number of periods in one season'
+      }
+    },
     isSeasonal: true
   },
   {
