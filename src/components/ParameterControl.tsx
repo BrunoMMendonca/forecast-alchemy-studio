@@ -20,6 +20,8 @@ interface ParameterControlProps {
   onMethodSelection?: (method: 'ai' | 'grid' | 'manual') => void;
   disabled?: boolean;
   grokApiEnabled?: boolean;
+  // NEW: Controlled component props
+  selectedMethod?: 'ai' | 'grid' | 'manual';
 }
 
 export const ParameterControl: React.FC<ParameterControlProps> = ({
@@ -30,70 +32,48 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   onMethodSelection,
   disabled = false,
   grokApiEnabled = true,
+  selectedMethod = 'manual' // Default to manual if not provided
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { cache, cacheVersion } = useOptimizationCache();
+  const { cache } = useOptimizationCache();
 
-  // Get current user selection from cache - depend on cacheVersion for reactivity
+  console.log(`🎯 PARAM_CONTROL: Rendering with selectedMethod = ${selectedMethod} for ${selectedSKU}:${model.id}`);
+
+  // Get cache entry for optimization data
   const cacheEntry = useMemo(() => {
-    console.log(`🔄 PARAM_CONTROL: Cache lookup for ${selectedSKU}:${model.id} (version: ${cacheVersion})`);
-    const entry = cache[selectedSKU]?.[model.id];
-    console.log(`🔄 PARAM_CONTROL: Found cache entry:`, entry);
-    return entry;
-  }, [cache, selectedSKU, model.id, cacheVersion]);
-
-  const userSelectedMethod = useMemo(() => {
-    const method = cacheEntry?.selected;
-    console.log(`🔄 PARAM_CONTROL: User selected method for ${selectedSKU}:${model.id} = ${method} (cache version: ${cacheVersion})`);
-    return method;
-  }, [cacheEntry, selectedSKU, model.id, cacheVersion]);
-
-  // Add effect to log when userSelectedMethod changes
-  useEffect(() => {
-    console.log(`🎯 PARAM_CONTROL: userSelectedMethod changed to ${userSelectedMethod} for ${selectedSKU}:${model.id}`);
-  }, [userSelectedMethod, selectedSKU, model.id]);
+    return cache[selectedSKU]?.[model.id];
+  }, [cache, selectedSKU, model.id]);
   
-  // Load optimization data from cache based on user selection
+  // Load optimization data from cache based on selected method
   const optimizationData = useMemo(() => {
-    if (!cacheEntry || userSelectedMethod === 'manual') {
-      console.log(`🔄 PARAM_CONTROL: No optimization data - manual mode or no cache entry`);
+    if (!cacheEntry || selectedMethod === 'manual') {
       return null;
     }
 
-    if (userSelectedMethod === 'ai' && cacheEntry.ai) {
-      console.log(`🔄 PARAM_CONTROL: Using AI optimization data`);
+    if (selectedMethod === 'ai' && cacheEntry.ai) {
       return cacheEntry.ai;
-    } else if (userSelectedMethod === 'grid' && cacheEntry.grid) {
-      console.log(`🔄 PARAM_CONTROL: Using Grid optimization data`);
+    } else if (selectedMethod === 'grid' && cacheEntry.grid) {
       return cacheEntry.grid;
     }
 
-    const fallback = cacheEntry.ai || cacheEntry.grid || null;
-    console.log(`🔄 PARAM_CONTROL: Using fallback optimization data:`, fallback ? 'found' : 'none');
-    return fallback;
-  }, [cacheEntry, userSelectedMethod]);
+    return null;
+  }, [cacheEntry, selectedMethod]);
 
-  // Determine which method is currently active based on user selection - REMOVED redundant cacheVersion dependency
+  // Determine badge states based on controlled selectedMethod prop
   const badgeStates = useMemo(() => {
-    const isManual = userSelectedMethod === 'manual';
-    const isAI = userSelectedMethod === 'ai';
-    const isGrid = userSelectedMethod === 'grid';
+    const isManual = selectedMethod === 'manual';
+    const isAI = selectedMethod === 'ai';
+    const isGrid = selectedMethod === 'grid';
     
-    console.log(`🎯 PARAM_CONTROL: Badge states recalculated for ${selectedSKU}:${model.id}:`, {
-      userSelectedMethod,
+    console.log(`🎯 PARAM_CONTROL: Badge states for ${selectedSKU}:${model.id}:`, {
+      selectedMethod,
       isManual,
       isAI,
-      isGrid,
-      timestamp: Date.now()
+      isGrid
     });
     
     return { isManual, isAI, isGrid };
-  }, [userSelectedMethod, selectedSKU, model.id]);
-
-  // Add debugging effect to track badge state changes
-  useEffect(() => {
-    console.log(`🎯 BADGE_UPDATE: Badge states changed for ${selectedSKU}:${model.id}:`, badgeStates);
-  }, [badgeStates, selectedSKU, model.id]);
+  }, [selectedMethod, selectedSKU, model.id]);
 
   const { isManual, isAI, isGrid } = badgeStates;
 
@@ -124,24 +104,16 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     onParameterUpdate(parameter, newValue);
   }, [onParameterUpdate]);
 
-  // Handle badge clicks - use the new method selection handler if available, otherwise fallback
+  // Handle badge clicks - use the controlled approach
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
-    // Prevent duplicate calls by checking if we're already in this method
-    if (userSelectedMethod === newMethod) {
-      console.log(`🎯 BADGE CLICK: Already in ${newMethod} mode for ${model.id}, ignoring`);
-      return;
-    }
-    
-    console.log(`🎯 BADGE CLICK: Switching to ${newMethod} for ${model.id}`);
+    console.log(`🎯 BADGE CLICK: Requesting method change to ${newMethod} for ${model.id}`);
     
     if (onMethodSelection) {
       onMethodSelection(newMethod);
-    } else {
-      if (newMethod === 'manual') {
-        onResetToManual();
-      }
+    } else if (newMethod === 'manual') {
+      onResetToManual();
     }
-  }, [userSelectedMethod, model.id, onMethodSelection, onResetToManual]);
+  }, [model.id, onMethodSelection, onResetToManual]);
 
   const getParameterConfig = (parameter: string) => {
     const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
@@ -198,7 +170,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
-                        console.log(`🎯 AI BADGE CLICK: Current method = ${userSelectedMethod}, isAI = ${isAI}, timestamp = ${Date.now()}`);
+                        console.log(`🎯 AI BADGE CLICK: Current method = ${selectedMethod}, requesting AI`);
                         handlePreferenceChange('ai');
                       }}
                     >
@@ -214,7 +186,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      console.log(`🎯 GRID BADGE CLICK: Current method = ${userSelectedMethod}, isGrid = ${isGrid}, timestamp = ${Date.now()}`);
+                      console.log(`🎯 GRID BADGE CLICK: Current method = ${selectedMethod}, requesting Grid`);
                       handlePreferenceChange('grid');
                     }}
                   >
@@ -229,7 +201,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      console.log(`🎯 MANUAL BADGE CLICK: Current method = ${userSelectedMethod}, isManual = ${isManual}, timestamp = ${Date.now()}`);
+                      console.log(`🎯 MANUAL BADGE CLICK: Current method = ${selectedMethod}, requesting Manual`);
                       handlePreferenceChange('manual');
                     }}
                   >
