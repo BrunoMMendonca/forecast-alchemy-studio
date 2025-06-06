@@ -10,9 +10,11 @@ import { ChevronDown, ChevronRight, Settings, Bot, Grid3X3, User } from 'lucide-
 import { ModelConfig } from '@/types/forecast';
 import { ReasoningDisplay } from './ReasoningDisplay';
 import { hasOptimizableParameters } from '@/utils/modelConfig';
+import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 
 interface ParameterControlProps {
   model: ModelConfig;
+  selectedSKU: string;
   onParameterUpdate: (parameter: string, value: number) => void;
   onUseAI: () => void;
   onUseGrid?: () => void;
@@ -21,12 +23,14 @@ interface ParameterControlProps {
 
 export const ParameterControl: React.FC<ParameterControlProps> = ({
   model,
+  selectedSKU,
   onParameterUpdate,
   onUseAI,
   onUseGrid,
   onResetToManual,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const { getCachedParameters } = useOptimizationCache();
 
   // Fix the logic to properly determine the current method
   const currentMethod = model.optimizationMethod;
@@ -40,9 +44,10 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   // Only show parameters section if model actually has parameters
   const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
 
-  // Check if optimization was actually performed
-  const hasOptimizationResults = model.optimizationMethod && 
-                                (model.optimizationReasoning || model.optimizationFactors);
+  // Check if optimization results exist in cache - use cache as source of truth
+  const cachedAIResults = getCachedParameters(selectedSKU, model.id, 'ai');
+  const cachedGridResults = getCachedParameters(selectedSKU, model.id, 'grid');
+  const hasOptimizationResults = canOptimize && (cachedAIResults || cachedGridResults) && !isManual;
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     onParameterUpdate(parameter, values[0]);
@@ -180,8 +185,8 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 })}
               </div>
 
-              {/* Reasoning Display - Only show if optimization was performed and model can be optimized */}
-              {canOptimize && hasOptimizationResults && !isManual && (
+              {/* Reasoning Display - Only show if optimization results exist in cache */}
+              {hasOptimizationResults && (
                 <div className="mt-6 pt-4 border-t">
                   <ReasoningDisplay
                     reasoning={model.optimizationReasoning}
