@@ -73,7 +73,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     return fallback;
   }, [cacheEntry, userSelectedMethod]);
 
-  // Determine which method is currently active based on user selection - FORCE recalculation on cacheVersion change
+  // Determine which method is currently active based on user selection - REMOVED redundant cacheVersion dependency
   const badgeStates = useMemo(() => {
     const isManual = userSelectedMethod === 'manual';
     const isAI = userSelectedMethod === 'ai';
@@ -84,11 +84,16 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
       isManual,
       isAI,
       isGrid,
-      cacheVersion
+      timestamp: Date.now()
     });
     
     return { isManual, isAI, isGrid };
-  }, [userSelectedMethod, selectedSKU, model.id, cacheVersion]);
+  }, [userSelectedMethod, selectedSKU, model.id]);
+
+  // Add debugging effect to track badge state changes
+  useEffect(() => {
+    console.log(`🎯 BADGE_UPDATE: Badge states changed for ${selectedSKU}:${model.id}:`, badgeStates);
+  }, [badgeStates, selectedSKU, model.id]);
 
   const { isManual, isAI, isGrid } = badgeStates;
 
@@ -193,7 +198,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
-                        console.log(`🎯 AI BADGE CLICK: Current method = ${userSelectedMethod}, isAI = ${isAI}`);
+                        console.log(`🎯 AI BADGE CLICK: Current method = ${userSelectedMethod}, isAI = ${isAI}, timestamp = ${Date.now()}`);
                         handlePreferenceChange('ai');
                       }}
                     >
@@ -209,7 +214,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      console.log(`🎯 GRID BADGE CLICK: Current method = ${userSelectedMethod}, isGrid = ${isGrid}`);
+                      console.log(`🎯 GRID BADGE CLICK: Current method = ${userSelectedMethod}, isGrid = ${isGrid}, timestamp = ${Date.now()}`);
                       handlePreferenceChange('grid');
                     }}
                   >
@@ -224,7 +229,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      console.log(`🎯 MANUAL BADGE CLICK: Current method = ${userSelectedMethod}, isManual = ${isManual}`);
+                      console.log(`🎯 MANUAL BADGE CLICK: Current method = ${userSelectedMethod}, isManual = ${isManual}, timestamp = ${Date.now()}`);
                       handlePreferenceChange('manual');
                     }}
                   >
