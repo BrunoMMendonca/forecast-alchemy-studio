@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,6 +10,7 @@ import { ForecastSettings } from '@/components/ForecastSettings';
 import { FloatingSettingsButton } from '@/components/FloatingSettingsButton';
 import { OutlierDetection } from '@/components/OutlierDetection';
 import { StepNavigation } from '@/components/StepNavigation';
+import { ProductSelector } from '@/components/ProductSelector';
 import { useGlobalForecastSettings } from '@/hooks/useGlobalForecastSettings';
 import { Upload, BarChart3, Target, Settings2, AlertTriangle } from 'lucide-react';
 import { ForecastResult } from '@/types/forecast';
@@ -142,19 +144,33 @@ const Index = () => {
 
           <TabsContent value="visualize" className="space-y-6">
             {data.length > 0 && (
-              <DataVisualization 
-                data={data} 
-              />
+              <>
+                <ProductSelector
+                  data={data}
+                  selectedSKU={selectedSKU}
+                  onSKUChange={handleSKUChange}
+                />
+                <DataVisualization 
+                  data={data} 
+                />
+              </>
             )}
           </TabsContent>
 
           <TabsContent value="outliers" className="space-y-6">
             {data.length > 0 && (
-              <OutlierDetection 
-                data={data}
-                cleanedData={data}
-                onDataCleaning={setData}
-              />
+              <>
+                <ProductSelector
+                  data={data}
+                  selectedSKU={selectedSKU}
+                  onSKUChange={handleSKUChange}
+                />
+                <OutlierDetection 
+                  data={data}
+                  cleanedData={data}
+                  onDataCleaning={setData}
+                />
+              </>
             )}
           </TabsContent>
 
