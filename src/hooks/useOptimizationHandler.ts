@@ -6,7 +6,7 @@ import { useBatchOptimization } from '@/hooks/useBatchOptimization';
 import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimization';
 import { useModelManagement } from '@/hooks/useModelManagement';
 import { OptimizationFactors } from '@/types/optimizationTypes';
-import { PreferenceValue } from '@/hooks/useManualAIPreferences';
+import { PreferenceValue, useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 import { hasOptimizableParameters } from '@/utils/modelConfig';
 
 interface OptimizationQueue {
@@ -25,7 +25,8 @@ export const useOptimizationHandler = (
   const {
     generateDataHash,
     setCachedParameters,
-    getSKUsNeedingOptimization
+    getSKUsNeedingOptimization,
+    cache
   } = useOptimizationCache();
   
   const { isOptimizing, progress, optimizeQueuedSKUs } = useBatchOptimization();
@@ -41,6 +42,25 @@ export const useOptimizationHandler = (
     loadManualAIPreferences,
     saveManualAIPreferences
   } = useModelManagement(selectedSKU, data);
+
+  const { saveManualAIPreferences: savePreferences } = useManualAIPreferences();
+
+  // Helper function to determine best available method for a model
+  const getBestAvailableMethod = useCallback((sku: string, modelId: string): PreferenceValue => {
+    const cached = cache[sku]?.[modelId];
+    if (!cached) return 'manual';
+
+    const skuData = data.filter(d => d.sku === sku);
+    const currentDataHash = generateDataHash(skuData);
+
+    const hasValidAI = cached.ai && cached.ai.dataHash === currentDataHash;
+    const hasValidGrid = cached.grid && cached.grid.dataHash === currentDataHash;
+
+    // Priority: AI > Grid > Manual
+    if (hasValidAI) return 'ai';
+    if (hasValidGrid) return 'grid';
+    return 'manual';
+  }, [cache, data, generateDataHash]);
 
   const handleQueueOptimization = useCallback(async () => {
     if (!optimizationQueue) {
@@ -111,6 +131,7 @@ export const useOptimizationHandler = (
           businessImpact: factors?.businessImpact || 'Unknown'
         };
         
+        // Cache the optimization results
         if (bothResults) {
           if (bothResults.ai) {
             setCachedParameters(
@@ -143,18 +164,16 @@ export const useOptimizationHandler = (
           setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
         }
         
+        // IMPORTANT: Update preferences to best available method after caching
         const preferences = loadManualAIPreferences();
         const preferenceKey = `${sku}:${modelId}`;
-        let newPreference: PreferenceValue = 'ai';
+        const bestAvailableMethod = getBestAvailableMethod(sku, modelId);
         
-        if (method === 'grid_search') {
-          newPreference = 'grid';
-        } else if (method?.startsWith('ai_')) {
-          newPreference = 'ai';
-        }
-        
-        preferences[preferenceKey] = newPreference;
+        preferences[preferenceKey] = bestAvailableMethod;
         saveManualAIPreferences(preferences);
+        savePreferences(preferences);
+        
+        console.log(`🎯 PREFERENCE UPDATE: ${preferenceKey} -> ${bestAvailableMethod} (after optimization)`);
         
         setModels(prev => prev.map(model => 
           model.id === modelId 
@@ -190,7 +209,7 @@ export const useOptimizationHandler = (
     setTimeout(() => {
       markOptimizationCompleted(data, '/');
     }, 1000);
-  }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete]);
+  }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, savePreferences, getBestAvailableMethod, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete]);
 
   return {
     isOptimizing,
