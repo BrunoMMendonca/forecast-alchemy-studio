@@ -30,13 +30,12 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   grokApiEnabled = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [pendingPreference, setPendingPreference] = useState<string | null>(null);
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
 
   // Get current preference for this model
   const preferences = loadManualAIPreferences();
   const preferenceKey = `${selectedSKU}:${model.id}`;
-  const currentPreference = pendingPreference || preferences[preferenceKey] || 'manual';
+  const currentPreference = preferences[preferenceKey] || 'manual';
 
   // Determine which method is currently active
   const isManual = currentPreference === 'manual';
@@ -49,7 +48,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   // Only show parameters section if model actually has parameters
   const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
 
-  // Check if optimization results exist for display - but respect pending preference
+  // Check if optimization results exist for display
   const hasOptimizationResults = canOptimize && model.optimizationReasoning && !isManual;
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
@@ -60,9 +59,6 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const handlePreferenceChange = useCallback((newPreference: 'manual' | 'ai' | 'grid') => {
     console.log(`🎯 BADGE CLICK: Switching to ${newPreference} view for ${model.id}`);
     
-    // Set pending preference for immediate UI feedback
-    setPendingPreference(newPreference);
-    
     const updatedPreferences = { ...preferences };
     updatedPreferences[preferenceKey] = newPreference;
     saveManualAIPreferences(updatedPreferences);
@@ -71,11 +67,6 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     if (newPreference === 'manual') {
       onResetToManual();
     }
-    
-    // Clear pending preference after a short delay to allow the hook to process
-    setTimeout(() => {
-      setPendingPreference(null);
-    }, 100);
     
     // Note: The badge click changes the preference, and the useUnifiedModelManagement hook
     // will detect this change and update the model with the appropriate cached results
@@ -251,19 +242,12 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                 </div>
               )}
 
-              {/* Status indicator when no optimization results are loaded - context aware */}
-              {canOptimize && !isManual && !model.optimizationReasoning && !pendingPreference && (
+              {/* Status indicator when no optimization results are loaded */}
+              {canOptimize && !isManual && !model.optimizationReasoning && (
                 <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
                   <p className="text-sm text-yellow-700">
-                    {isAI && !grokApiEnabled ? (
-                      "AI optimization is not available because Grok API is disabled. Try using Grid optimization instead."
-                    ) : isAI ? (
-                      "No AI optimization results are currently loaded for this model. If optimization has been run, try refreshing or check if results are available for this SKU."
-                    ) : isGrid ? (
-                      "No Grid optimization results are currently loaded for this model. If optimization has been run, try refreshing or check if results are available for this SKU."
-                    ) : (
-                      "No optimization results are currently loaded for this model. If optimization has been run, try refreshing or check if results are available for this SKU."
-                    )}
+                    No {isAI ? 'AI' : 'Grid'} optimization results are currently loaded for this model. 
+                    If optimization has been run, try refreshing or check if results are available for this SKU.
                   </p>
                 </div>
               )}
