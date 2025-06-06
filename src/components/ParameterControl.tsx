@@ -58,8 +58,9 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const isAI = userSelectedMethod === 'ai';
   const isGrid = userSelectedMethod === 'grid';
 
-  // Use optimized parameters from cache if available, otherwise use model's base parameters
-  const currentParameters = optimizationData?.parameters || model.parameters;
+  // CRITICAL FIX: Always use model.parameters for the actual parameter values
+  // Only use optimizationData for display of optimization results
+  const currentParameters = model.parameters;
   const canOptimize = hasOptimizableParameters(model);
 
   // Only show parameters section if model actually has parameters
@@ -69,8 +70,9 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const hasOptimizationResults = canOptimize && optimizationData && !isManual;
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
+    console.log(`🎯 Parameter change: ${parameter} = ${values[0]} for model ${model.id}`);
     onParameterUpdate(parameter, values[0]);
-  }, [onParameterUpdate]);
+  }, [onParameterUpdate, model.id]);
 
   // Handle badge clicks - update cache "selected" field directly
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
@@ -199,6 +201,8 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
               <div className="grid gap-4">
                 {Object.entries(currentParameters).map(([parameter, value]) => {
                   const config = getParameterConfig(parameter);
+                  const currentValue = typeof value === 'number' ? value : config.min;
+                  
                   return (
                     <div key={parameter} className="space-y-2">
                       <div className="flex justify-between items-center">
@@ -206,7 +210,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                           {parameter}
                         </Label>
                         <span className="text-sm font-mono bg-slate-100 px-2 py-1 rounded">
-                          {typeof value === 'number' ? value.toFixed(config.step < 1 ? 2 : 0) : value}
+                          {currentValue.toFixed(config.step < 1 ? 2 : 0)}
                         </span>
                       </div>
                       <Slider
@@ -214,7 +218,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                         min={config.min}
                         max={config.max}
                         step={config.step}
-                        value={[typeof value === 'number' ? value : config.min]}
+                        value={[currentValue]}
                         onValueChange={(values) => handleParameterChange(parameter, values)}
                         className="w-full"
                         disabled={!isManual || disabled}
