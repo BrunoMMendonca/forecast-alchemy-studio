@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -46,12 +47,6 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
   const defaultModels = getDefaultModels();
   const optimizableModels = defaultModels.filter(hasOptimizableParameters);
 
-  // Debug logging
-  console.log('🔍 QUEUE POPUP: isOptimizing:', isOptimizing);
-  console.log('🔍 QUEUE POPUP: progress:', progress);
-  console.log('🔍 QUEUE POPUP: currentSKU:', progress?.currentSKU);
-  console.log('🔍 QUEUE POPUP: optimizableModels:', optimizableModels.map(m => m.name));
-
   // Don't render if there's nothing to show
   if (queuedCombinations.length === 0 && !isOptimizing) {
     return null;
@@ -78,15 +73,6 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Debug Info Section */}
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs">
-            <h4 className="font-medium mb-1">Debug Info:</h4>
-            <div>Is Optimizing: {isOptimizing ? 'Yes' : 'No'}</div>
-            <div>Current SKU: {progress?.currentSKU || 'None'}</div>
-            <div>Progress: {progress ? `${progress.completedSKUs}/${progress.totalSKUs}` : 'No progress'}</div>
-            <div>Optimizable Models: {optimizableModels.length} ({optimizableModels.map(m => m.name).join(', ')})</div>
-          </div>
-
           {isOptimizing && progress && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">

@@ -44,6 +44,19 @@ const Index = () => {
   const { addSKUsToQueue, removeSKUsFromQueue, removeSKUModelPairsFromQueue, getSKUsInQueue, queueSize, uniqueSKUCount, getQueuedCombinations, getModelsForSKU, clearQueue } = useOptimizationQueue();
   const { clearManualAIPreferences } = useManualAIPreferences();
 
+  // Listen for the global queue popup event
+  useEffect(() => {
+    const handleOpenGlobalQueuePopup = () => {
+      setIsQueuePopupOpen(true);
+    };
+
+    window.addEventListener('openGlobalQueuePopup', handleOpenGlobalQueuePopup);
+    
+    return () => {
+      window.removeEventListener('openGlobalQueuePopup', handleOpenGlobalQueuePopup);
+    };
+  }, []);
+
   const handleGlobalSettingsChange = (changedSetting: 'forecastPeriods' | 'businessContext' | 'grokApiEnabled') => {
     if (cleanedData.length > 0) {
       const allSKUs = Array.from(new Set(cleanedData.map(d => d.sku)));
@@ -331,7 +344,7 @@ const Index = () => {
           )}
         </div>
 
-        {/* Global Optimization Queue Popup */}
+        {/* Global Optimization Queue Popup - Now the only one */}
         <OptimizationQueuePopup
           optimizationQueue={{
             getSKUsInQueue,

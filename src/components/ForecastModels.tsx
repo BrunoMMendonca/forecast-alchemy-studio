@@ -7,7 +7,6 @@ import { ModelSelection } from './ModelSelection';
 import { ProductSelector } from './ProductSelector';
 import { QueueStatusDisplay } from './QueueStatusDisplay';
 import { OptimizationLogger } from './OptimizationLogger';
-import { OptimizationQueuePopup } from './OptimizationQueuePopup';
 
 interface ForecastModelsProps {
   data: SalesData[];
@@ -42,7 +41,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   grokApiEnabled = true
 }, ref) => {
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
-  const [isQueuePopupOpen, setIsQueuePopupOpen] = useState(false);
   const hasTriggeredOptimizationRef = useRef(false);
   const componentMountedRef = useRef(false);
   const lastProcessedQueueSizeRef = useRef(0);
@@ -195,7 +193,10 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
             isOptimizing={isOptimizing}
             progress={progress}
             hasTriggeredOptimization={hasTriggeredOptimizationRef.current}
-            onOpenQueuePopup={() => setIsQueuePopupOpen(true)}
+            onOpenQueuePopup={() => {
+              // Trigger the global queue popup via a custom event
+              window.dispatchEvent(new CustomEvent('openGlobalQueuePopup'));
+            }}
           />
         )}
       </div>
@@ -213,17 +214,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         isVisible={showOptimizationLog} 
         onClose={() => setShowOptimizationLog(false)} 
       />
-
-      {optimizationQueue && (
-        <OptimizationQueuePopup
-          optimizationQueue={optimizationQueue}
-          models={models}
-          isOptimizing={isOptimizing}
-          progress={progress}
-          isOpen={isQueuePopupOpen}
-          onOpenChange={setIsQueuePopupOpen}
-        />
-      )}
     </div>
   );
 });
