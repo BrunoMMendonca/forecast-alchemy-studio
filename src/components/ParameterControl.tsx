@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -48,6 +47,15 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     return method;
   }, [cacheEntry, selectedSKU, model.id, cacheVersion]);
 
+  // NEW: Local state for immediate visual feedback
+  const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(userSelectedMethod);
+
+  // NEW: Sync local state with cache state
+  useEffect(() => {
+    setLocalSelectedMethod(userSelectedMethod);
+    console.log(`🎯 PARAM_CONTROL: Local state synced to ${userSelectedMethod} for ${selectedSKU}:${model.id}`);
+  }, [userSelectedMethod, selectedSKU, model.id]);
+
   // Add effect to log when userSelectedMethod changes
   useEffect(() => {
     console.log(`🎯 PARAM_CONTROL: userSelectedMethod changed to ${userSelectedMethod} for ${selectedSKU}:${model.id}`);
@@ -55,15 +63,15 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   
   // Load optimization data from cache based on user selection
   const optimizationData = useMemo(() => {
-    if (!cacheEntry || userSelectedMethod === 'manual') {
+    if (!cacheEntry || localSelectedMethod === 'manual') {
       console.log(`🔄 PARAM_CONTROL: No optimization data - manual mode or no cache entry`);
       return null;
     }
 
-    if (userSelectedMethod === 'ai' && cacheEntry.ai) {
+    if (localSelectedMethod === 'ai' && cacheEntry.ai) {
       console.log(`🔄 PARAM_CONTROL: Using AI optimization data`);
       return cacheEntry.ai;
-    } else if (userSelectedMethod === 'grid' && cacheEntry.grid) {
+    } else if (localSelectedMethod === 'grid' && cacheEntry.grid) {
       console.log(`🔄 PARAM_CONTROL: Using Grid optimization data`);
       return cacheEntry.grid;
     }
@@ -71,23 +79,23 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     const fallback = cacheEntry.ai || cacheEntry.grid || null;
     console.log(`🔄 PARAM_CONTROL: Using fallback optimization data:`, fallback ? 'found' : 'none');
     return fallback;
-  }, [cacheEntry, userSelectedMethod]);
+  }, [cacheEntry, localSelectedMethod]);
 
-  // Determine which method is currently active based on user selection
-  const isManual = userSelectedMethod === 'manual';
-  const isAI = userSelectedMethod === 'ai';
-  const isGrid = userSelectedMethod === 'grid';
+  // Determine which method is currently active based on local selected method
+  const isManual = localSelectedMethod === 'manual';
+  const isAI = localSelectedMethod === 'ai';
+  const isGrid = localSelectedMethod === 'grid';
 
   // Log current state for debugging
   useEffect(() => {
     console.log(`🎯 PARAM_CONTROL: Badge states for ${selectedSKU}:${model.id}:`, {
-      userSelectedMethod,
+      localSelectedMethod,
       isManual,
       isAI,
       isGrid,
       cacheVersion
     });
-  }, [selectedSKU, model.id, userSelectedMethod, isManual, isAI, isGrid, cacheVersion]);
+  }, [selectedSKU, model.id, localSelectedMethod, isManual, isAI, isGrid, cacheVersion]);
 
   // SIMPLIFIED: Determine the source of truth for parameter values
   const getParameterValue = useCallback((parameter: string) => {
@@ -116,15 +124,18 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     onParameterUpdate(parameter, newValue);
   }, [onParameterUpdate]);
 
-  // Handle badge clicks - use the new method selection handler if available, otherwise fallback
+  // NEW: Handle badge clicks with immediate local state update
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
     // Prevent duplicate calls by checking if we're already in this method
-    if (userSelectedMethod === newMethod) {
+    if (localSelectedMethod === newMethod) {
       console.log(`🎯 BADGE CLICK: Already in ${newMethod} mode for ${model.id}, ignoring`);
       return;
     }
     
     console.log(`🎯 BADGE CLICK: Switching to ${newMethod} for ${model.id}`);
+    
+    // NEW: Update local state immediately for visual feedback
+    setLocalSelectedMethod(newMethod);
     
     if (onMethodSelection) {
       onMethodSelection(newMethod);
@@ -133,7 +144,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
         onResetToManual();
       }
     }
-  }, [userSelectedMethod, model.id, onMethodSelection, onResetToManual]);
+  }, [localSelectedMethod, model.id, onMethodSelection, onResetToManual]);
 
   const getParameterConfig = (parameter: string) => {
     const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
@@ -182,15 +193,16 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
               {/* Show optimization badges for models with optimizable parameters */}
               {canOptimize && (
                 <div className="flex items-center gap-2">
-                  {/* AI Badge - Only show when Grok API is enabled */}
+                  {/* AI Badge - Only show when Grok API is enabled - NEW: Add dynamic key */}
                   {grokApiEnabled && (
                     <Badge 
+                      key={`ai-${localSelectedMethod}-${cacheVersion}`}
                       variant={isAI ? "default" : "outline"} 
                       className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
-                        console.log(`🎯 AI BADGE CLICK: Current method = ${userSelectedMethod}, isAI = ${isAI}`);
+                        console.log(`🎯 AI BADGE CLICK: Current method = ${localSelectedMethod}, isAI = ${isAI}`);
                         handlePreferenceChange('ai');
                       }}
                     >
@@ -199,14 +211,15 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     </Badge>
                   )}
 
-                  {/* Grid Badge - Always show */}
+                  {/* Grid Badge - Always show - NEW: Add dynamic key */}
                   <Badge 
+                    key={`grid-${localSelectedMethod}-${cacheVersion}`}
                     variant={isGrid ? "default" : "outline"} 
                     className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      console.log(`🎯 GRID BADGE CLICK: Current method = ${userSelectedMethod}, isGrid = ${isGrid}`);
+                      console.log(`🎯 GRID BADGE CLICK: Current method = ${localSelectedMethod}, isGrid = ${isGrid}`);
                       handlePreferenceChange('grid');
                     }}
                   >
@@ -214,14 +227,15 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     Grid
                   </Badge>
 
-                  {/* Manual Badge - Always show */}
+                  {/* Manual Badge - Always show - NEW: Add dynamic key */}
                   <Badge 
+                    key={`manual-${localSelectedMethod}-${cacheVersion}`}
                     variant={isManual ? "default" : "outline"} 
                     className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      console.log(`🎯 MANUAL BADGE CLICK: Current method = ${userSelectedMethod}, isManual = ${isManual}`);
+                      console.log(`🎯 MANUAL BADGE CLICK: Current method = ${localSelectedMethod}, isManual = ${isManual}`);
                       handlePreferenceChange('manual');
                     }}
                   >
