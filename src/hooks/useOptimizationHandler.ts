@@ -7,12 +7,10 @@ import { useNavigationAwareOptimization } from '@/hooks/useNavigationAwareOptimi
 import { useModelManagement } from '@/hooks/useModelManagement';
 import { OptimizationFactors } from '@/types/optimizationTypes';
 import { PreferenceValue } from '@/hooks/useManualAIPreferences';
-import { hasOptimizableParameters } from '@/utils/modelConfig';
 
 interface OptimizationQueue {
   getSKUsInQueue: () => string[];
   removeSKUsFromQueue: (skus: string[]) => void;
-  removeUnnecessarySKUs: (skus: string[]) => void;
   clearCacheAndPreferencesForSKU?: (sku: string) => void;
 }
 
@@ -52,54 +50,14 @@ export const useOptimizationHandler = (
       return;
     }
 
-    console.log('🚀 OPTIMIZATION: Starting queue processing for SKUs:', queuedSKUs);
-
     const enabledModels = models.filter(m => m.enabled);
-    const optimizableModels = enabledModels.filter(m => hasOptimizableParameters(m));
-    
-    console.log('🚀 OPTIMIZATION: Enabled models:', enabledModels.map(m => m.id));
-    console.log('🚀 OPTIMIZATION: Optimizable models:', optimizableModels.map(m => m.id));
-
-    // If no models have optimizable parameters, remove all SKUs from queue
-    if (optimizableModels.length === 0) {
-      console.log('🧹 OPTIMIZATION: No optimizable models found, clearing queue');
-      if (optimizationQueue.removeUnnecessarySKUs) {
-        optimizationQueue.removeUnnecessarySKUs(queuedSKUs);
-      } else {
-        optimizationQueue.removeSKUsFromQueue(queuedSKUs);
-      }
-      return;
-    }
-
-    // Check which SKUs actually need optimization
-    const skusNeedingOptimization = getSKUsNeedingOptimization(data, optimizableModels);
-    const skusToOptimize = skusNeedingOptimization.map(item => item.sku);
-    const unnecessarySKUs = queuedSKUs.filter(sku => !skusToOptimize.includes(sku));
-
-    console.log('🚀 OPTIMIZATION: SKUs that need optimization:', skusToOptimize);
-    console.log('🧹 OPTIMIZATION: SKUs that don\'t need optimization:', unnecessarySKUs);
-
-    // Remove unnecessary SKUs from queue
-    if (unnecessarySKUs.length > 0) {
-      if (optimizationQueue.removeUnnecessarySKUs) {
-        optimizationQueue.removeUnnecessarySKUs(unnecessarySKUs);
-      } else {
-        optimizationQueue.removeSKUsFromQueue(unnecessarySKUs);
-      }
-    }
-
-    // If no SKUs actually need optimization, we're done
-    if (skusToOptimize.length === 0) {
-      console.log('🧹 OPTIMIZATION: No SKUs need optimization, done');
-      return;
-    }
     
     markOptimizationStarted(data, '/');
     
     await optimizeQueuedSKUs(
       data, 
-      optimizableModels,
-      skusToOptimize,
+      enabledModels,
+      queuedSKUs,
       (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method, bothResults) => {
         const skuData = data.filter(d => d.sku === sku);
         const dataHash = generateDataHash(skuData);
@@ -171,7 +129,6 @@ export const useOptimizationHandler = (
         ));
       },
       (sku) => {
-        console.log('✅ OPTIMIZATION: SKU completed:', sku);
         // Delay queue removal to ensure UI updates are complete
         setTimeout(() => {
           optimizationQueue.removeSKUsFromQueue([sku]);
@@ -181,7 +138,7 @@ export const useOptimizationHandler = (
               onOptimizationComplete();
             }, 200);
           }
-        }, 500);
+        }, 500); // Give more time for UI updates
       },
       getSKUsNeedingOptimization
     );

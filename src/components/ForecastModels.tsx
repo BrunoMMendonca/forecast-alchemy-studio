@@ -19,7 +19,6 @@ interface ForecastModelsProps {
   optimizationQueue?: {
     getSKUsInQueue: () => string[];
     removeSKUsFromQueue: (skus: string[]) => void;
-    removeUnnecessarySKUs: (skus: string[]) => void;
   };
 }
 
