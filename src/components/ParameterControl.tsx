@@ -1,254 +1,205 @@
-import React, { useState, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import React, { useMemo } from 'react';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronRight, Settings, Bot, Grid3X3, User } from 'lucide-react';
-import { ModelConfig } from '@/types/forecast';
-import { ReasoningDisplay } from './ReasoningDisplay';
-import { hasOptimizableParameters } from '@/utils/modelConfig';
+import { Button } from '@/components/ui/button';
+import { Bot, Grid3x3, User } from 'lucide-react';
+import { Parameter } from '@/types/forecast';
+import { useCacheOperations } from '@/hooks/useCacheOperations';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 
 interface ParameterControlProps {
-  model: ModelConfig;
+  name: string;
+  parameter: Parameter;
+  value: number;
+  onChange: (value: number) => void;
   selectedSKU: string;
-  onParameterUpdate: (parameter: string, value: number) => void;
-  onResetToManual: () => void;
-  disabled?: boolean;
+  modelId: string;
+  cacheEntry?: {
+    ai?: any;
+    grid?: any;
+    selected?: 'ai' | 'grid' | 'manual';
+  } | null;
   grokApiEnabled?: boolean;
 }
 
 export const ParameterControl: React.FC<ParameterControlProps> = ({
-  model,
+  name,
+  parameter,
+  value,
+  onChange,
   selectedSKU,
-  onParameterUpdate,
-  onResetToManual,
-  disabled = false,
+  modelId,
+  cacheEntry,
   grokApiEnabled = true,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const { cache, setSelectedMethod } = useOptimizationCache();
+  const { setSelectedMethod } = useCacheOperations(
+    {}, // cache - not used in this component
+    () => {}, // setCache - not used in this component  
+    () => {}, // setCacheStats - not used in this component
+    () => {}  // setCacheVersion - not used in this component
+  );
 
-  // Get current user selection from cache
-  const cacheEntry = cache[selectedSKU]?.[model.id];
-  const userSelectedMethod = cacheEntry?.selected;
-  
-  // Determine which method is currently active based on user selection
-  const isManual = userSelectedMethod === 'manual';
-  const isAI = userSelectedMethod === 'ai';
-  const isGrid = userSelectedMethod === 'grid';
-
-  const currentParameters = model.optimizedParameters || model.parameters;
-  const canOptimize = hasOptimizableParameters(model);
-
-  // Only show parameters section if model actually has parameters
-  const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
-
-  // Check if optimization results exist for display
-  const hasOptimizationResults = canOptimize && model.optimizationReasoning && !isManual;
-
-  const handleParameterChange = useCallback((parameter: string, values: number[]) => {
-    onParameterUpdate(parameter, values[0]);
-  }, [onParameterUpdate]);
-
-  // Handle badge clicks - update cache "selected" field directly
-  const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
-    console.log(`🎯 BADGE CLICK: Switching to ${newMethod} for ${model.id}`);
+  // Determine the current method based on cache entry
+  const currentMethod = useMemo(() => {
+    if (!cacheEntry) return 'manual';
     
-    // Update the cache's "selected" field directly
-    setSelectedMethod(selectedSKU, model.id, newMethod);
-    
-    // If switching to manual, reset the model to clear optimization results
-    if (newMethod === 'manual') {
-      onResetToManual();
+    // Check if user has made an explicit selection
+    if (cacheEntry.selected) {
+      return cacheEntry.selected;
     }
-  }, [selectedSKU, model.id, setSelectedMethod, onResetToManual]);
-
-  const getParameterConfig = (parameter: string) => {
-    const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
-      alpha: { min: 0.1, max: 0.9, step: 0.05, description: "Level smoothing parameter" },
-      beta: { min: 0.1, max: 0.9, step: 0.05, description: "Trend smoothing parameter" },
-      gamma: { min: 0.1, max: 0.9, step: 0.05, description: "Seasonal smoothing parameter" },
-      phi: { min: 0.8, max: 1.0, step: 0.02, description: "Damping parameter" },
-      seasonalPeriods: { min: 2, max: 52, step: 1, description: "Number of periods in a season" },
-      trend: { min: 0, max: 2, step: 1, description: "Trend component (0=none, 1=additive, 2=multiplicative)" },
-      seasonal: { min: 0, max: 2, step: 1, description: "Seasonal component (0=none, 1=additive, 2=multiplicative)" },
-      damped: { min: 0, max: 1, step: 1, description: "Damped trend (0=false, 1=true)" },
-      window: { min: 1, max: 12, step: 1, description: "Number of periods to average" },
-    };
     
-    return configs[parameter] || { min: 0, max: 1, step: 0.1, description: "Parameter" };
+    // Fallback to manual if no selection
+    return 'manual';
+  }, [cacheEntry]);
+
+  // Check what methods are available
+  const hasAI = cacheEntry?.ai != null;
+  const hasGrid = cacheEntry?.grid != null;
+
+  const handleMethodSelect = (method: 'ai' | 'grid' | 'manual') => {
+    console.log(`🎯 PARAMETER_CONTROL: User selecting ${method} for ${selectedSKU}:${modelId}`);
+    
+    // Set the user's explicit choice in cache
+    setSelectedMethod(selectedSKU, modelId, method);
+    
+    // Update the parameter value if we have cached data
+    if (method === 'ai' && cacheEntry?.ai?.parameters?.[name] !== undefined) {
+      onChange(cacheEntry.ai.parameters[name]);
+    } else if (method === 'grid' && cacheEntry?.grid?.parameters?.[name] !== undefined) {
+      onChange(cacheEntry.grid.parameters[name]);
+    }
+    // For manual, we keep the current value
   };
 
-  // If model has no parameters, don't render anything
-  if (!hasParameters) {
-    return null;
-  }
+  const getMethodIcon = (method: string) => {
+    switch (method) {
+      case 'ai':
+        return <Bot className="h-3 w-3" />;
+      case 'grid':
+        return <Grid3x3 className="h-3 w-3" />;
+      default:
+        return <User className="h-3 w-3" />;
+    }
+  };
 
-  // Add safety check for selectedSKU
-  if (!selectedSKU) {
-    console.log('ParameterControl: No selectedSKU provided');
-    return null;
-  }
+  const getMethodLabel = (method: string) => {
+    switch (method) {
+      case 'ai':
+        return 'AI';
+      case 'grid':
+        return 'Grid';
+      default:
+        return 'Manual';
+    }
+  };
+
+  const getBadgeVariant = (method: string) => {
+    if (method === currentMethod) {
+      return 'default';
+    }
+    return 'outline';
+  };
+
+  const getBadgeStyle = (method: string) => {
+    if (method === currentMethod) {
+      switch (method) {
+        case 'ai':
+          return 'bg-blue-600 text-white border-blue-600';
+        case 'grid':
+          return 'bg-green-600 text-white border-green-600';
+        case 'manual':
+          return 'bg-slate-600 text-white border-slate-600';
+      }
+    }
+    return '';
+  };
 
   return (
-    <Card className="w-full">
-      <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-        <CollapsibleTrigger asChild>
-          <div className="p-4 cursor-pointer hover:bg-slate-50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                <Settings className="h-4 w-4" />
-                <span className="font-medium">Parameters</span>
-                {!canOptimize && (
-                  <Badge variant="outline" className="text-xs">
-                    No Optimization
-                  </Badge>
-                )}
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium text-slate-700">
+          {parameter.label}
+        </label>
+        <div className="flex items-center gap-1">
+          {/* Manual Badge - Always Available */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 py-0"
+            onClick={() => handleMethodSelect('manual')}
+          >
+            <Badge
+              variant={getBadgeVariant('manual')}
+              className={`text-xs cursor-pointer ${getBadgeStyle('manual')}`}
+            >
+              <div className="flex items-center gap-1">
+                {getMethodIcon('manual')}
+                {getMethodLabel('manual')}
               </div>
-              
-              {/* Show optimization badges for models with optimizable parameters */}
-              {canOptimize && (
-                <div className="flex items-center gap-2">
-                  {/* AI Badge - Only show when Grok API is enabled */}
-                  {grokApiEnabled && (
-                    <Badge 
-                      variant={isAI ? "default" : "outline"} 
-                      className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePreferenceChange('ai');
-                      }}
-                    >
-                      <Bot className="h-3 w-3 mr-1" />
-                      AI
-                    </Badge>
-                  )}
+            </Badge>
+          </Button>
 
-                  {/* Grid Badge - Always show */}
-                  <Badge 
-                    variant={isGrid ? "default" : "outline"} 
-                    className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePreferenceChange('grid');
-                    }}
-                  >
-                    <Grid3X3 className="h-3 w-3 mr-1" />
-                    Grid
-                  </Badge>
-
-                  {/* Manual Badge - Always show */}
-                  <Badge 
-                    variant={isManual ? "default" : "outline"} 
-                    className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePreferenceChange('manual');
-                    }}
-                  >
-                    <User className="h-3 w-3 mr-1" />
-                    Manual
-                  </Badge>
+          {/* AI Badge - Only if grokApiEnabled and results available */}
+          {grokApiEnabled && hasAI && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 py-0"
+              onClick={() => handleMethodSelect('ai')}
+            >
+              <Badge
+                variant={getBadgeVariant('ai')}
+                className={`text-xs cursor-pointer ${getBadgeStyle('ai')}`}
+              >
+                <div className="flex items-center gap-1">
+                  {getMethodIcon('ai')}
+                  {getMethodLabel('ai')}
                 </div>
-              )}
-            </div>
+              </Badge>
+            </Button>
+          )}
 
-            {/* Optimization Status Summary - only for optimizable models */}
-            {canOptimize && model.optimizationConfidence && !isManual && (
-              <div className="mt-2 flex items-center space-x-4 text-sm">
-                <span className="text-slate-600">
-                  Confidence: <span className="font-medium">{model.optimizationConfidence.toFixed(0)}%</span>
-                </span>
-                {model.expectedAccuracy && (
-                  <span className="text-slate-600">
-                    Expected Accuracy: <span className="font-medium">{model.expectedAccuracy.toFixed(1)}%</span>
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        </CollapsibleTrigger>
-
-        <CollapsibleContent>
-          <CardContent className="pt-0">
-            {/* Parameter Controls */}
-            <div className="space-y-4">
-              <div className="grid gap-4">
-                {Object.entries(currentParameters).map(([parameter, value]) => {
-                  const config = getParameterConfig(parameter);
-                  return (
-                    <div key={parameter} className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <Label htmlFor={`${model.id}-${parameter}`} className="text-sm font-medium">
-                          {parameter}
-                        </Label>
-                        <span className="text-sm font-mono bg-slate-100 px-2 py-1 rounded">
-                          {typeof value === 'number' ? value.toFixed(config.step < 1 ? 2 : 0) : value}
-                        </span>
-                      </div>
-                      <Slider
-                        id={`${model.id}-${parameter}`}
-                        min={config.min}
-                        max={config.max}
-                        step={config.step}
-                        value={[typeof value === 'number' ? value : config.min]}
-                        onValueChange={(values) => handleParameterChange(parameter, values)}
-                        className="w-full"
-                        disabled={!isManual || disabled}
-                      />
-                      <p className="text-xs text-slate-500">{config.description}</p>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Reasoning Display - Only show if optimization results exist */}
-              {hasOptimizationResults && (
-                <div className="mt-6 pt-4 border-t">
-                  <ReasoningDisplay
-                    reasoning={model.optimizationReasoning}
-                    factors={model.optimizationFactors}
-                    method={model.optimizationMethod}
-                    confidence={model.optimizationConfidence}
-                  />
+          {/* Grid Badge - Only if results available */}
+          {hasGrid && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 py-0"
+              onClick={() => handleMethodSelect('grid')}
+            >
+              <Badge
+                variant={getBadgeVariant('grid')}
+                className={`text-xs cursor-pointer ${getBadgeStyle('grid')}`}
+              >
+                <div className="flex items-center gap-1">
+                  {getMethodIcon('grid')}
+                  {getMethodLabel('grid')}
                 </div>
-              )}
+              </Badge>
+            </Button>
+          )}
+        </div>
+      </div>
 
-              {/* Information for non-optimizable models */}
-              {!canOptimize && (
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                  <p className="text-sm text-blue-700">
-                    This model uses a fixed algorithm and doesn't require parameter optimization.
-                  </p>
-                </div>
-              )}
+      <div className="space-y-1">
+        <Slider
+          value={[value]}
+          onValueChange={([newValue]) => onChange(newValue)}
+          min={parameter.min}
+          max={parameter.max}
+          step={parameter.step}
+          className="w-full"
+        />
+        <div className="flex justify-between text-xs text-slate-500">
+          <span>{parameter.min}</span>
+          <span className="font-medium">{value}</span>
+          <span>{parameter.max}</span>
+        </div>
+      </div>
 
-              {/* Manual mode indicator */}
-              {canOptimize && isManual && (
-                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-700">
-                    Manual mode: You can adjust parameters using the sliders above.
-                  </p>
-                </div>
-              )}
-
-              {/* Status indicator when no optimization results are loaded */}
-              {canOptimize && !isManual && !model.optimizationReasoning && (
-                <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-                  <p className="text-sm text-yellow-700">
-                    No {isAI ? 'AI' : 'Grid'} optimization results are currently loaded for this model. 
-                    If optimization has been run, try refreshing or check if results are available for this SKU.
-                  </p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </CollapsibleContent>
-      </Collapsible>
-    </Card>
+      {parameter.description && (
+        <p className="text-xs text-slate-500">{parameter.description}</p>
+      )}
+    </div>
   );
 };
