@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { SalesData, ForecastResult } from '@/pages/Index';
+import { SalesData } from '@/pages/Index';
+import { ForecastResult } from '@/types/forecast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp } from 'lucide-react';
 import { ProductSelector } from './ProductSelector';

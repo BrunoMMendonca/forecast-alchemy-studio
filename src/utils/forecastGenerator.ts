@@ -1,5 +1,6 @@
 
-import { SalesData, ForecastResult } from '@/pages/Index';
+import { SalesData } from '@/pages/Index';
+import { ForecastResult } from '@/types/forecast';
 import { ModelConfig } from '@/types/forecast';
 import { detectDateFrequency, generateForecastDates } from '@/utils/dateUtils';
 import { 

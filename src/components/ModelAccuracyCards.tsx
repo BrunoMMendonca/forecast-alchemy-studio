@@ -1,9 +1,8 @@
-
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Target, Star } from 'lucide-react';
-import { ForecastResult } from '@/pages/Index';
+import { ForecastResult } from '@/types/forecast';
 
 interface ModelAccuracyCardsProps {
   selectedSKUResults: ForecastResult[];

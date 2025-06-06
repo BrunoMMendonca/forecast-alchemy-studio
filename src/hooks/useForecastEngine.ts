@@ -1,6 +1,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
-import { SalesData, ForecastResult } from '@/pages/Index';
+import { SalesData } from '@/pages/Index';
+import { ForecastResult } from '@/types/forecast';
 import { ModelConfig } from '@/types/forecast';
 import { generateForecastsForSKU } from '@/utils/forecastGenerator';
 import { useForecastCache } from '@/hooks/useForecastCache';

@@ -31,9 +31,9 @@ export interface ForecastResult {
   predictions: ForecastPrediction[];
   accuracy: number;
   parameters: Record<string, number>;
-  mape: number;
-  mae: number;
-  rmse: number;
+  mape?: number;
+  mae?: number;
+  rmse?: number;
 }
 
 export interface SeasonalConfig {
