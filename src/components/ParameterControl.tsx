@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -30,27 +31,16 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   onUseGrid,
   onResetToManual,
 }) => {
-  console.log('🔧 ParameterControl render for model:', model.id, 'SKU:', `"${selectedSKU}"`, 'SKU type:', typeof selectedSKU, 'SKU length:', selectedSKU?.length);
-  
-  // DEBUGGING: Log the props being passed to this component
-  console.log('🔧 ParameterControl props debug:', {
-    modelId: model.id,
-    selectedSKU: selectedSKU,
-    selectedSKUType: typeof selectedSKU,
-    selectedSKULength: selectedSKU?.length,
-    dataLength: data?.length,
-    hasOnParameterUpdate: !!onParameterUpdate,
-    hasOnUseAI: !!onUseAI
-  });
+  console.log('🔧 ParameterControl render for model:', model.id, 'SKU:', selectedSKU);
   
   // Early return if no SKU selected to prevent infinite loops
   if (!selectedSKU || selectedSKU.trim() === '') {
-    console.log('❌ No valid SKU selected, skipping ParameterControl render. SKU value:', `"${selectedSKU}"`);
+    console.log('❌ No valid SKU selected, skipping ParameterControl render');
     return null;
   }
   
   const [isExpanded, setIsExpanded] = useState(false);
-  const { getCachedParameters, isCacheValid, generateDataHash, hasOptimizableParameters } = useOptimizationCache();
+  const { getCachedParameters, isCacheValid, generateDataHash } = useOptimizationCache();
 
   const isManual = !model.optimizedParameters;
   const isAI = model.optimizationMethod === 'ai';
@@ -58,16 +48,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 
   const currentParameters = model.optimizedParameters || model.parameters;
 
-  // Only show parameters section if model actually has parameters
-  const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
-
-  // If model has no parameters, don't render anything and don't check cache
-  if (!hasParameters) {
-    console.log('❌ No parameters for model:', model.id, '- skipping cache checks and rendering');
-    return null;
-  }
-
-  // Check if cached optimization results are available - only for models with parameters
+  // Check if cached optimization results are available
   const skuData = data.filter(d => d.sku === selectedSKU);
   const currentDataHash = generateDataHash(skuData);
   
@@ -98,6 +79,9 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const aiCacheAvailable = hasValidAICache();
   const gridCacheAvailable = hasValidGridCache();
 
+  // Only show parameters section if model actually has parameters
+  const hasParameters = currentParameters && Object.keys(currentParameters).length > 0;
+
   // Check if optimization was actually performed
   const hasOptimizationResults = model.optimizationMethod && 
                                 (model.optimizationReasoning || model.optimizationFactors);
@@ -123,7 +107,13 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     return configs[parameter] || { min: 0, max: 1, step: 0.1, description: "Parameter" };
   };
 
-  console.log('✅ Rendering ParameterControl for model with parameters:', model.id);
+  // If model has no parameters, don't render anything
+  if (!hasParameters) {
+    console.log('❌ No parameters for model:', model.id);
+    return null;
+  }
+
+  console.log('✅ Rendering ParameterControl for model:', model.id);
 
   return (
     <Card className="w-full">

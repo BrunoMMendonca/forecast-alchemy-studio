@@ -28,8 +28,6 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   onUseGrid,
   onResetToManual,
 }) => {
-  console.log('🃏 ModelCard render for model:', model.id, 'selectedSKU:', `"${selectedSKU}"`, 'type:', typeof selectedSKU);
-  
   return (
     <div className="border border-slate-200 rounded-lg p-4 space-y-4">
       <div className="flex items-center justify-between">

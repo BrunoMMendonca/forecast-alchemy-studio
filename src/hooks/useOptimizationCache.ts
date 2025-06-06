@@ -49,12 +49,6 @@ export const useOptimizationCache = () => {
     return hash.includes('len:') || hash.includes('dates:') || hash.includes('sales:');
   }, []);
 
-  // Helper function to check if model has parameters worth caching
-  const hasOptimizableParameters = useCallback((model: ModelConfig): boolean => {
-    const parameters = model.optimizedParameters || model.parameters;
-    return parameters && Object.keys(parameters).length > 0;
-  }, []);
-
   // Load state from localStorage on mount
   useEffect(() => {
     console.log('🗄️ CACHE: Loading from localStorage...');
@@ -165,7 +159,7 @@ export const useOptimizationCache = () => {
     models: ModelConfig[]
   ): { sku: string; models: string[] }[] => {
     const enabledModelsWithParams = models.filter(m => 
-      m.enabled && hasOptimizableParameters(m)
+      m.enabled && m.parameters && Object.keys(m.parameters).length > 0
     );
     
     const skus = Array.from(new Set(data.map(d => d.sku))).sort();
@@ -209,20 +203,13 @@ export const useOptimizationCache = () => {
     });
     
     return result;
-  }, [cache, generateDataHash, hasOptimizableParameters]);
+  }, [cache, generateDataHash]);
 
   const getCachedParameters = useCallback((
     sku: string, 
     modelId: string, 
     method?: 'ai' | 'grid'
   ): OptimizedParameters | null => {
-    // Early return if SKU is empty to prevent unnecessary cache lookups
-    if (!sku || sku.trim() === '') {
-      console.log(`🗄️ CACHE: SKIP - Empty SKU for ${modelId}, not checking cache`);
-      setCacheStats(prev => ({ ...prev, skipped: prev.skipped + 1 }));
-      return null;
-    }
-
     console.log(`🗄️ CACHE: Looking for ${sku}:${modelId}:${method || 'any'}`);
     
     const cached = cache[sku]?.[modelId];
@@ -312,18 +299,6 @@ export const useOptimizationCache = () => {
     expectedAccuracy?: number,
     method?: string
   ) => {
-    // Don't cache if SKU is empty
-    if (!sku || sku.trim() === '') {
-      console.log(`🗄️ CACHE: SKIP - Not caching for empty SKU`);
-      return;
-    }
-
-    // Don't cache if no parameters provided
-    if (!parameters || Object.keys(parameters).length === 0) {
-      console.log(`🗄️ CACHE: SKIP - Not caching ${sku}:${modelId} - no parameters to optimize`);
-      return;
-    }
-
     console.log(`🗄️ CACHE: Setting ${sku}:${modelId} with method ${method} and hash ${dataHash.substring(0, 50)}...`);
     
     const optimizedParams: OptimizedParameters = {
@@ -371,12 +346,6 @@ export const useOptimizationCache = () => {
     modelId: string,
     method: 'ai' | 'grid' | 'manual'
   ) => {
-    // Don't set method if SKU is empty
-    if (!sku || sku.trim() === '') {
-      console.log(`🗄️ CACHE: SKIP - Not setting method for empty SKU`);
-      return;
-    }
-
     console.log(`🗄️ CACHE: Setting selected method ${sku}:${modelId} to ${method}`);
     setCache(prev => {
       const newCache = JSON.parse(JSON.stringify(prev));
@@ -393,12 +362,6 @@ export const useOptimizationCache = () => {
   }, []);
 
   const isCacheValid = useCallback((sku: string, modelId: string, currentDataHash: string, method?: 'ai' | 'grid'): boolean => {
-    // Early return if SKU is empty
-    if (!sku || sku.trim() === '') {
-      console.log(`🗄️ CACHE: Invalid - empty SKU for ${modelId}`);
-      return false;
-    }
-
     const cached = getCachedParameters(sku, modelId, method);
     if (!cached) {
       console.log(`🗄️ CACHE: Invalid - no cached parameters for ${sku}:${modelId}:${method || 'any'}`);
@@ -452,7 +415,6 @@ export const useOptimizationCache = () => {
     getDatasetFingerprintString: generateDatasetFingerprint,
     hasOptimizationStarted: () => false,
     markOptimizationStarted: () => {},
-    batchValidateCache: () => ({}),
-    hasOptimizableParameters
+    batchValidateCache: () => ({})
   };
 };
