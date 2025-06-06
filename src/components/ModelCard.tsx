@@ -15,8 +15,6 @@ interface ModelCardProps {
   onMethodSelection?: (method: 'ai' | 'grid' | 'manual') => void;
   isOptimizing?: boolean;
   grokApiEnabled?: boolean;
-  // NEW: Add selectedMethod prop
-  selectedMethod?: 'ai' | 'grid' | 'manual';
 }
 
 export const ModelCard: React.FC<ModelCardProps> = ({
@@ -27,8 +25,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   onResetToManual,
   onMethodSelection,
   isOptimizing = false,
-  grokApiEnabled,
-  selectedMethod = 'manual'
+  grokApiEnabled
 }) => {
   return (
     <div className="border border-slate-200 rounded-lg p-4 space-y-4">
@@ -68,7 +65,6 @@ export const ModelCard: React.FC<ModelCardProps> = ({
           onMethodSelection={onMethodSelection}
           disabled={isOptimizing}
           grokApiEnabled={grokApiEnabled}
-          selectedMethod={selectedMethod}
         />
       )}
     </div>
