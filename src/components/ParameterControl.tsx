@@ -115,7 +115,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     Grid
                   </Badge>
 
-                  {/* Manual Badge - Third */}
+                  {/* Manual Badge - Third - Always clickable */}
                   <Badge 
                     variant={isManual ? "default" : "outline"} 
                     className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
@@ -172,7 +172,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                         value={[typeof value === 'number' ? value : config.min]}
                         onValueChange={(values) => handleParameterChange(parameter, values)}
                         className="w-full"
-                        disabled={!isManual || !canOptimize}
+                        disabled={!isManual}
                       />
                       <p className="text-xs text-slate-500">{config.description}</p>
                     </div>
