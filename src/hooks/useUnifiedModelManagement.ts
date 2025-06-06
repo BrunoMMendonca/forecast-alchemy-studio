@@ -24,7 +24,7 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
     return getDefaultModels();
   });
 
-  // Create models with current cache and preferences - always read fresh from localStorage
+  // Stable function that creates models with current cache and preferences
   const createModelsWithCurrentData = useCallback(() => {
     if (!selectedSKU || isTogglingAIManualRef.current) {
       return getDefaultModels();
@@ -92,23 +92,16 @@ export const useUnifiedModelManagement = (selectedSKU: string, data: SalesData[]
 
       return model;
     });
-  }, [selectedSKU, data, generateDataHash, cacheVersion]);
+  }, [selectedSKU, generateDataHash, cacheVersion]); // Stable dependencies only
 
-  // Single effect that updates models when cache version changes
-  useEffect(() => {
-    if (selectedSKU && cacheVersion > 0) {
-      const updatedModels = createModelsWithCurrentData();
-      setModels(updatedModels);
-    }
-  }, [cacheVersion, selectedSKU, createModelsWithCurrentData]);
-
-  // Effect for SKU changes
+  // Single effect that updates models when needed - no function dependencies
   useEffect(() => {
     if (selectedSKU) {
+      console.log(`🔧 UNIFIED: Updating models for SKU: ${selectedSKU}, cache version: ${cacheVersion}`);
       const updatedModels = createModelsWithCurrentData();
       setModels(updatedModels);
     }
-  }, [selectedSKU, createModelsWithCurrentData]);
+  }, [selectedSKU, cacheVersion]); // Remove function dependency to prevent infinite loop
 
   const toggleModel = (modelId: string) => {
     setModels(prev => prev.map(model => 
