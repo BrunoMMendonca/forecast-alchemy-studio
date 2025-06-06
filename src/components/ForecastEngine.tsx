@@ -18,7 +18,6 @@ interface ForecastEngineProps {
   selectedSKU: string;
   onSKUChange: (sku: string) => void;
   businessContext?: BusinessContext;
-  grokApiEnabled?: boolean;
 }
 
 export const ForecastEngine: React.FC<ForecastEngineProps> = ({
@@ -27,10 +26,9 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
   onForecastGeneration,
   selectedSKU,
   onSKUChange,
-  businessContext,
-  grokApiEnabled = true
+  businessContext
 }) => {
-  const { models, toggleModel, updateParameter, updateModelOptimization, resetModel } = useModelParameters(grokApiEnabled);
+  const { models, toggleModel, updateParameter, updateModelOptimization, resetModel } = useModelParameters();
   
   // Only initialize hooks with valid SKU to prevent cache calls with empty SKU
   const validSKU = selectedSKU && selectedSKU.trim() !== '';
@@ -38,8 +36,7 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
     validSKU ? selectedSKU : '', 
     data, 
     models, 
-    forecastPeriods,
-    grokApiEnabled
+    forecastPeriods
   );
   const { isOptimizing, optimizingModel, optimizeModel } = useOptimization(
     validSKU ? selectedSKU : '', 
@@ -128,7 +125,6 @@ export const ForecastEngine: React.FC<ForecastEngineProps> = ({
             onResetModel={resetModel}
             isOptimizing={isOptimizing}
             optimizingModel={optimizingModel}
-            grokApiEnabled={grokApiEnabled}
           />
         )}
       </CardContent>

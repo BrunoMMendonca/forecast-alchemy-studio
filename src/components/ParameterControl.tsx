@@ -19,7 +19,6 @@ interface ParameterControlProps {
   onUseGrid?: () => void;
   onResetToManual: () => void;
   disabled?: boolean;
-  grokApiEnabled?: boolean;
 }
 
 export const ParameterControl: React.FC<ParameterControlProps> = ({
@@ -30,7 +29,6 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   onUseGrid,
   onResetToManual,
   disabled = false,
-  grokApiEnabled = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -100,22 +98,20 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
               {/* Only show optimization badges for models with optimizable parameters */}
               {canOptimize && (
                 <div className="flex items-center gap-2">
-                  {/* AI Badge - Only show if Grok API is enabled */}
-                  {grokApiEnabled && (
-                    <Badge 
-                      variant={isAI ? "default" : "outline"} 
-                      className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onUseAI();
-                      }}
-                    >
-                      <Bot className="h-3 w-3 mr-1" />
-                      AI
-                    </Badge>
-                  )}
+                  {/* AI Badge - First */}
+                  <Badge 
+                    variant={isAI ? "default" : "outline"} 
+                    className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUseAI();
+                    }}
+                  >
+                    <Bot className="h-3 w-3 mr-1" />
+                    AI
+                  </Badge>
 
-                  {/* Grid Badge */}
+                  {/* Grid Badge - Second */}
                   <Badge 
                     variant={isGrid ? "default" : "outline"} 
                     className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
@@ -128,7 +124,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
                     Grid
                   </Badge>
 
-                  {/* Manual Badge - Always show */}
+                  {/* Manual Badge - Third - Always clickable */}
                   <Badge 
                     variant={isManual ? "default" : "outline"} 
                     className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}

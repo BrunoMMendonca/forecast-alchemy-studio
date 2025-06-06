@@ -12,7 +12,6 @@ interface ModelParameterPanelProps {
   onResetModel: (modelId: string) => void;
   isOptimizing: boolean;
   optimizingModel: string | null;
-  grokApiEnabled?: boolean;
 }
 
 export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
@@ -23,8 +22,7 @@ export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
   onOptimizeModel,
   onResetModel,
   isOptimizing,
-  optimizingModel,
-  grokApiEnabled = true
+  optimizingModel
 }) => {
   return (
     <div className="space-y-4">
@@ -39,7 +37,6 @@ export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
           onUseGrid={() => onOptimizeModel(model.id, 'grid')}
           onResetToManual={() => onResetModel(model.id)}
           isOptimizing={isOptimizing && optimizingModel === model.id}
-          grokApiEnabled={grokApiEnabled}
         />
       ))}
     </div>
