@@ -3,7 +3,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { ModelConfig } from '@/types/forecast';
+import { SalesData } from '@/pages/Index';
 import { hasOptimizableParameters } from '@/utils/modelConfig';
+import { generateDataHash } from '@/utils/cacheHashUtils';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useOptimizationMethodManagement } from '@/hooks/useOptimizationMethodManagement';
 import { ParameterBadges } from './ParameterBadges';
@@ -13,6 +15,7 @@ import { ParameterStatusDisplay } from './ParameterStatusDisplay';
 interface ParameterControlProps {
   model: ModelConfig;
   selectedSKU: string;
+  data: SalesData[];
   onParameterUpdate: (parameter: string, value: number) => void;
   onResetToManual: () => void;
   onMethodSelection?: (method: 'ai' | 'grid' | 'manual') => void;
@@ -23,6 +26,7 @@ interface ParameterControlProps {
 export const ParameterControl: React.FC<ParameterControlProps> = ({
   model,
   selectedSKU,
+  data,
   onParameterUpdate,
   onResetToManual,
   onMethodSelection,
@@ -32,6 +36,14 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const { cache, cacheVersion } = useOptimizationCache();
   const { getBestAvailableMethod } = useOptimizationMethodManagement();
+
+  // Get the actual data hash for the current SKU
+  const currentDataHash = useMemo(() => {
+    const skuData = data.filter(d => d.sku === selectedSKU);
+    const hash = generateDataHash(skuData);
+    console.log(`🔄 PARAM_CONTROL: Generated data hash for ${selectedSKU}: ${hash.substring(0, 50)}...`);
+    return hash;
+  }, [data, selectedSKU]);
 
   // Get current user selection from cache
   const cacheEntry = useMemo(() => {
@@ -56,11 +68,10 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     }
 
     // Otherwise, use the best available method based on current cache state
-    const currentDataHash = 'current'; // Simplified for now - in real usage this would be the actual data hash
     const bestMethod = getBestAvailableMethod(selectedSKU, model.id, currentDataHash);
-    console.log(`🎯 PARAM_CONTROL: Using best available method: ${bestMethod} for ${selectedSKU}:${model.id}`);
+    console.log(`🎯 PARAM_CONTROL: Using best available method: ${bestMethod} for ${selectedSKU}:${model.id} (hash: ${currentDataHash.substring(0, 20)}...)`);
     return bestMethod;
-  }, [userSelectedMethod, selectedSKU, model.id, getBestAvailableMethod, cacheVersion]);
+  }, [userSelectedMethod, selectedSKU, model.id, getBestAvailableMethod, currentDataHash, cacheVersion]);
 
   // Local state for immediate visual feedback on user clicks
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
@@ -104,9 +115,10 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
       isManual,
       isAI,
       isGrid,
-      cacheVersion
+      cacheVersion,
+      currentDataHash: currentDataHash.substring(0, 20) + '...'
     });
-  }, [selectedSKU, model.id, effectiveSelectedMethod, localSelectedMethod, isManual, isAI, isGrid, cacheVersion]);
+  }, [selectedSKU, model.id, effectiveSelectedMethod, localSelectedMethod, isManual, isAI, isGrid, cacheVersion, currentDataHash]);
 
   // Determine the source of truth for parameter values
   const getParameterValue = useCallback((parameter: string) => {

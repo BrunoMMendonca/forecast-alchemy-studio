@@ -1,11 +1,13 @@
 
 import React from 'react';
 import { ModelConfig } from '@/types/forecast';
+import { SalesData } from '@/pages/Index';
 import { ModelCard } from './ModelCard';
 
 interface ModelParameterPanelProps {
   models: ModelConfig[];
   selectedSKU: string;
+  data: SalesData[];
   onToggleModel: (modelId: string) => void;
   onUpdateParameter: (modelId: string, parameter: string, value: number) => void;
   onResetModel: (modelId: string) => void;
@@ -17,6 +19,7 @@ interface ModelParameterPanelProps {
 export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
   models,
   selectedSKU,
+  data,
   onToggleModel,
   onUpdateParameter,
   onResetModel,
@@ -31,6 +34,7 @@ export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
           key={model.id}
           model={model}
           selectedSKU={selectedSKU}
+          data={data}
           onToggle={() => onToggleModel(model.id)}
           onParameterUpdate={(parameter, value) => onUpdateParameter(model.id, parameter, value)}
           onResetToManual={() => onResetModel(model.id)}

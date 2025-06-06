@@ -4,11 +4,13 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ModelConfig } from '@/types/forecast';
+import { SalesData } from '@/pages/Index';
 import { ParameterControl } from './ParameterControl';
 
 interface ModelCardProps {
   model: ModelConfig;
   selectedSKU: string;
+  data: SalesData[];
   onToggle: () => void;
   onParameterUpdate: (parameter: string, value: number) => void;
   onResetToManual: () => void;
@@ -20,6 +22,7 @@ interface ModelCardProps {
 export const ModelCard: React.FC<ModelCardProps> = ({
   model,
   selectedSKU,
+  data,
   onToggle,
   onParameterUpdate,
   onResetToManual,
@@ -60,6 +63,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         <ParameterControl
           model={model}
           selectedSKU={selectedSKU}
+          data={data}
           onParameterUpdate={onParameterUpdate}
           onResetToManual={onResetToManual}
           onMethodSelection={onMethodSelection}
