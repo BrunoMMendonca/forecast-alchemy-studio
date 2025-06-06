@@ -23,7 +23,8 @@ export const useOptimizationHandler = (
   data: SalesData[],
   selectedSKU: string,
   optimizationQueue?: OptimizationQueue,
-  onOptimizationComplete?: () => void
+  onOptimizationComplete?: () => void,
+  grokApiEnabled: boolean = true
 ) => {
   const {
     generateDataHash,
@@ -61,6 +62,7 @@ export const useOptimizationHandler = (
     }
 
     console.log('🚀 OPTIMIZATION: Starting queue processing for combinations:', queuedCombinations);
+    console.log('🚀 OPTIMIZATION: Grok API enabled:', grokApiEnabled);
 
     // Get the default optimizable models
     const defaultModels = getDefaultModels();
@@ -245,14 +247,15 @@ export const useOptimizationHandler = (
           }, 200);
         }
       },
-      getSKUsNeedingOptimization
+      getSKUsNeedingOptimization,
+      grokApiEnabled // Pass grokApiEnabled to the batch optimization
     );
 
     // Mark optimization completed after a slight delay to ensure all updates are processed
     setTimeout(() => {
       markOptimizationCompleted(data, '/');
     }, 1000);
-  }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, savePreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete]);
+  }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, savePreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete, grokApiEnabled]);
 
   return {
     isOptimizing,

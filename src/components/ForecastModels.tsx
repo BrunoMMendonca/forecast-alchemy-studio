@@ -1,6 +1,5 @@
 
-
-import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
+import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { useUnifiedModelManagement } from '@/hooks/useUnifiedModelManagement';
 import { useOptimizationHandler } from '@/hooks/useOptimizationHandler';
@@ -28,6 +27,7 @@ interface ForecastModelsProps {
     queueSize: number;
     uniqueSKUCount: number;
   };
+  grokApiEnabled?: boolean;
 }
 
 export const ForecastModels = forwardRef<any, ForecastModelsProps>(({ 
@@ -38,12 +38,14 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   onSKUChange,
   shouldStartOptimization = false,
   onOptimizationStarted,
-  optimizationQueue
+  optimizationQueue,
+  grokApiEnabled = true
 }, ref) => {
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
   const [isQueuePopupOpen, setIsQueuePopupOpen] = useState(false);
   const hasTriggeredOptimizationRef = useRef(false);
   const componentMountedRef = useRef(false);
+  const lastProcessedQueueSizeRef = useRef(0);
   
   // Use the unified model management hook
   const {
@@ -60,60 +62,86 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     onForecastGeneration
   );
 
-  // Use optimization handler for queue management - pass the complete queue interface
+  // Memoize queue combinations to prevent infinite re-renders
+  const queuedCombinations = useMemo(() => {
+    return optimizationQueue?.getQueuedCombinations() || [];
+  }, [optimizationQueue?.queueSize]); // Only recalculate when queue size changes
+
+  // Use optimization handler for queue management - pass grokApiEnabled
   const {
     isOptimizing,
     progress,
     handleQueueOptimization
-  } = useOptimizationHandler(data, selectedSKU, optimizationQueue, generateForecasts);
+  } = useOptimizationHandler(data, selectedSKU, optimizationQueue, generateForecasts, grokApiEnabled);
 
   // Mark component as mounted
   useEffect(() => {
     componentMountedRef.current = true;
-    console.log('🔄 FORECAST_MODELS: Component mounted');
+    console.log('🔄 FORECAST_MODELS: Component mounted, grokApiEnabled:', grokApiEnabled);
     
     return () => {
       componentMountedRef.current = false;
       console.log('🔄 FORECAST_MODELS: Component unmounted');
     };
-  }, []);
+  }, [grokApiEnabled]);
 
-  // AUTO-START OPTIMIZATION: React to queue changes with more robust detection
+  // AUTO-START OPTIMIZATION: React to queue changes with stable detection
   useEffect(() => {
     if (!optimizationQueue || !componentMountedRef.current) {
       console.log('🔄 FORECAST_MODELS: Skipping auto-start - no queue or not mounted');
       return;
     }
 
-    const queueSize = optimizationQueue.queueSize;
-    const queuedCombinations = optimizationQueue.getQueuedCombinations();
+    const currentQueueSize = optimizationQueue.queueSize;
     
-    console.log('🔄 FORECAST_MODELS: Queue check - size:', queueSize, 'combinations:', queuedCombinations.length, 'isOptimizing:', isOptimizing);
+    // Only process if queue size actually changed and increased
+    if (currentQueueSize <= lastProcessedQueueSizeRef.current) {
+      console.log('🔄 FORECAST_MODELS: Queue size unchanged or decreased, skipping');
+      return;
+    }
+    
+    lastProcessedQueueSizeRef.current = currentQueueSize;
+    
+    console.log('🔄 FORECAST_MODELS: Queue size increased to:', currentQueueSize, 'combinations:', queuedCombinations.length, 'isOptimizing:', isOptimizing);
 
     // Auto-start optimization if:
     // 1. Queue has items
     // 2. Not currently optimizing 
     // 3. Component is mounted
-    if (queueSize > 0 && !isOptimizing) {
+    if (currentQueueSize > 0 && !isOptimizing) {
       console.log('🚀 FORECAST_MODELS: CONDITIONS MET - Auto-starting optimization');
-      console.log('🚀 FORECAST_MODELS: - Queue size:', queueSize);
+      console.log('🚀 FORECAST_MODELS: - Queue size:', currentQueueSize);
       console.log('🚀 FORECAST_MODELS: - Is optimizing:', isOptimizing);
       console.log('🚀 FORECAST_MODELS: - Component mounted:', componentMountedRef.current);
-      console.log('🚀 FORECAST_MODELS: - Queued combinations:', queuedCombinations);
+      console.log('🚀 FORECAST_MODELS: - Grok API enabled:', grokApiEnabled);
       
-      // Use immediate execution instead of timeout to avoid race conditions
-      console.log('🚀 FORECAST_MODELS: EXECUTING handleQueueOptimization NOW');
-      handleQueueOptimization();
-      if (onOptimizationStarted) {
-        onOptimizationStarted();
-      }
+      // Use timeout to avoid potential race conditions
+      setTimeout(() => {
+        if (componentMountedRef.current && !isOptimizing) {
+          console.log('🚀 FORECAST_MODELS: EXECUTING handleQueueOptimization');
+          handleQueueOptimization();
+          if (onOptimizationStarted) {
+            onOptimizationStarted();
+          }
+        }
+      }, 100);
     } else {
       console.log('🔄 FORECAST_MODELS: NOT starting optimization:');
-      console.log('🔄 FORECAST_MODELS: - Queue size > 0:', queueSize > 0);
+      console.log('🔄 FORECAST_MODELS: - Queue size > 0:', currentQueueSize > 0);
       console.log('🔄 FORECAST_MODELS: - Not optimizing:', !isOptimizing);
       console.log('🔄 FORECAST_MODELS: - Component mounted:', componentMountedRef.current);
     }
-  }, [optimizationQueue?.queueSize, optimizationQueue?.getQueuedCombinations().length, isOptimizing, handleQueueOptimization, onOptimizationStarted]);
+  }, [optimizationQueue?.queueSize, isOptimizing, handleQueueOptimization, onOptimizationStarted, queuedCombinations.length, grokApiEnabled]);
+
+  // Reset processed queue size when optimization completes
+  useEffect(() => {
+    if (!isOptimizing) {
+      // Reset after optimization completes to allow new auto-starts
+      setTimeout(() => {
+        lastProcessedQueueSizeRef.current = optimizationQueue?.queueSize || 0;
+      }, 1000);
+    }
+  }, [isOptimizing, optimizationQueue?.queueSize]);
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
@@ -200,4 +228,3 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 });
 
 ForecastModels.displayName = 'ForecastModels';
-

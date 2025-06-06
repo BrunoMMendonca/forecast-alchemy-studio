@@ -278,6 +278,7 @@ const Index = () => {
                   onForecastGeneration={handleForecastGeneration}
                   selectedSKU={selectedSKUForResults}
                   onSKUChange={setSelectedSKUForResults}
+                  grokApiEnabled={grokApiEnabled}
                   optimizationQueue={{
                     getSKUsInQueue,
                     getQueuedCombinations,
