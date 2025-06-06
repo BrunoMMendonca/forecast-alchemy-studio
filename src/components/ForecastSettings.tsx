@@ -79,6 +79,7 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
       <BusinessContextSettings
         businessContext={businessContext}
         setBusinessContext={setBusinessContext}
+        disabled={!grokApiEnabled}
       />
     </div>
   );

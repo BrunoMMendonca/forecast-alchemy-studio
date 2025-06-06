@@ -9,13 +9,16 @@ import { BusinessContext, BUSINESS_CONTEXT_OPTIONS } from '@/types/businessConte
 interface BusinessContextSettingsProps {
   businessContext: BusinessContext;
   setBusinessContext: (context: BusinessContext) => void;
+  disabled?: boolean;
 }
 
 export const BusinessContextSettings: React.FC<BusinessContextSettingsProps> = ({
   businessContext,
-  setBusinessContext
+  setBusinessContext,
+  disabled = false
 }) => {
   const updateBusinessContext = (key: keyof BusinessContext, value: string) => {
+    if (disabled) return;
     setBusinessContext({
       ...businessContext,
       [key]: value
@@ -24,7 +27,7 @@ export const BusinessContextSettings: React.FC<BusinessContextSettingsProps> = (
 
   return (
     <TooltipProvider>
-      <div className="space-y-4">
+      <div className={`space-y-4 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
         <h3 className="font-medium flex items-center gap-2">
           <Brain className="h-4 w-4 text-purple-600" />
           AI Optimization Context
@@ -49,6 +52,7 @@ export const BusinessContextSettings: React.FC<BusinessContextSettingsProps> = (
           <Select
             value={businessContext.costOfError}
             onValueChange={(value) => updateBusinessContext('costOfError', value)}
+            disabled={disabled}
           >
             <SelectTrigger className="w-48">
               <SelectValue />
@@ -82,6 +86,7 @@ export const BusinessContextSettings: React.FC<BusinessContextSettingsProps> = (
           <Select
             value={businessContext.planningPurpose}
             onValueChange={(value) => updateBusinessContext('planningPurpose', value)}
+            disabled={disabled}
           >
             <SelectTrigger className="w-48">
               <SelectValue />
@@ -115,6 +120,7 @@ export const BusinessContextSettings: React.FC<BusinessContextSettingsProps> = (
           <Select
             value={businessContext.updateFrequency}
             onValueChange={(value) => updateBusinessContext('updateFrequency', value)}
+            disabled={disabled}
           >
             <SelectTrigger className="w-48">
               <SelectValue />
@@ -148,6 +154,7 @@ export const BusinessContextSettings: React.FC<BusinessContextSettingsProps> = (
           <Select
             value={businessContext.interpretabilityNeeds}
             onValueChange={(value) => updateBusinessContext('interpretabilityNeeds', value)}
+            disabled={disabled}
           >
             <SelectTrigger className="w-48">
               <SelectValue />
