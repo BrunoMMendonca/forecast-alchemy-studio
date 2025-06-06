@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -65,6 +66,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     // Set pending preference for immediate visual feedback
     setPendingPreference(newPreference);
     
+    // Update stored preferences
     const updatedPreferences = { ...preferences };
     updatedPreferences[preferenceKey] = newPreference;
     saveManualAIPreferences(updatedPreferences);
@@ -74,10 +76,10 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
       onResetToManual();
     }
     
-    // Clear pending preference after a short delay to allow state updates
+    // Clear pending preference after state updates
     setTimeout(() => {
       setPendingPreference(null);
-    }, 100);
+    }, 200);
   }, [preferences, preferenceKey, saveManualAIPreferences, onResetToManual, model.id]);
 
   const getParameterConfig = (parameter: string) => {
@@ -108,18 +110,17 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     }
     
     if (!model.optimizationReasoning) {
-      if (grokApiEnabled && isAI) {
-        return {
-          type: 'pending',
-          text: 'No AI optimization results are currently loaded for this model. If optimization has been run, try refreshing or check if results are available for this SKU.'
-        };
-      } else if (isGrid) {
+      if (isGrid) {
         return {
           type: 'pending',
           text: 'No Grid optimization results are currently loaded for this model. If optimization has been run, try refreshing or check if results are available for this SKU.'
         };
-      } else if (!grokApiEnabled && isAI) {
-        // User selected AI but Grok is disabled - fallback message
+      } else if (isAI && grokApiEnabled) {
+        return {
+          type: 'pending',
+          text: 'No AI optimization results are currently loaded for this model. If optimization has been run, try refreshing or check if results are available for this SKU.'
+        };
+      } else if (isAI && !grokApiEnabled) {
         return {
           type: 'unavailable',
           text: 'AI optimization is not available. Grid optimization results will be used when available, or switch to Manual mode to adjust parameters.'
