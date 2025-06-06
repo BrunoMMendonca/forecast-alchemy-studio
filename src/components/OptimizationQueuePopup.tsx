@@ -8,14 +8,9 @@ import { Clock, X, Zap } from 'lucide-react';
 
 interface OptimizationQueuePopupProps {
   optimizationQueue: {
-    queue: Array<{
-      sku: string;
-      reason: 'csv_upload' | 'data_cleaning' | 'csv_import';
-      timestamp: number;
-      skipCacheClear?: boolean;
-    }>;
     getSKUsInQueue: () => string[];
     removeSKUsFromQueue: (skus: string[]) => void;
+    removeUnnecessarySKUs: (skus: string[]) => void;
   };
   models: Array<{
     id: string;
@@ -44,7 +39,7 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
     if (queuedSKUs.length > 0 || isOptimizing) {
       setIsOpen(true);
     }
-  }, [optimizationQueue.queue.length, isOptimizing]);
+  }, [optimizationQueue.getSKUsInQueue().length, isOptimizing]);
 
   // Auto-close when queue is empty and not optimizing
   useEffect(() => {
@@ -52,7 +47,7 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
     if (queuedSKUs.length === 0 && !isOptimizing) {
       setTimeout(() => setIsOpen(false), 2000); // Close after 2 seconds
     }
-  }, [optimizationQueue.queue.length, isOptimizing]);
+  }, [optimizationQueue.getSKUsInQueue().length, isOptimizing]);
 
   const queuedSKUs = optimizationQueue.getSKUsInQueue();
   const enabledModels = models.filter(m => m.enabled);
@@ -60,19 +55,6 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
   if (queuedSKUs.length === 0 && !isOptimizing) {
     return null;
   }
-
-  const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString();
-  };
-
-  const getReasonLabel = (reason: string) => {
-    switch (reason) {
-      case 'csv_upload': return 'CSV Upload';
-      case 'data_cleaning': return 'Data Cleaning';
-      case 'csv_import': return 'CSV Import';
-      default: return reason;
-    }
-  };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -129,29 +111,29 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
             </h3>
             <ScrollArea className="h-64 border rounded-lg">
               <div className="p-4 space-y-3">
-                {optimizationQueue.queue.map((item, index) => (
+                {queuedSKUs.map((sku, index) => (
                   <div
-                    key={`${item.sku}-${item.timestamp}`}
+                    key={`${sku}-${index}`}
                     className={`flex items-center justify-between p-3 rounded-lg border ${
-                      isOptimizing && progress?.currentSKU === item.sku
+                      isOptimizing && progress?.currentSKU === sku
                         ? 'bg-blue-50 border-blue-200'
                         : 'bg-gray-50'
                     }`}
                   >
                     <div className="flex-1">
-                      <div className="font-mono text-sm font-medium">{item.sku}</div>
+                      <div className="font-mono text-sm font-medium">{sku}</div>
                       <div className="text-xs text-muted-foreground">
-                        {getReasonLabel(item.reason)} • {formatTimestamp(item.timestamp)}
+                        Queued for optimization
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {isOptimizing && progress?.currentSKU === item.sku && (
+                      {isOptimizing && progress?.currentSKU === sku && (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
                       )}
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => optimizationQueue.removeSKUsFromQueue([item.sku])}
+                        onClick={() => optimizationQueue.removeSKUsFromQueue([sku])}
                         disabled={isOptimizing}
                       >
                         <X className="h-3 w-3" />
