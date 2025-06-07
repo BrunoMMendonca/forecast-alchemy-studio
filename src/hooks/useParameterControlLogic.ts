@@ -12,18 +12,21 @@ export const useParameterControlLogic = (
   data: SalesData[]
 ) => {
   const [isReasoningExpanded, setIsReasoningExpanded] = useState(false);
-  const { cache, cacheVersion } = useOptimizationCache();
+  const { cache, cacheVersion, getFreshCache } = useOptimizationCache();
 
   const currentDataHash = useMemo(() => {
     const skuData = data.filter(d => d.sku === selectedSKU);
     return generateDataHash(skuData);
   }, [data, selectedSKU]);
 
+  // Get fresh cache entry, especially important when SKU changes
   const cacheEntry = useMemo(() => {
-    const entry = cache[selectedSKU]?.[model.id];
+    // Force fresh cache read to ensure we have latest localStorage data
+    const freshCache = getFreshCache();
+    const entry = freshCache[selectedSKU]?.[model.id];
     console.log(`📊 PARAM_LOGIC: Cache entry for ${selectedSKU}:${model.id}:`, JSON.stringify(entry, null, 2));
     return entry;
-  }, [cache, selectedSKU, model.id, cacheVersion]);
+  }, [getFreshCache, selectedSKU, model.id, cacheVersion]);
 
   const userSelectedMethod = useMemo(() => {
     const selected = cacheEntry?.selected;
@@ -36,10 +39,12 @@ export const useParameterControlLogic = (
       console.log(`📊 PARAM_LOGIC: Using user selected method for ${model.id}: ${userSelectedMethod}`);
       return userSelectedMethod;
     }
-    const bestMethod = getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
+    // Use fresh cache for best method calculation
+    const freshCache = getFreshCache();
+    const bestMethod = getBestAvailableMethod(selectedSKU, model.id, currentDataHash, freshCache);
     console.log(`📊 PARAM_LOGIC: Using best available method for ${model.id}: ${bestMethod}`);
     return bestMethod;
-  }, [userSelectedMethod, selectedSKU, model.id, getBestAvailableMethod, currentDataHash, cache, cacheVersion]);
+  }, [userSelectedMethod, selectedSKU, model.id, currentDataHash, getFreshCache, cacheVersion]);
 
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
