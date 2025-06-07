@@ -50,24 +50,36 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
 
   // Track the last restored state to prevent unnecessary updates
   const lastRestoredRef = useRef<string>('');
+  const isRestoringRef = useRef<boolean>(false);
   const currentStateKey = `${selectedSKU}-${model.id}-${localSelectedMethod}`;
 
   // Restore cached manual parameters only when switching to manual mode or changing SKUs
   useEffect(() => {
-    if (isManual && lastRestoredRef.current !== currentStateKey) {
+    if (isManual && lastRestoredRef.current !== currentStateKey && !isRestoringRef.current) {
       const cachedParams = getCachedManualParameters();
       if (cachedParams) {
         console.log(`🔄 CONTAINER: Restoring cached manual parameters for ${model.id}:`, cachedParams);
+        isRestoringRef.current = true;
         // Update model parameters with cached values
         Object.entries(cachedParams).forEach(([param, value]) => {
           onParameterUpdate(param, value);
         });
         lastRestoredRef.current = currentStateKey;
+        // Allow a brief delay before allowing new manual changes
+        setTimeout(() => {
+          isRestoringRef.current = false;
+        }, 100);
       }
     }
   }, [isManual, selectedSKU, model.id, localSelectedMethod, getCachedManualParameters, onParameterUpdate, currentStateKey]);
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
+    // Prevent parameter changes during restoration
+    if (isRestoringRef.current) {
+      console.log(`🎚️ SLIDER CHANGE: Blocked during restoration for ${parameter}`);
+      return;
+    }
+    
     const newValue = values[0];
     console.log(`🎚️ SLIDER CHANGE: ${parameter} = ${newValue} (manual: ${isManual})`);
     onParameterUpdate(parameter, newValue);
