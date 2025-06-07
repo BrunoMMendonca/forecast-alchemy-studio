@@ -24,8 +24,6 @@ export const runGridOptimization = async (
   skuData: SalesData[],
   sku: string
 ): Promise<GridOptimizationResult> => {
-  console.log(`🔍 GRID: Starting for ${sku}:${model.id}`);
-
   const gridSearchResult = adaptiveGridSearchOptimization(
     model.id,
     skuData,
@@ -35,8 +33,6 @@ export const runGridOptimization = async (
       useWalkForward: true
     }
   );
-
-  console.log(`✅ GRID: Success for ${sku}:${model.id} with accuracy ${gridSearchResult.accuracy.toFixed(1)}%`);
 
   return {
     parameters: gridSearchResult.parameters,

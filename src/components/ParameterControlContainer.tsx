@@ -47,19 +47,15 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     const newValue = values[0];
-    console.log(`🎚️ SLIDER CHANGE: ${parameter} = ${newValue} (manual: ${isManual})`);
     onParameterUpdate(parameter, newValue);
-  }, [onParameterUpdate, isManual]);
+  }, [onParameterUpdate]);
 
   // Handle badge clicks with immediate local state update
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
     // Prevent duplicate calls by checking if we're already in this method
     if (localSelectedMethod === newMethod) {
-      console.log(`🎯 BADGE CLICK: Already in ${newMethod} mode for ${model.id}, ignoring`);
       return;
     }
-    
-    console.log(`🎯 BADGE CLICK: Switching to ${newMethod} for ${model.id}`);
     
     // Update local state immediately for visual feedback
     setLocalSelectedMethod(newMethod);
@@ -71,7 +67,7 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
         onResetToManual();
       }
     }
-  }, [localSelectedMethod, model.id, onMethodSelection, onResetToManual, setLocalSelectedMethod]);
+  }, [localSelectedMethod, onMethodSelection, onResetToManual, setLocalSelectedMethod]);
 
   // If model has no parameters, don't render anything
   if (!hasParameters) {

@@ -76,7 +76,6 @@ class OptimizationLogger {
         break;
     }
 
-    // Only log essential optimization information - NO verbose console logging
     this.notifyListeners();
   }
 

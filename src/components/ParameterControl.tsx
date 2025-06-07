@@ -18,7 +18,6 @@ interface ParameterControlProps {
 export const ParameterControl: React.FC<ParameterControlProps> = (props) => {
   // Add safety check for selectedSKU
   if (!props.selectedSKU) {
-    console.log('ParameterControl: No selectedSKU provided');
     return null;
   }
 
