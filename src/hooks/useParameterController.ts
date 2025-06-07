@@ -27,23 +27,15 @@ export const useParameterController = (
   }, [cache, selectedSKU]);
 
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
-    console.log(`🎚️ PARAMETER CONTROLLER: Updating ${parameter} = ${value} for ${modelId}`);
-    
     const isCurrentlyManual = isModelInManualMode(modelId);
     
     if (!isCurrentlyManual) {
-      console.log(`🎚️ PARAMETER CONTROLLER: Switching to manual mode for ${modelId}`);
       setSelectedMethod(selectedSKU, modelId, 'manual');
     }
     
-    // Update model state first, then cache
     setModels(prev => prev.map(model => {
       if (model.id === modelId) {
         const updatedParameters = { ...model.parameters, [parameter]: value };
-        
-        console.log(`🎚️ PARAMETER CONTROLLER: Updated model parameters:`, updatedParameters);
-        
-        // Cache the manual parameters
         cacheManualParameters(selectedSKU, modelId, updatedParameters, currentDataHash);
         
         return { 
@@ -64,8 +56,6 @@ export const useParameterController = (
   }, [selectedSKU, setSelectedMethod, setModels, cacheManualParameters, currentDataHash, isModelInManualMode]);
 
   const resetToManual = useCallback((modelId: string) => {
-    console.log(`🎚️ PARAMETER CONTROLLER: Resetting to manual mode for ${modelId}`);
-    
     setSelectedMethod(selectedSKU, modelId, 'manual');
     
     setModels(prev => prev.map(model => 
