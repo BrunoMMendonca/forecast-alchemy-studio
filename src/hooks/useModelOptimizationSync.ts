@@ -1,4 +1,3 @@
-
 import { useEffect, useRef } from 'react';
 import { SalesData } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
@@ -62,6 +61,27 @@ export const useModelOptimizationSync = (
         effectiveMethod = autoMethods[autoKey] || getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
       }
 
+      console.log(`🔄 ModelSync: SKU ${selectedSKU}, Model ${model.id}`);
+      console.log(`   Cache entry:`, cached);
+      console.log(`   Effective method:`, effectiveMethod);
+
+      if (effectiveMethod === 'manual') {
+        const manualCache = cached?.manual;
+        if (manualCache && manualCache.dataHash === currentDataHash) {
+          console.log(`   Using manual cache for ${selectedSKU}:${model.id}`);
+          return {
+            ...model,
+            parameters: manualCache.parameters,
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
+          };
+        }
+      }
+
       let selectedCache = null;
       if (effectiveMethod === 'ai' && cached?.ai) {
         selectedCache = cached.ai;
@@ -70,6 +90,7 @@ export const useModelOptimizationSync = (
       }
 
       if (selectedCache && selectedCache.dataHash === currentDataHash) {
+        console.log(`   Using ${effectiveMethod} cache for ${selectedSKU}:${model.id}`);
         return {
           ...model,
           optimizedParameters: selectedCache.parameters,
@@ -81,6 +102,7 @@ export const useModelOptimizationSync = (
         };
       }
 
+      console.log(`   No valid cache found for ${selectedSKU}:${model.id}`);
       return model;
     });
     
