@@ -1,3 +1,4 @@
+
 import { SalesData } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
 import { OptimizationCache, CACHE_EXPIRY_HOURS } from '@/utils/cacheStorageUtils';
@@ -25,12 +26,6 @@ export const getBestAvailableMethod = (
   const cached = cache[sku]?.[modelId];
   if (!cached) return 'manual';
 
-  // First priority: Check if user has explicitly selected a method
-  if (cached.selected) {
-    return cached.selected;
-  }
-
-  // Second priority: Fall back to best available optimization data
   const hasValidAI = cached.ai && cached.ai.dataHash === currentDataHash;
   const hasValidGrid = cached.grid && cached.grid.dataHash === currentDataHash;
 
