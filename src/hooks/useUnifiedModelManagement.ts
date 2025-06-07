@@ -16,13 +16,12 @@ export const useUnifiedModelManagement = (
   businessContext?: BusinessContext,
   onForecastGeneration?: (results: ForecastResult[], selectedSKU: string) => void
 ) => {
-  const { setSelectedMethod, cacheManualParameters } = useOptimizationCache();
+  const { setSelectedMethod, cacheManualParameters, cache } = useOptimizationCache();
   
   const {
     models,
     setModels,
-    toggleModel,
-    updateParameter: baseUpdateParameter
+    toggleModel
   } = useModelState();
 
   const {
@@ -37,7 +36,6 @@ export const useUnifiedModelManagement = (
     onForecastGeneration
   );
 
-  // Sync models with optimization cache
   useModelOptimizationSync(
     selectedSKU,
     data,
@@ -45,37 +43,33 @@ export const useUnifiedModelManagement = (
     lastForecastGenerationHashRef
   );
 
-  // Use parameter management hook
   const {
     updateParameter,
-    resetToManual,
-    currentDataHash
+    resetToManual
   } = useParameterManagement(
     selectedSKU,
     data,
     setModels,
     setSelectedMethod,
-    cacheManualParameters
+    cacheManualParameters,
+    cache
   );
 
-  // Use method selection management hook
   const { handleMethodSelection } = useMethodSelectionManagement(
     selectedSKU,
     setSelectedMethod,
     setModels,
-    currentDataHash
+    cache,
+    data
   );
 
-  // CONTROLLED forecast generation - only when models hash actually changes
   useEffect(() => {
     if (!selectedSKU || !models.length) return;
     
     const enabledModels = models.filter(m => m.enabled);
     if (enabledModels.length === 0) return;
 
-    // Only generate if the hash has actually changed and we're not currently processing
     if (lastForecastGenerationHashRef.current !== modelsHash) {
-      // Use a timeout to debounce rapid changes
       const timeoutId = setTimeout(() => {
         if (lastForecastGenerationHashRef.current !== modelsHash) {
           generateForecasts();

@@ -10,17 +10,11 @@ export const useCacheManagement = (
     setCache(prev => {
       const newCache = JSON.parse(JSON.stringify(prev));
       delete newCache[sku];
-      
-      // SAVE TO LOCALSTORAGE: Only when cache is cleared
-      console.log('🗄️ CACHE: Saving after clearing SKU cache to localStorage');
       saveCacheToStorage(newCache);
-      
       return newCache;
     });
     setCacheVersion(prev => prev + 1);
   }, [setCache, setCacheVersion]);
 
-  return {
-    clearCacheForSKU
-  };
+  return { clearCacheForSKU };
 };

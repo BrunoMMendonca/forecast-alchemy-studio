@@ -1,33 +1,28 @@
 
 import { useCallback } from 'react';
-import { useOptimizationCache } from '@/hooks/useOptimizationCache';
+import { generateDataHash } from '@/utils/cacheUtils';
 
 export const useMethodSelectionManagement = (
   selectedSKU: string,
   setSelectedMethod: (sku: string, modelId: string, method: 'ai' | 'grid' | 'manual') => void,
   setModels: React.Dispatch<React.SetStateAction<any[]>>,
-  currentDataHash: string
+  cache: any,
+  data: any[]
 ) => {
-  const { cache } = useOptimizationCache();
-
-  // Method selection handler for badge clicks
   const handleMethodSelection = useCallback((modelId: string, method: 'ai' | 'grid' | 'manual') => {
-    console.log(`🎯 METHOD SELECTION: ${modelId} -> ${method}`);
-    
-    // Update cache
     setSelectedMethod(selectedSKU, modelId, method);
     
-    // Immediately update model state based on method
+    const skuData = data.filter(d => d.sku === selectedSKU);
+    const currentDataHash = generateDataHash(skuData);
+    
     setModels(prev => prev.map(model => {
       if (model.id !== modelId) return model;
       
       const cached = cache[selectedSKU]?.[modelId];
       
       if (method === 'manual') {
-        // Try to restore manual parameters from cache first
         const manualCache = cached?.manual;
         if (manualCache && manualCache.dataHash === currentDataHash) {
-          console.log(`🔄 RESTORING manual parameters from cache for ${modelId}`);
           return {
             ...model,
             parameters: manualCache.parameters,
@@ -39,7 +34,6 @@ export const useMethodSelectionManagement = (
             optimizationMethod: undefined
           };
         } else {
-          // Clear optimization data for manual mode
           return {
             ...model,
             optimizedParameters: undefined,
@@ -51,7 +45,6 @@ export const useMethodSelectionManagement = (
           };
         }
       } else {
-        // Apply cached optimization data if available
         let selectedCache = null;
         if (method === 'ai' && cached?.ai) {
           selectedCache = cached.ai;
@@ -74,9 +67,7 @@ export const useMethodSelectionManagement = (
       
       return model;
     }));
-  }, [selectedSKU, setSelectedMethod, setModels, cache, currentDataHash]);
+  }, [selectedSKU, setSelectedMethod, setModels, cache, data]);
 
-  return {
-    handleMethodSelection
-  };
+  return { handleMethodSelection };
 };

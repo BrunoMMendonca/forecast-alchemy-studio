@@ -6,20 +6,17 @@ import { useDatasetOptimization } from '@/hooks/useDatasetOptimization';
 import { 
   OptimizationCache, 
   loadCacheFromStorage, 
-  saveCacheToStorage, 
   clearCacheStorage 
 } from '@/utils/cacheStorageUtils';
-import { generateDataHash } from '@/utils/cacheHashUtils';
+import { generateDataHash } from '@/utils/cacheUtils';
 import { getSKUsNeedingOptimization, isCacheValid } from '@/utils/cacheValidationUtils';
 import { useCacheOperations } from '@/hooks/useCacheOperations';
 
 export const useOptimizationCache = () => {
-  // All useState hooks must be called first and in the same order
   const [cache, setCache] = useState<OptimizationCache>({});
   const [cacheStats, setCacheStats] = useState({ hits: 0, misses: 0, skipped: 0 });
   const [cacheVersion, setCacheVersion] = useState(0);
   
-  // All custom hooks must be called after useState hooks and in the same order
   const {
     generateDatasetFingerprint,
     isOptimizationComplete,
@@ -33,41 +30,35 @@ export const useOptimizationCache = () => {
     clearCacheForSKU
   } = useCacheOperations(cache, setCache, setCacheStats, setCacheVersion);
 
-  // All useEffect hooks must come after other hooks
   useEffect(() => {
     const loadedCache = loadCacheFromStorage();
     setCache(loadedCache);
-    console.log('🗄️ CACHE: Initial load from localStorage completed');
   }, []);
 
-  // All useCallback hooks must come after useEffect hooks
   const setSelectedMethod = useCallback((
     sku: string,
     modelId: string,
     method: 'ai' | 'grid' | 'manual'
   ) => {
-    console.log(`🎯 METHOD: Setting method for ${sku}:${modelId} to ${method}`);
     _setSelectedMethod(sku, modelId, method);
   }, [_setSelectedMethod]);
 
-  // New function to cache manual parameters
   const cacheManualParameters = useCallback((
     sku: string,
     modelId: string,
     parameters: Record<string, number>,
     dataHash: string
   ) => {
-    console.log(`🗄️ CACHE: Caching manual parameters for ${sku}:${modelId}`);
     setCachedParameters(
       sku,
       modelId,
       parameters,
       dataHash,
-      undefined, // no confidence for manual
-      undefined, // no reasoning for manual
-      undefined, // no factors for manual
-      undefined, // no expected accuracy for manual
-      'manual'   // method identifier
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'manual'
     );
   }, [setCachedParameters]);
 
@@ -84,7 +75,6 @@ export const useOptimizationCache = () => {
   ) => isCacheValid(sku, modelId, currentDataHash, cache, method), [cache]);
 
   const clearAllCache = useCallback(() => {
-    console.log('🗄️ CACHE: Clearing all cache and saving to localStorage');
     setCache({});
     setCacheStats({ hits: 0, misses: 0, skipped: 0 });
     setCacheVersion(0);
