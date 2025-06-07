@@ -23,16 +23,10 @@ export const useParameterControlLogic = (
     return cache[selectedSKU]?.[model.id];
   }, [cache, selectedSKU, model.id, cacheVersion]);
 
-  const userSelectedMethod = useMemo(() => {
-    return cacheEntry?.selected;
-  }, [cacheEntry, cacheVersion]);
-
   const effectiveSelectedMethod = useMemo(() => {
-    if (userSelectedMethod) {
-      return userSelectedMethod;
-    }
+    // Always use getBestAvailableMethod which now respects user explicit selections
     return getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
-  }, [userSelectedMethod, selectedSKU, model.id, getBestAvailableMethod, currentDataHash, cache, cacheVersion]);
+  }, [selectedSKU, model.id, currentDataHash, cache, cacheVersion]);
 
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 

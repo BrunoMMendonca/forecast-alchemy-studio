@@ -26,9 +26,18 @@ export const getBestAvailableMethod = (
   const cached = cache[sku]?.[modelId];
   if (!cached) return 'manual';
 
+  // Prioritize explicit user selection if available
+  if (cached.userExplicitlySelected && cached.selected) {
+    return cached.selected;
+  }
+
+  // If no explicit selection, check what valid data is available
   const hasValidAI = cached.ai && cached.ai.dataHash === currentDataHash;
   const hasValidGrid = cached.grid && cached.grid.dataHash === currentDataHash;
+  const hasValidManual = cached.manual && cached.manual.dataHash === currentDataHash;
 
+  // If user hasn't made explicit choice, prefer manual if available, then AI, then grid
+  if (hasValidManual) return 'manual';
   if (hasValidAI) return 'ai';
   if (hasValidGrid) return 'grid';
   return 'manual';

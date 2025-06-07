@@ -18,6 +18,7 @@ export const useCacheMethodSelection = (
       if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
       
       newCache[sku][modelId].selected = method;
+      newCache[sku][modelId].userExplicitlySelected = true;
       saveCacheToStorage(newCache);
       
       return newCache;
