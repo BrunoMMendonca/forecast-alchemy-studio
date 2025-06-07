@@ -79,6 +79,17 @@ export const useModelOptimizationSync = (
             expectedAccuracy: undefined,
             optimizationMethod: undefined
           };
+        } else {
+          console.log(`   No valid manual cache for ${selectedSKU}:${model.id}, keeping current parameters`);
+          return {
+            ...model,
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
+          };
         }
       }
 
@@ -102,7 +113,7 @@ export const useModelOptimizationSync = (
         };
       }
 
-      console.log(`   No valid cache found for ${selectedSKU}:${model.id}`);
+      console.log(`   No valid cache found for ${selectedSKU}:${model.id}, keeping current state`);
       return model;
     });
     
