@@ -42,6 +42,8 @@ export const getSKUsNeedingOptimization = (
                             cached.grid.dataHash === currentDataHash && 
                             (Date.now() - cached.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000);
         
+        // For optimization purposes, we still need AI and Grid methods
+        // Manual methods don't require "optimization" as they're user-set
         if (!hasValidAI) {
           console.log(`🗄️ CACHE: ${sku}:${m.id} - No valid AI cache`);
         }
@@ -66,7 +68,7 @@ export const isCacheValid = (
   modelId: string, 
   currentDataHash: string, 
   cache: OptimizationCache,
-  method?: 'ai' | 'grid'
+  method?: 'ai' | 'grid' | 'manual'
 ): boolean => {
   const cached = cache[sku]?.[modelId];
   if (!cached) {
@@ -83,15 +85,18 @@ export const isCacheValid = (
 
   if (method) {
     const result = cached[method];
-    return isValidEntry(result);
+    const isValid = isValidEntry(result);
+    console.log(`🗄️ CACHE: Method-specific validation for ${sku}:${modelId}:${method}: ${isValid}`);
+    return isValid;
   }
 
-  // Check any available method
+  // Check any available method - prioritize selected method
   const selectedMethod = cached.selected || 'ai';
   let result = cached[selectedMethod];
   
   if (!isValidEntry(result)) {
-    result = cached.ai || cached.grid;
+    // Fallback to any valid method
+    result = cached.ai || cached.grid || cached.manual;
   }
   
   const isValid = isValidEntry(result);

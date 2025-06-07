@@ -81,16 +81,7 @@ export const useOptimizationCache = () => {
     modelId: string, 
     currentDataHash: string, 
     method?: 'ai' | 'grid' | 'manual'
-  ) => {
-    // Handle manual method separately since it's not supported by the original isCacheValid function
-    if (method === 'manual') {
-      const cached = cache[sku]?.[modelId]?.manual;
-      return cached && cached.dataHash === currentDataHash;
-    }
-    
-    // For ai and grid methods, use the original function
-    return isCacheValid(sku, modelId, currentDataHash, cache, method as 'ai' | 'grid');
-  }, [cache]);
+  ) => isCacheValid(sku, modelId, currentDataHash, cache, method), [cache]);
 
   const clearAllCache = useCallback(() => {
     console.log('🗄️ CACHE: Clearing all cache and saving to localStorage');
