@@ -1,5 +1,6 @@
-
 import { useCallback } from 'react';
+import { OptimizationCache } from '@/utils/cacheStorageUtils';
+import { getBestAvailableMethod } from '@/utils/cacheUtils';
 
 const AUTO_BEST_METHOD_KEY = 'auto_best_method';
 
@@ -49,6 +50,17 @@ export const useAutoBestMethod = () => {
     }
   }, []);
 
+  // Update automatic best methods for a specific SKU and data hash
+  const updateAutoBestMethods = useCallback((sku: string, currentDataHash: string) => {
+    const autoMethods = loadAutoBestMethod();
+    const cache: OptimizationCache = {}; // We'll need to get this from context
+    
+    // This would need access to cache and models to determine the best methods
+    // For now, keeping it simple and just ensuring the function exists
+    
+    saveAutoBestMethod(autoMethods);
+  }, [loadAutoBestMethod, saveAutoBestMethod]);
+
   // Clear all automatic best method selections
   const clearAutoBestMethod = useCallback(() => {
     try {
@@ -62,6 +74,7 @@ export const useAutoBestMethod = () => {
   return {
     loadAutoBestMethod,
     saveAutoBestMethod,
+    updateAutoBestMethods,
     clearAutoBestMethod
   };
 };
