@@ -50,34 +50,74 @@ export const useUnifiedModelManagement = (
     lastForecastGenerationHashRef
   );
 
+  // Helper function to determine if a model is currently in manual mode
+  const isModelInManualMode = useCallback((modelId: string) => {
+    const cachedEntry = cache[selectedSKU]?.[modelId];
+    const userSelectedMethod = cachedEntry?.selected;
+    
+    // If user has explicitly selected manual, or no optimization data exists, it's manual
+    if (userSelectedMethod === 'manual') {
+      return true;
+    }
+    
+    // If no explicit selection and no optimization data, default to manual
+    if (!userSelectedMethod && !cachedEntry?.ai && !cachedEntry?.grid) {
+      return true;
+    }
+    
+    return false;
+  }, [cache, selectedSKU]);
+
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
-    console.log(`🎚️ PARAMETER UPDATE: ${parameter} = ${value} for ${modelId} - switching to manual`);
+    const isCurrentlyManual = isModelInManualMode(modelId);
     
-    // Set explicit user selection to manual in cache
-    setSelectedMethod(selectedSKU, modelId, 'manual');
-    
-    // Update the model state to manual mode
-    setModels(prev => prev.map(model => {
-      if (model.id === modelId) {
-        const updatedParameters = { ...model.parameters, [parameter]: value };
-        
-        // Cache the manual parameters immediately
-        cacheManualParameters(selectedSKU, modelId, updatedParameters, currentDataHash);
-        
-        return { 
-          ...model, 
-          parameters: updatedParameters,
-          optimizedParameters: undefined,
-          optimizationConfidence: undefined,
-          optimizationReasoning: undefined,
-          optimizationFactors: undefined,
-          expectedAccuracy: undefined,
-          optimizationMethod: undefined
-        };
-      }
-      return model;
-    }));
-  }, [selectedSKU, setSelectedMethod, setModels, cacheManualParameters, currentDataHash]);
+    if (isCurrentlyManual) {
+      console.log(`🎚️ PARAMETER UPDATE (already manual): ${parameter} = ${value} for ${modelId}`);
+      
+      // Already in manual mode - just update parameters and cache
+      setModels(prev => prev.map(model => {
+        if (model.id === modelId) {
+          const updatedParameters = { ...model.parameters, [parameter]: value };
+          
+          // Cache the manual parameters immediately
+          cacheManualParameters(selectedSKU, modelId, updatedParameters, currentDataHash);
+          
+          return { 
+            ...model, 
+            parameters: updatedParameters
+          };
+        }
+        return model;
+      }));
+    } else {
+      console.log(`🎚️ PARAMETER UPDATE (switching to manual): ${parameter} = ${value} for ${modelId}`);
+      
+      // Not in manual mode - need to switch to manual first
+      setSelectedMethod(selectedSKU, modelId, 'manual');
+      
+      // Update the model state to manual mode and clear optimization data
+      setModels(prev => prev.map(model => {
+        if (model.id === modelId) {
+          const updatedParameters = { ...model.parameters, [parameter]: value };
+          
+          // Cache the manual parameters immediately
+          cacheManualParameters(selectedSKU, modelId, updatedParameters, currentDataHash);
+          
+          return { 
+            ...model, 
+            parameters: updatedParameters,
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
+          };
+        }
+        return model;
+      }));
+    }
+  }, [selectedSKU, setSelectedMethod, setModels, cacheManualParameters, currentDataHash, isModelInManualMode]);
 
   const resetToManual = useCallback((modelId: string) => {
     console.log(`🔄 RESET TO MANUAL: ${modelId}`);
