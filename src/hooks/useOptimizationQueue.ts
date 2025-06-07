@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
@@ -49,7 +48,12 @@ export const useOptimizationQueue = () => {
     saveManualAIPreferences(updatedPreferences);
   }, [clearCacheForSKU, loadManualAIPreferences, saveManualAIPreferences]);
 
-  const addSKUsToQueue = useCallback((skus: string[], reason: OptimizationQueueItem['reason'], skipCacheClear = false) => {
+  const addSKUsToQueue = useCallback((
+    skus: string[], 
+    reason: OptimizationQueueItem['reason'], 
+    skipCacheClear = false,
+    onlySpecifiedSKUs = false
+  ) => {
     const timestamp = Date.now();
     
     // Get all models that have optimizable parameters
@@ -59,16 +63,35 @@ export const useOptimizationQueue = () => {
     console.log('🚀 QUEUE: Adding SKU/model pairs to queue');
     console.log('🚀 QUEUE: SKUs:', skus);
     console.log('🚀 QUEUE: Optimizable models:', optimizableModels.map(m => m.id));
+    console.log('🚀 QUEUE: Reason:', reason, 'onlySpecifiedSKUs:', onlySpecifiedSKUs);
     
-    if (!skipCacheClear && reason !== 'csv_upload') {
-      skus.forEach(sku => {
-        clearCacheAndPreferencesForSKU(sku);
-      });
+    // Cache clearing logic based on operation type
+    if (!skipCacheClear) {
+      if (reason === 'csv_upload') {
+        // Clear cache for all SKUs on upload
+        skus.forEach(sku => {
+          clearCacheAndPreferencesForSKU(sku);
+        });
+      } else if ((reason === 'data_cleaning' || reason === 'csv_import') && onlySpecifiedSKUs) {
+        // Only clear cache for specifically affected SKUs
+        skus.forEach(sku => {
+          console.log(`🧹 QUEUE: Clearing cache only for affected SKU: ${sku}`);
+          clearCacheAndPreferencesForSKU(sku);
+        });
+      }
     }
     
     setQueue(prevQueue => {
-      // Remove any existing entries for these SKUs
-      const filteredQueue = prevQueue.filter(item => !skus.includes(item.sku));
+      let filteredQueue = prevQueue;
+      
+      if (onlySpecifiedSKUs) {
+        // Only remove entries for the specifically affected SKUs
+        filteredQueue = prevQueue.filter(item => !skus.includes(item.sku));
+        console.log(`🗑️ QUEUE: Removed entries only for affected SKUs: ${skus.join(', ')}`);
+      } else {
+        // Remove all existing entries for these SKUs (original behavior)
+        filteredQueue = prevQueue.filter(item => !skus.includes(item.sku));
+      }
       
       // Create new SKU/model combinations
       const newItems: OptimizationQueueItem[] = [];

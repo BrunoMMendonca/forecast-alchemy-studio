@@ -1,3 +1,4 @@
+
 import { useCallback } from 'react';
 import { SalesData } from '@/pages/Index';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
@@ -48,6 +49,54 @@ export const useOptimizationHandler = (
 
   const { saveManualAIPreferences: savePreferences } = useManualAIPreferences();
 
+  // Helper function to cache manual parameters for all SKUs
+  const cacheManualParametersForSKUs = useCallback((skusToCache: string[]) => {
+    const defaultModels = getDefaultModels();
+    const optimizableModels = defaultModels.filter(m => hasOptimizableParameters(m));
+    
+    console.log('📝 MANUAL: Caching manual parameters for SKUs:', skusToCache);
+    
+    skusToCache.forEach(sku => {
+      const skuData = data.filter(d => d.sku === sku);
+      if (skuData.length < 3) return; // Skip SKUs with insufficient data
+      
+      const dataHash = generateDataHash(skuData);
+      
+      optimizableModels.forEach(model => {
+        // Check if manual parameters are already cached and valid
+        const cached = cache[sku]?.[model.id];
+        const hasValidManual = cached?.manual && 
+                              cached.manual.dataHash === dataHash;
+        
+        if (!hasValidManual) {
+          console.log(`📝 MANUAL: Caching manual parameters for ${sku}:${model.id}`);
+          
+          // Use default model parameters as manual baseline
+          const manualParameters = model.parameters || {};
+          
+          setCachedParameters(
+            sku,
+            model.id,
+            manualParameters,
+            dataHash,
+            70, // Default confidence for manual
+            'Using default model parameters. No optimization applied.',
+            {
+              stability: 70,
+              interpretability: 90,
+              complexity: 10,
+              businessImpact: 'Baseline configuration with default parameters'
+            },
+            70, // Default expected accuracy
+            'manual'
+          );
+        } else {
+          console.log(`📝 MANUAL: Manual parameters already cached for ${sku}:${model.id}`);
+        }
+      });
+    });
+  }, [data, generateDataHash, setCachedParameters, cache]);
+
   const handleQueueOptimization = useCallback(async () => {
     if (!optimizationQueue) {
       console.log('🚫 OPTIMIZATION: No optimization queue provided');
@@ -85,7 +134,14 @@ export const useOptimizationHandler = (
       return;
     }
 
-    // Check which combinations actually need optimization
+    // Extract unique SKUs from valid combinations
+    const uniqueSKUs = Array.from(new Set(validCombinations.map(combo => combo.sku)));
+    
+    // STEP 1: Cache manual parameters for all SKUs immediately
+    console.log('📝 MANUAL: Caching manual parameters for all SKUs before optimization');
+    cacheManualParametersForSKUs(uniqueSKUs);
+
+    // Check which combinations actually need optimization (exclude already valid cache)
     const skusNeedingOptimization = getSKUsNeedingOptimization(data, optimizableModels);
     const validSKUsSet = new Set(skusNeedingOptimization.map(item => item.sku));
     
@@ -98,7 +154,7 @@ export const useOptimizationHandler = (
     );
 
     console.log('🚀 OPTIMIZATION: Combinations that need optimization:', combinationsToOptimize.length);
-    console.log('🧹 OPTIMIZATION: Unnecessary combinations:', unnecessaryCombinations.length);
+    console.log('🧹 OPTIMIZATION: Unnecessary combinations (already optimized):', unnecessaryCombinations.length);
 
     // Remove unnecessary combinations from queue
     if (unnecessaryCombinations.length > 0 && optimizationQueue.removeSKUModelPairsFromQueue) {
@@ -107,7 +163,7 @@ export const useOptimizationHandler = (
 
     // If no combinations actually need optimization, we're done
     if (combinationsToOptimize.length === 0) {
-      console.log('🧹 OPTIMIZATION: No combinations need optimization, done');
+      console.log('🧹 OPTIMIZATION: No combinations need optimization, manual parameters cached, done');
       return;
     }
 
@@ -254,7 +310,7 @@ export const useOptimizationHandler = (
     setTimeout(() => {
       markOptimizationCompleted(data, '/');
     }, 1000);
-  }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, savePreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete, grokApiEnabled]);
+  }, [optimizationQueue, models, data, selectedSKU, markOptimizationStarted, optimizeQueuedSKUs, generateDataHash, setCachedParameters, loadManualAIPreferences, saveManualAIPreferences, savePreferences, setModels, markOptimizationCompleted, getSKUsNeedingOptimization, onOptimizationComplete, grokApiEnabled, cacheManualParametersForSKUs]);
 
   return {
     isOptimizing,
