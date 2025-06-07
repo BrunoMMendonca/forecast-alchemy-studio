@@ -28,7 +28,7 @@ export const useMethodSelection = (
           console.log(`🔄 RESTORING_MANUAL: ${modelId} restoring manual parameters:`, manualCache.parameters);
           return {
             ...model,
-            parameters: manualCache.parameters,
+            parameters: manualCache.parameters, // This is the key fix - update the base parameters
             optimizedParameters: undefined,
             optimizationConfidence: undefined,
             optimizationReasoning: undefined,

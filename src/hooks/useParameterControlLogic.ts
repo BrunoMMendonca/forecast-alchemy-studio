@@ -60,22 +60,22 @@ export const useParameterControlLogic = (
     console.log(`🔍 PARAMETER_LOGIC: Model ${model.id} parameters changed:`, model.parameters);
   }, [model.parameters, model.id]);
 
-  // For manual mode, directly use model.parameters, for optimized modes use cache
+  // Always use model.parameters in manual mode, optimizedParameters in optimized modes
   const getParameterValueCallback = useCallback((parameter: string) => {
     let value: number | undefined;
     
     if (isManual) {
-      // In manual mode, always use the current model parameters
+      // In manual mode, always use the current model parameters (which should be restored from cache)
       value = model.parameters?.[parameter];
       console.log(`🎯 GET_PARAMETER_VALUE (MANUAL): ${parameter} = ${value} (from model.parameters)`);
     } else {
-      // In optimized modes, use the cache-based function
-      value = getParameterValue(parameter, model, isManual);
-      console.log(`🎯 GET_PARAMETER_VALUE (OPTIMIZED): ${parameter} = ${value} (from cache, manual: ${isManual}, modelId: ${model.id})`);
+      // In optimized modes, use optimizedParameters first, fall back to parameters
+      value = model.optimizedParameters?.[parameter] ?? model.parameters?.[parameter];
+      console.log(`🎯 GET_PARAMETER_VALUE (OPTIMIZED): ${parameter} = ${value} (from optimizedParameters: ${model.optimizedParameters?.[parameter]}, fallback: ${model.parameters?.[parameter]})`);
     }
     
     return value;
-  }, [model, isManual, model.parameters]);
+  }, [model, isManual]);
 
   const canOptimize = hasOptimizableParameters(model);
   const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;
