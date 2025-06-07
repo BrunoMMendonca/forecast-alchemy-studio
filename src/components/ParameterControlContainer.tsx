@@ -105,6 +105,7 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
             disabled={disabled}
             getParameterValue={getParameterValue}
             onParameterChange={handleParameterChange}
+            cacheVersion={cacheVersion}
           />
 
           {/* Optimization reasoning - collapsible */}

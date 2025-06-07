@@ -10,6 +10,7 @@ interface ParameterSlidersProps {
   disabled: boolean;
   getParameterValue: (parameter: string) => number | undefined;
   onParameterChange: (parameter: string, values: number[]) => void;
+  cacheVersion?: number; // Add cache version to force re-render
 }
 
 export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
@@ -18,6 +19,7 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
   disabled,
   getParameterValue,
   onParameterChange,
+  cacheVersion = 0,
 }) => {
   const getParameterConfig = (parameter: string) => {
     const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
@@ -47,7 +49,7 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
         const safeValue = typeof currentValue === 'number' ? currentValue : config.min;
         
         return (
-          <div key={parameter} className="space-y-2">
+          <div key={`${parameter}-${cacheVersion}`} className="space-y-2">
             <div className="flex justify-between items-center">
               <Label htmlFor={`${model.id}-${parameter}`} className="text-sm font-medium">
                 {parameter}
@@ -57,6 +59,7 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
               </span>
             </div>
             <Slider
+              key={`slider-${parameter}-${cacheVersion}-${safeValue}`}
               id={`${model.id}-${parameter}`}
               min={config.min}
               max={config.max}
