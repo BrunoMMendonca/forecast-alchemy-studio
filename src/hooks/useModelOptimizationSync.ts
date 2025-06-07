@@ -67,35 +67,21 @@ export const useModelOptimizationSync = (
         selectedCache = cached.ai;
       } else if (effectiveMethod === 'grid' && cached?.grid) {
         selectedCache = cached.grid;
-      } else if (effectiveMethod === 'manual' && cached?.manual) {
-        selectedCache = cached.manual;
       }
-
-      // Base model with default parameters
-      let updatedModel = { ...model };
 
       if (selectedCache && selectedCache.dataHash === currentDataHash) {
-        if (effectiveMethod === 'manual') {
-          // For manual mode, restore cached manual parameters to model.parameters
-          updatedModel = {
-            ...model,
-            parameters: { ...model.parameters, ...selectedCache.parameters }
-          };
-        } else {
-          // For AI/Grid mode, use optimizedParameters
-          updatedModel = {
-            ...model,
-            optimizedParameters: selectedCache.parameters,
-            optimizationConfidence: selectedCache.confidence,
-            optimizationReasoning: selectedCache.reasoning,
-            optimizationFactors: selectedCache.factors,
-            expectedAccuracy: selectedCache.expectedAccuracy,
-            optimizationMethod: selectedCache.method
-          };
-        }
+        return {
+          ...model,
+          optimizedParameters: selectedCache.parameters,
+          optimizationConfidence: selectedCache.confidence,
+          optimizationReasoning: selectedCache.reasoning,
+          optimizationFactors: selectedCache.factors,
+          expectedAccuracy: selectedCache.expectedAccuracy,
+          optimizationMethod: selectedCache.method
+        };
       }
 
-      return updatedModel;
+      return model;
     });
     
     setModels(updatedModels);
