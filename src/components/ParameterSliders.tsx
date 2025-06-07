@@ -64,7 +64,7 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
               value={[safeValue]}
               onValueChange={(values) => onParameterChange(parameter, values)}
               className="w-full"
-              disabled={disabled}
+              disabled={!isManual || disabled}
             />
             <p className="text-xs text-slate-500">{config.description}</p>
           </div>
