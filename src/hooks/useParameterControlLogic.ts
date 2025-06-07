@@ -56,7 +56,7 @@ export const useParameterControlLogic = (
 
   const getParameterValueCallback = useCallback((parameter: string) => {
     return getParameterValue(parameter, model, isManual);
-  }, [model, isManual]);
+  }, [model, isManual, model.parameters]);
 
   const canOptimize = hasOptimizableParameters(model);
   const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;
