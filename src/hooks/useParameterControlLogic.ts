@@ -54,29 +54,16 @@ export const useParameterControlLogic = (
 
   const isManual = localSelectedMethod === 'manual';
 
-  // Create a memoized parameter values object that updates with cache changes
-  const parameterValues = useMemo(() => {
-    const values: Record<string, number> = {};
-    
-    if (model.parameters) {
-      Object.keys(model.parameters).forEach(parameter => {
-        values[parameter] = getParameterValue(
-          parameter, 
-          model, 
-          isManual, 
-          cache, 
-          selectedSKU, 
-          currentDataHash
-        ) || 0;
-      });
-    }
-    
-    return values;
-  }, [model, isManual, cache, selectedSKU, currentDataHash, cacheVersion]);
-
   const getParameterValueCallback = useCallback((parameter: string) => {
-    return parameterValues[parameter];
-  }, [parameterValues]);
+    return getParameterValue(
+      parameter, 
+      model, 
+      isManual, 
+      cache, 
+      selectedSKU, 
+      currentDataHash
+    );
+  }, [model, isManual, cache, selectedSKU, currentDataHash, cacheVersion]);
 
   const canOptimize = hasOptimizableParameters(model);
   const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;
