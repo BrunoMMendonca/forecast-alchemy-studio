@@ -1,5 +1,6 @@
 
 import { useCallback, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import { SalesData } from '@/pages/Index';
 import { generateDataHash } from '@/utils/cacheUtils';
 
@@ -30,47 +31,55 @@ export const useParameterController = (
     const isCurrentlyManual = isModelInManualMode(modelId);
     
     if (!isCurrentlyManual) {
-      setSelectedMethod(selectedSKU, modelId, 'manual');
+      flushSync(() => {
+        setSelectedMethod(selectedSKU, modelId, 'manual');
+      });
     }
     
-    setModels(prev => prev.map(model => {
-      if (model.id === modelId) {
-        const updatedParameters = { ...model.parameters, [parameter]: value };
-        cacheManualParameters(selectedSKU, modelId, updatedParameters, currentDataHash);
-        
-        return { 
-          ...model, 
-          parameters: updatedParameters,
-          ...(isCurrentlyManual ? {} : {
-            optimizedParameters: undefined,
-            optimizationConfidence: undefined,
-            optimizationReasoning: undefined,
-            optimizationFactors: undefined,
-            expectedAccuracy: undefined,
-            optimizationMethod: undefined
-          })
-        };
-      }
-      return model;
-    }));
+    flushSync(() => {
+      setModels(prev => prev.map(model => {
+        if (model.id === modelId) {
+          const updatedParameters = { ...model.parameters, [parameter]: value };
+          cacheManualParameters(selectedSKU, modelId, updatedParameters, currentDataHash);
+          
+          return { 
+            ...model, 
+            parameters: updatedParameters,
+            ...(isCurrentlyManual ? {} : {
+              optimizedParameters: undefined,
+              optimizationConfidence: undefined,
+              optimizationReasoning: undefined,
+              optimizationFactors: undefined,
+              expectedAccuracy: undefined,
+              optimizationMethod: undefined
+            })
+          };
+        }
+        return model;
+      }));
+    });
   }, [selectedSKU, setSelectedMethod, setModels, cacheManualParameters, currentDataHash, isModelInManualMode]);
 
   const resetToManual = useCallback((modelId: string) => {
-    setSelectedMethod(selectedSKU, modelId, 'manual');
+    flushSync(() => {
+      setSelectedMethod(selectedSKU, modelId, 'manual');
+    });
     
-    setModels(prev => prev.map(model => 
-      model.id === modelId 
-        ? { 
-            ...model,
-            optimizedParameters: undefined,
-            optimizationConfidence: undefined,
-            optimizationReasoning: undefined,
-            optimizationFactors: undefined,
-            expectedAccuracy: undefined,
-            optimizationMethod: undefined
-          }
-        : model
-    ));
+    flushSync(() => {
+      setModels(prev => prev.map(model => 
+        model.id === modelId 
+          ? { 
+              ...model,
+              optimizedParameters: undefined,
+              optimizationConfidence: undefined,
+              optimizationReasoning: undefined,
+              optimizationFactors: undefined,
+              expectedAccuracy: undefined,
+              optimizationMethod: undefined
+            }
+          : model
+      ));
+    });
   }, [selectedSKU, setSelectedMethod, setModels]);
 
   return {

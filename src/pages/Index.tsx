@@ -1,5 +1,6 @@
 
 import React, { useEffect, useCallback, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { OptimizationQueuePopup } from '@/components/OptimizationQueuePopup';
 import { MainLayout } from '@/components/MainLayout';
 import { StepContent } from '@/components/StepContent';
@@ -111,7 +112,6 @@ const Index = () => {
 
   // Create a truly stable callback that uses the ref
   const stableOptimizationCallback = useCallback(() => {
-    console.log('🚀 AUTO-OPTIMIZATION: Stable callback triggered, calling current handler');
     if (optimizationHandlerRef.current) {
       optimizationHandlerRef.current();
     }
@@ -171,6 +171,13 @@ const Index = () => {
     };
   }, [setCurrentStep]);
 
+  // Wrapper for SKU changes that forces synchronous updates
+  const handleSKUChange = useCallback((newSKU: string) => {
+    flushSync(() => {
+      setSelectedSKUForResults(newSKU);
+    });
+  }, [setSelectedSKUForResults]);
+
   return (
     <>
       <MainLayout
@@ -203,7 +210,7 @@ const Index = () => {
           onDataCleaning={handleDataCleaning}
           onImportDataCleaning={handleImportDataCleaning}
           onForecastGeneration={handleForecastGeneration}
-          onSKUChange={setSelectedSKUForResults}
+          onSKUChange={handleSKUChange}
           onStepChange={setCurrentStep}
           optimizationQueue={optimizationQueue}
         />

@@ -1,5 +1,6 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
 import { hasOptimizableParameters } from '@/utils/modelConfig';
@@ -37,7 +38,9 @@ export const useParameterControlLogic = (
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
   useEffect(() => {
-    setLocalSelectedMethod(effectiveSelectedMethod);
+    flushSync(() => {
+      setLocalSelectedMethod(effectiveSelectedMethod);
+    });
   }, [effectiveSelectedMethod, selectedSKU, model.id]);
 
   const optimizationData = useMemo(() => {
@@ -62,11 +65,17 @@ export const useParameterControlLogic = (
   const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;
   const hasOptimizationResults = canOptimize && optimizationData && !isManual;
 
+  const setLocalSelectedMethodWithFlush = useCallback((method: 'ai' | 'grid' | 'manual' | undefined) => {
+    flushSync(() => {
+      setLocalSelectedMethod(method);
+    });
+  }, []);
+
   return {
     isReasoningExpanded,
     setIsReasoningExpanded,
     localSelectedMethod,
-    setLocalSelectedMethod,
+    setLocalSelectedMethod: setLocalSelectedMethodWithFlush,
     optimizationData,
     isManual,
     getParameterValue: getParameterValueCallback,
