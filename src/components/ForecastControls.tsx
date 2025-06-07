@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { flushSync } from 'react-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -25,14 +26,24 @@ export const ForecastControls: React.FC<ForecastControlsProps> = ({
   
   const handlePrevSKU = () => {
     if (currentIndex > 0) {
-      onSKUChange(skus[currentIndex - 1]);
+      flushSync(() => {
+        onSKUChange(skus[currentIndex - 1]);
+      });
     }
   };
   
   const handleNextSKU = () => {
     if (currentIndex < skus.length - 1) {
-      onSKUChange(skus[currentIndex + 1]);
+      flushSync(() => {
+        onSKUChange(skus[currentIndex + 1]);
+      });
     }
+  };
+
+  const handleSelectChange = (sku: string) => {
+    flushSync(() => {
+      onSKUChange(sku);
+    });
   };
 
   const exportResults = () => {
@@ -84,7 +95,7 @@ export const ForecastControls: React.FC<ForecastControlsProps> = ({
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Select value={selectedSKU} onValueChange={onSKUChange}>
+          <Select value={selectedSKU} onValueChange={handleSelectChange}>
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Select SKU" />
             </SelectTrigger>

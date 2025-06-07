@@ -1,5 +1,6 @@
 
 import { useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { OptimizationCache, saveCacheToStorage } from '@/utils/cacheStorageUtils';
 
 export const useCacheActions = (
@@ -7,13 +8,15 @@ export const useCacheActions = (
   setCacheVersion: React.Dispatch<React.SetStateAction<number>>
 ) => {
   const clearCacheForSKU = useCallback((sku: string) => {
-    setCache(prev => {
-      const newCache = JSON.parse(JSON.stringify(prev));
-      delete newCache[sku];
-      saveCacheToStorage(newCache);
-      return newCache;
+    flushSync(() => {
+      setCache(prev => {
+        const newCache = JSON.parse(JSON.stringify(prev));
+        delete newCache[sku];
+        saveCacheToStorage(newCache);
+        return newCache;
+      });
+      setCacheVersion(prev => prev + 1);
     });
-    setCacheVersion(prev => prev + 1);
   }, [setCache, setCacheVersion]);
 
   return { clearCacheForSKU };

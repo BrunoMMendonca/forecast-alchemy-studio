@@ -1,5 +1,6 @@
 
 import { useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { OptimizationCache, OptimizedParameters, saveCacheToStorage } from '@/utils/cacheStorageUtils';
 
 export const useCacheStorage = (
@@ -39,37 +40,39 @@ export const useCacheStorage = (
       method === 'manual' ? 'manual' :
       'ai';
 
-    setCache(prev => {
-      const newCache = JSON.parse(JSON.stringify(prev));
-      
-      if (!newCache[sku]) newCache[sku] = {};
-      if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
-      
-      newCache[sku][modelId][cacheMethod] = optimizedParams;
-      
-      // Auto-select best method
-      if (cacheMethod === 'manual') {
-        newCache[sku][modelId].selected = 'manual';
-      } else {
-        const hasAI = newCache[sku][modelId].ai;
-        const hasGrid = newCache[sku][modelId].grid;
-        const currentSelected = newCache[sku][modelId].selected;
+    flushSync(() => {
+      setCache(prev => {
+        const newCache = JSON.parse(JSON.stringify(prev));
         
-        const bestMethod = hasAI ? 'ai' : hasGrid ? 'grid' : 'manual';
-        const shouldAutoSelect = !currentSelected || 
-          (currentSelected === 'manual' && bestMethod !== 'manual') || 
-          (currentSelected === 'grid' && bestMethod === 'ai');
+        if (!newCache[sku]) newCache[sku] = {};
+        if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
         
-        if (shouldAutoSelect) {
-          newCache[sku][modelId].selected = bestMethod;
+        newCache[sku][modelId][cacheMethod] = optimizedParams;
+        
+        // Auto-select best method
+        if (cacheMethod === 'manual') {
+          newCache[sku][modelId].selected = 'manual';
+        } else {
+          const hasAI = newCache[sku][modelId].ai;
+          const hasGrid = newCache[sku][modelId].grid;
+          const currentSelected = newCache[sku][modelId].selected;
+          
+          const bestMethod = hasAI ? 'ai' : hasGrid ? 'grid' : 'manual';
+          const shouldAutoSelect = !currentSelected || 
+            (currentSelected === 'manual' && bestMethod !== 'manual') || 
+            (currentSelected === 'grid' && bestMethod === 'ai');
+          
+          if (shouldAutoSelect) {
+            newCache[sku][modelId].selected = bestMethod;
+          }
         }
-      }
-      
-      saveCacheToStorage(newCache);
-      return newCache;
-    });
+        
+        saveCacheToStorage(newCache);
+        return newCache;
+      });
 
-    setCacheVersion(prev => prev + 1);
+      setCacheVersion(prev => prev + 1);
+    });
   }, [setCache, setCacheVersion]);
 
   return { setCachedParameters };

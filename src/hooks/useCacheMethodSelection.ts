@@ -1,5 +1,6 @@
 
 import { useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { OptimizationCache, saveCacheToStorage } from '@/utils/cacheStorageUtils';
 
 export const useCacheMethodSelection = (
@@ -11,19 +12,21 @@ export const useCacheMethodSelection = (
     modelId: string,
     method: 'ai' | 'grid' | 'manual'
   ) => {
-    setCache(prev => {
-      const newCache = JSON.parse(JSON.stringify(prev));
-      
-      if (!newCache[sku]) newCache[sku] = {};
-      if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
-      
-      newCache[sku][modelId].selected = method;
-      saveCacheToStorage(newCache);
-      
-      return newCache;
-    });
+    flushSync(() => {
+      setCache(prev => {
+        const newCache = JSON.parse(JSON.stringify(prev));
+        
+        if (!newCache[sku]) newCache[sku] = {};
+        if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
+        
+        newCache[sku][modelId].selected = method;
+        saveCacheToStorage(newCache);
+        
+        return newCache;
+      });
 
-    setCacheVersion(prev => prev + 1);
+      setCacheVersion(prev => prev + 1);
+    });
   }, [setCache, setCacheVersion]);
 
   return { setSelectedMethod };
