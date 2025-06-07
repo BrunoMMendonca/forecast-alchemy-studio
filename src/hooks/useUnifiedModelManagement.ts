@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { BusinessContext } from '@/types/businessContext';
@@ -58,15 +57,12 @@ export const useUnifiedModelManagement = (
     const currentMethod = cacheEntry?.selected || 'manual';
     
     if (currentMethod === 'manual') {
-      console.log(`🎚️ ALREADY MANUAL: ${modelId}, just updating parameter`);
+      console.log(`🎚️ ALREADY MANUAL: ${modelId}, just updating parameter - NO CACHE UPDATE`);
       
-      // Just update the model parameters directly - don't trigger method switching
+      // Just update the model parameters directly - no caching, no method switching
       setModels(prev => prev.map(model => {
         if (model.id === modelId) {
           const updatedParameters = { ...model.parameters, [parameter]: value };
-          
-          // Cache the manual parameters immediately but don't change selection
-          cacheManualParameters(selectedSKU, modelId, updatedParameters, currentDataHash);
           
           return { 
             ...model, 
