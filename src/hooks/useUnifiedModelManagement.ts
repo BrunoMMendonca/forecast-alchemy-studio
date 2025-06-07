@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useMemo } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
 import { BusinessContext } from '@/types/businessContext';
@@ -50,21 +51,12 @@ export const useUnifiedModelManagement = (
   );
 
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
-    console.log(`🎚️ PARAMETER UPDATE: ${parameter} = ${value} for ${modelId}`);
+    console.log(`🎚️ PARAMETER UPDATE: ${parameter} = ${value} for ${modelId} - switching to manual`);
     
-    // Check if we're already in manual mode to avoid unnecessary setSelectedMethod calls
-    const cached = cache[selectedSKU]?.[modelId];
-    const currentMethod = cached?.selected;
+    // Set explicit user selection to manual in cache
+    setSelectedMethod(selectedSKU, modelId, 'manual');
     
-    // Only set method to manual if we're not already in manual mode
-    if (currentMethod !== 'manual') {
-      console.log(`🎚️ SWITCHING TO MANUAL: ${modelId} (was ${currentMethod})`);
-      setSelectedMethod(selectedSKU, modelId, 'manual');
-    } else {
-      console.log(`🎚️ ALREADY MANUAL: ${modelId}, just updating parameter`);
-    }
-    
-    // Update the model state
+    // Update the model state to manual mode
     setModels(prev => prev.map(model => {
       if (model.id === modelId) {
         const updatedParameters = { ...model.parameters, [parameter]: value };
@@ -85,7 +77,7 @@ export const useUnifiedModelManagement = (
       }
       return model;
     }));
-  }, [selectedSKU, setSelectedMethod, setModels, cacheManualParameters, currentDataHash, cache]);
+  }, [selectedSKU, setSelectedMethod, setModels, cacheManualParameters, currentDataHash]);
 
   const resetToManual = useCallback((modelId: string) => {
     console.log(`🔄 RESET TO MANUAL: ${modelId}`);
