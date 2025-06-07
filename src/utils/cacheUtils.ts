@@ -26,6 +26,16 @@ export const getBestAvailableMethod = (
   const cached = cache[sku]?.[modelId];
   if (!cached) return 'manual';
 
+  // Priority 1: Check if user has explicitly selected a method
+  if (cached.selected) {
+    const selectedCache = cached[cached.selected];
+    // Verify the selected method has valid data for current hash
+    if (selectedCache && selectedCache.dataHash === currentDataHash) {
+      return cached.selected;
+    }
+  }
+
+  // Priority 2: Fall back to "best available" logic only if no explicit selection
   const hasValidAI = cached.ai && cached.ai.dataHash === currentDataHash;
   const hasValidGrid = cached.grid && cached.grid.dataHash === currentDataHash;
 
