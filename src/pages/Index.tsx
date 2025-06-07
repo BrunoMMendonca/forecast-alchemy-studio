@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+
+import React, { useEffect, useCallback } from 'react';
 import { OptimizationQueuePopup } from '@/components/OptimizationQueuePopup';
 import { MainLayout } from '@/components/MainLayout';
 import { StepContent } from '@/components/StepContent';
@@ -44,24 +45,6 @@ const Index = () => {
     setIsQueuePopupOpen
   } = useAppState();
 
-  const { 
-    addSKUsToQueue, 
-    removeSKUsFromQueue, 
-    removeSKUModelPairsFromQueue, 
-    getSKUsInQueue, 
-    queueSize, 
-    uniqueSKUCount, 
-    getQueuedCombinations, 
-    getModelsForSKU, 
-    clearQueue 
-  } = useOptimizationQueue(() => {
-    // This callback runs whenever items are added to the queue
-    if (handleQueueOptimization) {
-      console.log('🚀 AUTO-OPTIMIZATION: Starting due to queue changes');
-      handleQueueOptimization();
-    }
-  });
-
   const { clearManualAIPreferences } = useManualAIPreferences();
 
   // Listen for the global queue popup event
@@ -102,10 +85,49 @@ const Index = () => {
     onSettingsChange: handleGlobalSettingsChange
   });
 
-  // Forward declare the optimization handler function
-  let handleQueueOptimization: (() => void) | undefined;
-
+  // Initialize optimization handler first
   const optimizationQueue = {
+    getSKUsInQueue: () => [],
+    getQueuedCombinations: () => [],
+    getModelsForSKU: () => [],
+    removeSKUsFromQueue: () => {},
+    removeSKUModelPairsFromQueue: () => {},
+    removeUnnecessarySKUs: () => {},
+    queueSize: 0,
+    uniqueSKUCount: 0
+  };
+
+  const optimizationHandler = useOptimizationHandler(
+    cleanedData,
+    selectedSKUForResults,
+    optimizationQueue,
+    undefined,
+    grokApiEnabled
+  );
+
+  // Create a stable callback that always points to the current optimization handler
+  const stableOptimizationCallback = useCallback(() => {
+    console.log('🚀 AUTO-OPTIMIZATION: Stable callback triggered, calling current handler');
+    if (optimizationHandler.handleQueueOptimization) {
+      optimizationHandler.handleQueueOptimization();
+    }
+  }, [optimizationHandler.handleQueueOptimization]);
+
+  // Initialize queue with the stable callback
+  const { 
+    addSKUsToQueue, 
+    removeSKUsFromQueue, 
+    removeSKUModelPairsFromQueue, 
+    getSKUsInQueue, 
+    queueSize, 
+    uniqueSKUCount, 
+    getQueuedCombinations, 
+    getModelsForSKU, 
+    clearQueue 
+  } = useOptimizationQueue(stableOptimizationCallback);
+
+  // Update the optimization queue reference
+  Object.assign(optimizationQueue, {
     getSKUsInQueue,
     getQueuedCombinations,
     getModelsForSKU,
@@ -114,19 +136,7 @@ const Index = () => {
     removeUnnecessarySKUs: removeSKUsFromQueue,
     queueSize,
     uniqueSKUCount
-  };
-
-  // Initialize optimization handler
-  const optimizationHandler = useOptimizationHandler(
-    cleanedData,
-    selectedSKUForResults,
-    optimizationQueue,
-    undefined, // onOptimizationComplete - we'll handle this in the forecast components
-    grokApiEnabled
-  );
-
-  // Assign the handler function
-  handleQueueOptimization = optimizationHandler.handleQueueOptimization;
+  });
 
   const {
     handleDataUpload,
@@ -142,8 +152,7 @@ const Index = () => {
     cleanedData,
     addSKUsToQueue,
     clearManualAIPreferences,
-    clearQueue,
-    onStartOptimization: undefined // No longer needed since queue handles it automatically
+    clearQueue
   });
 
   useEffect(() => {
@@ -200,8 +209,8 @@ const Index = () => {
       <OptimizationQueuePopup
         optimizationQueue={optimizationQueue}
         models={[]} // Empty models array when no data
-        isOptimizing={false}
-        progress={null}
+        isOptimizing={optimizationHandler.isOptimizing}
+        progress={optimizationHandler.progress}
         isOpen={isQueuePopupOpen}
         onOpenChange={setIsQueuePopupOpen}
       />
