@@ -1,3 +1,5 @@
+
+import { useCallback } from 'react';
 import { generateDataHash } from '@/utils/cacheUtils';
 
 export const useMethodSelection = (
