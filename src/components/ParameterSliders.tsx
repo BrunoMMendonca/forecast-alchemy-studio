@@ -1,7 +1,6 @@
 
-import React, { useMemo, useEffect, useRef } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
 import { ModelConfig } from '@/types/forecast';
 
 interface ParameterSlidersProps {
@@ -23,8 +22,6 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
   cacheVersion,
   parameterValues,
 }) => {
-  const sliderRefs = useRef<Record<string, any>>({});
-
   const getParameterConfig = (parameter: string) => {
     const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
       alpha: { min: 0.1, max: 0.9, step: 0.05, description: "Level smoothing parameter" },
@@ -48,10 +45,10 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
 
   // Force slider updates when parameterValues change
   useEffect(() => {
-    console.log(`🔄 EFFECT: parameterValues changed for ${model.id}, cacheVersion: ${cacheVersion}`);
+    console.log(`🔄 NATIVE SLIDER EFFECT: parameterValues changed for ${model.id}, cacheVersion: ${cacheVersion}`);
     Object.keys(parameterValues).forEach(parameter => {
       const value = parameterValues[parameter];
-      console.log(`🎚️ EFFECT UPDATE: ${parameter} = ${value}`);
+      console.log(`🎚️ NATIVE SLIDER EFFECT UPDATE: ${parameter} = ${value}`);
     });
   }, [parameterValues, cacheVersion, model.id]);
 
@@ -66,10 +63,10 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
         const currentValue = parameterValues[parameter];
         const safeValue = typeof currentValue === 'number' ? currentValue : config.min;
         
-        console.log(`🎚️ RENDER SLIDER: ${parameter} = ${safeValue}, from parameterValues: ${currentValue}`);
+        console.log(`🎚️ NATIVE SLIDER RENDER: ${parameter} = ${safeValue}, from parameterValues: ${currentValue}`);
         
         return (
-          <div key={parameter} className="space-y-2">
+          <div key={`${parameter}-${model.id}-${cacheVersion}`} className="space-y-2">
             <div className="flex justify-between items-center">
               <Label htmlFor={`slider-${parameter}`} className="text-sm font-medium">
                 {parameter}
@@ -78,24 +75,29 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
                 {safeValue.toFixed(config.step < 1 ? 2 : 0)}
               </span>
             </div>
-            <Slider
-              ref={(ref) => {
-                if (ref) {
-                  sliderRefs.current[parameter] = ref;
-                }
-              }}
-              id={`slider-${parameter}`}
-              min={config.min}
-              max={config.max}
-              step={config.step}
-              value={[safeValue]}
-              onValueChange={(values) => {
-                console.log(`🎚️ SLIDER CHANGE: ${parameter} = ${values[0]} (was ${safeValue})`);
-                onParameterChange(parameter, values);
-              }}
-              className="w-full"
-              disabled={!isManual || disabled}
-            />
+            
+            {/* Native HTML Range Input */}
+            <div className="relative">
+              <input
+                type="range"
+                id={`slider-${parameter}`}
+                min={config.min}
+                max={config.max}
+                step={config.step}
+                value={safeValue}
+                onChange={(e) => {
+                  const newValue = parseFloat(e.target.value);
+                  console.log(`🎚️ NATIVE SLIDER CHANGE: ${parameter} = ${newValue} (was ${safeValue})`);
+                  onParameterChange(parameter, [newValue]);
+                }}
+                disabled={!isManual || disabled}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb:appearance-none slider-thumb:h-4 slider-thumb:w-4 slider-thumb:rounded-full slider-thumb:bg-blue-600 slider-thumb:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${((safeValue - config.min) / (config.max - config.min)) * 100}%, #e5e7eb ${((safeValue - config.min) / (config.max - config.min)) * 100}%, #e5e7eb 100%)`
+                }}
+              />
+            </div>
+            
             <p className="text-xs text-slate-500">{config.description}</p>
           </div>
         );
