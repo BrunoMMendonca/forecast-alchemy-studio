@@ -105,6 +105,7 @@ export const CacheDebugger: React.FC = () => {
   const getMethodBadgeColor = (method?: string) => {
     if (method?.startsWith('ai_')) return 'bg-blue-500';
     if (method === 'grid_search') return 'bg-green-500';
+    if (method === 'manual') return 'bg-gray-500';
     return 'bg-gray-500';
   };
 
@@ -250,6 +251,21 @@ export const CacheDebugger: React.FC = () => {
                                   <div>Confidence: {modelCache.grid.confidence}%</div>
                                 )}
                                 <div>Parameters: {JSON.stringify(modelCache.grid.parameters)}</div>
+                              </div>
+                            )}
+
+                            {modelCache.manual && (
+                              <div className="mb-2 p-2 bg-gray-50 rounded text-xs">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge className={getMethodBadgeColor(modelCache.manual.method)}>
+                                    Manual: {modelCache.manual.method || 'manual'}
+                                  </Badge>
+                                  <span className="text-gray-600">
+                                    {formatTimestamp(modelCache.manual.timestamp)}
+                                  </span>
+                                </div>
+                                <div>Hash: {modelCache.manual.dataHash}</div>
+                                <div>Parameters: {JSON.stringify(modelCache.manual.parameters)}</div>
                               </div>
                             )}
                           </div>
