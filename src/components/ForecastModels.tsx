@@ -95,7 +95,8 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 
   useEffect(() => {
     const skus = Array.from(new Set(data.map(d => d.sku))).sort();
-    if (skus.length > 0 && !selectedSKU) {
+    if (skus.length > 0 && (!selectedSKU || selectedSKU === '')) {
+      console.log('ForecastModels: Auto-selecting first SKU:', skus[0]);
       onSKUChange(skus[0]);
     }
   }, [data, selectedSKU, onSKUChange]);

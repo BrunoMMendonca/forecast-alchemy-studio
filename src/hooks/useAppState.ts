@@ -6,7 +6,7 @@ export const useAppState = () => {
   const [salesData, setSalesData] = useState<SalesData[]>([]);
   const [cleanedData, setCleanedData] = useState<SalesData[]>([]);
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
-  const [selectedSKUForResults, setSelectedSKUForResults] = useState<string>('');
+  const [selectedSKUForResults, setSelectedSKUForResults] = useState<string | undefined>(undefined);
   const [currentStep, setCurrentStep] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isQueuePopupOpen, setIsQueuePopupOpen] = useState(false);
