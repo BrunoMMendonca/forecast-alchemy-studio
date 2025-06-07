@@ -53,10 +53,16 @@ export const useUnifiedModelManagement = (
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
     console.log(`🎚️ PARAMETER UPDATE: ${parameter} = ${value} for ${modelId} - switching to manual`);
     
-    // Update the model state first with the new value
+    // Set explicit user selection to manual in cache
+    setSelectedMethod(selectedSKU, modelId, 'manual');
+    
+    // Update the model state to manual mode
     setModels(prev => prev.map(model => {
       if (model.id === modelId) {
         const updatedParameters = { ...model.parameters, [parameter]: value };
+        
+        // Cache the manual parameters immediately
+        cacheManualParameters(selectedSKU, modelId, updatedParameters, currentDataHash);
         
         return { 
           ...model, 
@@ -71,14 +77,7 @@ export const useUnifiedModelManagement = (
       }
       return model;
     }));
-    
-    // Then cache the manual parameters with the new value
-    const updatedParameters = { ...models.find(m => m.id === modelId)?.parameters, [parameter]: value };
-    cacheManualParameters(selectedSKU, modelId, updatedParameters, currentDataHash);
-    
-    // Finally set the method to manual
-    setSelectedMethod(selectedSKU, modelId, 'manual');
-  }, [selectedSKU, setSelectedMethod, setModels, cacheManualParameters, currentDataHash, models]);
+  }, [selectedSKU, setSelectedMethod, setModels, cacheManualParameters, currentDataHash]);
 
   const resetToManual = useCallback((modelId: string) => {
     console.log(`🔄 RESET TO MANUAL: ${modelId}`);
