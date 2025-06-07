@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -38,10 +37,15 @@ export const useParameterControlLogic = (
 
   useEffect(() => {
     setLocalSelectedMethod(effectiveSelectedMethod);
-  }, [effectiveSelectedMethod, selectedSKU, model.id]);
+  }, [effectiveSelectedMethod, selectedSKU, model.id, cacheVersion]);
 
   const optimizationData = useMemo(() => {
-    if (!cacheEntry || localSelectedMethod === 'manual') return null;
+    if (!cacheEntry) return null;
+    
+    if (localSelectedMethod === 'manual') {
+      // When in manual mode, use the manual cache entry if available
+      return cacheEntry.manual || null;
+    }
     
     if (localSelectedMethod === 'ai' && cacheEntry.ai) {
       return cacheEntry.ai;
@@ -61,6 +65,13 @@ export const useParameterControlLogic = (
   const canOptimize = hasOptimizableParameters(model);
   const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;
   const hasOptimizationResults = canOptimize && optimizationData && !isManual;
+
+  useEffect(() => {
+    // Synchronize state
+    if (parentState !== localState) {
+      setLocalState(parentState);
+    }
+  }, [parentState]);
 
   return {
     isReasoningExpanded,
