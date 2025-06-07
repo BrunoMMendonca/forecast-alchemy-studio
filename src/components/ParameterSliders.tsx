@@ -46,6 +46,9 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
         const currentValue = getParameterValue(parameter);
         const safeValue = typeof currentValue === 'number' ? currentValue : config.min;
         
+        // Add debugging to track slider values
+        console.log(`🎚️ SLIDER_RENDER: ${parameter} = ${safeValue} (from getParameterValue: ${currentValue}, isManual: ${isManual})`);
+        
         return (
           <div key={parameter} className="space-y-2">
             <div className="flex justify-between items-center">
@@ -62,7 +65,10 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
               max={config.max}
               step={config.step}
               value={[safeValue]}
-              onValueChange={(values) => onParameterChange(parameter, values)}
+              onValueChange={(values) => {
+                console.log(`🎚️ SLIDER_CHANGE: ${parameter} changing from ${safeValue} to ${values[0]}`);
+                onParameterChange(parameter, values);
+              }}
               className="w-full"
               disabled={!isManual || disabled}
             />

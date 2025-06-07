@@ -54,8 +54,15 @@ export const useParameterControlLogic = (
 
   const isManual = localSelectedMethod === 'manual';
 
+  // Add debugging to track parameter changes
+  useEffect(() => {
+    console.log(`🔍 PARAMETER_LOGIC: Model ${model.id} parameters changed:`, model.parameters);
+  }, [model.parameters, model.id]);
+
   const getParameterValueCallback = useCallback((parameter: string) => {
-    return getParameterValue(parameter, model, isManual);
+    const value = getParameterValue(parameter, model, isManual);
+    console.log(`🎯 GET_PARAMETER_VALUE: ${parameter} = ${value} (manual: ${isManual}, modelId: ${model.id})`);
+    return value;
   }, [model, isManual, model.parameters]);
 
   const canOptimize = hasOptimizableParameters(model);
