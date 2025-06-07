@@ -28,10 +28,10 @@ export const useModelOptimizationSync = (
     if (effectiveMethod === 'manual') {
       const manualCache = cacheEntry?.manual;
       if (manualCache && manualCache.dataHash === currentDataHash) {
-        console.log(`🔄 SYNC_MANUAL: ${model.id} restoring manual parameters:`, manualCache.parameters);
+        console.log(`🔄 SYNC_MANUAL_RESTORE: ${model.id} restoring manual parameters to model.parameters:`, manualCache.parameters);
         return {
           ...model,
-          parameters: { ...manualCache.parameters }, // Restore cached manual parameters
+          parameters: manualCache.parameters, // THIS IS THE KEY FIX - update the base parameters
           optimizedParameters: undefined,
           optimizationConfidence: undefined,
           optimizationReasoning: undefined,

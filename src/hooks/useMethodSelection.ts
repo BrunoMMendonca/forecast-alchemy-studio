@@ -25,10 +25,10 @@ export const useMethodSelection = (
       if (method === 'manual') {
         const manualCache = cached?.manual;
         if (manualCache && manualCache.dataHash === currentDataHash) {
-          console.log(`🔄 RESTORING_MANUAL: ${modelId} restoring manual parameters:`, manualCache.parameters);
+          console.log(`🔄 METHOD_SWITCH_MANUAL: ${modelId} updating model.parameters with manual cache:`, manualCache.parameters);
           return {
             ...model,
-            parameters: manualCache.parameters, // This is the key fix - update the base parameters
+            parameters: manualCache.parameters, // Update base parameters with manual values
             optimizedParameters: undefined,
             optimizationConfidence: undefined,
             optimizationReasoning: undefined,
@@ -37,7 +37,7 @@ export const useMethodSelection = (
             optimizationMethod: undefined
           };
         } else {
-          console.log(`🔄 MANUAL_NO_CACHE: ${modelId} no valid manual cache, keeping current parameters`);
+          console.log(`🔄 METHOD_SWITCH_MANUAL_NO_CACHE: ${modelId} no valid manual cache, keeping current parameters`);
           return {
             ...model,
             optimizedParameters: undefined,
@@ -57,7 +57,7 @@ export const useMethodSelection = (
         }
 
         if (selectedCache) {
-          console.log(`🔄 RESTORING_OPTIMIZED: ${modelId} restoring ${method} parameters:`, selectedCache.parameters);
+          console.log(`🔄 METHOD_SWITCH_OPTIMIZED: ${modelId} restoring ${method} parameters:`, selectedCache.parameters);
           return {
             ...model,
             optimizedParameters: selectedCache.parameters,
