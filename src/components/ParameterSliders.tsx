@@ -55,12 +55,15 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
         const currentValue = parameterValues[parameter];
         const safeValue = typeof currentValue === 'number' ? currentValue : config.min;
         
-        console.log(`🎚️ RENDER SLIDER: ${parameter} = ${safeValue}, cacheVersion: ${cacheVersion}`);
+        // Create a unique key that forces complete remount when value changes
+        const uniqueKey = `${model.id}-${parameter}-${safeValue}-${cacheVersion}-${Date.now()}`;
+        
+        console.log(`🎚️ FORCE REMOUNT SLIDER: ${parameter} = ${safeValue}, key: ${uniqueKey}`);
         
         return (
-          <div key={`${parameter}-${cacheVersion}-${safeValue}`} className="space-y-2">
+          <div key={`param-container-${parameter}-${cacheVersion}`} className="space-y-2">
             <div className="flex justify-between items-center">
-              <Label htmlFor={`${model.id}-${parameter}`} className="text-sm font-medium">
+              <Label htmlFor={uniqueKey} className="text-sm font-medium">
                 {parameter}
               </Label>
               <span className="text-sm font-mono bg-slate-100 px-2 py-1 rounded">
@@ -68,8 +71,8 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
               </span>
             </div>
             <Slider
-              key={`slider-${parameter}-${cacheVersion}-${safeValue}`}
-              id={`${model.id}-${parameter}`}
+              key={uniqueKey}
+              id={uniqueKey}
               min={config.min}
               max={config.max}
               step={config.step}

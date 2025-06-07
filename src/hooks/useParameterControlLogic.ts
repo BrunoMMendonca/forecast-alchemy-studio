@@ -12,6 +12,7 @@ export const useParameterControlLogic = (
   data: SalesData[]
 ) => {
   const [isReasoningExpanded, setIsReasoningExpanded] = useState(false);
+  const [forceUpdateCounter, setForceUpdateCounter] = useState(0);
   const { cache, cacheVersion } = useOptimizationCache();
 
   const currentDataHash = useMemo(() => {
@@ -36,10 +37,11 @@ export const useParameterControlLogic = (
 
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
-  // Force update local method when cache or SKU changes
+  // Force update when cache or SKU changes - and trigger a counter update
   useEffect(() => {
     console.log(`🔄 EFFECT: Setting localSelectedMethod to ${effectiveSelectedMethod} for ${model.id}`);
     setLocalSelectedMethod(effectiveSelectedMethod);
+    setForceUpdateCounter(prev => prev + 1);
   }, [effectiveSelectedMethod, selectedSKU, model.id, cacheVersion]);
 
   const optimizationData = useMemo(() => {
@@ -56,16 +58,15 @@ export const useParameterControlLogic = (
 
   const isManual = localSelectedMethod === 'manual';
 
-  // Create parameter values that are directly reactive to cache changes
+  // Force parameter values to update with counter
   const parameterValues = useMemo(() => {
     if (!model.parameters) return {};
     
-    console.log(`🎯 COMPUTING parameterValues for ${model.id}, isManual: ${isManual}, cacheVersion: ${cacheVersion}`);
+    console.log(`🎯 COMPUTING parameterValues for ${model.id}, isManual: ${isManual}, cacheVersion: ${cacheVersion}, forceCounter: ${forceUpdateCounter}`);
     
     const values: Record<string, number> = {};
     Object.keys(model.parameters).forEach(parameter => {
       if (isManual) {
-        // For manual mode, check cache first, then model parameters
         const cachedValue = cacheEntry?.manual?.parameters?.[parameter];
         if (cachedValue !== undefined && cacheEntry?.manual?.dataHash === currentDataHash) {
           values[parameter] = cachedValue;
@@ -75,7 +76,6 @@ export const useParameterControlLogic = (
           console.log(`📊 MANUAL DEFAULT: ${parameter} = ${model.parameters![parameter]}`);
         }
       } else {
-        // For AI/Grid mode, use optimized parameters if available
         const optimizedValue = model.optimizedParameters?.[parameter];
         values[parameter] = optimizedValue !== undefined ? optimizedValue : model.parameters![parameter];
         console.log(`📊 OPTIMIZED: ${parameter} = ${values[parameter]}`);
@@ -83,7 +83,7 @@ export const useParameterControlLogic = (
     });
     
     return values;
-  }, [model, isManual, cacheEntry, currentDataHash, cacheVersion]);
+  }, [model, isManual, cacheEntry, currentDataHash, cacheVersion, forceUpdateCounter]);
 
   const getParameterValueCallback = useCallback((parameter: string) => {
     const value = parameterValues[parameter];
@@ -106,7 +106,7 @@ export const useParameterControlLogic = (
     canOptimize,
     hasParameters,
     hasOptimizationResults,
-    cacheVersion,
+    cacheVersion: cacheVersion + forceUpdateCounter, // Include force counter in cache version
     parameterValues
   };
 };
