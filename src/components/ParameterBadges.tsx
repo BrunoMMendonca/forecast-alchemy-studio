@@ -34,12 +34,14 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
   const isGrid = localSelectedMethod === 'grid';
   const isManual = localSelectedMethod === 'manual';
 
+  // Force re-render when cache or SKU changes by using a key
+  const componentKey = `${selectedSKU}-${modelId}-${cacheVersion}-${localSelectedMethod}`;
+
   return (
-    <div className="flex items-center gap-2">
+    <div key={componentKey} className="flex items-center gap-2">
       {/* AI Badge - Only show when Grok API is enabled */}
       {grokApiEnabled && (
         <Badge 
-          key={`ai-${selectedSKU}-${modelId}-${localSelectedMethod}-${cacheVersion}`}
           variant={isAI ? "default" : "outline"} 
           className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
           onClick={(e) => {
@@ -56,7 +58,6 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
 
       {/* Grid Badge - Always show */}
       <Badge 
-        key={`grid-${selectedSKU}-${modelId}-${localSelectedMethod}-${cacheVersion}`}
         variant={isGrid ? "default" : "outline"} 
         className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
         onClick={(e) => {
@@ -72,7 +73,6 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
 
       {/* Manual Badge - Always show */}
       <Badge 
-        key={`manual-${selectedSKU}-${modelId}-${localSelectedMethod}-${cacheVersion}`}
         variant={isManual ? "default" : "outline"} 
         className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
         onClick={(e) => {

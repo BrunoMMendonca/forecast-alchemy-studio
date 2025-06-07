@@ -20,13 +20,14 @@ export const useParameterControlLogic = (
 
   const cacheEntry = useMemo(() => {
     return cache[selectedSKU]?.[model.id];
-  }, [cache, selectedSKU, model.id]);
+  }, [cache, selectedSKU, model.id, cacheVersion]);
 
   const effectiveSelectedMethod = useMemo(() => {
     console.log(`🔍 Computing effective method for ${selectedSKU}/${model.id}:`, {
       cacheEntry,
       userSelected: cacheEntry?.selected,
-      currentDataHash
+      currentDataHash,
+      cacheVersion
     });
 
     // If user has explicitly selected a method, use it
@@ -41,13 +42,13 @@ export const useParameterControlLogic = (
     return bestMethod;
   }, [cacheEntry, selectedSKU, model.id, currentDataHash, cache, cacheVersion]);
 
-  const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
-
-  // Sync local state whenever effective method changes
-  useEffect(() => {
-    console.log(`🔄 Syncing local state: ${localSelectedMethod} -> ${effectiveSelectedMethod} for ${selectedSKU}/${model.id}`);
-    setLocalSelectedMethod(effectiveSelectedMethod);
-  }, [effectiveSelectedMethod, selectedSKU, model.id]);
+  // Use effectiveSelectedMethod directly instead of local state
+  const localSelectedMethod = effectiveSelectedMethod;
+  
+  // Keep setLocalSelectedMethod for API compatibility but it doesn't do anything
+  const setLocalSelectedMethod = useCallback(() => {
+    // This is kept for API compatibility but we rely on cache state
+  }, []);
 
   const optimizationData = useMemo(() => {
     if (!cacheEntry || localSelectedMethod === 'manual') return null;
@@ -59,7 +60,7 @@ export const useParameterControlLogic = (
     }
     
     return cacheEntry.ai || cacheEntry.grid || null;
-  }, [cacheEntry, localSelectedMethod]);
+  }, [cacheEntry, localSelectedMethod, cacheVersion]);
 
   const isManual = localSelectedMethod === 'manual';
 
