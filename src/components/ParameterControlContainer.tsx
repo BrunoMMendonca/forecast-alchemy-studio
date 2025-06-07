@@ -42,7 +42,8 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
     canOptimize,
     hasParameters,
     hasOptimizationResults,
-    cacheVersion
+    cacheVersion,
+    parameterValues
   } = useParameterControlLogic(model, selectedSKU, data);
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
@@ -79,7 +80,7 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
   }
 
   return (
-    <Card className="w-full">
+    <Card className="w-full" key={`param-control-${model.id}-${selectedSKU}-${cacheVersion}`}>
       <CardContent className="p-4">
         <div className="space-y-4">
           {/* Header with badges - always visible */}
@@ -105,6 +106,8 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
             disabled={disabled}
             getParameterValue={getParameterValue}
             onParameterChange={handleParameterChange}
+            cacheVersion={cacheVersion}
+            parameterValues={parameterValues}
           />
 
           {/* Optimization reasoning - collapsible */}

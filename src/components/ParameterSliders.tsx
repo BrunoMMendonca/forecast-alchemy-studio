@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { ModelConfig } from '@/types/forecast';
@@ -10,6 +10,8 @@ interface ParameterSlidersProps {
   disabled: boolean;
   getParameterValue: (parameter: string) => number | undefined;
   onParameterChange: (parameter: string, values: number[]) => void;
+  cacheVersion: number; // Force re-render when cache changes
+  parameterValues: Record<string, number>; // Direct parameter values
 }
 
 export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
@@ -18,6 +20,8 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
   disabled,
   getParameterValue,
   onParameterChange,
+  cacheVersion,
+  parameterValues,
 }) => {
   const getParameterConfig = (parameter: string) => {
     const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
@@ -35,19 +39,26 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
     return configs[parameter] || { min: 0, max: 1, step: 0.1, description: "Parameter" };
   };
 
+  // Memoize parameter entries to ensure consistent rendering
+  const parameterEntries = useMemo(() => {
+    if (!model.parameters) return [];
+    return Object.entries(model.parameters);
+  }, [model.parameters]);
+
   if (!model.parameters || Object.keys(model.parameters).length === 0) {
     return null;
   }
 
   return (
     <div className="grid gap-4">
-      {Object.entries(model.parameters).map(([parameter, _]) => {
+      {parameterEntries.map(([parameter, _]) => {
         const config = getParameterConfig(parameter);
-        const currentValue = getParameterValue(parameter);
+        // Use parameterValues directly for most reactive value
+        const currentValue = parameterValues[parameter];
         const safeValue = typeof currentValue === 'number' ? currentValue : config.min;
         
         return (
-          <div key={parameter} className="space-y-2">
+          <div key={`${parameter}-${cacheVersion}`} className="space-y-2">
             <div className="flex justify-between items-center">
               <Label htmlFor={`${model.id}-${parameter}`} className="text-sm font-medium">
                 {parameter}
@@ -57,6 +68,7 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
               </span>
             </div>
             <Slider
+              key={`slider-${parameter}-${cacheVersion}-${safeValue}`} // Force re-render when value changes
               id={`${model.id}-${parameter}`}
               min={config.min}
               max={config.max}

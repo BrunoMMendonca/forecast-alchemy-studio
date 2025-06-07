@@ -32,7 +32,7 @@ export const useParameterControlLogic = (
       return userSelectedMethod;
     }
     return getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
-  }, [userSelectedMethod, selectedSKU, model.id, getBestAvailableMethod, currentDataHash, cache, cacheVersion]);
+  }, [userSelectedMethod, selectedSKU, model.id, currentDataHash, cache, cacheVersion]);
 
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
@@ -54,16 +54,27 @@ export const useParameterControlLogic = (
 
   const isManual = localSelectedMethod === 'manual';
 
-  const getParameterValueCallback = useCallback((parameter: string) => {
-    return getParameterValue(
-      parameter, 
-      model, 
-      isManual, 
-      cache, 
-      selectedSKU, 
-      currentDataHash
-    );
+  // Create a reactive parameter values object that updates when cache changes
+  const parameterValues = useMemo(() => {
+    if (!model.parameters) return {};
+    
+    const values: Record<string, number> = {};
+    Object.keys(model.parameters).forEach(parameter => {
+      values[parameter] = getParameterValue(
+        parameter, 
+        model, 
+        isManual, 
+        cache, 
+        selectedSKU, 
+        currentDataHash
+      ) || model.parameters![parameter];
+    });
+    return values;
   }, [model, isManual, cache, selectedSKU, currentDataHash, cacheVersion]);
+
+  const getParameterValueCallback = useCallback((parameter: string) => {
+    return parameterValues[parameter];
+  }, [parameterValues]);
 
   const canOptimize = hasOptimizableParameters(model);
   const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;
@@ -80,6 +91,7 @@ export const useParameterControlLogic = (
     canOptimize,
     hasParameters,
     hasOptimizationResults,
-    cacheVersion
+    cacheVersion,
+    parameterValues // Expose this for direct access
   };
 };
