@@ -8,6 +8,8 @@ interface ParameterBadgesProps {
   grokApiEnabled: boolean;
   localSelectedMethod: 'ai' | 'grid' | 'manual' | undefined;
   cacheVersion: number;
+  selectedSKU: string;
+  modelId: string;
   onMethodChange: (method: 'ai' | 'grid' | 'manual') => void;
 }
 
@@ -16,6 +18,8 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
   grokApiEnabled,
   localSelectedMethod,
   cacheVersion,
+  selectedSKU,
+  modelId,
   onMethodChange,
 }) => {
   if (!canOptimize) {
@@ -35,7 +39,7 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
       {/* AI Badge - Only show when Grok API is enabled */}
       {grokApiEnabled && (
         <Badge 
-          key={`ai-${localSelectedMethod}-${cacheVersion}`}
+          key={`ai-${selectedSKU}-${modelId}-${localSelectedMethod}-${cacheVersion}`}
           variant={isAI ? "default" : "outline"} 
           className={`text-xs cursor-pointer ${isAI ? 'bg-green-600' : 'hover:bg-green-100'}`}
           onClick={(e) => {
@@ -52,7 +56,7 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
 
       {/* Grid Badge - Always show */}
       <Badge 
-        key={`grid-${localSelectedMethod}-${cacheVersion}`}
+        key={`grid-${selectedSKU}-${modelId}-${localSelectedMethod}-${cacheVersion}`}
         variant={isGrid ? "default" : "outline"} 
         className={`text-xs cursor-pointer ${isGrid ? 'bg-blue-600' : 'hover:bg-blue-100'}`}
         onClick={(e) => {
@@ -68,7 +72,7 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
 
       {/* Manual Badge - Always show */}
       <Badge 
-        key={`manual-${localSelectedMethod}-${cacheVersion}`}
+        key={`manual-${selectedSKU}-${modelId}-${localSelectedMethod}-${cacheVersion}`}
         variant={isManual ? "default" : "outline"} 
         className={`text-xs cursor-pointer ${isManual ? 'bg-gray-700' : 'hover:bg-gray-100'}`}
         onClick={(e) => {
