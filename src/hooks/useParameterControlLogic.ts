@@ -1,10 +1,9 @@
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
-import { hasOptimizableParameters } from '@/utils/modelConfig';
-import { generateDataHash, getBestAvailableMethod, getParameterValue } from '@/utils/cacheUtils';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
+import { generateDataHash, getBestAvailableMethod } from '@/utils/cacheUtils';
 
 export const useParameterControlLogic = (
   model: ModelConfig,
@@ -19,48 +18,63 @@ export const useParameterControlLogic = (
     return generateDataHash(skuData);
   }, [data, selectedSKU]);
 
-  const cacheEntry = useMemo(() => {
-    return cache[selectedSKU]?.[model.id];
-  }, [cache, selectedSKU, model.id, cacheVersion]);
-
-  const userSelectedMethod = useMemo(() => {
-    return cacheEntry?.selected;
-  }, [cacheEntry, cacheVersion]);
-
-  const effectiveSelectedMethod = useMemo(() => {
-    if (userSelectedMethod) {
-      return userSelectedMethod;
-    }
+  const bestAvailableMethod = useMemo(() => {
     return getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
-  }, [userSelectedMethod, selectedSKU, model.id, getBestAvailableMethod, currentDataHash, cache, cacheVersion]);
+  }, [selectedSKU, model.id, currentDataHash, cache, cacheVersion]);
 
-  const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
+  const cachedEntry = cache[selectedSKU]?.[model.id];
+  const userSelectedMethod = cachedEntry?.selected;
+  
+  const [localSelectedMethod, setLocalSelectedMethod] = useState<'manual' | 'ai' | 'grid'>(() => {
+    return userSelectedMethod || bestAvailableMethod;
+  });
 
-  useEffect(() => {
-    setLocalSelectedMethod(effectiveSelectedMethod);
-  }, [effectiveSelectedMethod, selectedSKU, model.id]);
+  // Update local state when cache changes
+  React.useEffect(() => {
+    const newMethod = userSelectedMethod || bestAvailableMethod;
+    if (newMethod !== localSelectedMethod) {
+      console.log(`🎯 LOGIC: Updating local method from ${localSelectedMethod} to ${newMethod} for ${model.id}`);
+      setLocalSelectedMethod(newMethod);
+    }
+  }, [userSelectedMethod, bestAvailableMethod, localSelectedMethod, model.id]);
 
   const optimizationData = useMemo(() => {
-    if (!cacheEntry || localSelectedMethod === 'manual') return null;
+    const methodToUse = localSelectedMethod === 'manual' ? 'manual' : localSelectedMethod;
+    const cached = cachedEntry?.[methodToUse];
     
-    if (localSelectedMethod === 'ai' && cacheEntry.ai) {
-      return cacheEntry.ai;
-    } else if (localSelectedMethod === 'grid' && cacheEntry.grid) {
-      return cacheEntry.grid;
+    if (!cached || cached.dataHash !== currentDataHash) {
+      return null;
     }
     
-    return cacheEntry.ai || cacheEntry.grid || null;
-  }, [cacheEntry, localSelectedMethod]);
+    return cached;
+  }, [cachedEntry, localSelectedMethod, currentDataHash]);
 
   const isManual = localSelectedMethod === 'manual';
+  
+  // Get parameter value from model state (not cache) for UI display
+  const getParameterValue = useCallback((parameter: string): number | undefined => {
+    // Always read from model.parameters for manual mode to reflect UI changes immediately
+    if (isManual) {
+      const value = model.parameters?.[parameter];
+      console.log(`🎯 LOGIC: Getting manual parameter ${parameter} = ${value} from model state`);
+      return value;
+    } else {
+      // For optimized modes, use optimized parameters if available
+      const optimizedValue = model.optimizedParameters?.[parameter];
+      const modelValue = model.parameters?.[parameter];
+      const value = optimizedValue !== undefined ? optimizedValue : modelValue;
+      console.log(`🎯 LOGIC: Getting optimized parameter ${parameter} = ${value} (optimized: ${optimizedValue}, model: ${modelValue})`);
+      return value;
+    }
+  }, [model.parameters, model.optimizedParameters, isManual]);
 
-  const getParameterValueCallback = useCallback((parameter: string) => {
-    return getParameterValue(parameter, model, isManual);
-  }, [model, isManual]);
+  const canOptimize = useMemo(() => {
+    const skuData = data.filter(d => d.sku === selectedSKU);
+    return skuData.length >= 10;
+  }, [data, selectedSKU]);
 
-  const canOptimize = hasOptimizableParameters(model);
   const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;
-  const hasOptimizationResults = canOptimize && optimizationData && !isManual;
+  const hasOptimizationResults = !!optimizationData;
 
   return {
     isReasoningExpanded,
@@ -69,7 +83,7 @@ export const useParameterControlLogic = (
     setLocalSelectedMethod,
     optimizationData,
     isManual,
-    getParameterValue: getParameterValueCallback,
+    getParameterValue,
     canOptimize,
     hasParameters,
     hasOptimizationResults,
