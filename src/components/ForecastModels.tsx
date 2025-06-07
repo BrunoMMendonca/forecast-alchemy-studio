@@ -82,7 +82,8 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     isOptimizing,
     handleQueueOptimization,
     onOptimizationStarted,
-    componentMountedRef
+    componentMountedRef,
+    queueSize: optimizationQueue?.queueSize || 0 // Pass queue size to prevent empty queue processing
   });
 
   useEffect(() => {
