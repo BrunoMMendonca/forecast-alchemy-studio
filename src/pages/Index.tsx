@@ -4,6 +4,7 @@ import { OptimizationQueuePopup } from '@/components/OptimizationQueuePopup';
 import { MainLayout } from '@/components/MainLayout';
 import { StepContent } from '@/components/StepContent';
 import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
+import { useOptimizationHandler } from '@/hooks/useOptimizationHandler';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 import { useGlobalForecastSettings } from '@/hooks/useGlobalForecastSettings';
 import { useAppState } from '@/hooks/useAppState';
@@ -96,6 +97,26 @@ const Index = () => {
     onSettingsChange: handleGlobalSettingsChange
   });
 
+  const optimizationQueue = {
+    getSKUsInQueue,
+    getQueuedCombinations,
+    getModelsForSKU,
+    removeSKUsFromQueue,
+    removeSKUModelPairsFromQueue,
+    removeUnnecessarySKUs: removeSKUsFromQueue,
+    queueSize,
+    uniqueSKUCount
+  };
+
+  // Initialize optimization handler
+  const { handleQueueOptimization } = useOptimizationHandler(
+    cleanedData,
+    selectedSKUForResults,
+    optimizationQueue,
+    undefined, // onOptimizationComplete - we'll handle this in the forecast components
+    grokApiEnabled
+  );
+
   const {
     handleDataUpload,
     handleDataCleaning,
@@ -110,7 +131,8 @@ const Index = () => {
     cleanedData,
     addSKUsToQueue,
     clearManualAIPreferences,
-    clearQueue
+    clearQueue,
+    onStartOptimization: handleQueueOptimization // Connect optimization to data handlers
   });
 
   useEffect(() => {
@@ -124,17 +146,6 @@ const Index = () => {
       window.removeEventListener('proceedToForecasting', handleProceedToForecasting);
     };
   }, [setCurrentStep]);
-
-  const optimizationQueue = {
-    getSKUsInQueue,
-    getQueuedCombinations,
-    getModelsForSKU,
-    removeSKUsFromQueue,
-    removeSKUModelPairsFromQueue,
-    removeUnnecessarySKUs: removeSKUsFromQueue,
-    queueSize,
-    uniqueSKUCount
-  };
 
   return (
     <>
