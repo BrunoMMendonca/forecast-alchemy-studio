@@ -1,5 +1,4 @@
-
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown, ChevronRight, Settings } from 'lucide-react';
@@ -45,6 +44,13 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
     cacheVersion
   } = useParameterControlLogic(model, selectedSKU, data);
 
+  // Log when the component renders or updates
+  useEffect(() => {
+    console.log(`🔄 Container: Rendering for SKU ${selectedSKU}, model ${model.id}`);
+    console.log(`   Local selected method:`, localSelectedMethod);
+    console.log(`   Cache version:`, cacheVersion);
+  }, [selectedSKU, model.id, localSelectedMethod, cacheVersion]);
+
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     const newValue = values[0];
     onParameterUpdate(parameter, newValue);
@@ -54,8 +60,11 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
     // Prevent duplicate calls by checking if we're already in this method
     if (localSelectedMethod === newMethod) {
+      console.log(`🔄 Container: Already in ${newMethod} mode, skipping update`);
       return;
     }
+    
+    console.log(`🔄 Container: Changing method from ${localSelectedMethod} to ${newMethod}`);
     
     // Update local state immediately for visual feedback
     setLocalSelectedMethod(newMethod);
@@ -104,7 +113,7 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
           />
 
           {/* Optimization reasoning - collapsible */}
-          {hasOptimizationResults && (
+          {canOptimize && (
             <Collapsible open={isReasoningExpanded} onOpenChange={setIsReasoningExpanded}>
               <CollapsibleTrigger asChild>
                 <div className="flex items-center space-x-2 cursor-pointer hover:bg-slate-50 p-2 rounded">
