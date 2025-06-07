@@ -11,7 +11,7 @@ export const useModelOptimizationSync = (
   setModels: React.Dispatch<React.SetStateAction<ModelConfig[]>>,
   lastForecastGenerationHashRef: React.MutableRefObject<string>
 ) => {
-  const { cache } = useOptimizationCache();
+  const { cache, cacheVersion } = useOptimizationCache();
 
   const currentDataHash = useMemo(() => {
     const skuData = data.filter(d => d.sku === selectedSKU);
@@ -23,7 +23,7 @@ export const useModelOptimizationSync = (
     const userSelectedMethod = cacheEntry?.selected;
     const effectiveMethod = userSelectedMethod || getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
 
-    console.log(`🔄 SYNC_MODEL: ${model.id} effectiveMethod=${effectiveMethod}, userSelected=${userSelectedMethod}`);
+    console.log(`🔄 SYNC_MODEL: ${model.id} effectiveMethod=${effectiveMethod}, userSelected=${userSelectedMethod}, cacheVersion=${cacheVersion}`);
 
     if (effectiveMethod === 'manual') {
       const manualCache = cacheEntry?.manual;
@@ -31,7 +31,7 @@ export const useModelOptimizationSync = (
         console.log(`🔄 SYNC_MANUAL_RESTORE: ${model.id} restoring manual parameters to model.parameters:`, manualCache.parameters);
         return {
           ...model,
-          parameters: manualCache.parameters, // THIS IS THE KEY FIX - update the base parameters
+          parameters: { ...manualCache.parameters }, // Create new object to ensure React detects the change
           optimizedParameters: undefined,
           optimizationConfidence: undefined,
           optimizationReasoning: undefined,
@@ -75,20 +75,25 @@ export const useModelOptimizationSync = (
     }
 
     return model;
-  }, [selectedSKU, cache, currentDataHash]);
+  }, [selectedSKU, cache, currentDataHash, cacheVersion]);
 
   useEffect(() => {
     if (!selectedSKU || !data.length) return;
 
-    console.log(`🔄 MODEL_SYNC: Syncing models for SKU ${selectedSKU}`);
+    console.log(`🔄 MODEL_SYNC: Syncing models for SKU ${selectedSKU}, cacheVersion=${cacheVersion}`);
     
-    setModels(prevModels => {
-      const updatedModels = prevModels.map(syncModelWithCache);
-      
-      // Reset forecast generation hash to force regeneration with new parameters
-      lastForecastGenerationHashRef.current = '';
-      
-      return updatedModels;
-    });
-  }, [selectedSKU, cache, syncModelWithCache, setModels, lastForecastGenerationHashRef]);
+    // Add a small delay to ensure cache is fully updated before syncing
+    const timeoutId = setTimeout(() => {
+      setModels(prevModels => {
+        const updatedModels = prevModels.map(syncModelWithCache);
+        
+        // Reset forecast generation hash to force regeneration with new parameters
+        lastForecastGenerationHashRef.current = '';
+        
+        return updatedModels;
+      });
+    }, 50); // Small delay to ensure cache updates are processed
+
+    return () => clearTimeout(timeoutId);
+  }, [selectedSKU, cache, syncModelWithCache, setModels, lastForecastGenerationHashRef, cacheVersion]);
 };

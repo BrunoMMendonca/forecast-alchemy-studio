@@ -37,9 +37,9 @@ export const useParameterControlLogic = (
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
   useEffect(() => {
-    console.log(`🔄 SKU_SWITCH_EFFECT: ${model.id} effectiveSelectedMethod changed to ${effectiveSelectedMethod} for SKU ${selectedSKU}`);
+    console.log(`🔄 SKU_SWITCH_EFFECT: ${model.id} effectiveSelectedMethod changed to ${effectiveSelectedMethod} for SKU ${selectedSKU}, cacheVersion=${cacheVersion}`);
     setLocalSelectedMethod(effectiveSelectedMethod);
-  }, [effectiveSelectedMethod, selectedSKU, model.id]);
+  }, [effectiveSelectedMethod, selectedSKU, model.id, cacheVersion]);
 
   const optimizationData = useMemo(() => {
     if (!cacheEntry || localSelectedMethod === 'manual') return null;
@@ -58,7 +58,8 @@ export const useParameterControlLogic = (
   // Add debugging to track parameter changes
   useEffect(() => {
     console.log(`🔍 PARAMETER_LOGIC: Model ${model.id} parameters changed:`, model.parameters);
-  }, [model.parameters, model.id]);
+    console.log(`🔍 PARAMETER_LOGIC: Model ${model.id} isManual=${isManual}, localSelectedMethod=${localSelectedMethod}`);
+  }, [model.parameters, model.id, isManual, localSelectedMethod]);
 
   // Always use model.parameters in manual mode, optimizedParameters in optimized modes
   const getParameterValueCallback = useCallback((parameter: string) => {
