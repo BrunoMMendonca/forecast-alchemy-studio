@@ -1,11 +1,11 @@
 
 import { useEffect, useRef } from 'react';
-import { SalesData, ForecastResult } from '@/pages/Index';
+import { SalesData } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
 import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useAutoBestMethod } from '@/hooks/useAutoBestMethod';
-import { useOptimizationMethodManagement } from './useOptimizationMethodManagement';
+import { getBestAvailableMethod } from '@/utils/cacheUtils';
 
 export const useModelOptimizationSync = (
   selectedSKU: string,
@@ -23,8 +23,7 @@ export const useModelOptimizationSync = (
     cacheVersion
   } = useOptimizationCache();
   
-  const { loadAutoBestMethod } = useAutoBestMethod();
-  const { getBestAvailableMethod, updateAutoBestMethods } = useOptimizationMethodManagement();
+  const { loadAutoBestMethod, updateAutoBestMethods } = useAutoBestMethod();
 
   // CONTROLLED cache version updates - only process when optimization data actually changes
   useEffect(() => {
@@ -40,7 +39,6 @@ export const useModelOptimizationSync = (
       return;
     }
     
-    console.log(`🗄️ CACHE: Processing cache version change: ${lastProcessedCacheVersionRef.current} -> ${cacheVersion}`);
     lastProcessedCacheVersionRef.current = cacheVersion;
     lastProcessedSKURef.current = selectedSKU;
     
@@ -61,7 +59,7 @@ export const useModelOptimizationSync = (
       // Priority: Use user's explicit "selected" choice, fallback to automatic best method
       let effectiveMethod = cached?.selected;
       if (!effectiveMethod) {
-        effectiveMethod = autoMethods[autoKey] || getBestAvailableMethod(selectedSKU, model.id, currentDataHash);
+        effectiveMethod = autoMethods[autoKey] || getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
       }
 
       let selectedCache = null;
@@ -90,5 +88,5 @@ export const useModelOptimizationSync = (
     
     // Reset forecast generation hash when models are updated from cache changes
     lastForecastGenerationHashRef.current = '';
-  }, [cacheVersion, selectedSKU, data, cache, generateDataHash, updateAutoBestMethods, loadAutoBestMethod, getBestAvailableMethod, setModels, lastForecastGenerationHashRef]);
+  }, [cacheVersion, selectedSKU, data, cache, generateDataHash, updateAutoBestMethods, loadAutoBestMethod, setModels, lastForecastGenerationHashRef]);
 };
