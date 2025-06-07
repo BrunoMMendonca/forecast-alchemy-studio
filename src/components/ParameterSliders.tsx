@@ -62,11 +62,7 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
               max={config.max}
               step={config.step}
               value={[safeValue]}
-              onValueChange={(values) => {
-                const newValue = values[0];
-                console.log(`🎚️ SLIDER CHANGE: ${parameter} = ${newValue} (manual: ${isManual})`);
-                onParameterChange(parameter, values);
-              }}
+              onValueChange={(values) => onParameterChange(parameter, values)}
               className="w-full"
               disabled={!isManual || disabled}
             />
