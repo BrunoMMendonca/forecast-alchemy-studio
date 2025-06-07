@@ -72,7 +72,7 @@ export const useModelOptimizationSync = (
       }
 
       // Handle optimization results (AI/Grid)
-      if (selectedCache && selectedCache.dataHash === currentDataHash {
+      if (selectedCache && selectedCache.dataHash === currentDataHash) {
         return {
           ...model,
           optimizedParameters: selectedCache.parameters,
@@ -81,6 +81,14 @@ export const useModelOptimizationSync = (
           optimizationFactors: selectedCache.factors,
           expectedAccuracy: selectedCache.expectedAccuracy,
           optimizationMethod: selectedCache.method
+        };
+      }
+
+      // Handle manual parameters - restore cached manual parameters to model.parameters
+      if (effectiveMethod === 'manual' && cached?.manual && cached.manual.dataHash === currentDataHash) {
+        return {
+          ...model,
+          parameters: { ...model.parameters, ...cached.manual.parameters }
         };
       }
 
