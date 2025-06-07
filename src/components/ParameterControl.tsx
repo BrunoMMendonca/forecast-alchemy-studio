@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -121,25 +120,22 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
     });
   }, [selectedSKU, model.id, effectiveSelectedMethod, localSelectedMethod, isManual, isAI, isGrid, cacheVersion, currentDataHash]);
 
-  // Determine the source of truth for parameter values
+  // FIXED: Use model parameters as source of truth, not cache
   const getParameterValue = useCallback((parameter: string) => {
     if (isManual) {
-      // For manual mode, check cache first, then fall back to model parameters
-      const manualCache = cacheEntry?.manual;
-      if (manualCache && manualCache.dataHash === currentDataHash) {
-        const cachedValue = manualCache.parameters?.[parameter];
-        if (cachedValue !== undefined) {
-          console.log(`🔄 PARAM_CONTROL: Using cached manual value for ${parameter}: ${cachedValue}`);
-          return cachedValue;
-        }
-      }
-      return model.parameters?.[parameter];
+      // For manual mode, always use the current model parameters (which get updated by the slider)
+      const modelValue = model.parameters?.[parameter];
+      console.log(`🔄 PARAM_CONTROL: Using current model value for ${parameter}: ${modelValue}`);
+      return modelValue;
     } else {
+      // For optimization modes, use optimized parameters if available, otherwise fall back to model
       const optimizedValue = model.optimizedParameters?.[parameter];
       const modelValue = model.parameters?.[parameter];
-      return optimizedValue !== undefined ? optimizedValue : modelValue;
+      const result = optimizedValue !== undefined ? optimizedValue : modelValue;
+      console.log(`🔄 PARAM_CONTROL: Using optimized value for ${parameter}: ${result} (optimized: ${optimizedValue}, model: ${modelValue})`);
+      return result;
     }
-  }, [isManual, model.parameters, model.optimizedParameters, cacheEntry, currentDataHash]);
+  }, [isManual, model.parameters, model.optimizedParameters]);
 
   const canOptimize = hasOptimizableParameters(model);
 
@@ -151,9 +147,9 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     const newValue = values[0];
-    console.log(`🎚️ SLIDER CHANGE: ${parameter} = ${newValue}, switching to manual mode`);
+    console.log(`🎚️ SLIDER CHANGE: ${parameter} = ${newValue} (manual: ${isManual})`);
     onParameterUpdate(parameter, newValue);
-  }, [onParameterUpdate]);
+  }, [onParameterUpdate, isManual]);
 
   // Handle badge clicks with immediate local state update
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
