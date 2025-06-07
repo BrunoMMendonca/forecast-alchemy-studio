@@ -35,9 +35,15 @@ export const useParameterControlLogic = (
 
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
+  // Update local state when cache or SKU changes
   useEffect(() => {
+    console.log(`🔄 ParameterControl: Updating local state for SKU ${selectedSKU}, model ${model.id}`);
+    console.log(`   Cache entry:`, cacheEntry);
+    console.log(`   User selected method:`, userSelectedMethod);
+    console.log(`   Effective method:`, effectiveSelectedMethod);
+    
     setLocalSelectedMethod(effectiveSelectedMethod);
-  }, [effectiveSelectedMethod, selectedSKU, model.id, cacheVersion]);
+  }, [effectiveSelectedMethod, selectedSKU, model.id, cacheVersion, cacheEntry, userSelectedMethod]);
 
   const optimizationData = useMemo(() => {
     if (!cacheEntry) return null;
@@ -65,13 +71,6 @@ export const useParameterControlLogic = (
   const canOptimize = hasOptimizableParameters(model);
   const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;
   const hasOptimizationResults = canOptimize && optimizationData && !isManual;
-
-  useEffect(() => {
-    // Synchronize state
-    if (parentState !== localState) {
-      setLocalState(parentState);
-    }
-  }, [parentState]);
 
   return {
     isReasoningExpanded,
