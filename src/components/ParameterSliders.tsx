@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { ModelConfig } from '@/types/forecast';
@@ -23,6 +23,8 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
   cacheVersion,
   parameterValues,
 }) => {
+  const sliderRefs = useRef<Record<string, any>>({});
+
   const getParameterConfig = (parameter: string) => {
     const configs: Record<string, { min: number; max: number; step: number; description: string }> = {
       alpha: { min: 0.1, max: 0.9, step: 0.05, description: "Level smoothing parameter" },
@@ -44,6 +46,15 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
     return Object.entries(model.parameters);
   }, [model.parameters]);
 
+  // Force slider updates when parameterValues change
+  useEffect(() => {
+    console.log(`🔄 EFFECT: parameterValues changed for ${model.id}, cacheVersion: ${cacheVersion}`);
+    Object.keys(parameterValues).forEach(parameter => {
+      const value = parameterValues[parameter];
+      console.log(`🎚️ EFFECT UPDATE: ${parameter} = ${value}`);
+    });
+  }, [parameterValues, cacheVersion, model.id]);
+
   if (!model.parameters || Object.keys(model.parameters).length === 0) {
     return null;
   }
@@ -55,15 +66,12 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
         const currentValue = parameterValues[parameter];
         const safeValue = typeof currentValue === 'number' ? currentValue : config.min;
         
-        // Create a unique key that forces complete remount when value changes
-        const uniqueKey = `${model.id}-${parameter}-${safeValue}-${cacheVersion}-${Date.now()}`;
-        
-        console.log(`🎚️ FORCE REMOUNT SLIDER: ${parameter} = ${safeValue}, key: ${uniqueKey}`);
+        console.log(`🎚️ RENDER SLIDER: ${parameter} = ${safeValue}, from parameterValues: ${currentValue}`);
         
         return (
-          <div key={`param-container-${parameter}-${cacheVersion}`} className="space-y-2">
+          <div key={parameter} className="space-y-2">
             <div className="flex justify-between items-center">
-              <Label htmlFor={uniqueKey} className="text-sm font-medium">
+              <Label htmlFor={`slider-${parameter}`} className="text-sm font-medium">
                 {parameter}
               </Label>
               <span className="text-sm font-mono bg-slate-100 px-2 py-1 rounded">
@@ -71,13 +79,20 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
               </span>
             </div>
             <Slider
-              key={uniqueKey}
-              id={uniqueKey}
+              ref={(ref) => {
+                if (ref) {
+                  sliderRefs.current[parameter] = ref;
+                }
+              }}
+              id={`slider-${parameter}`}
               min={config.min}
               max={config.max}
               step={config.step}
               value={[safeValue]}
-              onValueChange={(values) => onParameterChange(parameter, values)}
+              onValueChange={(values) => {
+                console.log(`🎚️ SLIDER CHANGE: ${parameter} = ${values[0]} (was ${safeValue})`);
+                onParameterChange(parameter, values);
+              }}
               className="w-full"
               disabled={!isManual || disabled}
             />
