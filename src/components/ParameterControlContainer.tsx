@@ -94,8 +94,6 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
               grokApiEnabled={grokApiEnabled}
               localSelectedMethod={localSelectedMethod}
               cacheVersion={cacheVersion}
-              selectedSKU={selectedSKU}
-              modelId={model.id}
               onMethodChange={handlePreferenceChange}
             />
           </div>

@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -22,34 +23,22 @@ export const useParameterControlLogic = (
     return cache[selectedSKU]?.[model.id];
   }, [cache, selectedSKU, model.id, cacheVersion]);
 
+  const userSelectedMethod = useMemo(() => {
+    return cacheEntry?.selected;
+  }, [cacheEntry, cacheVersion]);
+
   const effectiveSelectedMethod = useMemo(() => {
-    console.log(`🔍 Computing effective method for ${selectedSKU}/${model.id}:`, {
-      cacheEntry,
-      userSelected: cacheEntry?.selected,
-      currentDataHash,
-      cacheVersion
-    });
-
-    // If user has explicitly selected a method, use it
-    if (cacheEntry?.selected) {
-      console.log(`👤 User selected: ${cacheEntry.selected}`);
-      return cacheEntry.selected;
+    if (userSelectedMethod) {
+      return userSelectedMethod;
     }
+    return getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
+  }, [userSelectedMethod, selectedSKU, model.id, getBestAvailableMethod, currentDataHash, cache, cacheVersion]);
 
-    // Otherwise, get the best available method
-    const bestMethod = getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
-    console.log(`🎯 Best available method: ${bestMethod}`);
-    return bestMethod;
-  }, [cacheEntry, selectedSKU, model.id, currentDataHash, cache, cacheVersion]);
+  const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
-  // Use effectiveSelectedMethod directly instead of local state
-  const localSelectedMethod = effectiveSelectedMethod;
-  
-  // Keep setLocalSelectedMethod for API compatibility but accept argument even though we don't use it
-  const setLocalSelectedMethod = useCallback((_method?: 'ai' | 'grid' | 'manual') => {
-    // This is kept for API compatibility but we rely on cache state
-    console.log('setLocalSelectedMethod called but ignored, relying on cache state');
-  }, []);
+  useEffect(() => {
+    setLocalSelectedMethod(effectiveSelectedMethod);
+  }, [effectiveSelectedMethod, selectedSKU, model.id]);
 
   const optimizationData = useMemo(() => {
     if (!cacheEntry || localSelectedMethod === 'manual') return null;
@@ -61,7 +50,7 @@ export const useParameterControlLogic = (
     }
     
     return cacheEntry.ai || cacheEntry.grid || null;
-  }, [cacheEntry, localSelectedMethod, cacheVersion]);
+  }, [cacheEntry, localSelectedMethod]);
 
   const isManual = localSelectedMethod === 'manual';
 

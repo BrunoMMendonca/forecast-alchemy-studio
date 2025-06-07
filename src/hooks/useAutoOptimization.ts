@@ -31,12 +31,6 @@ export const useAutoOptimization = ({
 
     const currentQueueSize = optimizationQueue.queueSize;
     
-    // Don't process if queue is empty
-    if (currentQueueSize === 0) {
-      console.log('🔄 FORECAST_MODELS: Skipping auto-start - queue is empty');
-      return;
-    }
-    
     // Only process if queue size actually changed and increased
     if (currentQueueSize <= lastProcessedQueueSizeRef.current) {
       console.log('🔄 FORECAST_MODELS: Queue size unchanged or decreased, skipping');
@@ -51,7 +45,7 @@ export const useAutoOptimization = ({
     // 1. Queue has items
     // 2. Not currently optimizing 
     // 3. Component is mounted
-    if (!isOptimizing) {
+    if (currentQueueSize > 0 && !isOptimizing) {
       console.log('🚀 FORECAST_MODELS: CONDITIONS MET - Auto-starting optimization');
       console.log('🚀 FORECAST_MODELS: - Queue size:', currentQueueSize);
       console.log('🚀 FORECAST_MODELS: - Is optimizing:', isOptimizing);
@@ -60,18 +54,19 @@ export const useAutoOptimization = ({
       
       // Use timeout to avoid potential race conditions
       setTimeout(() => {
-        if (componentMountedRef.current && !isOptimizing && optimizationQueue.queueSize > 0) {
+        if (componentMountedRef.current && !isOptimizing) {
           console.log('🚀 FORECAST_MODELS: EXECUTING handleQueueOptimization');
           handleQueueOptimization();
           if (onOptimizationStarted) {
             onOptimizationStarted();
           }
-        } else {
-          console.log('🔄 FORECAST_MODELS: Skipping execution - conditions changed');
         }
       }, 100);
     } else {
-      console.log('🔄 FORECAST_MODELS: NOT starting optimization - already optimizing');
+      console.log('🔄 FORECAST_MODELS: NOT starting optimization:');
+      console.log('🔄 FORECAST_MODELS: - Queue size > 0:', currentQueueSize > 0);
+      console.log('🔄 FORECAST_MODELS: - Not optimizing:', !isOptimizing);
+      console.log('🔄 FORECAST_MODELS: - Component mounted:', componentMountedRef.current);
     }
   }, [optimizationQueue?.queueSize, isOptimizing, handleQueueOptimization, onOptimizationStarted, grokApiEnabled]);
 
