@@ -36,9 +36,17 @@ export const useParameterControlLogic = (
 
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
+  // Reset local state when SKU or model changes
   useEffect(() => {
+    console.log(`🔄 SKU/Model changed: ${selectedSKU}/${model.id}, resetting to: ${effectiveSelectedMethod}`);
     setLocalSelectedMethod(effectiveSelectedMethod);
-  }, [effectiveSelectedMethod, selectedSKU, model.id]);
+  }, [selectedSKU, model.id]);
+
+  // Sync with effective method when it changes
+  useEffect(() => {
+    console.log(`🔄 Effective method changed to: ${effectiveSelectedMethod} for ${selectedSKU}/${model.id}`);
+    setLocalSelectedMethod(effectiveSelectedMethod);
+  }, [effectiveSelectedMethod]);
 
   const optimizationData = useMemo(() => {
     if (!cacheEntry || localSelectedMethod === 'manual') return null;
