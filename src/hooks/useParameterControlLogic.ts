@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
 import { hasOptimizableParameters } from '@/utils/modelConfig';
@@ -22,7 +22,7 @@ export const useParameterControlLogic = (
     return cache[selectedSKU]?.[model.id];
   }, [cache, selectedSKU, model.id]);
 
-  const effectiveSelectedMethod = useMemo(() => {
+  const localSelectedMethod = useMemo(() => {
     console.log(`🔍 Computing effective method for ${selectedSKU}/${model.id}:`, {
       cacheEntry,
       userSelected: cacheEntry?.selected,
@@ -41,13 +41,11 @@ export const useParameterControlLogic = (
     return bestMethod;
   }, [cacheEntry, selectedSKU, model.id, currentDataHash, cache, cacheVersion]);
 
-  const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
-
-  // Sync local state whenever effective method changes
-  useEffect(() => {
-    console.log(`🔄 Syncing local state: ${localSelectedMethod} -> ${effectiveSelectedMethod} for ${selectedSKU}/${model.id}`);
-    setLocalSelectedMethod(effectiveSelectedMethod);
-  }, [effectiveSelectedMethod, selectedSKU, model.id]);
+  // Simple function to update the method - this will be handled by the parent component
+  const setLocalSelectedMethod = useCallback((method: 'ai' | 'grid' | 'manual' | undefined) => {
+    console.log(`🔄 Method change requested: ${method} for ${selectedSKU}/${model.id}`);
+    // This is just for logging - actual state management happens in the cache
+  }, [selectedSKU, model.id]);
 
   const optimizationData = useMemo(() => {
     if (!cacheEntry || localSelectedMethod === 'manual') return null;
