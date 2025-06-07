@@ -67,9 +67,12 @@ export const useModelOptimizationSync = (
         selectedCache = cached.ai;
       } else if (effectiveMethod === 'grid' && cached?.grid) {
         selectedCache = cached.grid;
+      } else if (effectiveMethod === 'manual' && cached?.manual) {
+        selectedCache = cached.manual;
       }
 
-      if (selectedCache && selectedCache.dataHash === currentDataHash) {
+      // Handle optimization results (AI/Grid)
+      if (selectedCache && selectedCache.dataHash === currentDataHash && (effectiveMethod === 'ai' || effectiveMethod === 'grid')) {
         return {
           ...model,
           optimizedParameters: selectedCache.parameters,
@@ -78,6 +81,20 @@ export const useModelOptimizationSync = (
           optimizationFactors: selectedCache.factors,
           expectedAccuracy: selectedCache.expectedAccuracy,
           optimizationMethod: selectedCache.method
+        };
+      }
+
+      // Handle manual parameters - restore to base model.parameters
+      if (effectiveMethod === 'manual' && cached?.manual && cached.manual.dataHash === currentDataHash) {
+        return {
+          ...model,
+          parameters: { ...model.parameters, ...cached.manual.parameters },
+          optimizedParameters: undefined,
+          optimizationConfidence: undefined,
+          optimizationReasoning: undefined,
+          optimizationFactors: undefined,
+          expectedAccuracy: undefined,
+          optimizationMethod: undefined
         };
       }
 
