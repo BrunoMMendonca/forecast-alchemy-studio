@@ -49,10 +49,24 @@ export const useCacheStorage = (
       // Store the parameters
       newCache[sku][modelId][cacheMethod] = optimizedParams;
       
-      // If this is a manual update, ensure the selected method is set to manual
+      // Handle method selection
       if (cacheMethod === 'manual') {
+        // If this is a manual update, ensure the selected method is set to manual
         console.log(`💾 CacheStorage: Setting selected method to manual for ${sku}:${modelId}`);
         newCache[sku][modelId].selected = 'manual';
+      } else {
+        // For AI and Grid updates, only auto-select if there's no existing selection
+        // or if the current selection is manual
+        const currentSelected = newCache[sku][modelId].selected;
+        if (!currentSelected || currentSelected === 'manual') {
+          const hasAI = newCache[sku][modelId].ai;
+          const hasGrid = newCache[sku][modelId].grid;
+          
+          // Default to Grid if available, otherwise AI
+          const bestMethod = hasGrid ? 'grid' : hasAI ? 'ai' : 'manual';
+          console.log(`💾 CacheStorage: Auto-selecting ${bestMethod} for ${sku}:${modelId}`);
+          newCache[sku][modelId].selected = bestMethod;
+        }
       }
       
       // Save to storage immediately
