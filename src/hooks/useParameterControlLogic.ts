@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -43,7 +44,8 @@ export const useParameterControlLogic = (
       cacheEntry: cacheEntry,
       hasAI: !!cacheEntry?.ai,
       hasGrid: !!cacheEntry?.grid,
-      hasManual: !!cacheEntry?.manual
+      hasManual: !!cacheEntry?.manual,
+      cacheVersion
     });
     
     return result;
@@ -51,10 +53,14 @@ export const useParameterControlLogic = (
 
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
+  // Force sync local state with effective method whenever it changes
   useEffect(() => {
-    console.log(`🎯 EFFECT UPDATE for ${selectedSKU}-${model.id}: ${localSelectedMethod} -> ${effectiveSelectedMethod}`);
-    setLocalSelectedMethod(effectiveSelectedMethod);
-  }, [effectiveSelectedMethod, selectedSKU, model.id]);
+    console.log(`🎯 EFFECT UPDATE for ${selectedSKU}-${model.id}: ${localSelectedMethod} -> ${effectiveSelectedMethod} (version: ${cacheVersion})`);
+    if (localSelectedMethod !== effectiveSelectedMethod) {
+      console.log(`🎯 FORCING STATE SYNC for ${selectedSKU}-${model.id}: ${effectiveSelectedMethod}`);
+      setLocalSelectedMethod(effectiveSelectedMethod);
+    }
+  }, [effectiveSelectedMethod, selectedSKU, model.id, cacheVersion, localSelectedMethod]);
 
   const optimizationData = useMemo(() => {
     if (!cacheEntry || localSelectedMethod === 'manual') return null;
