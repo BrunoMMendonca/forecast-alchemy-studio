@@ -13,7 +13,7 @@ interface UseDataHandlersProps {
   addSKUsToQueue: (skus: string[], source: string, skipCacheClear?: boolean, onlySpecifiedSKUs?: boolean) => void;
   clearManualAIPreferences: () => void;
   clearQueue: () => void;
-  onStartOptimization?: () => void;
+  onStartOptimization?: () => void; // Keep for backward compatibility but no longer used
 }
 
 export const useDataHandlers = ({
@@ -26,7 +26,7 @@ export const useDataHandlers = ({
   addSKUsToQueue,
   clearManualAIPreferences,
   clearQueue,
-  onStartOptimization
+  onStartOptimization // Kept for compatibility but ignored
 }: UseDataHandlersProps) => {
   const { toast } = useToast();
 
@@ -51,22 +51,14 @@ export const useDataHandlers = ({
       }
     }
     
-    // Add SKUs to queue and trigger optimization immediately
+    // Add SKUs to queue - optimization will start automatically
     addSKUsToQueue(skusInOrder, 'csv_upload', false, false);
-    
-    // Start optimization automatically after upload
-    if (onStartOptimization) {
-      console.log('🚀 AUTO-OPTIMIZATION: Starting optimization after CSV upload');
-      setTimeout(() => {
-        onStartOptimization();
-      }, 100); // Small delay to ensure queue is updated
-    }
     
     toast({
       title: "Data Uploaded",
       description: `${skusInOrder.length} SKU${skusInOrder.length > 1 ? 's' : ''} queued for optimization. Optimization starting automatically...`,
     });
-  }, [setSalesData, setCleanedData, setCurrentStep, setForecastResults, setSelectedSKUForResults, addSKUsToQueue, clearManualAIPreferences, clearQueue, toast, onStartOptimization]);
+  }, [setSalesData, setCleanedData, setCurrentStep, setForecastResults, setSelectedSKUForResults, addSKUsToQueue, clearManualAIPreferences, clearQueue, toast]);
 
   const handleDataCleaning = useCallback((cleaned: SalesData[], changedSKUs?: string[]) => {
     setCleanedData(cleaned);
@@ -76,16 +68,8 @@ export const useDataHandlers = ({
       const validChangedSKUs = changedSKUs.filter(sku => currentSKUs.includes(sku));
       
       if (validChangedSKUs.length > 0) {
-        // Only add the specifically changed SKUs to queue with selective cache clearing
+        // Only add the specifically changed SKUs to queue - optimization will start automatically
         addSKUsToQueue(validChangedSKUs, 'data_cleaning', false, true);
-        
-        // Start optimization for the changed SKUs
-        if (onStartOptimization) {
-          console.log('🚀 AUTO-OPTIMIZATION: Starting optimization after data cleaning for SKUs:', validChangedSKUs);
-          setTimeout(() => {
-            onStartOptimization();
-          }, 100); // Small delay to ensure queue is updated
-        }
         
         toast({
           title: "Optimization Triggered",
@@ -93,30 +77,22 @@ export const useDataHandlers = ({
         });
       }
     }
-  }, [setCleanedData, addSKUsToQueue, cleanedData, toast, onStartOptimization]);
+  }, [setCleanedData, addSKUsToQueue, toast]);
 
   const handleImportDataCleaning = useCallback((importedSKUs: string[]) => {
     const currentSKUs = Array.from(new Set(cleanedData.map(d => d.sku)));
     const validImportedSKUs = importedSKUs.filter(sku => currentSKUs.includes(sku));
     
     if (validImportedSKUs.length > 0) {
-      // Only add the specifically imported SKUs with selective cache clearing
+      // Only add the specifically imported SKUs - optimization will start automatically
       addSKUsToQueue(validImportedSKUs, 'csv_import', false, true);
-      
-      // Start optimization for the imported SKUs
-      if (onStartOptimization) {
-        console.log('🚀 AUTO-OPTIMIZATION: Starting optimization after CSV import for SKUs:', validImportedSKUs);
-        setTimeout(() => {
-          onStartOptimization();
-        }, 100); // Small delay to ensure queue is updated
-      }
       
       toast({
         title: "Import Optimization Triggered",
         description: `${validImportedSKUs.length} SKU${validImportedSKUs.length > 1 ? 's' : ''} queued for optimization after import. Optimization starting automatically...`,
       });
     }
-  }, [cleanedData, addSKUsToQueue, toast, onStartOptimization]);
+  }, [cleanedData, addSKUsToQueue, toast]);
 
   const handleForecastGeneration = useCallback((results: ForecastResult[], selectedSKU?: string) => {
     setForecastResults(results);

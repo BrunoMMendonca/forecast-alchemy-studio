@@ -11,7 +11,7 @@ interface OptimizationQueueItem {
   skipCacheClear?: boolean;
 }
 
-export const useOptimizationQueue = () => {
+export const useOptimizationQueue = (onQueueChanged?: () => void) => {
   const [queue, setQueue] = useState<OptimizationQueueItem[]>([]);
   const { clearCacheForSKU } = useOptimizationCache();
   const { loadManualAIPreferences, saveManualAIPreferences } = useManualAIPreferences();
@@ -108,9 +108,19 @@ export const useOptimizationQueue = () => {
       });
       
       console.log('🚀 QUEUE: Created', newItems.length, 'SKU/model combinations');
-      return [...filteredQueue, ...newItems];
+      const newQueue = [...filteredQueue, ...newItems];
+      
+      // Trigger optimization if items were added and callback is provided
+      if (newItems.length > 0 && onQueueChanged) {
+        console.log('🚀 QUEUE: Triggering optimization due to queue changes');
+        setTimeout(() => {
+          onQueueChanged();
+        }, 100);
+      }
+      
+      return newQueue;
     });
-  }, [clearCacheAndPreferencesForSKU]);
+  }, [clearCacheAndPreferencesForSKU, onQueueChanged]);
 
   const removeSKUsFromQueue = useCallback((skus: string[]) => {
     console.log('🗑️ QUEUE: Removing SKUs from queue:', skus);

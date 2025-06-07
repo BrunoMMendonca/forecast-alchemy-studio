@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { OptimizationQueuePopup } from '@/components/OptimizationQueuePopup';
 import { MainLayout } from '@/components/MainLayout';
@@ -55,8 +54,14 @@ const Index = () => {
     getQueuedCombinations, 
     getModelsForSKU, 
     clearQueue 
-  } = useOptimizationQueue();
-  
+  } = useOptimizationQueue(() => {
+    // This callback runs whenever items are added to the queue
+    if (handleQueueOptimization) {
+      console.log('🚀 AUTO-OPTIMIZATION: Starting due to queue changes');
+      handleQueueOptimization();
+    }
+  });
+
   const { clearManualAIPreferences } = useManualAIPreferences();
 
   // Listen for the global queue popup event
@@ -97,6 +102,9 @@ const Index = () => {
     onSettingsChange: handleGlobalSettingsChange
   });
 
+  // Forward declare the optimization handler function
+  let handleQueueOptimization: (() => void) | undefined;
+
   const optimizationQueue = {
     getSKUsInQueue,
     getQueuedCombinations,
@@ -109,13 +117,16 @@ const Index = () => {
   };
 
   // Initialize optimization handler
-  const { handleQueueOptimization } = useOptimizationHandler(
+  const optimizationHandler = useOptimizationHandler(
     cleanedData,
     selectedSKUForResults,
     optimizationQueue,
     undefined, // onOptimizationComplete - we'll handle this in the forecast components
     grokApiEnabled
   );
+
+  // Assign the handler function
+  handleQueueOptimization = optimizationHandler.handleQueueOptimization;
 
   const {
     handleDataUpload,
@@ -132,7 +143,7 @@ const Index = () => {
     addSKUsToQueue,
     clearManualAIPreferences,
     clearQueue,
-    onStartOptimization: handleQueueOptimization // Connect optimization to data handlers
+    onStartOptimization: undefined // No longer needed since queue handles it automatically
   });
 
   useEffect(() => {
