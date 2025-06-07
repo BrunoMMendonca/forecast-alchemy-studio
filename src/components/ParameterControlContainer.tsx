@@ -78,6 +78,9 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
     return null;
   }
 
+  // Create a unique key to force re-render when parameters change
+  const parametersKey = `${model.id}-${selectedSKU}-${JSON.stringify(model.parameters)}-${isManual}-${cacheVersion}`;
+
   return (
     <Card className="w-full">
       <CardContent className="p-4">
@@ -98,8 +101,9 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
             />
           </div>
 
-          {/* Parameter sliders - always visible */}
+          {/* Parameter sliders - always visible with forced re-render key */}
           <ParameterSliders
+            key={parametersKey}
             model={model}
             isManual={isManual}
             disabled={disabled}
