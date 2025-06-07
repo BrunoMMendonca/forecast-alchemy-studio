@@ -39,6 +39,13 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
     return null;
   }
 
+  const handleSliderChange = (parameter: string, values: number[]) => {
+    console.log(`🎚️ SLIDER: ${parameter} changed to ${values[0]} (manual: ${isManual})`);
+    if (isManual && !disabled) {
+      onParameterChange(parameter, values);
+    }
+  };
+
   return (
     <div className="grid gap-4">
       {Object.entries(model.parameters).map(([parameter, _]) => {
@@ -62,7 +69,7 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
               max={config.max}
               step={config.step}
               value={[safeValue]}
-              onValueChange={(values) => onParameterChange(parameter, values)}
+              onValueChange={(values) => handleSliderChange(parameter, values)}
               className="w-full"
               disabled={!isManual || disabled}
             />
