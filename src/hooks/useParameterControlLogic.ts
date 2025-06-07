@@ -37,9 +37,8 @@ export const useParameterControlLogic = (
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
   useEffect(() => {
-    console.log(`🔄 SKU_SWITCH_EFFECT: ${model.id} effectiveSelectedMethod changed to ${effectiveSelectedMethod} for SKU ${selectedSKU}, cacheVersion=${cacheVersion}`);
     setLocalSelectedMethod(effectiveSelectedMethod);
-  }, [effectiveSelectedMethod, selectedSKU, model.id, cacheVersion]);
+  }, [effectiveSelectedMethod, selectedSKU, model.id]);
 
   const optimizationData = useMemo(() => {
     if (!cacheEntry || localSelectedMethod === 'manual') return null;
@@ -55,29 +54,9 @@ export const useParameterControlLogic = (
 
   const isManual = localSelectedMethod === 'manual';
 
-  // Add debugging to track parameter changes
-  useEffect(() => {
-    console.log(`🔍 PARAMETER_LOGIC: Model ${model.id} parameters changed:`, model.parameters);
-    console.log(`🔍 PARAMETER_LOGIC: Model ${model.id} isManual=${isManual}, localSelectedMethod=${localSelectedMethod}`);
-    console.log(`🔍 PARAMETER_LOGIC: Model ${model.id} optimizedParameters:`, model.optimizedParameters);
-  }, [model.parameters, model.optimizedParameters, model.id, isManual, localSelectedMethod]);
-
-  // FIXED: Always use model.parameters in manual mode, optimizedParameters in optimized modes
   const getParameterValueCallback = useCallback((parameter: string) => {
-    let value: number | undefined;
-    
-    if (isManual) {
-      // In manual mode, ALWAYS use model.parameters (which should contain restored values)
-      value = model.parameters?.[parameter];
-      console.log(`🎯 GET_PARAMETER_VALUE (MANUAL): ${parameter} = ${value} (from model.parameters, all params:`, model.parameters, ')');
-    } else {
-      // In optimized modes, use optimizedParameters first, fall back to parameters
-      value = model.optimizedParameters?.[parameter] ?? model.parameters?.[parameter];
-      console.log(`🎯 GET_PARAMETER_VALUE (OPTIMIZED): ${parameter} = ${value} (from optimizedParameters: ${model.optimizedParameters?.[parameter]}, fallback: ${model.parameters?.[parameter]})`);
-    }
-    
-    return value;
-  }, [model.parameters, model.optimizedParameters, isManual]);
+    return getParameterValue(parameter, model, isManual);
+  }, [model, isManual]);
 
   const canOptimize = hasOptimizableParameters(model);
   const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;
