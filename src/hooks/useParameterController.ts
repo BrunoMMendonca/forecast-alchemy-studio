@@ -3,7 +3,7 @@ import { useCallback, useMemo } from 'react';
 import { SalesData } from '@/pages/Index';
 import { generateDataHash } from '@/utils/cacheUtils';
 
-export const useParameterManagement = (
+export const useParameterController = (
   selectedSKU: string,
   data: SalesData[],
   setModels: React.Dispatch<React.SetStateAction<any[]>>,

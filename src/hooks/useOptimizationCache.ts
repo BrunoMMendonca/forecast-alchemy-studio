@@ -96,13 +96,6 @@ export const useOptimizationCache = () => {
     clearAllCache,
     isOptimizationComplete,
     markOptimizationComplete,
-    generateDatasetFingerprint,
-    startOptimizationSession: () => {},
-    markSKUOptimized: () => {},
-    completeOptimizationSession: () => {},
-    getDatasetFingerprintString: generateDatasetFingerprint,
-    hasOptimizationStarted: () => false,
-    markOptimizationStarted: () => {},
-    batchValidateCache: () => ({})
+    generateDatasetFingerprint
   };
 };

@@ -1,10 +1,10 @@
 
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react';
 import { SalesData, ForecastResult } from '@/pages/Index';
-import { useUnifiedModelManagement } from '@/hooks/useUnifiedModelManagement';
+import { useModelController } from '@/hooks/useModelController';
 import { useOptimizationHandler } from '@/hooks/useOptimizationHandler';
 import { useAutoOptimization } from '@/hooks/useAutoOptimization';
-import { useManualOptimizationTrigger } from '@/hooks/useManualOptimizationTrigger';
+import { useOptimizationTrigger } from '@/hooks/useOptimizationTrigger';
 import { ForecastModelsContent } from './ForecastModelsContent';
 import { OptimizationLogger } from './OptimizationLogger';
 
@@ -43,7 +43,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
   const componentMountedRef = useRef(false);
   
-  // Use the unified model management hook
   const {
     models,
     toggleModel,
@@ -51,7 +50,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     resetToManual,
     handleMethodSelection,
     generateForecasts
-  } = useUnifiedModelManagement(
+  } = useModelController(
     selectedSKU,
     data,
     forecastPeriods,
@@ -59,19 +58,16 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     onForecastGeneration
   );
 
-  // Memoize queue combinations to prevent infinite re-renders
   const queuedCombinations = useMemo(() => {
     return optimizationQueue?.getQueuedCombinations() || [];
-  }, [optimizationQueue?.queueSize]); // Only recalculate when queue size changes
+  }, [optimizationQueue?.queueSize]);
 
-  // Use optimization handler for queue management - pass grokApiEnabled
   const {
     isOptimizing,
     progress,
     handleQueueOptimization
   } = useOptimizationHandler(data, selectedSKU, optimizationQueue, generateForecasts, grokApiEnabled);
 
-  // Use auto-optimization hook
   useAutoOptimization({
     optimizationQueue,
     isOptimizing,
@@ -81,8 +77,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     componentMountedRef
   });
 
-  // Use manual optimization trigger hook
-  const { hasTriggeredOptimizationRef } = useManualOptimizationTrigger({
+  const { hasTriggeredOptimizationRef } = useOptimizationTrigger({
     shouldStartOptimization,
     isOptimizing,
     handleQueueOptimization,
@@ -90,18 +85,14 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     componentMountedRef
   });
 
-  // Mark component as mounted
   useEffect(() => {
     componentMountedRef.current = true;
-    console.log('🔄 FORECAST_MODELS: Component mounted, grokApiEnabled:', grokApiEnabled);
     
     return () => {
       componentMountedRef.current = false;
-      console.log('🔄 FORECAST_MODELS: Component unmounted');
     };
   }, [grokApiEnabled]);
 
-  // Auto-select first SKU when data changes (only if no SKU selected)
   useEffect(() => {
     const skus = Array.from(new Set(data.map(d => d.sku))).sort();
     if (skus.length > 0 && !selectedSKU) {
@@ -109,7 +100,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     }
   }, [data, selectedSKU, onSKUChange]);
 
-  // Expose methods to parent component
   useImperativeHandle(ref, () => ({
     startOptimization: handleQueueOptimization
   }));

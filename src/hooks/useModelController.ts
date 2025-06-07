@@ -6,10 +6,10 @@ import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useModelState } from './useModelState';
 import { useForecastGeneration } from './useForecastGeneration';
 import { useModelOptimizationSync } from './useModelOptimizationSync';
-import { useParameterManagement } from './useParameterManagement';
-import { useMethodSelectionManagement } from './useMethodSelectionManagement';
+import { useParameterController } from './useParameterController';
+import { useMethodSelection } from './useMethodSelection';
 
-export const useUnifiedModelManagement = (
+export const useModelController = (
   selectedSKU: string, 
   data: SalesData[], 
   forecastPeriods: number,
@@ -46,7 +46,7 @@ export const useUnifiedModelManagement = (
   const {
     updateParameter,
     resetToManual
-  } = useParameterManagement(
+  } = useParameterController(
     selectedSKU,
     data,
     setModels,
@@ -55,7 +55,7 @@ export const useUnifiedModelManagement = (
     cache
   );
 
-  const { handleMethodSelection } = useMethodSelectionManagement(
+  const { handleMethodSelection } = useMethodSelection(
     selectedSKU,
     setSelectedMethod,
     setModels,

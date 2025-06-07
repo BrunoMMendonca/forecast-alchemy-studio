@@ -2,7 +2,7 @@
 import { useCacheRetrieval } from '@/hooks/useCacheRetrieval';
 import { useCacheStorage } from '@/hooks/useCacheStorage';
 import { useCacheMethodSelection } from '@/hooks/useCacheMethodSelection';
-import { useCacheManagement } from '@/hooks/useCacheManagement';
+import { useCacheActions } from '@/hooks/useCacheActions';
 import { OptimizationCache } from '@/utils/cacheStorageUtils';
 
 export const useCacheOperations = (
@@ -14,7 +14,7 @@ export const useCacheOperations = (
   const { getCachedParameters } = useCacheRetrieval(cache, setCacheStats);
   const { setCachedParameters } = useCacheStorage(setCache, setCacheVersion);
   const { setSelectedMethod } = useCacheMethodSelection(setCache, setCacheVersion);
-  const { clearCacheForSKU } = useCacheManagement(setCache, setCacheVersion);
+  const { clearCacheForSKU } = useCacheActions(setCache, setCacheVersion);
 
   return {
     getCachedParameters,

@@ -2,7 +2,7 @@
 import { useCallback } from 'react';
 import { OptimizationCache, saveCacheToStorage } from '@/utils/cacheStorageUtils';
 
-export const useCacheManagement = (
+export const useCacheActions = (
   setCache: React.Dispatch<React.SetStateAction<OptimizationCache>>,
   setCacheVersion: React.Dispatch<React.SetStateAction<number>>
 ) => {

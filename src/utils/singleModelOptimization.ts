@@ -34,12 +34,7 @@ export const optimizeSingleModel = async (
   selectedResult: OptimizationResult | GridOptimizationResult;
   bothResults?: { ai?: OptimizationResult; grid: GridOptimizationResult };
 }> => {
-  console.log(`🔧 SINGLE: Starting optimization for ${sku}:${model.id}, grokEnabled=${grokApiEnabled}`);
-
-  // CRITICAL: Early check for models without optimizable parameters
   if (!hasOptimizableParameters(model)) {
-    console.log(`🚫 SINGLE: Model ${model.id} has no optimizable parameters, skipping optimization entirely`);
-    
     const defaultResult = { 
       parameters: model.parameters || {}, 
       confidence: 70, 
@@ -60,11 +55,8 @@ export const optimizeSingleModel = async (
   }
 
   if (forceGridSearch || !grokApiEnabled) {
-    console.log(`🔧 SINGLE: ${forceGridSearch ? 'Force grid search' : 'Grok disabled, using grid only'} for ${sku}:${model.id}`);
     const gridResult = await runGridOptimization(model, skuData, sku);
-    console.log(`✅ SINGLE: Grid-only result for ${sku}:${model.id}:`, gridResult);
     if (onMethodComplete) {
-      console.log(`🔧 SINGLE: Calling onMethodComplete for grid-only ${sku}:${model.id}`);
       onMethodComplete('grid', gridResult);
     }
     return { 
@@ -73,7 +65,6 @@ export const optimizeSingleModel = async (
     };
   }
 
-  // Run both optimizations only if Grok is enabled
   const results = await runBothOptimizations(model, skuData, sku, progressUpdater, businessContext, onMethodComplete, grokApiEnabled);
   
   return {
@@ -91,11 +82,7 @@ const runBothOptimizations = async (
   onMethodComplete?: (method: 'grid' | 'ai', result: OptimizationResult | GridOptimizationResult) => void,
   grokApiEnabled: boolean = true
 ): Promise<MultiMethodResult> => {
-  console.log(`🔧 DUAL: Starting dual optimization for ${sku}:${model.id}, grokEnabled=${grokApiEnabled}`);
-  
-  // If Grok is disabled, we shouldn't be in this function, but handle it gracefully
   if (!grokApiEnabled) {
-    console.log(`🚫 DUAL: Grok disabled, falling back to grid-only for ${sku}:${model.id}`);
     const gridResult = await runGridOptimization(model, skuData, sku);
     if (onMethodComplete) {
       onMethodComplete('grid', gridResult);
@@ -115,10 +102,7 @@ const runBothOptimizations = async (
     parameters: model.parameters
   });
 
-  // Step 1: ALWAYS run Grid optimization first
-  console.log(`📊 GRID: Starting grid optimization for ${sku}:${model.id}`);
   const gridResult = await runGridOptimization(model, skuData, sku);
-  console.log(`✅ GRID: Completed for ${sku}:${model.id}`, gridResult);
   
   optimizationLogger.logStep({
     sku,
@@ -128,16 +112,12 @@ const runBothOptimizations = async (
     parameters: gridResult.parameters
   });
 
-  // Notify that grid optimization is complete - cache immediately
   if (onMethodComplete) {
-    console.log(`🔧 CACHE: Calling onMethodComplete for grid ${sku}:${model.id}`);
     onMethodComplete('grid', gridResult);
   }
 
-  // Step 2: Try AI optimization (only if enabled)
   let aiResult: OptimizationResult | null = null;
   
-  console.log(`🤖 AI: Starting AI optimization for ${sku}:${model.id}`);
   aiResult = await runAIOptimization(
     model, 
     skuData, 
@@ -146,19 +126,11 @@ const runBothOptimizations = async (
     { parameters: gridResult.parameters, accuracy: gridResult.accuracy },
     grokApiEnabled
   );
-  
-  if (aiResult) {
-    console.log(`✅ AI: Completed for ${sku}:${model.id}`, aiResult);
-  } else {
-    console.log(`❌ AI: Failed for ${sku}:${model.id}`);
-  }
 
-  // Step 3: Select result and notify if AI succeeded
   let selectedResult: OptimizationResult | GridOptimizationResult;
   
   if (aiResult) {
     selectedResult = aiResult;
-    console.log(`🎯 RESULT: AI selected for ${sku}:${model.id}`);
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
@@ -167,9 +139,7 @@ const runBothOptimizations = async (
       parameters: aiResult.parameters
     });
     
-    // Notify that AI optimization is complete - cache immediately
     if (onMethodComplete) {
-      console.log(`🔧 CACHE: Calling onMethodComplete for AI ${sku}:${model.id}`);
       onMethodComplete('ai', aiResult);
     }
     
@@ -179,7 +149,6 @@ const runBothOptimizations = async (
     } : null);
   } else {
     selectedResult = gridResult;
-    console.log(`🎯 RESULT: Grid selected for ${sku}:${model.id} (AI failed)`);
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
@@ -208,9 +177,7 @@ export const getOptimizationByMethod = async (
   businessContext?: BusinessContext,
   grokApiEnabled: boolean = true
 ): Promise<OptimizationResult | GridOptimizationResult | null> => {
-  // Early check for models without optimizable parameters
   if (!hasOptimizableParameters(model)) {
-    console.log(`🔧 OPTIMIZATION: Model ${model.id} has no optimizable parameters, returning null`);
     return null;
   }
 

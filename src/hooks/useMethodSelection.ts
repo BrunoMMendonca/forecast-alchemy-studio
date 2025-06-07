@@ -2,7 +2,7 @@
 import { useCallback } from 'react';
 import { generateDataHash } from '@/utils/cacheUtils';
 
-export const useMethodSelectionManagement = (
+export const useMethodSelection = (
   selectedSKU: string,
   setSelectedMethod: (sku: string, modelId: string, method: 'ai' | 'grid' | 'manual') => void,
   setModels: React.Dispatch<React.SetStateAction<any[]>>,

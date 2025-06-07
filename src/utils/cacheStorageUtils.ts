@@ -1,3 +1,4 @@
+
 const CACHE_KEY = 'forecast_optimization_cache';
 const CACHE_EXPIRY_HOURS = 24;
 
@@ -29,16 +30,13 @@ export interface OptimizationCache {
 }
 
 export const loadCacheFromStorage = (): OptimizationCache => {
-  console.log('🗄️ CACHE: Loading from localStorage...');
   try {
     const stored = localStorage.getItem(CACHE_KEY);
     if (!stored) {
-      console.log('🗄️ CACHE: No stored cache found');
       return {};
     }
 
     const parsedCache = JSON.parse(stored);
-    console.log('🗄️ CACHE: Found stored cache with', Object.keys(parsedCache).length, 'SKUs');
     const now = Date.now();
     const filteredCache: OptimizationCache = {};
     
@@ -46,15 +44,12 @@ export const loadCacheFromStorage = (): OptimizationCache => {
       Object.keys(parsedCache[sku]).forEach(modelId => {
         const entry = parsedCache[sku][modelId];
         
-        // Handle both old and new cache structures
         if (entry.parameters) {
           const method = entry.method?.startsWith('ai_') ? 'ai' : 
                        entry.method === 'grid_search' ? 'grid' : 
                        entry.method === 'manual' ? 'manual' : 'ai';
           
-          // Skip entries that don't have the new hash format (v2-)
           if (!entry.dataHash?.startsWith('v2-')) {
-            console.log(`🗄️ CACHE: Skipping old format entry ${sku}:${modelId}:${method}`);
             return;
           }
           
@@ -64,12 +59,8 @@ export const loadCacheFromStorage = (): OptimizationCache => {
             
             filteredCache[sku][modelId][method] = entry;
             filteredCache[sku][modelId].selected = method;
-            console.log(`🗄️ CACHE: Loaded ${sku}:${modelId}:${method}`);
-          } else {
-            console.log(`🗄️ CACHE: Expired ${sku}:${modelId}:${method}`);
           }
         } else {
-          // Handle new cache structure
           const hasValidAI = entry.ai && 
                             entry.ai.dataHash?.startsWith('v2-') &&
                             now - entry.ai.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
@@ -94,28 +85,24 @@ export const loadCacheFromStorage = (): OptimizationCache => {
               filteredCache[sku][modelId].manual = entry.manual;
             }
             filteredCache[sku][modelId].selected = entry.selected;
-            console.log(`🗄️ CACHE: Loaded ${sku}:${modelId} with multiple methods`);
           }
         }
       });
     });
     
-    console.log('🗄️ CACHE: Final loaded cache has', Object.keys(filteredCache).length, 'SKUs');
     return filteredCache;
   } catch (error) {
-    console.error('🗄️ CACHE: Error loading from localStorage:', error);
+    console.error('Cache loading error:', error);
     return {};
   }
 };
 
 export const saveCacheToStorage = (cache: OptimizationCache): void => {
   if (Object.keys(cache).length > 0) {
-    console.log('🗄️ CACHE: Saving to localStorage with', Object.keys(cache).length, 'SKUs');
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
-      console.log('🗄️ CACHE: Successfully saved to localStorage');
     } catch (error) {
-      console.error('🗄️ CACHE: Error saving to localStorage:', error);
+      console.error('Cache saving error:', error);
     }
   }
 };
