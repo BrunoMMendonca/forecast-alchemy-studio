@@ -25,7 +25,6 @@ export interface OptimizationCache {
       grid?: OptimizedParameters;
       manual?: OptimizedParameters;
       selected?: 'ai' | 'grid' | 'manual';
-      userExplicitlySelected?: boolean;
     };
   };
 }
