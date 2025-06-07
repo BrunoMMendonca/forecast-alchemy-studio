@@ -20,23 +20,31 @@ export const useParameterControlLogic = (
   }, [data, selectedSKU]);
 
   const cacheEntry = useMemo(() => {
-    return cache[selectedSKU]?.[model.id];
+    const entry = cache[selectedSKU]?.[model.id];
+    console.log(`📊 PARAM_LOGIC: Cache entry for ${selectedSKU}:${model.id}:`, JSON.stringify(entry, null, 2));
+    return entry;
   }, [cache, selectedSKU, model.id, cacheVersion]);
 
   const userSelectedMethod = useMemo(() => {
-    return cacheEntry?.selected;
+    const selected = cacheEntry?.selected;
+    console.log(`📊 PARAM_LOGIC: User selected method for ${model.id}: ${selected}`);
+    return selected;
   }, [cacheEntry, cacheVersion]);
 
   const effectiveSelectedMethod = useMemo(() => {
     if (userSelectedMethod) {
+      console.log(`📊 PARAM_LOGIC: Using user selected method for ${model.id}: ${userSelectedMethod}`);
       return userSelectedMethod;
     }
-    return getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
+    const bestMethod = getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
+    console.log(`📊 PARAM_LOGIC: Using best available method for ${model.id}: ${bestMethod}`);
+    return bestMethod;
   }, [userSelectedMethod, selectedSKU, model.id, getBestAvailableMethod, currentDataHash, cache, cacheVersion]);
 
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
   useEffect(() => {
+    console.log(`📊 PARAM_LOGIC: Updating local method for ${model.id} from ${localSelectedMethod} to ${effectiveSelectedMethod}`);
     setLocalSelectedMethod(effectiveSelectedMethod);
   }, [effectiveSelectedMethod, selectedSKU, model.id]);
 
@@ -44,19 +52,35 @@ export const useParameterControlLogic = (
     if (!cacheEntry || localSelectedMethod === 'manual') return null;
     
     if (localSelectedMethod === 'ai' && cacheEntry.ai) {
+      console.log(`📊 PARAM_LOGIC: Using AI optimization data for ${model.id}`);
       return cacheEntry.ai;
     } else if (localSelectedMethod === 'grid' && cacheEntry.grid) {
+      console.log(`📊 PARAM_LOGIC: Using Grid optimization data for ${model.id}`);
       return cacheEntry.grid;
     }
     
-    return cacheEntry.ai || cacheEntry.grid || null;
+    const fallback = cacheEntry.ai || cacheEntry.grid || null;
+    console.log(`📊 PARAM_LOGIC: Using fallback optimization data for ${model.id}:`, fallback ? 'found' : 'none');
+    return fallback;
   }, [cacheEntry, localSelectedMethod]);
 
   const isManual = localSelectedMethod === 'manual';
 
   const getParameterValueCallback = useCallback((parameter: string) => {
-    return getParameterValue(parameter, model, isManual);
-  }, [model, isManual]);
+    const value = getParameterValue(parameter, model, isManual);
+    console.log(`📊 PARAM_LOGIC: Getting parameter ${parameter} for ${model.id} (manual: ${isManual}): ${value}`);
+    
+    // If manual mode and we have a cached manual value, use that instead
+    if (isManual && cacheEntry?.manual && cacheEntry.manual.dataHash === currentDataHash) {
+      const cachedValue = cacheEntry.manual.parameters[parameter];
+      if (cachedValue !== undefined) {
+        console.log(`📊 PARAM_LOGIC: Using cached manual value for ${parameter}: ${cachedValue}`);
+        return cachedValue;
+      }
+    }
+    
+    return value;
+  }, [model, isManual, cacheEntry, currentDataHash]);
 
   const canOptimize = hasOptimizableParameters(model);
   const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;

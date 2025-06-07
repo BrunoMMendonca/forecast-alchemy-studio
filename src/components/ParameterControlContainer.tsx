@@ -45,6 +45,8 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
     cacheVersion
   } = useParameterControlLogic(model, selectedSKU, data);
 
+  console.log(`🎛️ CONTAINER: Rendering ${model.id} for SKU ${selectedSKU}, method: ${localSelectedMethod}, manual: ${isManual}`);
+
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     const newValue = values[0];
     console.log(`🎚️ SLIDER CHANGE: ${parameter} = ${newValue} (manual: ${isManual})`);
@@ -78,8 +80,11 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
     return null;
   }
 
+  // Create a unique key to force re-render when SKU or method changes
+  const componentKey = `${selectedSKU}-${model.id}-${localSelectedMethod}-${cacheVersion}`;
+
   return (
-    <Card className="w-full">
+    <Card className="w-full" key={componentKey}>
       <CardContent className="p-4">
         <div className="space-y-4">
           {/* Header with badges - always visible */}
@@ -100,6 +105,7 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
 
           {/* Parameter sliders - always visible */}
           <ParameterSliders
+            key={`sliders-${componentKey}`}
             model={model}
             isManual={isManual}
             disabled={disabled}

@@ -24,13 +24,23 @@ export const getBestAvailableMethod = (
   cache: OptimizationCache
 ): 'ai' | 'grid' | 'manual' => {
   const cached = cache[sku]?.[modelId];
-  if (!cached) return 'manual';
+  if (!cached) {
+    console.log(`🔍 CACHE_UTILS: No cache for ${sku}:${modelId}, defaulting to manual`);
+    return 'manual';
+  }
 
   const hasValidAI = cached.ai && cached.ai.dataHash === currentDataHash;
   const hasValidGrid = cached.grid && cached.grid.dataHash === currentDataHash;
+  const hasValidManual = cached.manual && cached.manual.dataHash === currentDataHash;
+
+  console.log(`🔍 CACHE_UTILS: Best method analysis for ${sku}:${modelId}:`);
+  console.log(`  - Valid AI: ${hasValidAI}`);
+  console.log(`  - Valid Grid: ${hasValidGrid}`);
+  console.log(`  - Valid Manual: ${hasValidManual}`);
 
   if (hasValidAI) return 'ai';
   if (hasValidGrid) return 'grid';
+  if (hasValidManual) return 'manual';
   return 'manual';
 };
 
@@ -39,13 +49,37 @@ export const getParameterValue = (
   model: ModelConfig,
   isManual: boolean
 ): number | undefined => {
+  console.log(`🔧 CACHE_UTILS: Getting parameter ${parameter} for model ${model.id} (manual: ${isManual})`);
+  
   if (isManual) {
-    return model.parameters?.[parameter];
+    const modelValue = model.parameters?.[parameter];
+    console.log(`🔧 CACHE_UTILS: Manual mode - using model value: ${modelValue}`);
+    return modelValue;
   } else {
     const optimizedValue = model.optimizedParameters?.[parameter];
     const modelValue = model.parameters?.[parameter];
-    return optimizedValue !== undefined ? optimizedValue : modelValue;
+    const finalValue = optimizedValue !== undefined ? optimizedValue : modelValue;
+    console.log(`🔧 CACHE_UTILS: Optimization mode - optimized: ${optimizedValue}, model: ${modelValue}, final: ${finalValue}`);
+    return finalValue;
   }
+};
+
+export const getManualParameterValue = (
+  sku: string,
+  modelId: string,
+  parameter: string,
+  currentDataHash: string,
+  cache: OptimizationCache
+): number | undefined => {
+  const cached = cache[sku]?.[modelId];
+  if (!cached?.manual || cached.manual.dataHash !== currentDataHash) {
+    console.log(`🔧 CACHE_UTILS: No valid manual cache for ${sku}:${modelId}:${parameter}`);
+    return undefined;
+  }
+  
+  const value = cached.manual.parameters[parameter];
+  console.log(`🔧 CACHE_UTILS: Found cached manual value for ${sku}:${modelId}:${parameter}: ${value}`);
+  return value;
 };
 
 export const isCacheValid = (
