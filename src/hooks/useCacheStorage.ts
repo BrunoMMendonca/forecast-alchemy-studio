@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { OptimizationCache, OptimizedParameters, saveCacheToStorage } from '@/utils/cacheStorageUtils';
 
@@ -22,6 +21,8 @@ export const useCacheStorage = (
     expectedAccuracy?: number,
     method?: string
   ) => {
+    console.log(`💾 CacheStorage: Setting parameters for ${sku}:${modelId}, method: ${method}`);
+    
     const optimizedParams: OptimizedParameters = {
       parameters,
       timestamp: Date.now(),
@@ -45,31 +46,28 @@ export const useCacheStorage = (
       if (!newCache[sku]) newCache[sku] = {};
       if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
       
+      // Store the parameters
       newCache[sku][modelId][cacheMethod] = optimizedParams;
       
-      // Auto-select best method
+      // If this is a manual update, ensure the selected method is set to manual
       if (cacheMethod === 'manual') {
+        console.log(`💾 CacheStorage: Setting selected method to manual for ${sku}:${modelId}`);
         newCache[sku][modelId].selected = 'manual';
-      } else {
-        const hasAI = newCache[sku][modelId].ai;
-        const hasGrid = newCache[sku][modelId].grid;
-        const currentSelected = newCache[sku][modelId].selected;
-        
-        const bestMethod = hasAI ? 'ai' : hasGrid ? 'grid' : 'manual';
-        const shouldAutoSelect = !currentSelected || 
-          (currentSelected === 'manual' && bestMethod !== 'manual') || 
-          (currentSelected === 'grid' && bestMethod === 'ai');
-        
-        if (shouldAutoSelect) {
-          newCache[sku][modelId].selected = bestMethod;
-        }
       }
       
+      // Save to storage immediately
       saveCacheToStorage(newCache);
+      console.log(`💾 CacheStorage: Saved to storage for ${sku}:${modelId}`);
+      
       return newCache;
     });
 
-    setCacheVersion(prev => prev + 1);
+    // Increment cache version to trigger updates
+    setCacheVersion(prev => {
+      const newVersion = prev + 1;
+      console.log(`💾 CacheStorage: Cache version updated to ${newVersion}`);
+      return newVersion;
+    });
   }, [setCache, setCacheVersion]);
 
   return { setCachedParameters };
