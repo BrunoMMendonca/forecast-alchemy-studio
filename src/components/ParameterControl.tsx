@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -151,9 +150,9 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     const newValue = values[0];
-    console.log(`🎚️ SLIDER CHANGE: ${parameter} = ${newValue}, switching to manual mode`);
+    console.log(`🎚️ PARAMETER CHANGE: ${parameter} = ${newValue} (manual mode: ${isManual})`);
     onParameterUpdate(parameter, newValue);
-  }, [onParameterUpdate]);
+  }, [onParameterUpdate, isManual]);
 
   // Handle badge clicks with immediate local state update
   const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
