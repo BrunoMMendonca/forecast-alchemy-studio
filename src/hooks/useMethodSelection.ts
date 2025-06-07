@@ -1,6 +1,5 @@
 
 import { useCallback } from 'react';
-import { flushSync } from 'react-dom';
 import { generateDataHash } from '@/utils/cacheUtils';
 
 export const useMethodSelection = (
@@ -11,67 +10,63 @@ export const useMethodSelection = (
   data: any[]
 ) => {
   const handleMethodSelection = useCallback((modelId: string, method: 'ai' | 'grid' | 'manual') => {
-    flushSync(() => {
-      setSelectedMethod(selectedSKU, modelId, method);
-    });
+    setSelectedMethod(selectedSKU, modelId, method);
     
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
     
-    flushSync(() => {
-      setModels(prev => prev.map(model => {
-        if (model.id !== modelId) return model;
-        
-        const cached = cache[selectedSKU]?.[modelId];
-        
-        if (method === 'manual') {
-          const manualCache = cached?.manual;
-          if (manualCache && manualCache.dataHash === currentDataHash) {
-            return {
-              ...model,
-              parameters: manualCache.parameters,
-              optimizedParameters: undefined,
-              optimizationConfidence: undefined,
-              optimizationReasoning: undefined,
-              optimizationFactors: undefined,
-              expectedAccuracy: undefined,
-              optimizationMethod: undefined
-            };
-          } else {
-            return {
-              ...model,
-              optimizedParameters: undefined,
-              optimizationConfidence: undefined,
-              optimizationReasoning: undefined,
-              optimizationFactors: undefined,
-              expectedAccuracy: undefined,
-              optimizationMethod: undefined
-            };
-          }
+    setModels(prev => prev.map(model => {
+      if (model.id !== modelId) return model;
+      
+      const cached = cache[selectedSKU]?.[modelId];
+      
+      if (method === 'manual') {
+        const manualCache = cached?.manual;
+        if (manualCache && manualCache.dataHash === currentDataHash) {
+          return {
+            ...model,
+            parameters: manualCache.parameters,
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
+          };
         } else {
-          let selectedCache = null;
-          if (method === 'ai' && cached?.ai) {
-            selectedCache = cached.ai;
-          } else if (method === 'grid' && cached?.grid) {
-            selectedCache = cached.grid;
-          }
-
-          if (selectedCache) {
-            return {
-              ...model,
-              optimizedParameters: selectedCache.parameters,
-              optimizationConfidence: selectedCache.confidence,
-              optimizationReasoning: selectedCache.reasoning,
-              optimizationFactors: selectedCache.factors,
-              expectedAccuracy: selectedCache.expectedAccuracy,
-              optimizationMethod: selectedCache.method
-            };
-          }
+          return {
+            ...model,
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
+          };
         }
-        
-        return model;
-      }));
-    });
+      } else {
+        let selectedCache = null;
+        if (method === 'ai' && cached?.ai) {
+          selectedCache = cached.ai;
+        } else if (method === 'grid' && cached?.grid) {
+          selectedCache = cached.grid;
+        }
+
+        if (selectedCache) {
+          return {
+            ...model,
+            optimizedParameters: selectedCache.parameters,
+            optimizationConfidence: selectedCache.confidence,
+            optimizationReasoning: selectedCache.reasoning,
+            optimizationFactors: selectedCache.factors,
+            expectedAccuracy: selectedCache.expectedAccuracy,
+            optimizationMethod: selectedCache.method
+          };
+        }
+      }
+      
+      return model;
+    }));
   }, [selectedSKU, setSelectedMethod, setModels, cache, data]);
 
   return { handleMethodSelection };

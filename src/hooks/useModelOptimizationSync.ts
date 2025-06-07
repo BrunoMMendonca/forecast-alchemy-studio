@@ -1,6 +1,5 @@
 
 import { useEffect, useRef } from 'react';
-import { flushSync } from 'react-dom';
 import { SalesData } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
 import { getDefaultModels } from '@/utils/modelConfig';
@@ -40,10 +39,8 @@ export const useModelOptimizationSync = (
       return;
     }
     
-    flushSync(() => {
-      lastProcessedCacheVersionRef.current = cacheVersion;
-      lastProcessedSKURef.current = selectedSKU;
-    });
+    lastProcessedCacheVersionRef.current = cacheVersion;
+    lastProcessedSKURef.current = selectedSKU;
     
     const skuData = data.filter(d => d.sku === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
@@ -87,9 +84,7 @@ export const useModelOptimizationSync = (
       return model;
     });
     
-    flushSync(() => {
-      setModels(updatedModels);
-    });
+    setModels(updatedModels);
     
     // Reset forecast generation hash when models are updated from cache changes
     lastForecastGenerationHashRef.current = '';

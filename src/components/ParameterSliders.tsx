@@ -1,6 +1,5 @@
 
-import React, { useCallback } from 'react';
-import { flushSync } from 'react-dom';
+import React from 'react';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { ModelConfig } from '@/types/forecast';
@@ -36,12 +35,6 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
     return configs[parameter] || { min: 0, max: 1, step: 0.1, description: "Parameter" };
   };
 
-  const handleParameterChange = useCallback((parameter: string, values: number[]) => {
-    flushSync(() => {
-      onParameterChange(parameter, values);
-    });
-  }, [onParameterChange]);
-
   if (!model.parameters || Object.keys(model.parameters).length === 0) {
     return null;
   }
@@ -69,7 +62,7 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
               max={config.max}
               step={config.step}
               value={[safeValue]}
-              onValueChange={(values) => handleParameterChange(parameter, values)}
+              onValueChange={(values) => onParameterChange(parameter, values)}
               className="w-full"
               disabled={!isManual || disabled}
             />
