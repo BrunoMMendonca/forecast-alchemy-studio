@@ -38,7 +38,7 @@ export const useParameterControlLogic = (
 
   useEffect(() => {
     setLocalSelectedMethod(effectiveSelectedMethod);
-  }, [effectiveSelectedMethod, selectedSKU, model.id]);
+  }, [effectiveSelectedMethod, selectedSKU, model.id, cacheVersion]);
 
   const optimizationData = useMemo(() => {
     if (!cacheEntry || localSelectedMethod === 'manual') return null;
@@ -50,13 +50,20 @@ export const useParameterControlLogic = (
     }
     
     return cacheEntry.ai || cacheEntry.grid || null;
-  }, [cacheEntry, localSelectedMethod]);
+  }, [cacheEntry, localSelectedMethod, cacheVersion]);
 
   const isManual = localSelectedMethod === 'manual';
 
   const getParameterValueCallback = useCallback((parameter: string) => {
-    return getParameterValue(parameter, model, isManual);
-  }, [model, isManual]);
+    return getParameterValue(
+      parameter, 
+      model, 
+      isManual, 
+      cache, 
+      selectedSKU, 
+      currentDataHash
+    );
+  }, [model, isManual, cache, selectedSKU, currentDataHash, cacheVersion]);
 
   const canOptimize = hasOptimizableParameters(model);
   const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;

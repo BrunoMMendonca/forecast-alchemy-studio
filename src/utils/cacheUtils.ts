@@ -37,8 +37,22 @@ export const getBestAvailableMethod = (
 export const getParameterValue = (
   parameter: string,
   model: ModelConfig,
-  isManual: boolean
+  isManual: boolean,
+  cache?: OptimizationCache,
+  sku?: string,
+  currentDataHash?: string
 ): number | undefined => {
+  if (isManual && cache && sku && currentDataHash) {
+    // For manual mode, first check cache for saved manual parameters
+    const cached = cache[sku]?.[model.id];
+    if (cached?.manual && cached.manual.dataHash === currentDataHash) {
+      const cachedValue = cached.manual.parameters?.[parameter];
+      if (cachedValue !== undefined) {
+        return cachedValue;
+      }
+    }
+  }
+  
   if (isManual) {
     return model.parameters?.[parameter];
   } else {
