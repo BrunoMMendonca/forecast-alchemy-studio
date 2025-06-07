@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -21,32 +20,34 @@ export const useParameterControlLogic = (
 
   const cacheEntry = useMemo(() => {
     return cache[selectedSKU]?.[model.id];
-  }, [cache, selectedSKU, model.id, cacheVersion]);
-
-  const userSelectedMethod = useMemo(() => {
-    return cacheEntry?.selected;
-  }, [cacheEntry, cacheVersion]);
+  }, [cache, selectedSKU, model.id]);
 
   const effectiveSelectedMethod = useMemo(() => {
-    if (userSelectedMethod) {
-      return userSelectedMethod;
+    console.log(`🔍 Computing effective method for ${selectedSKU}/${model.id}:`, {
+      cacheEntry,
+      userSelected: cacheEntry?.selected,
+      currentDataHash
+    });
+
+    // If user has explicitly selected a method, use it
+    if (cacheEntry?.selected) {
+      console.log(`👤 User selected: ${cacheEntry.selected}`);
+      return cacheEntry.selected;
     }
-    return getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
-  }, [userSelectedMethod, selectedSKU, model.id, getBestAvailableMethod, currentDataHash, cache, cacheVersion]);
+
+    // Otherwise, get the best available method
+    const bestMethod = getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
+    console.log(`🎯 Best available method: ${bestMethod}`);
+    return bestMethod;
+  }, [cacheEntry, selectedSKU, model.id, currentDataHash, cache, cacheVersion]);
 
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
-  // Reset local state when SKU or model changes
+  // Sync local state whenever effective method changes
   useEffect(() => {
-    console.log(`🔄 SKU/Model changed: ${selectedSKU}/${model.id}, resetting to: ${effectiveSelectedMethod}`);
+    console.log(`🔄 Syncing local state: ${localSelectedMethod} -> ${effectiveSelectedMethod} for ${selectedSKU}/${model.id}`);
     setLocalSelectedMethod(effectiveSelectedMethod);
-  }, [selectedSKU, model.id]);
-
-  // Sync with effective method when it changes
-  useEffect(() => {
-    console.log(`🔄 Effective method changed to: ${effectiveSelectedMethod} for ${selectedSKU}/${model.id}`);
-    setLocalSelectedMethod(effectiveSelectedMethod);
-  }, [effectiveSelectedMethod]);
+  }, [effectiveSelectedMethod, selectedSKU, model.id]);
 
   const optimizationData = useMemo(() => {
     if (!cacheEntry || localSelectedMethod === 'manual') return null;
