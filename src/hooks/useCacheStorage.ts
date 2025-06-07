@@ -47,23 +47,20 @@ export const useCacheStorage = (
       
       newCache[sku][modelId][cacheMethod] = optimizedParams;
       
-      // Auto-select best method
+      // Only auto-select if no existing selection and method is manual
+      const currentSelected = newCache[sku][modelId].selected;
+      
       if (cacheMethod === 'manual') {
         newCache[sku][modelId].selected = 'manual';
-      } else {
+      } else if (!currentSelected) {
+        // Only auto-select when there's no existing user selection
         const hasAI = newCache[sku][modelId].ai;
         const hasGrid = newCache[sku][modelId].grid;
-        const currentSelected = newCache[sku][modelId].selected;
         
         const bestMethod = hasAI ? 'ai' : hasGrid ? 'grid' : 'manual';
-        const shouldAutoSelect = !currentSelected || 
-          (currentSelected === 'manual' && bestMethod !== 'manual') || 
-          (currentSelected === 'grid' && bestMethod === 'ai');
-        
-        if (shouldAutoSelect) {
-          newCache[sku][modelId].selected = bestMethod;
-        }
+        newCache[sku][modelId].selected = bestMethod;
       }
+      // If currentSelected exists, preserve it (don't override user's choice)
       
       saveCacheToStorage(newCache);
       return newCache;
