@@ -59,9 +59,20 @@ export const useParameterControlLogic = (
     console.log(`🔍 PARAMETER_LOGIC: Model ${model.id} parameters changed:`, model.parameters);
   }, [model.parameters, model.id]);
 
+  // For manual mode, directly use model.parameters, for optimized modes use cache
   const getParameterValueCallback = useCallback((parameter: string) => {
-    const value = getParameterValue(parameter, model, isManual);
-    console.log(`🎯 GET_PARAMETER_VALUE: ${parameter} = ${value} (manual: ${isManual}, modelId: ${model.id})`);
+    let value: number | undefined;
+    
+    if (isManual) {
+      // In manual mode, always use the current model parameters
+      value = model.parameters?.[parameter];
+      console.log(`🎯 GET_PARAMETER_VALUE (MANUAL): ${parameter} = ${value} (from model.parameters)`);
+    } else {
+      // In optimized modes, use the cache-based function
+      value = getParameterValue(parameter, model, isManual);
+      console.log(`🎯 GET_PARAMETER_VALUE (OPTIMIZED): ${parameter} = ${value} (from cache, manual: ${isManual}, modelId: ${model.id})`);
+    }
+    
     return value;
   }, [model, isManual, model.parameters]);
 
