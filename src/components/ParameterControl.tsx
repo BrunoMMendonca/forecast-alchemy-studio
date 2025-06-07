@@ -34,7 +34,7 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
   disabled = false,
   grokApiEnabled = true,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isReasoningExpanded, setIsReasoningExpanded] = useState(false);
   const { cache, cacheVersion } = useOptimizationCache();
   const { getBestAvailableMethod } = useOptimizationMethodManagement();
 
@@ -190,57 +190,57 @@ export const ParameterControl: React.FC<ParameterControlProps> = ({
 
   return (
     <Card className="w-full">
-      <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-        <CollapsibleTrigger asChild>
-          <div className="p-4 cursor-pointer hover:bg-slate-50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                <Settings className="h-4 w-4" />
-                <span className="font-medium">Parameters</span>
-              </div>
-              
-              <ParameterBadges
-                canOptimize={canOptimize}
-                grokApiEnabled={grokApiEnabled}
-                localSelectedMethod={localSelectedMethod}
-                cacheVersion={cacheVersion}
-                onMethodChange={handlePreferenceChange}
-              />
+      <CardContent className="p-4">
+        <div className="space-y-4">
+          {/* Header with badges - always visible */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <Settings className="h-4 w-4" />
+              <span className="font-medium">Parameters</span>
             </div>
-
-            <ParameterStatusDisplay
+            
+            <ParameterBadges
               canOptimize={canOptimize}
-              isManual={isManual}
-              optimizationData={optimizationData}
-              hasOptimizationResults={false}
+              grokApiEnabled={grokApiEnabled}
               localSelectedMethod={localSelectedMethod}
+              cacheVersion={cacheVersion}
+              onMethodChange={handlePreferenceChange}
             />
           </div>
-        </CollapsibleTrigger>
 
-        <CollapsibleContent>
-          <CardContent className="pt-0">
-            <div className="space-y-4">
-              <ParameterSliders
-                model={model}
-                isManual={isManual}
-                disabled={disabled}
-                getParameterValue={getParameterValue}
-                onParameterChange={handleParameterChange}
-              />
+          {/* Parameter sliders - always visible */}
+          <ParameterSliders
+            model={model}
+            isManual={isManual}
+            disabled={disabled}
+            getParameterValue={getParameterValue}
+            onParameterChange={handleParameterChange}
+          />
 
-              <ParameterStatusDisplay
-                canOptimize={canOptimize}
-                isManual={isManual}
-                optimizationData={optimizationData}
-                hasOptimizationResults={hasOptimizationResults}
-                localSelectedMethod={localSelectedMethod}
-              />
-            </div>
-          </CardContent>
-        </CollapsibleContent>
-      </Collapsible>
+          {/* Optimization reasoning - collapsible */}
+          {hasOptimizationResults && (
+            <Collapsible open={isReasoningExpanded} onOpenChange={setIsReasoningExpanded}>
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center space-x-2 cursor-pointer hover:bg-slate-50 p-2 rounded">
+                  {isReasoningExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  <span className="text-sm font-medium">Optimization Details</span>
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="pt-2">
+                  <ParameterStatusDisplay
+                    canOptimize={canOptimize}
+                    isManual={isManual}
+                    optimizationData={optimizationData}
+                    hasOptimizationResults={hasOptimizationResults}
+                    localSelectedMethod={localSelectedMethod}
+                  />
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+        </div>
+      </CardContent>
     </Card>
   );
 };
