@@ -26,30 +26,25 @@ export const useOptimization = (
   } | null> => {
     // Guard against empty or invalid SKU
     if (!selectedSKU || selectedSKU.trim() === '' || !data.length) {
-      console.log('useOptimization: No valid SKU or data, skipping optimization');
       return null;
     }
 
     // Guard against models without optimizable parameters
     if (!hasOptimizableParameters(model)) {
-      console.log('useOptimization: Model has no optimizable parameters, skipping optimization:', model.id);
       return null;
     }
 
     // If AI method is requested but Grok API is disabled, fall back to grid
     if (method === 'ai' && !grokApiEnabled) {
-      console.log('useOptimization: Grok API disabled, falling back to grid optimization');
       method = 'grid';
     }
 
-    console.log('useOptimization: Starting optimization for SKU:', selectedSKU, 'Model:', model.id, 'Method:', method);
     setIsOptimizing(true);
     setOptimizingModel(model.id);
 
     try {
       const skuData = data.filter(d => d.sku === selectedSKU);
       if (skuData.length === 0) {
-        console.log('useOptimization: No data found for SKU:', selectedSKU);
         return null;
       }
 
