@@ -67,20 +67,11 @@ export const useParameterControlLogic = (
   const isManual = localSelectedMethod === 'manual';
 
   const getParameterValueCallback = useCallback((parameter: string) => {
+    // Always use the current model parameter value - don't override with cache during UI interactions
     const value = getParameterValue(parameter, model, isManual);
     console.log(`📊 PARAM_LOGIC: Getting parameter ${parameter} for ${model.id} (manual: ${isManual}): ${value}`);
-    
-    // If manual mode and we have a cached manual value, use that instead
-    if (isManual && cacheEntry?.manual && cacheEntry.manual.dataHash === currentDataHash) {
-      const cachedValue = cacheEntry.manual.parameters[parameter];
-      if (cachedValue !== undefined) {
-        console.log(`📊 PARAM_LOGIC: Using cached manual value for ${parameter}: ${cachedValue}`);
-        return cachedValue;
-      }
-    }
-    
     return value;
-  }, [model, isManual, cacheEntry, currentDataHash]);
+  }, [model, isManual]);
 
   const canOptimize = hasOptimizableParameters(model);
   const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;
