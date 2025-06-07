@@ -171,7 +171,7 @@ export const CacheDebugger: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-4 gap-4 text-sm">
             <div>
               <span className="font-medium">Hits:</span> {cacheStats.hits}
             </div>
@@ -181,6 +181,9 @@ export const CacheDebugger: React.FC = () => {
             <div>
               <span className="font-medium">Skipped:</span> {cacheStats.skipped}
             </div>
+            <div>
+              <span className="font-medium">User Prefs:</span> {Object.keys(preferences).length}
+            </div>
           </div>
           <div className="mt-2 text-xs text-gray-500">
             Last updated: {lastUpdate} | Version: {cacheVersion} | Cache entries: {Object.keys(optimizationCache).length}
@@ -189,9 +192,10 @@ export const CacheDebugger: React.FC = () => {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="optimization">Optimization Cache</TabsTrigger>
-          <TabsTrigger value="preferences">Preferences</TabsTrigger>
+          <TabsTrigger value="preferences">User Optimization Preferences</TabsTrigger>
+          <TabsTrigger value="raw">Raw Data</TabsTrigger>
         </TabsList>
 
         <TabsContent value="optimization">
@@ -311,19 +315,66 @@ export const CacheDebugger: React.FC = () => {
               {Object.keys(preferences).length === 0 ? (
                 <Card>
                   <CardContent className="pt-6">
-                    <p className="text-sm text-gray-500">No preference entries</p>
+                    <p className="text-sm text-gray-500">No user optimization preferences stored</p>
                   </CardContent>
                 </Card>
               ) : (
-                Object.entries(preferences).map(([key, value]) => (
-                  <div key={key} className="flex items-center justify-between p-2 border rounded text-sm">
-                    <span className="font-mono">{key}</span>
-                    <Badge variant={String(value) === 'manual' ? 'secondary' : String(value) === 'ai' ? 'default' : 'outline'}>
-                      {String(value)}
-                    </Badge>
-                  </div>
-                ))
+                <div className="space-y-4">
+                  {Object.entries(preferences).map(([key, value]) => {
+                    const [sku, modelId] = key.split(':');
+                    return (
+                      <Card key={key}>
+                        <CardContent className="pt-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="font-medium text-sm">SKU: {sku}</div>
+                                <div className="text-xs text-gray-500">Model: {modelId}</div>
+                              </div>
+                              <Badge 
+                                variant={String(value) === 'manual' ? 'secondary' : String(value) === 'ai' ? 'default' : 'outline'}
+                                className="font-bold"
+                              >
+                                {String(value).toUpperCase()}
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
+                              Key: {key}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
               )}
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="raw">
+          <ScrollArea className="h-96">
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Raw Optimization Cache</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto">
+                    {JSON.stringify(optimizationCache, null, 2)}
+                  </pre>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Raw User Preferences</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto">
+                    {JSON.stringify(preferences, null, 2)}
+                  </pre>
+                </CardContent>
+              </Card>
             </div>
           </ScrollArea>
         </TabsContent>
