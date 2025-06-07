@@ -45,9 +45,10 @@ export const useParameterControlLogic = (
   // Use effectiveSelectedMethod directly instead of local state
   const localSelectedMethod = effectiveSelectedMethod;
   
-  // Keep setLocalSelectedMethod for API compatibility but it doesn't do anything
-  const setLocalSelectedMethod = useCallback(() => {
+  // Keep setLocalSelectedMethod for API compatibility but accept argument even though we don't use it
+  const setLocalSelectedMethod = useCallback((_method?: 'ai' | 'grid' | 'manual') => {
     // This is kept for API compatibility but we rely on cache state
+    console.log('setLocalSelectedMethod called but ignored, relying on cache state');
   }, []);
 
   const optimizationData = useMemo(() => {
