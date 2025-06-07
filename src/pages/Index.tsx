@@ -1,5 +1,5 @@
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import { OptimizationQueuePopup } from '@/components/OptimizationQueuePopup';
 import { MainLayout } from '@/components/MainLayout';
 import { StepContent } from '@/components/StepContent';
@@ -85,7 +85,7 @@ const Index = () => {
     onSettingsChange: handleGlobalSettingsChange
   });
 
-  // Initialize optimization handler first
+  // Initialize optimization queue first
   const optimizationQueue = {
     getSKUsInQueue: () => [],
     getQueuedCombinations: () => [],
@@ -105,13 +105,17 @@ const Index = () => {
     grokApiEnabled
   );
 
-  // Create a stable callback that always points to the current optimization handler
+  // Use a ref to always have the latest optimization handler
+  const optimizationHandlerRef = useRef(optimizationHandler.handleQueueOptimization);
+  optimizationHandlerRef.current = optimizationHandler.handleQueueOptimization;
+
+  // Create a truly stable callback that uses the ref
   const stableOptimizationCallback = useCallback(() => {
     console.log('🚀 AUTO-OPTIMIZATION: Stable callback triggered, calling current handler');
-    if (optimizationHandler.handleQueueOptimization) {
-      optimizationHandler.handleQueueOptimization();
+    if (optimizationHandlerRef.current) {
+      optimizationHandlerRef.current();
     }
-  }, [optimizationHandler.handleQueueOptimization]);
+  }, []); // Empty dependency array makes this truly stable
 
   // Initialize queue with the stable callback
   const { 
