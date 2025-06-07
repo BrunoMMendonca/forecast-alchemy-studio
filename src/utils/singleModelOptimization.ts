@@ -98,7 +98,6 @@ const runBothOptimizations = async (
     console.log(`🚫 DUAL: Grok disabled, falling back to grid-only for ${sku}:${model.id}`);
     const gridResult = await runGridOptimization(model, skuData, sku);
     if (onMethodComplete) {
-      console.log(`🔧 DUAL: Calling onMethodComplete for grid fallback ${sku}:${model.id}`);
       onMethodComplete('grid', gridResult);
     }
     return {

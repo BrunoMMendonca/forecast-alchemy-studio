@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { SalesData } from '@/pages/Index';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
@@ -122,12 +121,12 @@ export const useOptimizationHandler = (
       optimizableModels,
       skusToOptimize,
       (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method, bothResults) => {
-        console.log(`💾 CACHE_HANDLER: Processing optimization result for ${sku}:${modelId}, method: ${method}`);
+        console.log(`💾 CACHE: Processing optimization result for ${sku}:${modelId}, method: ${method}`);
         
         // CRITICAL: Only cache models with optimizable parameters
         const model = optimizableModels.find(m => m.id === modelId);
         if (!model || !hasOptimizableParameters(model)) {
-          console.log(`🚫 CACHE_HANDLER: Skipping cache for ${sku}:${modelId} - no optimizable parameters`);
+          console.log(`🚫 CACHE: Skipping cache for ${sku}:${modelId} - no optimizable parameters`);
           return;
         }
 
@@ -143,10 +142,10 @@ export const useOptimizationHandler = (
         
         // Cache the optimization results - handle both single and dual results
         if (bothResults) {
-          console.log(`💾 CACHE_HANDLER: Storing dual results for ${sku}:${modelId}`);
+          console.log(`💾 CACHE: Storing dual results for ${sku}:${modelId}`);
           
           if (bothResults.ai) {
-            console.log(`💾 CACHE_HANDLER: Storing AI result for ${sku}:${modelId} via setCachedParameters`);
+            console.log(`💾 CACHE: Storing AI result for ${sku}:${modelId}`);
             setCachedParameters(
               sku, 
               modelId, 
@@ -156,12 +155,12 @@ export const useOptimizationHandler = (
               bothResults.ai.reasoning,
               bothResults.ai.factors,
               bothResults.ai.expectedAccuracy,
-              'ai_optimization'
+              'ai'
             );
           }
           
           if (bothResults.grid) {
-            console.log(`💾 CACHE_HANDLER: Storing Grid result for ${sku}:${modelId} via setCachedParameters`);
+            console.log(`💾 CACHE: Storing Grid result for ${sku}:${modelId}`);
             setCachedParameters(
               sku, 
               modelId, 
@@ -185,7 +184,7 @@ export const useOptimizationHandler = (
           
           console.log(`🎯 PREFERENCE: Set ${preferenceKey} -> ${bestMethod} (dual optimization)`);
         } else {
-          console.log(`💾 CACHE_HANDLER: Storing single result for ${sku}:${modelId}, method: ${method} via setCachedParameters`);
+          console.log(`💾 CACHE: Storing single result for ${sku}:${modelId}, method: ${method}`);
           setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
           
           // Set preference based on the method used
