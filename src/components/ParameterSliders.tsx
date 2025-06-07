@@ -40,9 +40,21 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
   }
 
   const handleSliderChange = (parameter: string, values: number[]) => {
-    console.log(`🎚️ SLIDER: ${parameter} changed to ${values[0]} (manual: ${isManual})`);
+    const newValue = values[0];
+    console.log(`🎚️ SLIDER CHANGE DEBUG:`, {
+      parameter,
+      newValue,
+      isManual,
+      disabled,
+      modelId: model.id,
+      willUpdate: isManual && !disabled
+    });
+    
     if (isManual && !disabled) {
+      console.log(`🎚️ CALLING onParameterChange for ${parameter} = ${newValue}`);
       onParameterChange(parameter, values);
+    } else {
+      console.log(`🎚️ BLOCKED: isManual=${isManual}, disabled=${disabled}`);
     }
   };
 
@@ -52,6 +64,8 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
         const config = getParameterConfig(parameter);
         const currentValue = getParameterValue(parameter);
         const safeValue = typeof currentValue === 'number' ? currentValue : config.min;
+        
+        console.log(`🎚️ RENDER: ${parameter} = ${safeValue}, isManual=${isManual}, disabled=${disabled || !isManual}`);
         
         return (
           <div key={parameter} className="space-y-2">
