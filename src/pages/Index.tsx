@@ -85,21 +85,39 @@ const Index = () => {
     onSettingsChange: handleGlobalSettingsChange
   });
 
-  // Create a stable ref for the optimization handler
-  const optimizationHandlerRef = useRef<() => void>();
+  // Initialize optimization queue first
+  const optimizationQueue = {
+    getSKUsInQueue: () => [],
+    getQueuedCombinations: () => [],
+    getModelsForSKU: () => [],
+    removeSKUsFromQueue: () => {},
+    removeSKUModelPairsFromQueue: () => {},
+    removeUnnecessarySKUs: () => {},
+    queueSize: 0,
+    uniqueSKUCount: 0
+  };
 
-  // Create a stable callback that uses the ref
+  const optimizationHandler = useOptimizationHandler(
+    cleanedData,
+    selectedSKUForResults,
+    optimizationQueue,
+    undefined,
+    grokApiEnabled
+  );
+
+  // Use a ref to always have the latest optimization handler
+  const optimizationHandlerRef = useRef(optimizationHandler.handleQueueOptimization);
+  optimizationHandlerRef.current = optimizationHandler.handleQueueOptimization;
+
+  // Create a truly stable callback that uses the ref
   const stableOptimizationCallback = useCallback(() => {
-    console.log('🚀 AUTO-OPTIMIZATION: Stable callback triggered');
+    console.log('🚀 AUTO-OPTIMIZATION: Stable callback triggered, calling current handler');
     if (optimizationHandlerRef.current) {
-      console.log('🚀 AUTO-OPTIMIZATION: Calling optimization handler');
       optimizationHandlerRef.current();
-    } else {
-      console.log('🚫 AUTO-OPTIMIZATION: No handler available yet');
     }
-  }, []);
+  }, []); // Empty dependency array makes this truly stable
 
-  // Initialize optimization queue with the stable callback
+  // Initialize queue with the stable callback
   const { 
     addSKUsToQueue, 
     removeSKUsFromQueue, 
@@ -112,8 +130,8 @@ const Index = () => {
     clearQueue 
   } = useOptimizationQueue(stableOptimizationCallback);
 
-  // Create the real optimization queue object
-  const optimizationQueue = {
+  // Update the optimization queue reference
+  Object.assign(optimizationQueue, {
     getSKUsInQueue,
     getQueuedCombinations,
     getModelsForSKU,
@@ -122,21 +140,7 @@ const Index = () => {
     removeUnnecessarySKUs: removeSKUsFromQueue,
     queueSize,
     uniqueSKUCount
-  };
-
-  // Initialize optimization handler with real queue
-  const optimizationHandler = useOptimizationHandler(
-    cleanedData,
-    selectedSKUForResults,
-    optimizationQueue,
-    undefined,
-    grokApiEnabled
-  );
-
-  // Update the ref with the current handler
-  useEffect(() => {
-    optimizationHandlerRef.current = optimizationHandler.handleQueueOptimization;
-  }, [optimizationHandler.handleQueueOptimization]);
+  });
 
   const {
     handleDataUpload,
