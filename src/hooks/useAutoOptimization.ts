@@ -21,7 +21,6 @@ export const useAutoOptimization = ({
   componentMountedRef
 }: UseAutoOptimizationProps) => {
   const lastProcessedQueueSizeRef = useRef(0);
-  const wasOptimizingRef = useRef(false);
 
   // AUTO-START OPTIMIZATION: React to queue changes with stable detection
   useEffect(() => {
@@ -71,21 +70,15 @@ export const useAutoOptimization = ({
     }
   }, [optimizationQueue?.queueSize, isOptimizing, handleQueueOptimization, onOptimizationStarted, grokApiEnabled]);
 
-  // Reset processed queue size when optimization completes (but only when it actually completes)
+  // Reset processed queue size when optimization completes
   useEffect(() => {
-    // Track if we were optimizing before
-    const wasOptimizing = wasOptimizingRef.current;
-    wasOptimizingRef.current = isOptimizing;
-
-    // Only reset when optimization actually completes (was optimizing, now not optimizing)
-    if (wasOptimizing && !isOptimizing) {
-      console.log('🔄 FORECAST_MODELS: Optimization completed, resetting processed queue size');
+    if (!isOptimizing) {
+      // Reset after optimization completes to allow new auto-starts
       setTimeout(() => {
         lastProcessedQueueSizeRef.current = optimizationQueue?.queueSize || 0;
-        console.log('🔄 FORECAST_MODELS: Reset lastProcessedQueueSizeRef to:', lastProcessedQueueSizeRef.current);
       }, 1000);
     }
-  }, [isOptimizing]); // Only depend on isOptimizing, not queue size
+  }, [isOptimizing, optimizationQueue?.queueSize]);
 
   return {
     lastProcessedQueueSizeRef
