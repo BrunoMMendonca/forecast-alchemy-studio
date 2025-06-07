@@ -109,6 +109,22 @@ export const CacheDebugger: React.FC = () => {
     return 'bg-gray-500';
   };
 
+  const getSelectedMethodBadge = (selected?: string) => {
+    if (!selected) return <Badge variant="outline" className="text-xs">None</Badge>;
+    
+    const colors = {
+      ai: 'bg-blue-600 text-white',
+      grid: 'bg-green-600 text-white', 
+      manual: 'bg-gray-700 text-white'
+    };
+    
+    return (
+      <Badge className={`text-xs font-bold ${colors[selected as keyof typeof colors] || 'bg-gray-500'}`}>
+        SELECTED: {selected.toUpperCase()}
+      </Badge>
+    );
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -209,12 +225,22 @@ export const CacheDebugger: React.FC = () => {
                       <div className="space-y-3">
                         {Object.entries(skuCache).map(([modelId, modelCache]) => (
                           <div key={modelId} className="border-l-2 border-gray-200 pl-3">
-                            <div className="flex items-center gap-2 mb-2">
+                            <div className="flex items-center gap-2 mb-3">
                               <span className="font-medium text-sm">Model: {modelId}</span>
-                              {modelCache.selected && (
-                                <Badge variant="outline" className="text-xs">
-                                  Selected: {modelCache.selected}
-                                </Badge>
+                              {getSelectedMethodBadge(modelCache.selected)}
+                            </div>
+                            
+                            {/* Show detailed selected info */}
+                            <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                              <div className="font-semibold mb-1">USER SELECTION STATUS:</div>
+                              <div>Selected Method: {modelCache.selected || 'NONE'}</div>
+                              <div>Has AI Cache: {modelCache.ai ? 'YES' : 'NO'}</div>
+                              <div>Has Grid Cache: {modelCache.grid ? 'YES' : 'NO'}</div>
+                              <div>Has Manual Cache: {modelCache.manual ? 'YES' : 'NO'}</div>
+                              {modelCache.selected && modelCache[modelCache.selected] && (
+                                <div className="mt-1 font-semibold">
+                                  Selected Parameters: {JSON.stringify(modelCache[modelCache.selected].parameters)}
+                                </div>
                               )}
                             </div>
                             
