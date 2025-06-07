@@ -51,33 +51,59 @@ export const useUnifiedModelManagement = (
   );
 
   const updateParameter = useCallback((modelId: string, parameter: string, value: number) => {
-    console.log(`🎚️ PARAMETER UPDATE: ${parameter} = ${value} for ${modelId} - switching to manual`);
+    console.log(`🎚️ PARAMETER UPDATE: ${parameter} = ${value} for ${modelId}`);
     
-    // Set explicit user selection to manual in cache
-    setSelectedMethod(selectedSKU, modelId, 'manual');
+    // Get current method from cache
+    const cacheEntry = cache[selectedSKU]?.[modelId];
+    const currentMethod = cacheEntry?.selected || 'manual';
     
-    // Update the model state to manual mode
-    setModels(prev => prev.map(model => {
-      if (model.id === modelId) {
-        const updatedParameters = { ...model.parameters, [parameter]: value };
-        
-        // Cache the manual parameters immediately
-        cacheManualParameters(selectedSKU, modelId, updatedParameters, currentDataHash);
-        
-        return { 
-          ...model, 
-          parameters: updatedParameters,
-          optimizedParameters: undefined,
-          optimizationConfidence: undefined,
-          optimizationReasoning: undefined,
-          optimizationFactors: undefined,
-          expectedAccuracy: undefined,
-          optimizationMethod: undefined
-        };
-      }
-      return model;
-    }));
-  }, [selectedSKU, setSelectedMethod, setModels, cacheManualParameters, currentDataHash]);
+    if (currentMethod === 'manual') {
+      console.log(`🎚️ ALREADY MANUAL: ${modelId}, just updating parameter`);
+      
+      // Just update the model parameters directly - don't trigger method switching
+      setModels(prev => prev.map(model => {
+        if (model.id === modelId) {
+          const updatedParameters = { ...model.parameters, [parameter]: value };
+          
+          // Cache the manual parameters immediately but don't change selection
+          cacheManualParameters(selectedSKU, modelId, updatedParameters, currentDataHash);
+          
+          return { 
+            ...model, 
+            parameters: updatedParameters
+          };
+        }
+        return model;
+      }));
+    } else {
+      console.log(`🎚️ SWITCHING TO MANUAL: ${modelId}, parameter ${parameter} = ${value}`);
+      
+      // Set explicit user selection to manual in cache
+      setSelectedMethod(selectedSKU, modelId, 'manual');
+      
+      // Update the model state to manual mode
+      setModels(prev => prev.map(model => {
+        if (model.id === modelId) {
+          const updatedParameters = { ...model.parameters, [parameter]: value };
+          
+          // Cache the manual parameters immediately
+          cacheManualParameters(selectedSKU, modelId, updatedParameters, currentDataHash);
+          
+          return { 
+            ...model, 
+            parameters: updatedParameters,
+            optimizedParameters: undefined,
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationFactors: undefined,
+            expectedAccuracy: undefined,
+            optimizationMethod: undefined
+          };
+        }
+        return model;
+      }));
+    }
+  }, [selectedSKU, setSelectedMethod, setModels, cacheManualParameters, currentDataHash, cache]);
 
   const resetToManual = useCallback((modelId: string) => {
     console.log(`🔄 RESET TO MANUAL: ${modelId}`);
