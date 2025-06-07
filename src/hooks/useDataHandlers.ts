@@ -31,6 +31,7 @@ export const useDataHandlers = ({
   const { toast } = useToast();
 
   const handleDataUpload = useCallback((data: SalesData[]) => {
+    // Clear all user preferences and cache when uploading new data
     clearManualAIPreferences();
     clearQueue();
     
@@ -56,7 +57,7 @@ export const useDataHandlers = ({
     
     toast({
       title: "Data Uploaded",
-      description: `${skusInOrder.length} SKU${skusInOrder.length > 1 ? 's' : ''} queued for optimization. Optimization starting automatically...`,
+      description: `${skusInOrder.length} SKU${skusInOrder.length > 1 ? 's' : ''} queued for optimization. Starting fresh with no existing preferences.`,
     });
   }, [setSalesData, setCleanedData, setCurrentStep, setForecastResults, setSelectedSKUForResults, addSKUsToQueue, clearManualAIPreferences, clearQueue, toast]);
 
