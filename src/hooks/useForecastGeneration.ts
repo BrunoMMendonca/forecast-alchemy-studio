@@ -4,6 +4,8 @@ import { SalesData, ForecastResult } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
 import { generateForecastsForSKU } from '@/utils/forecastGenerator';
 import { useToast } from '@/hooks/use-toast';
+import { useOptimizationCache } from '@/hooks/useOptimizationCache';
+import { generateDataHash } from '@/utils/cacheHashUtils';
 
 export const useForecastGeneration = (
   selectedSKU: string,
@@ -13,6 +15,7 @@ export const useForecastGeneration = (
   onForecastGeneration?: (results: ForecastResult[], selectedSKU: string) => void
 ) => {
   const { toast } = useToast();
+  const { cacheManualParameters } = useOptimizationCache();
   const forecastGenerationInProgressRef = useRef<boolean>(false);
   const lastForecastGenerationHashRef = useRef<string>('');
 
@@ -48,6 +51,19 @@ export const useForecastGeneration = (
       forecastGenerationInProgressRef.current = true;
       lastForecastGenerationHashRef.current = modelsHash;
       
+      // Cache manual parameters for all enabled models with default values
+      const skuData = data.filter(d => d.sku === selectedSKU);
+      const currentDataHash = generateDataHash(skuData);
+      
+      enabledModels.forEach(model => {
+        if (model.parameters && Object.keys(model.parameters).length > 0) {
+          // Cache the current parameter values (either optimized or default) as manual
+          const parametersToCache = model.optimizedParameters || model.parameters;
+          console.log(`🗄️ FORECAST: Caching manual parameters for ${selectedSKU}:${model.id}`, parametersToCache);
+          cacheManualParameters(selectedSKU, model.id, parametersToCache, currentDataHash);
+        }
+      });
+      
       const results = await generateForecastsForSKU(
         selectedSKU,
         data,
@@ -68,7 +84,7 @@ export const useForecastGeneration = (
     } finally {
       forecastGenerationInProgressRef.current = false;
     }
-  }, [selectedSKU, data, modelsHash, forecastPeriods, onForecastGeneration, toast]);
+  }, [selectedSKU, data, modelsHash, forecastPeriods, onForecastGeneration, toast, models, cacheManualParameters]);
 
   return {
     modelsHash,
