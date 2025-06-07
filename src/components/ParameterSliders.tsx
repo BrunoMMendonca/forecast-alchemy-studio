@@ -39,33 +39,12 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
     return null;
   }
 
-  const handleSliderChange = (parameter: string, values: number[]) => {
-    const newValue = values[0];
-    console.log(`🎚️ SLIDER CHANGE DEBUG:`, {
-      parameter,
-      newValue,
-      isManual,
-      disabled,
-      modelId: model.id,
-      willUpdate: isManual && !disabled
-    });
-    
-    if (isManual && !disabled) {
-      console.log(`🎚️ CALLING onParameterChange for ${parameter} = ${newValue}`);
-      onParameterChange(parameter, values);
-    } else {
-      console.log(`🎚️ BLOCKED: isManual=${isManual}, disabled=${disabled}`);
-    }
-  };
-
   return (
     <div className="grid gap-4">
       {Object.entries(model.parameters).map(([parameter, _]) => {
         const config = getParameterConfig(parameter);
         const currentValue = getParameterValue(parameter);
         const safeValue = typeof currentValue === 'number' ? currentValue : config.min;
-        
-        console.log(`🎚️ RENDER: ${parameter} = ${safeValue}, isManual=${isManual}, disabled=${disabled || !isManual}`);
         
         return (
           <div key={parameter} className="space-y-2">
@@ -83,7 +62,7 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
               max={config.max}
               step={config.step}
               value={[safeValue]}
-              onValueChange={(values) => handleSliderChange(parameter, values)}
+              onValueChange={(values) => onParameterChange(parameter, values)}
               className="w-full"
               disabled={!isManual || disabled}
             />
