@@ -84,9 +84,16 @@ export const useModelOptimizationSync = (
       return model;
     });
     
+    // Check if models actually changed before resetting forecast hash
+    const modelsChanged = JSON.stringify(updatedModels) !== JSON.stringify(getDefaultModels());
+    
     setModels(updatedModels);
     
-    // Reset forecast generation hash when models are updated from cache changes
-    lastForecastGenerationHashRef.current = '';
+    // Only reset forecast generation hash when models are actually updated from cache changes
+    // This prevents unnecessary triggers when just clicking "Generate Forecasts"
+    if (modelsChanged) {
+      console.log('🔄 MODEL_SYNC: Models changed from cache, resetting forecast hash');
+      lastForecastGenerationHashRef.current = '';
+    }
   }, [cacheVersion, selectedSKU, data, cache, generateDataHash, updateAutoBestMethods, loadAutoBestMethod, setModels, lastForecastGenerationHashRef]);
 };
