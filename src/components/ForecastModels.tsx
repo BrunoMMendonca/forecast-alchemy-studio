@@ -4,7 +4,6 @@ import { SalesData, ForecastResult } from '@/pages/Index';
 import { useModelController } from '@/hooks/useModelController';
 import { useOptimizationHandler } from '@/hooks/useOptimizationHandler';
 import { useAutoOptimization } from '@/hooks/useAutoOptimization';
-import { useOptimizationTrigger } from '@/hooks/useOptimizationTrigger';
 import { ForecastModelsContent } from './ForecastModelsContent';
 import { OptimizationLogger } from './OptimizationLogger';
 
@@ -77,15 +76,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     componentMountedRef
   });
 
-  const { hasTriggeredOptimizationRef } = useOptimizationTrigger({
-    shouldStartOptimization,
-    isOptimizing,
-    handleQueueOptimization,
-    onOptimizationStarted,
-    componentMountedRef,
-    queueSize: optimizationQueue?.queueSize || 0 // Pass queue size to prevent empty queue processing
-  });
-
   useEffect(() => {
     componentMountedRef.current = true;
     
@@ -115,7 +105,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         optimizationQueue={optimizationQueue}
         isOptimizing={isOptimizing}
         progress={progress}
-        hasTriggeredOptimization={hasTriggeredOptimizationRef.current}
+        hasTriggeredOptimization={false}
         models={models}
         onToggleModel={toggleModel}
         onUpdateParameter={updateParameter}
