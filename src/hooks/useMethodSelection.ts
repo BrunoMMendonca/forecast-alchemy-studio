@@ -10,6 +10,8 @@ export const useMethodSelection = (
   data: any[]
 ) => {
   const handleMethodSelection = useCallback((modelId: string, method: 'ai' | 'grid' | 'manual') => {
+    console.log(`🔄 METHOD_SELECTION: ${modelId} switching to ${method} for SKU ${selectedSKU}`);
+    
     setSelectedMethod(selectedSKU, modelId, method);
     
     const skuData = data.filter(d => d.sku === selectedSKU);
@@ -23,6 +25,7 @@ export const useMethodSelection = (
       if (method === 'manual') {
         const manualCache = cached?.manual;
         if (manualCache && manualCache.dataHash === currentDataHash) {
+          console.log(`🔄 RESTORING_MANUAL: ${modelId} restoring manual parameters:`, manualCache.parameters);
           return {
             ...model,
             parameters: manualCache.parameters,
@@ -34,6 +37,7 @@ export const useMethodSelection = (
             optimizationMethod: undefined
           };
         } else {
+          console.log(`🔄 MANUAL_NO_CACHE: ${modelId} no valid manual cache, keeping current parameters`);
           return {
             ...model,
             optimizedParameters: undefined,
@@ -53,6 +57,7 @@ export const useMethodSelection = (
         }
 
         if (selectedCache) {
+          console.log(`🔄 RESTORING_OPTIMIZED: ${modelId} restoring ${method} parameters:`, selectedCache.parameters);
           return {
             ...model,
             optimizedParameters: selectedCache.parameters,

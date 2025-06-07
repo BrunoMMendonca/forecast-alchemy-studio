@@ -37,6 +37,7 @@ export const useParameterControlLogic = (
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
   useEffect(() => {
+    console.log(`🔄 SKU_SWITCH_EFFECT: ${model.id} effectiveSelectedMethod changed to ${effectiveSelectedMethod} for SKU ${selectedSKU}`);
     setLocalSelectedMethod(effectiveSelectedMethod);
   }, [effectiveSelectedMethod, selectedSKU, model.id]);
 
