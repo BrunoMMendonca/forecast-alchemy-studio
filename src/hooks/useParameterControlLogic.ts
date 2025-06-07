@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -24,19 +23,36 @@ export const useParameterControlLogic = (
   }, [cache, selectedSKU, model.id, cacheVersion]);
 
   const userSelectedMethod = useMemo(() => {
-    return cacheEntry?.selected;
-  }, [cacheEntry, cacheVersion]);
+    const selected = cacheEntry?.selected;
+    console.log(`🎯 USER SELECTED METHOD for ${selectedSKU}-${model.id}:`, selected);
+    return selected;
+  }, [cacheEntry, cacheVersion, selectedSKU, model.id]);
 
   const effectiveSelectedMethod = useMemo(() => {
+    let result;
     if (userSelectedMethod) {
-      return userSelectedMethod;
+      result = userSelectedMethod;
+      console.log(`🎯 USING USER SELECTION for ${selectedSKU}-${model.id}:`, result);
+    } else {
+      result = getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
+      console.log(`🎯 USING BEST AVAILABLE for ${selectedSKU}-${model.id}:`, result);
     }
-    return getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
-  }, [userSelectedMethod, selectedSKU, model.id, getBestAvailableMethod, currentDataHash, cache, cacheVersion]);
+    
+    console.log(`🎯 EFFECTIVE METHOD for ${selectedSKU}-${model.id}:`, result, {
+      userSelected: userSelectedMethod,
+      cacheEntry: cacheEntry,
+      hasAI: !!cacheEntry?.ai,
+      hasGrid: !!cacheEntry?.grid,
+      hasManual: !!cacheEntry?.manual
+    });
+    
+    return result;
+  }, [userSelectedMethod, selectedSKU, model.id, getBestAvailableMethod, currentDataHash, cache, cacheVersion, cacheEntry]);
 
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
   useEffect(() => {
+    console.log(`🎯 EFFECT UPDATE for ${selectedSKU}-${model.id}: ${localSelectedMethod} -> ${effectiveSelectedMethod}`);
     setLocalSelectedMethod(effectiveSelectedMethod);
   }, [effectiveSelectedMethod, selectedSKU, model.id]);
 
