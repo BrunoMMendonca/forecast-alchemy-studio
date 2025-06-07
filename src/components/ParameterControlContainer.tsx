@@ -1,5 +1,5 @@
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown, ChevronRight, Settings } from 'lucide-react';
@@ -42,30 +42,8 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
     canOptimize,
     hasParameters,
     hasOptimizationResults,
-    cacheVersion,
-    getCachedManualParameters
+    cacheVersion
   } = useParameterControlLogic(model, selectedSKU, data);
-
-  console.log(`🎛️ CONTAINER: Rendering ${model.id} for SKU ${selectedSKU}, method: ${localSelectedMethod}, manual: ${isManual}`);
-
-  // Track the last restored state to prevent unnecessary updates
-  const lastRestoredRef = useRef<string>('');
-  const currentStateKey = `${selectedSKU}-${model.id}-${localSelectedMethod}`;
-
-  // Restore cached manual parameters only when switching to manual mode or changing SKUs
-  useEffect(() => {
-    if (isManual && lastRestoredRef.current !== currentStateKey) {
-      const cachedParams = getCachedManualParameters();
-      if (cachedParams) {
-        console.log(`🔄 CONTAINER: Restoring cached manual parameters for ${model.id}:`, cachedParams);
-        // Update model parameters with cached values
-        Object.entries(cachedParams).forEach(([param, value]) => {
-          onParameterUpdate(param, value);
-        });
-        lastRestoredRef.current = currentStateKey;
-      }
-    }
-  }, [isManual, selectedSKU, model.id, localSelectedMethod, getCachedManualParameters, onParameterUpdate, currentStateKey]);
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     const newValue = values[0];
@@ -100,11 +78,8 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
     return null;
   }
 
-  // Create a unique key to force re-render when SKU or method changes
-  const componentKey = `${selectedSKU}-${model.id}-${localSelectedMethod}-${cacheVersion}`;
-
   return (
-    <Card className="w-full" key={componentKey}>
+    <Card className="w-full">
       <CardContent className="p-4">
         <div className="space-y-4">
           {/* Header with badges - always visible */}
@@ -125,7 +100,6 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
 
           {/* Parameter sliders - always visible */}
           <ParameterSliders
-            key={`sliders-${componentKey}`}
             model={model}
             isManual={isManual}
             disabled={disabled}
