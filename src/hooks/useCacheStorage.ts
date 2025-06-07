@@ -47,20 +47,23 @@ export const useCacheStorage = (
       
       newCache[sku][modelId][cacheMethod] = optimizedParams;
       
-      // Only auto-select if no explicit selection exists
-      const currentSelected = newCache[sku][modelId].selected;
-      
+      // Auto-select best method
       if (cacheMethod === 'manual') {
-        // Always select manual when user manually sets parameters
         newCache[sku][modelId].selected = 'manual';
-      } else if (!currentSelected) {
-        // Only auto-select when no previous selection exists
+      } else {
         const hasAI = newCache[sku][modelId].ai;
         const hasGrid = newCache[sku][modelId].grid;
+        const currentSelected = newCache[sku][modelId].selected;
+        
         const bestMethod = hasAI ? 'ai' : hasGrid ? 'grid' : 'manual';
-        newCache[sku][modelId].selected = bestMethod;
+        const shouldAutoSelect = !currentSelected || 
+          (currentSelected === 'manual' && bestMethod !== 'manual') || 
+          (currentSelected === 'grid' && bestMethod === 'ai');
+        
+        if (shouldAutoSelect) {
+          newCache[sku][modelId].selected = bestMethod;
+        }
       }
-      // If user has made an explicit selection, preserve it
       
       saveCacheToStorage(newCache);
       return newCache;

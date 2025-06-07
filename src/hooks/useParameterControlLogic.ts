@@ -24,43 +24,21 @@ export const useParameterControlLogic = (
   }, [cache, selectedSKU, model.id, cacheVersion]);
 
   const userSelectedMethod = useMemo(() => {
-    const selected = cacheEntry?.selected;
-    console.log(`🎯 USER SELECTED METHOD for ${selectedSKU}-${model.id}:`, selected);
-    return selected;
-  }, [cacheEntry, cacheVersion, selectedSKU, model.id]);
+    return cacheEntry?.selected;
+  }, [cacheEntry, cacheVersion]);
 
   const effectiveSelectedMethod = useMemo(() => {
-    let result;
     if (userSelectedMethod) {
-      result = userSelectedMethod;
-      console.log(`🎯 USING USER SELECTION for ${selectedSKU}-${model.id}:`, result);
-    } else {
-      result = getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
-      console.log(`🎯 USING BEST AVAILABLE for ${selectedSKU}-${model.id}:`, result);
+      return userSelectedMethod;
     }
-    
-    console.log(`🎯 EFFECTIVE METHOD for ${selectedSKU}-${model.id}:`, result, {
-      userSelected: userSelectedMethod,
-      cacheEntry: cacheEntry,
-      hasAI: !!cacheEntry?.ai,
-      hasGrid: !!cacheEntry?.grid,
-      hasManual: !!cacheEntry?.manual,
-      cacheVersion
-    });
-    
-    return result;
-  }, [userSelectedMethod, selectedSKU, model.id, getBestAvailableMethod, currentDataHash, cache, cacheVersion, cacheEntry]);
+    return getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
+  }, [userSelectedMethod, selectedSKU, model.id, getBestAvailableMethod, currentDataHash, cache, cacheVersion]);
 
   const [localSelectedMethod, setLocalSelectedMethod] = useState<'ai' | 'grid' | 'manual' | undefined>(effectiveSelectedMethod);
 
-  // Force sync local state with effective method whenever it changes
   useEffect(() => {
-    console.log(`🎯 EFFECT UPDATE for ${selectedSKU}-${model.id}: ${localSelectedMethod} -> ${effectiveSelectedMethod} (version: ${cacheVersion})`);
-    if (localSelectedMethod !== effectiveSelectedMethod) {
-      console.log(`🎯 FORCING STATE SYNC for ${selectedSKU}-${model.id}: ${effectiveSelectedMethod}`);
-      setLocalSelectedMethod(effectiveSelectedMethod);
-    }
-  }, [effectiveSelectedMethod, selectedSKU, model.id, cacheVersion, localSelectedMethod]);
+    setLocalSelectedMethod(effectiveSelectedMethod);
+  }, [effectiveSelectedMethod, selectedSKU, model.id]);
 
   const optimizationData = useMemo(() => {
     if (!cacheEntry || localSelectedMethod === 'manual') return null;

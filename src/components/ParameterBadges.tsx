@@ -18,8 +18,6 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
   cacheVersion,
   onMethodChange,
 }) => {
-  console.log(`🎨 PARAMETER BADGES RENDER: method=${localSelectedMethod}, version=${cacheVersion}`);
-
   if (!canOptimize) {
     return (
       <Badge variant="outline" className="text-xs">
@@ -31,8 +29,6 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
   const isAI = localSelectedMethod === 'ai';
   const isGrid = localSelectedMethod === 'grid';
   const isManual = localSelectedMethod === 'manual';
-
-  console.log(`🎨 BADGE STATES: AI=${isAI}, Grid=${isGrid}, Manual=${isManual}`);
 
   return (
     <div className="flex items-center gap-2">
