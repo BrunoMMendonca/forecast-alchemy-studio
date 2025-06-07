@@ -71,16 +71,34 @@ export const useParameterControlLogic = (
 
   const isManual = localSelectedMethod === 'manual';
 
+  // Enhanced parameter value getter that uses fresh cache data for manual mode
   const getParameterValueCallback = useCallback((parameter: string) => {
-    // Always use the current model parameter value - don't override with cache during UI interactions
+    if (isManual && cacheEntry?.manual && cacheEntry.manual.dataHash === currentDataHash) {
+      const cachedValue = cacheEntry.manual.parameters[parameter];
+      if (cachedValue !== undefined) {
+        console.log(`📊 PARAM_LOGIC: Using cached manual parameter ${parameter} for ${model.id}: ${cachedValue}`);
+        return cachedValue;
+      }
+    }
+    
+    // Fallback to model parameter value
     const value = getParameterValue(parameter, model, isManual);
     console.log(`📊 PARAM_LOGIC: Getting parameter ${parameter} for ${model.id} (manual: ${isManual}): ${value}`);
     return value;
-  }, [model, isManual]);
+  }, [model, isManual, cacheEntry, currentDataHash]);
 
   const canOptimize = hasOptimizableParameters(model);
   const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;
   const hasOptimizationResults = canOptimize && optimizationData && !isManual;
+
+  // Return cached manual parameters if available for external use
+  const getCachedManualParameters = useCallback(() => {
+    if (isManual && cacheEntry?.manual && cacheEntry.manual.dataHash === currentDataHash) {
+      console.log(`📊 PARAM_LOGIC: Returning cached manual parameters for ${model.id}:`, cacheEntry.manual.parameters);
+      return cacheEntry.manual.parameters;
+    }
+    return null;
+  }, [isManual, cacheEntry, currentDataHash, model.id]);
 
   return {
     isReasoningExpanded,
@@ -93,6 +111,7 @@ export const useParameterControlLogic = (
     canOptimize,
     hasParameters,
     hasOptimizationResults,
-    cacheVersion
+    cacheVersion,
+    getCachedManualParameters
   };
 };
