@@ -10,8 +10,8 @@ interface ParameterSlidersProps {
   disabled: boolean;
   getParameterValue: (parameter: string) => number | undefined;
   onParameterChange: (parameter: string, values: number[]) => void;
-  cacheVersion: number; // Force re-render when cache changes
-  parameterValues: Record<string, number>; // Direct parameter values
+  cacheVersion: number;
+  parameterValues: Record<string, number>;
 }
 
 export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
@@ -39,7 +39,6 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
     return configs[parameter] || { min: 0, max: 1, step: 0.1, description: "Parameter" };
   };
 
-  // Memoize parameter entries to ensure consistent rendering
   const parameterEntries = useMemo(() => {
     if (!model.parameters) return [];
     return Object.entries(model.parameters);
@@ -53,12 +52,13 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
     <div className="grid gap-4">
       {parameterEntries.map(([parameter, _]) => {
         const config = getParameterConfig(parameter);
-        // Use parameterValues directly for most reactive value
         const currentValue = parameterValues[parameter];
         const safeValue = typeof currentValue === 'number' ? currentValue : config.min;
         
+        console.log(`🎚️ RENDER SLIDER: ${parameter} = ${safeValue}, cacheVersion: ${cacheVersion}`);
+        
         return (
-          <div key={`${parameter}-${cacheVersion}`} className="space-y-2">
+          <div key={`${parameter}-${cacheVersion}-${safeValue}`} className="space-y-2">
             <div className="flex justify-between items-center">
               <Label htmlFor={`${model.id}-${parameter}`} className="text-sm font-medium">
                 {parameter}
@@ -68,7 +68,7 @@ export const ParameterSliders: React.FC<ParameterSlidersProps> = ({
               </span>
             </div>
             <Slider
-              key={`slider-${parameter}-${cacheVersion}-${safeValue}`} // Force re-render when value changes
+              key={`slider-${parameter}-${cacheVersion}-${safeValue}`}
               id={`${model.id}-${parameter}`}
               min={config.min}
               max={config.max}
