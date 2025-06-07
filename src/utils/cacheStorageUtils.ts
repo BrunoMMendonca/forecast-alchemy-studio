@@ -1,3 +1,4 @@
+
 const CACHE_KEY = 'forecast_optimization_cache';
 const CACHE_EXPIRY_HOURS = 24;
 
@@ -43,41 +44,47 @@ export const loadCacheFromStorage = (): OptimizationCache => {
       Object.keys(parsedCache[sku]).forEach(modelId => {
         const entry = parsedCache[sku][modelId];
         
-        // Check for valid cache entries
-        const hasValidAI = entry.ai && 
-                          entry.ai.dataHash?.startsWith('v2-') &&
-                          now - entry.ai.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
-        const hasValidGrid = entry.grid && 
-                            entry.grid.dataHash?.startsWith('v2-') &&
-                            now - entry.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
-        const hasValidManual = entry.manual && 
-                              entry.manual.dataHash?.startsWith('v2-') &&
-                              now - entry.manual.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
-        
-        if (hasValidAI || hasValidGrid || hasValidManual) {
-          if (!filteredCache[sku]) filteredCache[sku] = {};
-          filteredCache[sku][modelId] = {};
+        if (entry.parameters) {
+          const method = entry.method?.startsWith('ai_') ? 'ai' : 
+                       entry.method === 'grid_search' ? 'grid' : 
+                       entry.method === 'manual' ? 'manual' : 'ai';
           
-          // Preserve valid cache entries
-          if (hasValidAI) {
-            filteredCache[sku][modelId].ai = entry.ai;
-          }
-          if (hasValidGrid) {
-            filteredCache[sku][modelId].grid = entry.grid;
-          }
-          if (hasValidManual) {
-            filteredCache[sku][modelId].manual = entry.manual;
+          if (!entry.dataHash?.startsWith('v2-')) {
+            return;
           }
           
-          // Always preserve the selected method if it exists
-          if (entry.selected) {
-            console.log(`💾 Cache: Loading selected method for ${sku}:${modelId} = ${entry.selected}`);
+          if (now - entry.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000) {
+            if (!filteredCache[sku]) filteredCache[sku] = {};
+            if (!filteredCache[sku][modelId]) filteredCache[sku][modelId] = {};
+            
+            filteredCache[sku][modelId][method] = entry;
+            filteredCache[sku][modelId].selected = method;
+          }
+        } else {
+          const hasValidAI = entry.ai && 
+                            entry.ai.dataHash?.startsWith('v2-') &&
+                            now - entry.ai.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
+          const hasValidGrid = entry.grid && 
+                              entry.grid.dataHash?.startsWith('v2-') &&
+                              now - entry.grid.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
+          const hasValidManual = entry.manual && 
+                                entry.manual.dataHash?.startsWith('v2-') &&
+                                now - entry.manual.timestamp < CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
+          
+          if (hasValidAI || hasValidGrid || hasValidManual) {
+            if (!filteredCache[sku]) filteredCache[sku] = {};
+            filteredCache[sku][modelId] = {};
+            
+            if (hasValidAI) {
+              filteredCache[sku][modelId].ai = entry.ai;
+            }
+            if (hasValidGrid) {
+              filteredCache[sku][modelId].grid = entry.grid;
+            }
+            if (hasValidManual) {
+              filteredCache[sku][modelId].manual = entry.manual;
+            }
             filteredCache[sku][modelId].selected = entry.selected;
-          } else {
-            // If no selected method, default to the first available valid method
-            const defaultMethod = hasValidAI ? 'ai' : hasValidGrid ? 'grid' : 'manual';
-            console.log(`💾 Cache: No selected method for ${sku}:${modelId}, defaulting to ${defaultMethod}`);
-            filteredCache[sku][modelId].selected = defaultMethod;
           }
         }
       });
@@ -109,4 +116,3 @@ export const clearCacheStorage = (): void => {
 };
 
 export { CACHE_EXPIRY_HOURS };
-

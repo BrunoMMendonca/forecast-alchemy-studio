@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -37,10 +38,9 @@ export const useOptimizationCache = () => {
   const setSelectedMethod = useCallback((
     sku: string,
     modelId: string,
-    method: 'ai' | 'grid' | 'manual',
-    data: any[]
+    method: 'ai' | 'grid' | 'manual'
   ) => {
-    _setSelectedMethod(sku, modelId, method, data);
+    _setSelectedMethod(sku, modelId, method);
   }, [_setSelectedMethod]);
 
   const cacheManualParameters = useCallback((

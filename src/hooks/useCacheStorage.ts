@@ -2,7 +2,10 @@
 import { useCallback } from 'react';
 import { OptimizationCache, OptimizedParameters, saveCacheToStorage } from '@/utils/cacheStorageUtils';
 
-export const useCacheStorage = () => {
+export const useCacheStorage = (
+  setCache: React.Dispatch<React.SetStateAction<OptimizationCache>>,
+  setCacheVersion: React.Dispatch<React.SetStateAction<number>>
+) => {
   const setCachedParameters = useCallback((
     sku: string, 
     modelId: string, 
@@ -19,8 +22,6 @@ export const useCacheStorage = () => {
     expectedAccuracy?: number,
     method?: string
   ) => {
-    console.log(`💾 CacheStorage: Setting parameters for ${sku}:${modelId}, method: ${method}`);
-    
     const optimizedParams: OptimizedParameters = {
       parameters,
       timestamp: Date.now(),
@@ -32,9 +33,44 @@ export const useCacheStorage = () => {
       method
     };
 
-    // This would need proper state management implementation
-    console.log('Parameters cached:', optimizedParams);
-  }, []);
+    const cacheMethod: 'ai' | 'grid' | 'manual' = 
+      method === 'grid_search' ? 'grid' :
+      method?.startsWith('ai_') ? 'ai' :
+      method === 'manual' ? 'manual' :
+      'ai';
+
+    setCache(prev => {
+      const newCache = JSON.parse(JSON.stringify(prev));
+      
+      if (!newCache[sku]) newCache[sku] = {};
+      if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
+      
+      newCache[sku][modelId][cacheMethod] = optimizedParams;
+      
+      // Auto-select best method
+      if (cacheMethod === 'manual') {
+        newCache[sku][modelId].selected = 'manual';
+      } else {
+        const hasAI = newCache[sku][modelId].ai;
+        const hasGrid = newCache[sku][modelId].grid;
+        const currentSelected = newCache[sku][modelId].selected;
+        
+        const bestMethod = hasAI ? 'ai' : hasGrid ? 'grid' : 'manual';
+        const shouldAutoSelect = !currentSelected || 
+          (currentSelected === 'manual' && bestMethod !== 'manual') || 
+          (currentSelected === 'grid' && bestMethod === 'ai');
+        
+        if (shouldAutoSelect) {
+          newCache[sku][modelId].selected = bestMethod;
+        }
+      }
+      
+      saveCacheToStorage(newCache);
+      return newCache;
+    });
+
+    setCacheVersion(prev => prev + 1);
+  }, [setCache, setCacheVersion]);
 
   return { setCachedParameters };
 };

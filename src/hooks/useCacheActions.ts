@@ -2,16 +2,19 @@
 import { useCallback } from 'react';
 import { OptimizationCache, saveCacheToStorage } from '@/utils/cacheStorageUtils';
 
-export const useCacheActions = () => {
+export const useCacheActions = (
+  setCache: React.Dispatch<React.SetStateAction<OptimizationCache>>,
+  setCacheVersion: React.Dispatch<React.SetStateAction<number>>
+) => {
   const clearCacheForSKU = useCallback((sku: string) => {
-    // This would need to be implemented with proper state management
-    console.log(`Clearing cache for SKU: ${sku}`);
-  }, []);
+    setCache(prev => {
+      const newCache = JSON.parse(JSON.stringify(prev));
+      delete newCache[sku];
+      saveCacheToStorage(newCache);
+      return newCache;
+    });
+    setCacheVersion(prev => prev + 1);
+  }, [setCache, setCacheVersion]);
 
-  const incrementCacheVersion = useCallback(() => {
-    // This would need to be implemented with proper state management
-    console.log('Incrementing cache version');
-  }, []);
-
-  return { clearCacheForSKU, incrementCacheVersion };
+  return { clearCacheForSKU };
 };
