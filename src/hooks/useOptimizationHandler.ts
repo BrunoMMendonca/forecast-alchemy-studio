@@ -54,6 +54,8 @@ export const useOptimizationHandler = (
     const defaultModels = getDefaultModels();
     const optimizableModels = defaultModels.filter(m => hasOptimizableParameters(m));
     
+    console.log('📝 MANUAL: Caching manual parameters for SKUs:', skusToCache);
+    
     skusToCache.forEach(sku => {
       const skuData = data.filter(d => d.sku === sku);
       if (skuData.length < 3) return; // Skip SKUs with insufficient data
@@ -67,6 +69,7 @@ export const useOptimizationHandler = (
                               cached.manual.dataHash === dataHash;
         
         if (!hasValidManual) {
+          console.log(`📝 MANUAL: Caching manual parameters for ${sku}:${model.id}`);
           
           // Use default model parameters as manual baseline
           const manualParameters = model.parameters || {};
@@ -88,6 +91,7 @@ export const useOptimizationHandler = (
             'manual'
           );
         } else {
+          console.log(`📝 MANUAL: Manual parameters already cached for ${sku}:${model.id}`);
         }
       });
     });
@@ -95,17 +99,24 @@ export const useOptimizationHandler = (
 
   const handleQueueOptimization = useCallback(async () => {
     if (!optimizationQueue) {
+      console.log('🚫 OPTIMIZATION: No optimization queue provided');
       return;
     }
 
     const queuedCombinations = optimizationQueue.getQueuedCombinations();
     if (queuedCombinations.length === 0) {
+      console.log('🚫 OPTIMIZATION: No SKU/model combinations in queue');
       return;
     }
+
+    console.log('🚀 OPTIMIZATION: Starting queue processing for combinations:', queuedCombinations);
+    console.log('🚀 OPTIMIZATION: Grok API enabled:', grokApiEnabled);
 
     // Get the default optimizable models
     const defaultModels = getDefaultModels();
     const optimizableModels = defaultModels.filter(m => hasOptimizableParameters(m));
+    
+    console.log('🚀 OPTIMIZATION: Available optimizable models:', optimizableModels.map(m => m.id));
 
     // Filter combinations to only include models that actually exist and are optimizable
     const validCombinations = queuedCombinations.filter(combo => 
@@ -127,6 +138,7 @@ export const useOptimizationHandler = (
     const uniqueSKUs = Array.from(new Set(validCombinations.map(combo => combo.sku)));
     
     // STEP 1: Cache manual parameters for all SKUs immediately
+    console.log('📝 MANUAL: Caching manual parameters for all SKUs before optimization');
     cacheManualParametersForSKUs(uniqueSKUs);
 
     // Check which combinations actually need optimization (exclude already valid cache)
@@ -141,6 +153,9 @@ export const useOptimizationHandler = (
       !validSKUsSet.has(combo.sku)
     );
 
+    console.log('🚀 OPTIMIZATION: Combinations that need optimization:', combinationsToOptimize.length);
+    console.log('🧹 OPTIMIZATION: Unnecessary combinations (already optimized):', unnecessaryCombinations.length);
+
     // Remove unnecessary combinations from queue
     if (unnecessaryCombinations.length > 0 && optimizationQueue.removeSKUModelPairsFromQueue) {
       optimizationQueue.removeSKUModelPairsFromQueue(unnecessaryCombinations);
@@ -148,6 +163,7 @@ export const useOptimizationHandler = (
 
     // If no combinations actually need optimization, we're done
     if (combinationsToOptimize.length === 0) {
+      console.log('🧹 OPTIMIZATION: No combinations need optimization, manual parameters cached, done');
       return;
     }
 
@@ -161,10 +177,12 @@ export const useOptimizationHandler = (
       optimizableModels,
       skusToOptimize,
       (sku, modelId, parameters, confidence, reasoning, factors, expectedAccuracy, method, bothResults) => {
+        console.log(`💾 CACHE: Processing optimization result for ${sku}:${modelId}, method: ${method}`);
         
         // CRITICAL: Only cache models with optimizable parameters
         const model = optimizableModels.find(m => m.id === modelId);
         if (!model || !hasOptimizableParameters(model)) {
+          console.log(`🚫 CACHE: Skipping cache for ${sku}:${modelId} - no optimizable parameters`);
           return;
         }
 
@@ -180,8 +198,10 @@ export const useOptimizationHandler = (
         
         // Cache the optimization results - handle both single and dual results
         if (bothResults) {
+          console.log(`💾 CACHE: Storing dual results for ${sku}:${modelId}`);
           
           if (bothResults.ai) {
+            console.log(`💾 CACHE: Storing AI result for ${sku}:${modelId}`);
             setCachedParameters(
               sku, 
               modelId, 
@@ -196,6 +216,7 @@ export const useOptimizationHandler = (
           }
           
           if (bothResults.grid) {
+            console.log(`💾 CACHE: Storing Grid result for ${sku}:${modelId}`);
             setCachedParameters(
               sku, 
               modelId, 
@@ -217,7 +238,9 @@ export const useOptimizationHandler = (
           saveManualAIPreferences(preferences);
           savePreferences(preferences);
           
+          console.log(`🎯 PREFERENCE: Set ${preferenceKey} -> ${bestMethod} (dual optimization)`);
         } else {
+          console.log(`💾 CACHE: Storing single result for ${sku}:${modelId}, method: ${method}`);
           setCachedParameters(sku, modelId, parameters, dataHash, confidence, reasoning, typedFactors, expectedAccuracy, method);
           
           // Set preference based on the method used
@@ -228,6 +251,7 @@ export const useOptimizationHandler = (
           saveManualAIPreferences(preferences);
           savePreferences(preferences);
           
+          console.log(`🎯 PREFERENCE: Set ${preferenceKey} -> ${preferenceMethod} (single optimization)`);
         }
         
         // Update model state
@@ -246,26 +270,33 @@ export const useOptimizationHandler = (
         ));
       },
       (sku) => {
+        console.log('✅ OPTIMIZATION: SKU completed:', sku);
         
         // Get all models for this SKU from the current queue state
         const modelsForSKU = optimizationQueue.getModelsForSKU(sku);
+        console.log(`🗑️ QUEUE: Found ${modelsForSKU.length} models for completed SKU ${sku}:`, modelsForSKU);
         
         // Create SKU/model pairs to remove
         const pairsToRemove = modelsForSKU.map(modelId => ({ sku, modelId }));
+        console.log('🗑️ QUEUE: Removing pairs for completed SKU:', pairsToRemove);
         
         // Remove the completed SKU/model pairs immediately
         if (optimizationQueue.removeSKUModelPairsFromQueue && pairsToRemove.length > 0) {
           optimizationQueue.removeSKUModelPairsFromQueue(pairsToRemove);
+          console.log(`✅ QUEUE: Successfully removed ${pairsToRemove.length} pairs for SKU ${sku}`);
         } else {
           // Fallback to removing the entire SKU
           optimizationQueue.removeSKUsFromQueue([sku]);
+          console.log(`✅ QUEUE: Fallback - removed entire SKU ${sku} from queue`);
         }
         
         // Log queue state after removal
         const remainingCombinations = optimizationQueue.getQueuedCombinations();
+        console.log(`📊 QUEUE: After removal - ${remainingCombinations.length} combinations remaining`);
         
         // Trigger forecast refresh if this is the selected SKU
         if (sku === selectedSKU && onOptimizationComplete) {
+          console.log(`🔄 FORECAST: Triggering refresh for selected SKU ${sku}`);
           setTimeout(() => {
             onOptimizationComplete();
           }, 200);

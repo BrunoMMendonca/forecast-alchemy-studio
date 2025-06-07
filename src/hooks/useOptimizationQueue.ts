@@ -60,6 +60,11 @@ export const useOptimizationQueue = (onQueueChanged?: () => void) => {
     const defaultModels = getDefaultModels();
     const optimizableModels = defaultModels.filter(hasOptimizableParameters);
     
+    console.log('🚀 QUEUE: Adding SKU/model pairs to queue');
+    console.log('🚀 QUEUE: SKUs:', skus);
+    console.log('🚀 QUEUE: Optimizable models:', optimizableModels.map(m => m.id));
+    console.log('🚀 QUEUE: Reason:', reason, 'onlySpecifiedSKUs:', onlySpecifiedSKUs);
+    
     // Cache clearing logic based on operation type
     if (!skipCacheClear) {
       if (reason === 'csv_upload') {
@@ -82,6 +87,7 @@ export const useOptimizationQueue = (onQueueChanged?: () => void) => {
       if (onlySpecifiedSKUs) {
         // Only remove entries for the specifically affected SKUs
         filteredQueue = prevQueue.filter(item => !skus.includes(item.sku));
+        console.log(`🗑️ QUEUE: Removed entries only for affected SKUs: ${skus.join(', ')}`);
       } else {
         // Remove all existing entries for these SKUs (original behavior)
         filteredQueue = prevQueue.filter(item => !skus.includes(item.sku));
@@ -117,22 +123,27 @@ export const useOptimizationQueue = (onQueueChanged?: () => void) => {
   }, [clearCacheAndPreferencesForSKU, onQueueChanged]);
 
   const removeSKUsFromQueue = useCallback((skus: string[]) => {
+    console.log('🗑️ QUEUE: Removing SKUs from queue:', skus);
     setQueue(prevQueue => {
       const newQueue = prevQueue.filter(item => !skus.includes(item.sku));
+      console.log('🗑️ QUEUE: Queue after removal:', newQueue.length, 'combinations remaining');
       return newQueue;
     });
   }, []);
 
   const removeSKUModelPairsFromQueue = useCallback((pairs: Array<{sku: string, modelId: string}>) => {
+    console.log('🗑️ QUEUE: Removing SKU/model pairs from queue:', pairs);
     setQueue(prevQueue => {
       const newQueue = prevQueue.filter(item => 
         !pairs.some(pair => pair.sku === item.sku && pair.modelId === item.modelId)
       );
+      console.log('🗑️ QUEUE: Queue after pair removal:', newQueue.length, 'combinations remaining');
       return newQueue;
     });
   }, []);
 
   const clearQueue = useCallback(() => {
+    console.log('🗑️ QUEUE: Clearing entire queue');
     setQueue([]);
   }, []);
 

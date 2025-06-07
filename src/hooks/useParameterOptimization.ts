@@ -30,10 +30,12 @@ export const useParameterOptimization = () => {
     grokApiEnabled: boolean = true
   ): Promise<Record<string, number> | undefined> => {
     if (!model.parameters || Object.keys(model.parameters).length === 0) {
+      console.log(`⚠️ useParameterOptimization: No parameters for ${model.name}`);
       return model.parameters;
     }
 
     if (!grokApiEnabled) {
+      console.log('🔑 useParameterOptimization: Grok API disabled in global settings');
       toast({
         title: "AI Optimization Disabled",
         description: "AI optimization is disabled in global settings. Enable it in settings to use AI optimization.",
@@ -53,6 +55,7 @@ export const useParameterOptimization = () => {
     }
 
     try {
+      console.log(`🤖 useParameterOptimization: Starting AI optimization for ${model.name}`);
       setOptimizationProgress(`Optimizing ${model.name} parameters with enhanced AI approach...`);
       
       const result = await optimizeParametersWithGrok({
@@ -62,6 +65,11 @@ export const useParameterOptimization = () => {
         seasonalPeriod: frequency.seasonalPeriod,
         targetMetric: 'accuracy'
       }, GROK_API_KEY);
+
+      console.log(`🎯 useParameterOptimization: Enhanced optimization completed for ${model.name}:`);
+      console.log(`📊 Expected accuracy: ${result.expectedAccuracy}%`);
+      console.log(`🔧 Optimized parameters:`, result.optimizedParameters);
+      console.log(`💭 AI reasoning:`, result.reasoning);
 
       toast({
         title: "AI Optimization Complete",
