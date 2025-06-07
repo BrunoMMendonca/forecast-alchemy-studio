@@ -1,5 +1,5 @@
 
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown, ChevronRight, Settings } from 'lucide-react';
@@ -48,9 +48,13 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
 
   console.log(`🎛️ CONTAINER: Rendering ${model.id} for SKU ${selectedSKU}, method: ${localSelectedMethod}, manual: ${isManual}`);
 
-  // Restore cached manual parameters when switching to manual mode or changing SKUs
+  // Track the last restored state to prevent unnecessary updates
+  const lastRestoredRef = useRef<string>('');
+  const currentStateKey = `${selectedSKU}-${model.id}-${localSelectedMethod}`;
+
+  // Restore cached manual parameters only when switching to manual mode or changing SKUs
   useEffect(() => {
-    if (isManual) {
+    if (isManual && lastRestoredRef.current !== currentStateKey) {
       const cachedParams = getCachedManualParameters();
       if (cachedParams) {
         console.log(`🔄 CONTAINER: Restoring cached manual parameters for ${model.id}:`, cachedParams);
@@ -58,9 +62,10 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
         Object.entries(cachedParams).forEach(([param, value]) => {
           onParameterUpdate(param, value);
         });
+        lastRestoredRef.current = currentStateKey;
       }
     }
-  }, [isManual, selectedSKU, model.id, getCachedManualParameters, onParameterUpdate]);
+  }, [isManual, selectedSKU, model.id, localSelectedMethod, getCachedManualParameters, onParameterUpdate, currentStateKey]);
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     const newValue = values[0];
