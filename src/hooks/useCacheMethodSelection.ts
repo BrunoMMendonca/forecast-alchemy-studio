@@ -1,46 +1,63 @@
-
 import { useCallback } from 'react';
-import { OptimizationCache, saveCacheToStorage } from '@/utils/cacheStorageUtils';
+import { useOptimizationCache } from './useOptimizationCache';
+import { useCacheStorage } from './useCacheStorage';
+import { useCacheActions } from './useCacheActions';
+import { generateDataHash } from '@/utils/cacheUtils';
 
-export const useCacheMethodSelection = (
-  setCache: React.Dispatch<React.SetStateAction<OptimizationCache>>,
-  setCacheVersion: React.Dispatch<React.SetStateAction<number>>
-) => {
+export const useCacheMethodSelection = () => {
+  const { cache, generateDataHash } = useOptimizationCache();
+  const { setCachedParameters } = useCacheStorage();
+  const { incrementCacheVersion } = useCacheActions();
+
   const setSelectedMethod = useCallback((
     sku: string,
     modelId: string,
-    method: 'ai' | 'grid' | 'manual'
+    method: 'ai' | 'grid' | 'manual',
+    data: any[]
   ) => {
-    console.log(`💾 Cache: Setting method for ${sku}:${modelId} to ${method}`);
+    console.log(`🔄 Setting selected method for ${sku}:${modelId} to ${method}`);
+    const skuData = data.filter(d => d.sku === sku);
+    const dataHash = generateDataHash(skuData);
     
-    setCache(prev => {
-      const newCache = JSON.parse(JSON.stringify(prev));
-      
-      if (!newCache[sku]) newCache[sku] = {};
-      if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
-      
-      // Always update the selected method
-      newCache[sku][modelId].selected = method;
-      
-      // If switching to manual mode, ensure we keep the manual cache entry
-      if (method === 'manual' && newCache[sku][modelId].manual) {
-        console.log(`💾 Cache: Preserving manual cache for ${sku}:${modelId}`);
+    // Get current cache entry
+    const currentCache = cache[sku]?.[modelId];
+    console.log('Current cache entry:', currentCache);
+    
+    // If switching to manual, preserve the current parameters
+    if (method === 'manual' && currentCache) {
+      const currentParams = currentCache.manual?.parameters || currentCache.grid?.parameters || currentCache.ai?.parameters;
+      if (currentParams) {
+        console.log('Preserving current parameters for manual mode:', currentParams);
+        setCachedParameters(sku, modelId, currentParams, 'manual', dataHash, {
+          confidence: 1,
+          reasoning: 'Manual mode selected',
+          factors: ['user_selection']
+        });
       }
-      
-      // Save to storage immediately
-      saveCacheToStorage(newCache);
-      console.log(`💾 Cache: Saved to storage for ${sku}:${modelId}`);
-      
-      return newCache;
-    });
-
-    // Increment cache version to trigger updates
-    setCacheVersion(prev => {
-      const newVersion = prev + 1;
-      console.log(`💾 Cache: Version updated to ${newVersion}`);
-      return newVersion;
-    });
-  }, [setCache, setCacheVersion]);
+    } else {
+      // For AI or Grid, use the existing cache if available
+      const existingCache = currentCache?.[method];
+      if (existingCache && existingCache.dataHash === dataHash) {
+        console.log(`Using existing ${method} cache`);
+        setCachedParameters(sku, modelId, existingCache.parameters, method, dataHash, {
+          confidence: existingCache.confidence,
+          reasoning: existingCache.reasoning,
+          factors: existingCache.factors
+        });
+      } else {
+        // If no existing cache, set default parameters
+        console.log(`No existing ${method} cache, using default parameters`);
+        setCachedParameters(sku, modelId, {}, method, dataHash, {
+          confidence: 1,
+          reasoning: `${method.toUpperCase()} mode selected`,
+          factors: ['user_selection']
+        });
+      }
+    }
+    
+    // Increment cache version to trigger UI updates
+    incrementCacheVersion();
+  }, [cache, generateDataHash, setCachedParameters, incrementCacheVersion]);
 
   return { setSelectedMethod };
 };
