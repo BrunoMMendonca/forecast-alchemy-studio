@@ -1,5 +1,4 @@
-
-import { SalesData } from '@/pages/Index';
+import { NormalizedSalesData } from '@/pages/Index';
 
 export interface CleaningRecord {
   sku: string;
@@ -13,37 +12,37 @@ export interface CleaningRecord {
 }
 
 export const exportCleaningData = (
-  originalData: SalesData[], 
-  cleanedData: SalesData[], 
+  originalData: NormalizedSalesData[], 
+  cleanedData: NormalizedSalesData[], 
   threshold: number
 ): void => {
   const cleaningRecords: CleaningRecord[] = [];
 
   // Process all SKUs that have been through cleaning
-  const processedSKUs = new Set(cleanedData.map(d => d.sku));
+  const processedSKUs = new Set(cleanedData.map(d => d['Material Code']));
   
   processedSKUs.forEach(sku => {
-    const skuOriginal = originalData.filter(d => d.sku === sku);
-    const skuCleaned = cleanedData.filter(d => d.sku === sku);
+    const skuOriginal = originalData.filter(d => d['Material Code'] === sku);
+    const skuCleaned = cleanedData.filter(d => d['Material Code'] === sku);
     
     // Calculate statistics for outlier detection
-    const sales = skuCleaned.map(d => d.sales);
+    const sales = skuCleaned.map(d => d['Sales']);
     const mean = sales.reduce((sum, s) => sum + s, 0) / sales.length;
     const variance = sales.reduce((sum, s) => sum + Math.pow(s - mean, 2), 0) / sales.length;
     const stdDev = Math.sqrt(variance);
     
     skuCleaned.forEach(cleanedItem => {
-      const originalItem = skuOriginal.find(o => o.date === cleanedItem.date);
+      const originalItem = skuOriginal.find(o => o['Date'] === cleanedItem['Date']);
       if (originalItem) {
-        const zScore = stdDev > 0 ? Math.abs((cleanedItem.sales - mean) / stdDev) : 0;
+        const zScore = stdDev > 0 ? Math.abs((cleanedItem['Sales'] - mean) / stdDev) : 0;
         const wasOutlier = zScore > threshold;
         
         cleaningRecords.push({
-          sku: cleanedItem.sku,
-          date: cleanedItem.date,
-          originalSales: originalItem.sales,
-          cleanedSales: cleanedItem.sales,
-          changeAmount: cleanedItem.sales - originalItem.sales,
+          sku: cleanedItem['Material Code'],
+          date: cleanedItem['Date'],
+          originalSales: originalItem['Sales'],
+          cleanedSales: cleanedItem['Sales'],
+          changeAmount: cleanedItem['Sales'] - originalItem['Sales'],
           note: cleanedItem.note,
           wasOutlier,
           zScore: Math.round(zScore * 100) / 100
@@ -67,18 +66,18 @@ export const exportCleaningData = (
     `# Total Records: ${cleaningRecords.length}`,
     `# SKUs: ${processedSKUs.size}`,
     '',
-    'SKU,Date,Original_Sales,Cleaned_Sales,Change_Amount,Note,Was_Outlier,Z_Score'
+    'Material Code,Date,Original_Sales,Cleaned_Sales,Change_Amount,Note,Was_Outlier,Z_Score'
   ].join('\n');
 
   const csvRows = cleaningRecords.map(record => [
-    record.sku,
-    record.date,
-    record.originalSales,
-    record.cleanedSales,
-    record.changeAmount,
+    String(record.sku),
+    String(record.date),
+    String(record.originalSales),
+    String(record.cleanedSales),
+    String(record.changeAmount),
     record.note ? `"${record.note.replace(/"/g, '""')}"` : '',
     record.wasOutlier ? 'Yes' : 'No',
-    record.zScore
+    String(record.zScore)
   ].join(','));
 
   const csvContent = headers + '\n' + csvRows.join('\n');
@@ -130,7 +129,9 @@ export const parseCleaningCSV = (csvText: string): {
         const match = line.match(/Total Records:\s*(\d+)/);
         if (match) metadata.totalRecords = parseInt(match[1]);
       }
-    } else if (line.toLowerCase().includes('sku,date')) {
+    } else if (
+      line.toLowerCase().includes('material code,date')
+    ) {
       dataStartIndex = i + 1;
       break;
     }
@@ -154,9 +155,9 @@ export const parseCleaningCSV = (csvText: string): {
         continue;
       }
 
-      const [sku, date, originalSales, cleanedSales, changeAmount, note, wasOutlier, zScore] = values;
+      const [materialCode, date, originalSales, cleanedSales, changeAmount, note, wasOutlier, zScore] = values;
       
-      if (!sku || !date) {
+      if (!materialCode || !date) {
         errors.push(`Row ${i + 1}: Missing SKU or Date`);
         continue;
       }
@@ -170,7 +171,7 @@ export const parseCleaningCSV = (csvText: string): {
       }
 
       previews.push({
-        sku,
+        sku: materialCode,
         date,
         currentSales: originalSalesNum,
         newSales: cleanedSalesNum,
@@ -214,22 +215,22 @@ const parseCSVRow = (row: string): string[] => {
 };
 
 export const applyImportChanges = (
-  currentData: SalesData[],
+  currentData: NormalizedSalesData[],
   previews: ImportPreview[]
-): SalesData[] => {
+): NormalizedSalesData[] => {
   const updatedData = [...currentData];
   
   previews.forEach(preview => {
     if (preview.action === 'no_change') return;
     
     const index = updatedData.findIndex(
-      item => item.sku === preview.sku && item.date === preview.date
+      item => String(item['Material Code']) === String(preview.sku) && String(item['Date']) === String(preview.date)
     );
     
     if (index !== -1) {
       updatedData[index] = {
         ...updatedData[index],
-        sales: preview.newSales,
+        ['Sales']: preview.newSales,
         note: preview.note
       };
     }

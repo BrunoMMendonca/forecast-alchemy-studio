@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -6,49 +5,37 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Clock, X, Zap, Play } from 'lucide-react';
 import { getDefaultModels, hasOptimizableParameters } from '@/utils/modelConfig';
+import { OptimizationProgress } from './OptimizationProgress';
+import { OptimizationQueue } from '@/types/optimization';
 
 interface OptimizationQueuePopupProps {
-  optimizationQueue: {
-    getSKUsInQueue: () => string[];
-    getQueuedCombinations: () => Array<{sku: string, modelId: string}>;
-    getModelsForSKU: (sku: string) => string[];
-    removeSKUsFromQueue: (skus: string[]) => void;
-    removeUnnecessarySKUs: (skus: string[]) => void;
-    queueSize: number;
-    uniqueSKUCount: number;
-  };
+  queue: OptimizationQueue;
   models: Array<{
     id: string;
     name: string;
     enabled: boolean;
   }>;
-  isOptimizing: boolean;
-  progress?: {
-    currentSKU?: string;
-    completedSKUs: number;
-    totalSKUs: number;
-  } | null;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  onRemoveFromQueue: (skus: string[]) => void;
 }
 
-export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
-  optimizationQueue,
+export function OptimizationQueuePopup({
+  queue,
   models,
-  isOptimizing,
-  progress,
   isOpen,
-  onOpenChange
-}) => {
-  const queuedSKUs = optimizationQueue.getSKUsInQueue();
-  const queuedCombinations = optimizationQueue.getQueuedCombinations();
+  onOpenChange,
+  onRemoveFromQueue
+}: OptimizationQueuePopupProps) {
+  const queuedSKUs = Array.from(new Set(queue.items.map(item => item.sku)));
+  const queuedCombinations = queue.items.map(item => ({ sku: item.sku, modelId: item.modelId }));
   
   // Get the actual optimizable models from default config
   const defaultModels = getDefaultModels();
   const optimizableModels = defaultModels.filter(hasOptimizableParameters);
 
   // Don't render if there's nothing to show
-  if (queuedCombinations.length === 0 && !isOptimizing) {
+  if (queuedCombinations.length === 0 && !queue.isOptimizing) {
     return null;
   }
 
@@ -57,7 +44,7 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {isOptimizing ? (
+            {queue.isOptimizing ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
                 <Zap className="h-4 w-4 text-blue-600" />
@@ -73,42 +60,16 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
         </DialogHeader>
 
         <div className="space-y-4">
-          {isOptimizing && progress && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h3 className="font-medium text-blue-800">Currently Processing</h3>
-                  <p className="text-sm text-blue-600">SKU: {progress.currentSKU}</p>
-                </div>
-                <Badge variant="secondary">
-                  {progress.completedSKUs + 1}/{progress.totalSKUs}
-                </Badge>
-              </div>
-              
-              {/* Show which model pairs are being optimized for the current SKU */}
-              {progress.currentSKU && (
-                <div className="mt-3 pt-3 border-t border-blue-200">
-                  <h4 className="text-sm font-medium text-blue-700 mb-2 flex items-center gap-1">
-                    <Play className="h-3 w-3" />
-                    Currently Running Optimizations:
-                  </h4>
-                  <div className="flex flex-wrap gap-1">
-                    {optimizableModels.map(model => (
-                      <Badge key={model.id} variant="outline" className="text-xs bg-blue-100 border-blue-300 text-blue-700">
-                        {progress.currentSKU}:{model.name}
-                      </Badge>
-                    ))}
-                  </div>
-                  {optimizableModels.length === 0 && (
-                    <p className="text-xs text-red-600">No optimizable models found!</p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+          <OptimizationProgress
+            queueSize={queue.items.length}
+            uniqueSKUCount={new Set(queue.items.map(item => item.sku)).size}
+            isOptimizing={queue.isOptimizing}
+            progress={0}
+            hasTriggeredOptimization={false}
+          />
 
           {/* Show message when not optimizing but should be */}
-          {!isOptimizing && queuedCombinations.length > 0 && (
+          {!queue.isOptimizing && queuedCombinations.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Clock className="h-4 w-4 text-amber-600" />
@@ -136,13 +97,15 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
 
           <div>
             <h3 className="font-medium mb-2">
-              SKUs in Queue ({optimizationQueue.uniqueSKUCount})
+              SKUs in Queue ({queuedSKUs.length})
             </h3>
             <ScrollArea className="h-64 border rounded-lg">
               <div className="p-4 space-y-3">
                 {queuedSKUs.map((sku, index) => {
-                  const modelsForSKU = optimizationQueue.getModelsForSKU(sku);
-                  const isCurrentlyOptimizing = isOptimizing && progress?.currentSKU === sku;
+                  const modelsForSKU = queue.items
+                    .filter(item => item.sku === sku)
+                    .map(item => item.modelId);
+                  const isCurrentlyOptimizing = queue.isOptimizing && queue.progress[sku] !== undefined;
                   
                   return (
                     <div
@@ -164,12 +127,12 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
                             const model = optimizableModels.find(m => m.id === modelId);
                             const modelName = model?.name || modelId;
                             return (
-                              <Badge 
-                                key={modelId} 
-                                variant="outline" 
+                              <Badge
+                                key={`${sku}-${modelId}-${queue.items.find(item => item.sku === sku && item.modelId === modelId)?.timestamp}`}
+                                variant="outline"
                                 className={`text-xs ${
-                                  isCurrentlyOptimizing 
-                                    ? 'bg-blue-100 border-blue-300 text-blue-700' 
+                                  isCurrentlyOptimizing
+                                    ? 'bg-blue-100 border-blue-300 text-blue-700'
                                     : 'bg-gray-100'
                                 }`}
                               >
@@ -186,8 +149,8 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => optimizationQueue.removeSKUsFromQueue([sku])}
-                          disabled={isOptimizing}
+                          onClick={() => onRemoveFromQueue([sku])}
+                          disabled={queue.isOptimizing}
                         >
                           <X className="h-3 w-3" />
                         </Button>
@@ -201,7 +164,7 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
 
           <div className="flex justify-between items-center pt-4 border-t">
             <p className="text-sm text-muted-foreground">
-              Total combinations: {optimizationQueue.uniqueSKUCount} SKUs × {optimizableModels.length} models = {optimizationQueue.queueSize}
+              Total combinations: {queuedSKUs.length} SKUs × {optimizableModels.length} models = {queue.items.length}
             </p>
             <Button
               variant="outline"
@@ -214,4 +177,4 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
       </DialogContent>
     </Dialog>
   );
-};
+}

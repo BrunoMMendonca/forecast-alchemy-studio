@@ -1,22 +1,18 @@
-
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { OptimizationQueuePopup } from '@/components/OptimizationQueuePopup';
 import { MainLayout } from '@/components/MainLayout';
 import { StepContent } from '@/components/StepContent';
-import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
-import { useOptimizationHandler } from '@/hooks/useOptimizationHandler';
-import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
-import { useGlobalForecastSettings } from '@/hooks/useGlobalForecastSettings';
-import { useAppState } from '@/hooks/useAppState';
-import { useDataHandlers } from '@/hooks/useDataHandlers';
+import { useUnifiedState } from '@/hooks/useUnifiedState';
 import { useToast } from '@/hooks/use-toast';
+import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
+import { ForecastPage } from './ForecastPage';
 
-export interface SalesData {
-  date: string;
-  sku: string;
-  sales: number;
-  isOutlier?: boolean;
-  note?: string;
+export interface NormalizedSalesData {
+  'Material Code': string;
+  'Description'?: string;
+  'Date': string;
+  'Sales': number;
+  [key: string]: string | number | undefined;
 }
 
 export interface ForecastResult {
@@ -29,23 +25,64 @@ export interface ForecastResult {
 const Index = () => {
   const { toast } = useToast();
   const {
+    // State
     salesData,
-    setSalesData,
     cleanedData,
-    setCleanedData,
     forecastResults,
-    setForecastResults,
-    selectedSKUForResults,
-    setSelectedSKUForResults,
     currentStep,
-    setCurrentStep,
     settingsOpen,
-    setSettingsOpen,
     isQueuePopupOpen,
-    setIsQueuePopupOpen
-  } = useAppState();
+    selectedSKU,
+    models,
+    forecastPeriods,
+    businessContext,
+    grokApiEnabled,
+    
+    // Data management
+    setSalesData,
+    setCleanedData,
+    setForecastResults,
+    
+    // UI state management
+    setCurrentStep,
+    setSettingsOpen,
+    setIsQueuePopupOpen,
+    
+    // SKU management
+    setSelectedSKU,
+    
+    // Model management
+    setModels,
+    updateModel,
+    
+    // Settings management
+    setForecastPeriods,
+    setBusinessContext,
+    setGrokApiEnabled
+  } = useUnifiedState();
 
-  const { clearManualAIPreferences } = useManualAIPreferences();
+  const {
+    queue,
+    addToQueue,
+    removeFromQueue,
+    updateProgress,
+    setIsOptimizing
+  } = useOptimizationQueue();
+
+  const [optimizationQueue, setOptimizationQueue] = useState<{
+    items: Array<{
+      sku: string;
+      modelId: string;
+      reason: string;
+      timestamp: number;
+    }>;
+    queueSize: number;
+    uniqueSKUCount: number;
+  }>({
+    items: [],
+    queueSize: 0,
+    uniqueSKUCount: 0
+  });
 
   // Listen for the global queue popup event
   useEffect(() => {
@@ -62,10 +99,16 @@ const Index = () => {
 
   const handleGlobalSettingsChange = (changedSetting: 'forecastPeriods' | 'businessContext' | 'grokApiEnabled') => {
     if (cleanedData.length > 0) {
-      const allSKUs = Array.from(new Set(cleanedData.map(d => d.sku)));
+      const allSKUs = Array.from(new Set(cleanedData.map(d => d['Material Code'])));
       
-      clearManualAIPreferences();
-      addSKUsToQueue(allSKUs, 'csv_upload');
+      // Clear existing queue and add all SKUs
+      removeFromQueue(allSKUs);
+      addToQueue(allSKUs.map(sku => ({
+        sku,
+        modelId: '',
+        reason: 'settings_change',
+        timestamp: Date.now()
+      })));
       
       toast({
         title: "Global Settings Changed",
@@ -74,90 +117,20 @@ const Index = () => {
     }
   };
 
-  const {
-    forecastPeriods,
-    setForecastPeriods,
-    businessContext,
-    setBusinessContext,
-    grokApiEnabled,
-    setGrokApiEnabled
-  } = useGlobalForecastSettings({
-    onSettingsChange: handleGlobalSettingsChange
-  });
+  const handleDataUpload = useCallback((data: NormalizedSalesData[]) => {
+    setSalesData(data);
+    setCleanedData(data);
+    setCurrentStep(1);
+  }, [setSalesData, setCleanedData, setCurrentStep]);
 
-  // Initialize optimization queue first
-  const optimizationQueue = {
-    getSKUsInQueue: () => [],
-    getQueuedCombinations: () => [],
-    getModelsForSKU: () => [],
-    removeSKUsFromQueue: () => {},
-    removeSKUModelPairsFromQueue: () => {},
-    removeUnnecessarySKUs: () => {},
-    queueSize: 0,
-    uniqueSKUCount: 0
-  };
+  const handleDataCleaning = useCallback((data: NormalizedSalesData[]) => {
+    setCleanedData(data);
+  }, [setCleanedData]);
 
-  const optimizationHandler = useOptimizationHandler(
-    cleanedData,
-    selectedSKUForResults,
-    optimizationQueue,
-    undefined,
-    grokApiEnabled
-  );
-
-  // Use a ref to always have the latest optimization handler
-  const optimizationHandlerRef = useRef(optimizationHandler.handleQueueOptimization);
-  optimizationHandlerRef.current = optimizationHandler.handleQueueOptimization;
-
-  // Create a truly stable callback that uses the ref
-  const stableOptimizationCallback = useCallback(() => {
-    console.log('🚀 AUTO-OPTIMIZATION: Stable callback triggered, calling current handler');
-    if (optimizationHandlerRef.current) {
-      optimizationHandlerRef.current();
-    }
-  }, []); // Empty dependency array makes this truly stable
-
-  // Initialize queue with the stable callback
-  const { 
-    addSKUsToQueue, 
-    removeSKUsFromQueue, 
-    removeSKUModelPairsFromQueue, 
-    getSKUsInQueue, 
-    queueSize, 
-    uniqueSKUCount, 
-    getQueuedCombinations, 
-    getModelsForSKU, 
-    clearQueue 
-  } = useOptimizationQueue(stableOptimizationCallback);
-
-  // Update the optimization queue reference
-  Object.assign(optimizationQueue, {
-    getSKUsInQueue,
-    getQueuedCombinations,
-    getModelsForSKU,
-    removeSKUsFromQueue,
-    removeSKUModelPairsFromQueue,
-    removeUnnecessarySKUs: removeSKUsFromQueue,
-    queueSize,
-    uniqueSKUCount
-  });
-
-  const {
-    handleDataUpload,
-    handleDataCleaning,
-    handleImportDataCleaning,
-    handleForecastGeneration
-  } = useDataHandlers({
-    setSalesData,
-    setCleanedData,
-    setCurrentStep,
-    setForecastResults,
-    setSelectedSKUForResults,
-    cleanedData,
-    addSKUsToQueue,
-    clearManualAIPreferences,
-    clearQueue
-  });
+  const handleForecastGeneration = useCallback((results: ForecastResult[], sku: string) => {
+    setForecastResults(results);
+    setSelectedSKU(sku);
+  }, [setForecastResults, setSelectedSKU]);
 
   useEffect(() => {
     const handleProceedToForecasting = () => {
@@ -171,12 +144,49 @@ const Index = () => {
     };
   }, [setCurrentStep]);
 
+  const shouldStartOptimization = () => {
+    // For now, always return false (or implement your logic here)
+    return false;
+  };
+
+  const handleOptimizationStarted = () => {
+    // Implementation of handleOptimizationStarted
+  };
+
+  // If we're on the forecast step, render the new ForecastPage
+  if (currentStep === 3) {
+    return (
+      <MainLayout
+        salesDataLength={salesData.length}
+        queueSize={queue.items.length}
+        uniqueSKUCount={new Set(queue.items.map(item => item.sku)).size}
+        currentStep={currentStep}
+        forecastResultsLength={forecastResults.length}
+        onStepClick={setCurrentStep}
+        onQueuePopupOpen={() => setIsQueuePopupOpen(true)}
+        forecastPeriods={forecastPeriods}
+        setForecastPeriods={setForecastPeriods}
+        businessContext={businessContext}
+        setBusinessContext={setBusinessContext}
+        grokApiEnabled={grokApiEnabled}
+        setGrokApiEnabled={setGrokApiEnabled}
+        settingsOpen={settingsOpen}
+        setSettingsOpen={setSettingsOpen}
+      >
+        <ForecastPage
+          data={cleanedData.length > 0 ? cleanedData : salesData}
+          onBack={() => setCurrentStep(2)}
+        />
+      </MainLayout>
+    );
+  }
+
   return (
     <>
       <MainLayout
         salesDataLength={salesData.length}
-        queueSize={queueSize}
-        uniqueSKUCount={uniqueSKUCount}
+        queueSize={queue.items.length}
+        uniqueSKUCount={new Set(queue.items.map(item => item.sku)).size}
         currentStep={currentStep}
         forecastResultsLength={forecastResults.length}
         onStepClick={setCurrentStep}
@@ -192,31 +202,31 @@ const Index = () => {
       >
         <StepContent
           currentStep={currentStep}
+          onDataUpload={handleDataUpload}
+          onDataCleaning={handleDataCleaning}
+          onForecastGeneration={handleForecastGeneration}
           salesData={salesData}
           cleanedData={cleanedData}
           forecastResults={forecastResults}
-          selectedSKUForResults={selectedSKUForResults}
-          queueSize={queueSize}
-          forecastPeriods={forecastPeriods}
+          selectedSKUForResults={selectedSKU}
+          onSKUChange={setSelectedSKU}
+          shouldStartOptimization={shouldStartOptimization}
+          onOptimizationStarted={handleOptimizationStarted}
           grokApiEnabled={grokApiEnabled}
-          onDataUpload={handleDataUpload}
-          onDataCleaning={handleDataCleaning}
-          onImportDataCleaning={handleImportDataCleaning}
-          onForecastGeneration={handleForecastGeneration}
-          onSKUChange={setSelectedSKUForResults}
-          onStepChange={setCurrentStep}
           optimizationQueue={optimizationQueue}
+          forecastPeriods={forecastPeriods}
+          onStepChange={setCurrentStep}
+          queueSize={queue.items.length}
+          onImportDataCleaning={() => {}}
         />
       </MainLayout>
 
-      {/* Global Optimization Queue Popup */}
       <OptimizationQueuePopup
-        optimizationQueue={optimizationQueue}
-        models={[]} // Empty models array when no data
-        isOptimizing={optimizationHandler.isOptimizing}
-        progress={optimizationHandler.progress}
         isOpen={isQueuePopupOpen}
         onOpenChange={setIsQueuePopupOpen}
+        queue={queue}
+        models={models}
+        onRemoveFromQueue={removeFromQueue}
       />
     </>
   );

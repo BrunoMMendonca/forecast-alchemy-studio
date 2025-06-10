@@ -1,17 +1,16 @@
-
-import { SalesData } from '@/pages/Index';
+import { NormalizedSalesData } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
 import { OptimizationCache, CACHE_EXPIRY_HOURS } from '@/utils/cacheStorageUtils';
 
-export const generateDataHash = (skuData: SalesData[]): string => {
+export const generateDataHash = (skuData: NormalizedSalesData[]): string => {
   if (!skuData || skuData.length === 0) return 'empty';
   
-  const sorted = [...skuData].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...skuData].sort((a, b) => a['Date'].localeCompare(b['Date']));
   const dataPoints = sorted.map(d => {
-    const sales = Math.round(d.sales * 1000) / 1000;
+    const sales = Math.round((d['Sales'] as number) * 1000) / 1000;
     const outlier = d.isOutlier ? '1' : '0';
     const note = d.note ? '1' : '0';
-    return `${d.date}:${sales}:${outlier}:${note}`;
+    return `${d['Date']}:${sales}:${outlier}:${note}`;
   });
   
   return `v2-${sorted.length}-${dataPoints.join('|')}`;

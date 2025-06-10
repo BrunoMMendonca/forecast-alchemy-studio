@@ -1,19 +1,33 @@
-
 import React from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { getBlueTone } from '@/utils/colors';
 
 interface ChartData {
   date: string;
   originalSales: number;
   cleanedSales: number;
+  outlier: number | null;
 }
 
 interface OutlierChartProps {
   data: ChartData[];
   selectedSKU: string;
+  onDateClick?: (date: string) => void;
+  highlightedDate?: string;
 }
 
-export const OutlierChart: React.FC<OutlierChartProps> = ({ data, selectedSKU }) => {
+export const OutlierChart: React.FC<OutlierChartProps> = ({ 
+  data, 
+  selectedSKU, 
+  onDateClick,
+  highlightedDate 
+}) => {
+  const handleClick = (data: any) => {
+    if (data && data.activePayload && data.activePayload[0] && onDateClick) {
+      onDateClick(data.activePayload[0].payload.date);
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg p-4 border">
       <h3 className="text-lg font-semibold text-slate-800 mb-4">
@@ -21,7 +35,10 @@ export const OutlierChart: React.FC<OutlierChartProps> = ({ data, selectedSKU })
       </h3>
       <div className="h-80">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
+          <LineChart 
+            data={data}
+            onClick={handleClick}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis 
               dataKey="date" 
@@ -70,33 +87,45 @@ export const OutlierChart: React.FC<OutlierChartProps> = ({ data, selectedSKU })
             <Line 
               type="monotone" 
               dataKey="originalSales" 
-              stroke="#94a3b8" 
-              strokeWidth={2}
-              name="Original Sales"
+              stroke={getBlueTone(1, 2)} 
+              strokeWidth={1}
+              name="Actuals"
               dot={false}
               connectNulls={false}
+              activeDot={false}
+              className="no-dot"
             />
             <Line 
               type="monotone" 
               dataKey="cleanedSales" 
-              stroke="#3b82f6" 
+              stroke={getBlueTone(0, 2)} 
               strokeWidth={2}
               name="Cleaned Sales"
               dot={false}
               connectNulls={false}
+              activeDot={false}
+              className="no-dot"
             />
+            <Line 
+              type="monotone" 
+              dataKey="outlier" 
+              stroke="red" 
+              strokeWidth={0}
+              name="Outlier"
+              dot={{ r: 3, fill: 'red' }}
+              connectNulls={false}
+              activeDot={{ r: 8, fill: 'red', fillOpacity: 0.3 }}
+              className="outlier-dot"
+            />
+            {highlightedDate && (
+              <ReferenceLine
+                x={highlightedDate}
+                stroke="#94a3b8"
+                strokeWidth={3}
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
-      </div>
-      <div className="flex items-center justify-center space-x-6 mt-4 text-sm">
-        <div className="flex items-center space-x-2">
-          <div className="w-3 h-3 bg-slate-400 rounded-full"></div>
-          <span>Original Data</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-          <span>Cleaned Data</span>
-        </div>
       </div>
     </div>
   );

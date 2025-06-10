@@ -1,6 +1,5 @@
-
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { SalesData } from '@/pages/Index';
+import { NormalizedSalesData } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
 
 interface NavigationOptimizationState {
@@ -47,21 +46,21 @@ export const useNavigationAwareOptimization = () => {
     }
   }, [navigationState]);
 
-  const generateStableFingerprint = useCallback((data: SalesData[]): string => {
+  const generateStableFingerprint = useCallback((data: NormalizedSalesData[]): string => {
     if (!data || data.length === 0) return 'empty';
     
     // Create a stable fingerprint based on data content, including modifications
     const sortedData = [...data].sort((a, b) => {
-      const skuCompare = a.sku.localeCompare(b.sku);
+      const skuCompare = a['Material Code'].localeCompare(b['Material Code']);
       if (skuCompare !== 0) return skuCompare;
-      return a.date.localeCompare(b.date);
+      return a['Date'].localeCompare(b['Date']);
     });
     
     // Include sales values, outlier flags, and notes in fingerprint - more precise
     const dataContent = sortedData.map(d => {
       // Round sales to 2 decimals to avoid floating point precision issues
-      const roundedSales = Math.round(d.sales * 100) / 100;
-      return `${d.sku}|${d.date}|${roundedSales}|${d.isOutlier ? '1' : '0'}|${d.note || ''}`;
+      const roundedSales = Math.round(d['Sales'] * 100) / 100;
+      return `${d['Material Code']}|${d['Date']}|${roundedSales}|${d.isOutlier ? '1' : '0'}|${d.note || ''}`;
     }).join('||');
     
     // Create a more stable hash
@@ -76,7 +75,7 @@ export const useNavigationAwareOptimization = () => {
     return fingerprint;
   }, []);
 
-  const shouldOptimize = useCallback((data: SalesData[], currentRoute: string = '/'): boolean => {
+  const shouldOptimize = useCallback((data: NormalizedSalesData[], currentRoute: string = '/'): boolean => {
     if (!data || data.length === 0) {
       return false;
     }
@@ -134,7 +133,7 @@ export const useNavigationAwareOptimization = () => {
     return true;
   }, [navigationState, generateStableFingerprint]);
 
-  const markOptimizationStarted = useCallback((data: SalesData[], currentRoute: string = '/') => {
+  const markOptimizationStarted = useCallback((data: NormalizedSalesData[], currentRoute: string = '/') => {
     // NEW: Set optimization lock
     optimizationLockRef.current = true;
     
@@ -151,7 +150,7 @@ export const useNavigationAwareOptimization = () => {
     setNavigationState(newState);
   }, [generateStableFingerprint]);
 
-  const markOptimizationCompleted = useCallback((data: SalesData[], currentRoute: string = '/') => {
+  const markOptimizationCompleted = useCallback((data: NormalizedSalesData[], currentRoute: string = '/') => {
     // NEW: Release optimization lock
     optimizationLockRef.current = false;
     
@@ -168,7 +167,7 @@ export const useNavigationAwareOptimization = () => {
     setNavigationState(newState);
   }, [navigationState, generateStableFingerprint]);
 
-  const markDataModified = useCallback((data?: SalesData[]) => {
+  const markDataModified = useCallback((data?: NormalizedSalesData[]) => {
     // NEW: Release any existing optimization lock when data is modified
     optimizationLockRef.current = false;
     

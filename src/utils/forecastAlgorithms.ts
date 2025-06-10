@@ -1,63 +1,107 @@
-import { SalesData } from '@/pages/Index';
+import type { ForecastPrediction } from '@/types/forecast';
 
-export const generateMovingAverage = (salesData: SalesData[], window: number, periods: number): number[] => {
-  const values = salesData.map(d => d.sales);
-  const predictions: number[] = [];
+const generateDates = (startDate: Date, periods: number): string[] => {
+  const dates: string[] = [];
+  const currentDate = new Date(startDate);
   
   for (let i = 0; i < periods; i++) {
-    const recentValues = values.slice(-window);
-    const average = recentValues.reduce((sum, val) => sum + val, 0) / recentValues.length;
-    predictions.push(average);
-    values.push(average);
+    currentDate.setMonth(currentDate.getMonth() + 1);
+    dates.push(currentDate.toISOString().split('T')[0]);
   }
   
-  return predictions;
+  return dates;
 };
 
-export const generateSimpleExponentialSmoothing = (salesData: SalesData[], alpha: number, periods: number): number[] => {
-  const values = salesData.map(d => d.sales);
-  let lastSmoothed = values[values.length - 1];
-  const predictions: number[] = [];
+export const generateMovingAverage = (
+  data: number[],
+  windowSize: number,
+  forecastPeriods: number
+): ForecastPrediction[] => {
+  if (data.length === 0) return [];
   
-  for (let i = 0; i < periods; i++) {
-    predictions.push(lastSmoothed);
-  }
+  const lastDate = new Date();
+  const dates = generateDates(lastDate, forecastPeriods);
   
-  return predictions;
+  // Calculate the last moving average
+  const lastWindow = data.slice(-windowSize);
+  const lastMA = lastWindow.reduce((sum, val) => sum + val, 0) / windowSize;
+  
+  // Generate predictions
+  return dates.map((date, index) => ({
+    date,
+    value: lastMA,
+    confidence: {
+      lower: lastMA * 0.9,
+      upper: lastMA * 1.1,
+    },
+  }));
 };
 
-export const generateDoubleExponentialSmoothing = (salesData: SalesData[], alpha: number, beta: number, periods: number): number[] => {
-  const values = salesData.map(d => d.sales);
-  const n = values.length;
+export const generateSimpleExponentialSmoothing = (
+  data: number[],
+  alpha: number,
+  forecastPeriods: number
+): ForecastPrediction[] => {
+  if (data.length === 0) return [];
   
-  if (n < 2) {
-    return new Array(periods).fill(values[0] || 0);
+  const lastDate = new Date();
+  const dates = generateDates(lastDate, forecastPeriods);
+  
+  // Calculate the last smoothed value
+  let lastSmoothed = data[0];
+  for (let i = 1; i < data.length; i++) {
+    lastSmoothed = alpha * data[i] + (1 - alpha) * lastSmoothed;
   }
+  
+  // Generate predictions
+  return dates.map((date, index) => ({
+    date,
+    value: lastSmoothed,
+    confidence: {
+      lower: lastSmoothed * 0.9,
+      upper: lastSmoothed * 1.1,
+    },
+  }));
+};
+
+export const generateDoubleExponentialSmoothing = (
+  data: number[],
+  alpha: number,
+  beta: number,
+  forecastPeriods: number
+): ForecastPrediction[] => {
+  if (data.length === 0) return [];
+  
+  const lastDate = new Date();
+  const dates = generateDates(lastDate, forecastPeriods);
   
   // Initialize level and trend
-  let level = values[0];
-  let trend = values[1] - values[0];
+  let level = data[0];
+  let trend = data[1] - data[0];
   
-  // Apply double exponential smoothing to historical data
-  for (let i = 1; i < n; i++) {
-    const newLevel = alpha * values[i] + (1 - alpha) * (level + trend);
-    const newTrend = beta * (newLevel - level) + (1 - beta) * trend;
-    level = newLevel;
-    trend = newTrend;
+  // Calculate final level and trend
+  for (let i = 1; i < data.length; i++) {
+    const prevLevel = level;
+    level = alpha * data[i] + (1 - alpha) * (level + trend);
+    trend = beta * (level - prevLevel) + (1 - beta) * trend;
   }
   
-  // Generate forecasts
-  const predictions: number[] = [];
-  for (let i = 0; i < periods; i++) {
-    const forecast = level + (i + 1) * trend;
-    predictions.push(Math.max(0, forecast));
-  }
-  
-  return predictions;
+  // Generate predictions
+  return dates.map((date, index) => {
+    const prediction = level + trend * (index + 1);
+    return {
+      date,
+      value: prediction,
+      confidence: {
+        lower: prediction * 0.9,
+        upper: prediction * 1.1,
+      },
+    };
+  });
 };
 
-export const generateLinearTrend = (salesData: SalesData[], periods: number): number[] => {
-  const values = salesData.map(d => d.sales);
+export const generateLinearTrend = (salesData: NormalizedSalesData[], periods: number): number[] => {
+  const values = salesData.map(d => d['Sales']);
   const n = values.length;
   
   const xSum = (n * (n - 1)) / 2;

@@ -24,6 +24,19 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
   const processCSV = useCallback((file: File) => {
     setIsProcessing(true);
+    // CLEAR ALL CACHE ON NEW UPLOAD (for testing, can be removed later)
+    try {
+      localStorage.removeItem('forecast_unified_state');
+      localStorage.removeItem('forecast_optimization_cache');
+      localStorage.removeItem('manual_ai_preferences');
+      localStorage.removeItem('global_forecast_settings');
+      localStorage.removeItem('dataset_optimization_state');
+      localStorage.removeItem('navigation_optimization_state');
+      localStorage.removeItem('auto_best_method');
+      // Data cleaning cache keys (add/remove as needed)
+      localStorage.removeItem('data_cleaning_cache');
+      localStorage.removeItem('data_cleaning_export');
+    } catch (e) { /* ignore */ }
     const reader = new FileReader();
     
     reader.onload = (e) => {
@@ -79,7 +92,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           title: "Success!",
           description: `Uploaded ${data.length} records from ${new Set(data.map(d => d.sku)).size} SKUs`,
         });
-        
       } catch (error) {
         toast({
           title: "Upload Error",

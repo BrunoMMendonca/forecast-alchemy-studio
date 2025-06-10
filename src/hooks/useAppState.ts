@@ -1,10 +1,9 @@
-
 import { useState } from 'react';
-import { SalesData, ForecastResult } from '@/pages/Index';
+import { NormalizedSalesData, ForecastResult } from '@/pages/Index';
 
 export const useAppState = () => {
-  const [salesData, setSalesData] = useState<SalesData[]>([]);
-  const [cleanedData, setCleanedData] = useState<SalesData[]>([]);
+  const [salesData, setSalesData] = useState<NormalizedSalesData[]>([]);
+  const [cleanedData, setCleanedData] = useState<NormalizedSalesData[]>([]);
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
   const [selectedSKUForResults, setSelectedSKUForResults] = useState<string>('');
   const [currentStep, setCurrentStep] = useState(0);

@@ -1,16 +1,11 @@
-
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Clock, Zap, Eye } from 'lucide-react';
 
 interface QueueStatusDisplayProps {
-  optimizationQueue: {
-    getSKUsInQueue: () => string[];
-    removeSKUsFromQueue: (skus: string[]) => void;
-    queueSize: number;
-    uniqueSKUCount: number;
-  };
+  queueSize: number;
+  uniqueSKUCount: number;
   isOptimizing: boolean;
   progress?: {
     currentSKU?: string;
@@ -22,14 +17,14 @@ interface QueueStatusDisplayProps {
 }
 
 export const QueueStatusDisplay: React.FC<QueueStatusDisplayProps> = ({
-  optimizationQueue,
+  queueSize,
+  uniqueSKUCount,
   isOptimizing,
   progress,
   hasTriggeredOptimization,
   onOpenQueuePopup,
 }) => {
-  const queuedSKUs = optimizationQueue.getSKUsInQueue();
-  const shouldShow = isOptimizing || optimizationQueue.queueSize > 0;
+  const shouldShow = isOptimizing || queueSize > 0;
 
   if (!shouldShow) {
     return null;
@@ -58,7 +53,7 @@ export const QueueStatusDisplay: React.FC<QueueStatusDisplayProps> = ({
             <>
               <Clock className="h-5 w-5 text-amber-600" />
               <span className="font-medium text-amber-800">
-                {optimizationQueue.queueSize} combinations queued ({optimizationQueue.uniqueSKUCount} SKUs)
+                {queueSize} combinations queued ({uniqueSKUCount} SKUs)
               </span>
               <Badge variant="outline" className="text-xs border-amber-300 text-amber-700">
                 {hasTriggeredOptimization ? 'Starting...' : 'Pending'}

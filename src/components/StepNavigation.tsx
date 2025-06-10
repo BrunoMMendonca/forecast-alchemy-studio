@@ -1,12 +1,7 @@
-
 import React from 'react';
-import { Upload, BarChart3, Zap, TrendingUp, Eye, LucideProps } from 'lucide-react';
-
-interface Step {
-  id: string;
-  title: string;
-  icon: React.ComponentType<LucideProps>;
-}
+import { Upload, BarChart3, TrendingUp, Eye } from 'lucide-react';
+import { Icon } from 'lucide-react';
+import { broom } from '@lucide/lab';
 
 interface StepNavigationProps {
   currentStep: number;
@@ -15,12 +10,12 @@ interface StepNavigationProps {
   onStepClick: (stepIndex: number) => void;
 }
 
-const steps: Step[] = [
-  { id: 'upload', title: 'Upload Data', icon: Upload },
-  { id: 'visualize', title: 'Visualize', icon: BarChart3 },
-  { id: 'clean', title: 'Clean Data', icon: Zap },
-  { id: 'forecast', title: 'Generate Forecasts', icon: TrendingUp },
-  { id: 'finalize', title: 'Finalize & Export', icon: Eye },
+const steps = [
+  { id: 'upload', title: 'Upload', icon: Upload },
+  { id: 'clean', title: 'Clean & Prepare', icon: (props: any) => <Icon iconNode={broom} {...props} /> },
+  { id: 'explore', title: 'Explore', icon: BarChart3 },
+  { id: 'forecast', title: 'Forecast', icon: TrendingUp },
+  { id: 'review', title: 'Review', icon: Eye },
 ];
 
 export const StepNavigation: React.FC<StepNavigationProps> = ({

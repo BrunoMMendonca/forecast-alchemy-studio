@@ -1,46 +1,43 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { Edit3, Save, X } from 'lucide-react';
-import { SalesData } from '@/pages/Index';
+import { Save, X, ChevronDown } from 'lucide-react';
+import { NormalizedSalesData } from '@/pages/Index';
 
-interface OutlierDataPoint extends SalesData {
+type OutlierDataPoint = NormalizedSalesData & {
   isOutlier: boolean;
   zScore: number;
   index: number;
   key: string;
   originalSales: number;
   note?: string;
-}
+};
 
 interface OutlierDataTableProps {
   filteredData: OutlierDataPoint[];
   selectedSKU: string;
-  hideCleanData: boolean;
   editingOutliers: { [key: string]: { value: number; note: string } };
-  onHideCleanDataChange: (checked: boolean) => void;
   onEditOutlier: (key: string) => void;
   onSaveEdit: (key: string) => void;
   onCancelEdit: (key: string) => void;
   onEditValueChange: (key: string, value: number) => void;
   onEditNoteChange: (key: string, note: string) => void;
+  highlightedDate?: string;
 }
 
 export const OutlierDataTable: React.FC<OutlierDataTableProps> = ({
   filteredData,
   selectedSKU,
-  hideCleanData,
   editingOutliers,
-  onHideCleanDataChange,
   onEditOutlier,
   onSaveEdit,
   onCancelEdit,
   onEditValueChange,
-  onEditNoteChange
+  onEditNoteChange,
+  highlightedDate
 }) => {
   return (
     <div className="bg-white rounded-lg p-4 border">
@@ -48,30 +45,32 @@ export const OutlierDataTable: React.FC<OutlierDataTableProps> = ({
         <h3 className="text-lg font-semibold text-slate-800">
           Edit Data Values - {selectedSKU}
         </h3>
-        <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="hide-clean" 
-            checked={hideCleanData}
-            onCheckedChange={(checked) => onHideCleanDataChange(checked === true)}
-          />
-          <label htmlFor="hide-clean" className="text-sm text-slate-700 cursor-pointer">
-            Hide clean data
-          </label>
-        </div>
       </div>
-      <div className="space-y-3 max-h-96 overflow-y-auto">
-        {filteredData.map((dataPoint) => {
+      <div className="space-y-3 max-h-96 overflow-y-auto pt-4 pb-4">
+        {filteredData.map((dataPoint, idx) => {
           const isEditing = editingOutliers.hasOwnProperty(dataPoint.key);
           const badgeVariant = dataPoint.isOutlier ? "destructive" : "secondary";
-          const hasBeenModified = dataPoint.sales !== dataPoint.originalSales;
+          const hasBeenModified = dataPoint['Sales'] !== dataPoint.originalSales;
+          const isHighlighted = dataPoint['Date'] === highlightedDate;
           
           return (
-            <div key={dataPoint.key} className={`p-3 rounded-lg ${dataPoint.isOutlier ? 'bg-red-50' : 'bg-green-50'}`}>
+            <div 
+              key={dataPoint.key}
+              id={dataPoint.key}
+              className={`p-3 rounded-lg mx-4 ${dataPoint.isOutlier ? 'bg-red-50' : 'bg-green-50'} ${isHighlighted ? 'ring-2 ring-blue-500' : ''} ${!isEditing ? 'cursor-pointer hover:bg-opacity-80' : ''}`}
+              onClick={() => {
+                if (isEditing) {
+                  onCancelEdit(dataPoint.key);
+                } else {
+                  onEditOutlier(dataPoint.key);
+                }
+              }}
+            >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center space-x-4">
-                  <div className="text-sm text-slate-600">{dataPoint.date}</div>
+                  <div className="text-sm text-slate-600">{dataPoint['Date']}</div>
                   <div className="text-sm">
-                    <span className="font-medium">Current: {dataPoint.sales.toLocaleString()}</span>
+                    <span className="font-medium">Current: {dataPoint['Sales'].toLocaleString()}</span>
                     <span className="text-slate-500 ml-2">
                       (Original: {dataPoint.originalSales.toLocaleString()})
                     </span>
@@ -95,19 +94,7 @@ export const OutlierDataTable: React.FC<OutlierDataTableProps> = ({
                     </Badge>
                   )}
                 </div>
-                
-                <div className="flex items-center space-x-2">
-                  {!isEditing && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onEditOutlier(dataPoint.key)}
-                    >
-                      <Edit3 className="h-3 w-3 mr-1" />
-                      Edit
-                    </Button>
-                  )}
-                </div>
+                <ChevronDown className={`transition-transform ml-2 ${isEditing ? 'rotate-180' : 'rotate-0'} text-slate-400`} />
               </div>
 
               {dataPoint.note && !isEditing && (
@@ -117,14 +104,21 @@ export const OutlierDataTable: React.FC<OutlierDataTableProps> = ({
               )}
 
               {isEditing && (
-                <div className="space-y-3 bg-white p-3 rounded border">
+                <div className={`space-y-3 p-3 rounded ${dataPoint.isOutlier ? 'bg-red-50' : 'bg-green-50'}`} onClick={(e) => e.stopPropagation()}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-slate-600 mb-1 block">New Value</label>
                       <Input
-                        type="number"
-                        value={editingOutliers[dataPoint.key]?.value || 0}
-                        onChange={(e) => onEditValueChange(dataPoint.key, parseFloat(e.target.value) || 0)}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={editingOutliers[dataPoint.key]?.value === 0 ? '0' : (editingOutliers[dataPoint.key]?.value || '')}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === '' || /^\d+$/.test(value)) {
+                            onEditValueChange(dataPoint.key, value === '' ? 0 : Number(value));
+                          }
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
@@ -152,9 +146,6 @@ export const OutlierDataTable: React.FC<OutlierDataTableProps> = ({
                         className="w-full resize-none"
                         rows={2}
                       />
-                      <div className="text-xs text-slate-500 mt-1">
-                        Press Enter to save
-                      </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -164,14 +155,6 @@ export const OutlierDataTable: React.FC<OutlierDataTableProps> = ({
                     >
                       <Save className="h-3 w-3 mr-1" />
                       Save
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onCancelEdit(dataPoint.key)}
-                    >
-                      <X className="h-3 w-3 mr-1" />
-                      Cancel
                     </Button>
                   </div>
                 </div>

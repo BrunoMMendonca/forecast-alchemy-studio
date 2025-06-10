@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,6 +12,9 @@ interface OutlierControlsProps {
   onThresholdChange: (threshold: number[]) => void;
   onPrevSKU: () => void;
   onNextSKU: () => void;
+  treatZeroAsOutlier: boolean;
+  setTreatZeroAsOutlier: (checked: boolean) => void;
+  descriptions?: Record<string, string>;
 }
 
 export const OutlierControls: React.FC<OutlierControlsProps> = ({
@@ -22,7 +24,10 @@ export const OutlierControls: React.FC<OutlierControlsProps> = ({
   onSKUChange,
   onThresholdChange,
   onPrevSKU,
-  onNextSKU
+  onNextSKU,
+  treatZeroAsOutlier,
+  setTreatZeroAsOutlier,
+  descriptions
 }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -41,12 +46,22 @@ export const OutlierControls: React.FC<OutlierControlsProps> = ({
           </Button>
           <Select value={selectedSKU} onValueChange={onSKUChange}>
             <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Select SKU" />
+              <SelectValue placeholder="Select SKU">
+                {selectedSKU ? (() => {
+                  const desc = descriptions?.[selectedSKU];
+                  return desc ? `${selectedSKU} - ${desc}` : selectedSKU;
+                })() : ''}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {skus.map(sku => (
-                <SelectItem key={sku} value={sku}>{sku}</SelectItem>
-              ))}
+              {skus.map(sku => {
+                const desc = descriptions?.[sku];
+                return (
+                  <SelectItem key={sku} value={sku}>
+                    {desc ? `${sku} - ${desc}` : sku}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
           <Button 
@@ -72,6 +87,17 @@ export const OutlierControls: React.FC<OutlierControlsProps> = ({
           step={0.1}
           className="w-full"
         />
+        <div className="flex items-center space-x-2 mt-1">
+          <input
+            type="checkbox"
+            id="treat-zero-as-outlier"
+            checked={treatZeroAsOutlier}
+            onChange={e => setTreatZeroAsOutlier(e.target.checked)}
+          />
+          <label htmlFor="treat-zero-as-outlier" className="text-xs text-slate-700 cursor-pointer">
+            Treat zeros as outliers
+          </label>
+        </div>
         <p className="text-xs text-slate-500">
           Higher values = fewer outliers detected
         </p>

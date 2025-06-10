@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -11,13 +10,15 @@ interface ForecastControlsProps {
   selectedSKU: string;
   onSKUChange: (sku: string) => void;
   results: ForecastResult[];
+  descriptions?: Record<string, string>;
 }
 
 export const ForecastControls: React.FC<ForecastControlsProps> = ({
   skus,
   selectedSKU,
   onSKUChange,
-  results
+  results,
+  descriptions
 }) => {
   const { toast } = useToast();
   
@@ -86,12 +87,22 @@ export const ForecastControls: React.FC<ForecastControlsProps> = ({
           </Button>
           <Select value={selectedSKU} onValueChange={onSKUChange}>
             <SelectTrigger className="w-48">
-              <SelectValue placeholder="Select SKU" />
+              <SelectValue placeholder="Select SKU">
+                {selectedSKU ? (() => {
+                  const desc = descriptions?.[selectedSKU];
+                  return desc ? `${selectedSKU} - ${desc}` : selectedSKU;
+                })() : ''}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {skus.map(sku => (
-                <SelectItem key={sku} value={sku}>{sku}</SelectItem>
-              ))}
+              {skus.map(sku => {
+                const desc = descriptions?.[sku];
+                return (
+                  <SelectItem key={sku} value={sku}>
+                    {desc ? `${sku} - ${desc}` : sku}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
           <Button 

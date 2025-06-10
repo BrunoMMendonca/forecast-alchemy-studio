@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -9,68 +8,75 @@ import { ParameterControl } from './ParameterControl';
 
 interface ModelCardProps {
   model: ModelConfig;
-  selectedSKU: string;
-  data: SalesData[];
-  onToggle: () => void;
-  onParameterUpdate: (parameter: string, value: number) => void;
-  onResetToManual: () => void;
-  onMethodSelection?: (method: 'ai' | 'grid' | 'manual') => void;
-  isOptimizing?: boolean;
-  grokApiEnabled?: boolean;
+  onToggle: (modelId: string) => void;
+  onUpdateParameter: (modelId: string, paramName: string, value: any) => void;
+  onResetToManual: (modelId: string) => void;
+  onMethodSelection: (modelId: string, method: 'ai' | 'grid' | 'manual') => void;
+  grokApiEnabled: boolean;
+  disableToggle?: boolean;
 }
 
 export const ModelCard: React.FC<ModelCardProps> = ({
   model,
-  selectedSKU,
-  data,
   onToggle,
-  onParameterUpdate,
+  onUpdateParameter,
   onResetToManual,
   onMethodSelection,
-  isOptimizing = false,
-  grokApiEnabled
+  grokApiEnabled,
+  disableToggle = false
 }) => {
   return (
-    <div className="border border-slate-200 rounded-lg p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <Switch
-            id={`model-${model.id}`}
-            checked={model.enabled}
-            onCheckedChange={onToggle}
-          />
-          <Label htmlFor={`model-${model.id}`} className="text-base font-medium">
-            {model.name}
-          </Label>
-          {model.enabled && (
-            <Badge variant="outline" className="text-xs">
-              Enabled
-            </Badge>
-          )}
-          {isOptimizing && (
-            <Badge variant="secondary" className="text-xs">
-              Optimizing...
-            </Badge>
-          )}
-        </div>
+    <div className="bg-white rounded-lg shadow p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold">{model.name}</h3>
+        <Switch
+          id={`model-toggle-${model.id}`}
+          checked={model.enabled}
+          onCheckedChange={() => onToggle(model.id)}
+          disabled={disableToggle}
+        />
+        <Label htmlFor={`model-toggle-${model.id}`} className="ml-2">
+          {model.enabled ? 'Enabled' : 'Disabled'}
+        </Label>
       </div>
 
-      {model.description && (
-        <p className="text-sm text-slate-600">{model.description}</p>
-      )}
+      <div className="space-y-4">
+        <div className="flex items-center space-x-2">
+          <label className="text-sm font-medium">Method:</label>
+          <select
+            value={model.optimizationMethod || 'manual'}
+            onChange={(e) => onMethodSelection(model.id, e.target.value as 'ai' | 'grid' | 'manual')}
+            className="border rounded px-2 py-1"
+            disabled={!model.enabled}
+          >
+            <option value="manual">Manual</option>
+            <option value="grid">Grid Search</option>
+            {grokApiEnabled && <option value="ai">AI Optimization</option>}
+          </select>
+        </div>
 
-      {model.enabled && (
-        <ParameterControl
-          model={model}
-          selectedSKU={selectedSKU}
-          data={data}
-          onParameterUpdate={onParameterUpdate}
-          onResetToManual={onResetToManual}
-          onMethodSelection={onMethodSelection}
-          disabled={isOptimizing}
-          grokApiEnabled={grokApiEnabled}
-        />
-      )}
+        {model.parameters && Object.entries(model.parameters).map(([paramName, value]) => (
+          <div key={paramName} className="flex items-center space-x-2">
+            <label className="text-sm font-medium">{paramName}:</label>
+            <input
+              type="number"
+              value={value}
+              onChange={(e) => onUpdateParameter(model.id, paramName, parseFloat(e.target.value))}
+              className="border rounded px-2 py-1 w-24"
+              disabled={!model.enabled || (model.optimizationMethod !== 'manual' && !!model.optimizationMethod)}
+            />
+          </div>
+        ))}
+
+        {model.optimizationMethod !== 'manual' && (
+          <button
+            onClick={() => onResetToManual(model.id)}
+            className="text-sm text-blue-600 hover:text-blue-800"
+          >
+            Reset to Manual
+          </button>
+        )}
+      </div>
     </div>
   );
 };

@@ -1,4 +1,3 @@
-
 export interface DateFrequency {
   type: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
   interval: number;
@@ -67,3 +66,54 @@ export const generateForecastDates = (
   
   return dates;
 };
+
+/**
+ * Parses a date string according to the given format.
+ * Supported formats: dd/mm/yyyy, mm/dd/yyyy, yyyy-mm-dd, dd-mm-yyyy, yyyy/mm/dd
+ */
+export function parseDateWithFormat(dateStr: string, format: string): Date | null {
+  if (!dateStr) return null;
+  let day: number, month: number, year: number;
+  let parts: string[];
+  switch (format) {
+    case 'dd/mm/yyyy':
+      parts = dateStr.split('/');
+      if (parts.length !== 3) return null;
+      day = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1;
+      year = parseInt(parts[2], 10);
+      break;
+    case 'mm/dd/yyyy':
+      parts = dateStr.split('/');
+      if (parts.length !== 3) return null;
+      month = parseInt(parts[0], 10) - 1;
+      day = parseInt(parts[1], 10);
+      year = parseInt(parts[2], 10);
+      break;
+    case 'yyyy-mm-dd':
+      parts = dateStr.split('-');
+      if (parts.length !== 3) return null;
+      year = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1;
+      day = parseInt(parts[2], 10);
+      break;
+    case 'dd-mm-yyyy':
+      parts = dateStr.split('-');
+      if (parts.length !== 3) return null;
+      day = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1;
+      year = parseInt(parts[2], 10);
+      break;
+    case 'yyyy/mm/dd':
+      parts = dateStr.split('/');
+      if (parts.length !== 3) return null;
+      year = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1;
+      day = parseInt(parts[2], 10);
+      break;
+    default:
+      return null;
+  }
+  if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+  return new Date(year, month, day);
+}

@@ -1,12 +1,12 @@
-
 import React from 'react';
 import { CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { BarChart3, Brain } from 'lucide-react';
+import { BarChart3, Brain, Sparkles } from 'lucide-react';
 import { BusinessContext } from '@/types/businessContext';
 import { BusinessContextSettings } from '@/components/BusinessContextSettings';
+import { useAISettings } from '@/hooks/useAISettings';
 
 interface ForecastSettingsProps {
   forecastPeriods: number;
@@ -25,15 +25,80 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
   grokApiEnabled,
   setGrokApiEnabled
 }) => {
+  const { enabled: aiEnabled, setEnabled: setAIEnabled } = useAISettings({
+    onSettingsChange: (enabled) => {
+      // If AI Features is disabled, also disable AI Model Optimization
+      if (!enabled) {
+        setGrokApiEnabled(false);
+      }
+    }
+  });
+
   return (
-    <div className="space-y-6">
-      <div>
-        <CardDescription>
-          Configure global parameters that apply to all forecast models and AI optimization
-        </CardDescription>
+    <div className="space-y-8">
+      {/* AI Features (Grok API) */}
+      <div className="space-y-2">
+        <Label htmlFor="ai-enabled" className="flex items-center gap-2 text-lg">
+          <Sparkles className="h-5 w-5" />
+          AI Features (Grok API)
+        </Label>
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="ai-enabled"
+            checked={aiEnabled}
+            onCheckedChange={setAIEnabled}
+          />
+          <span className="text-sm text-slate-600">
+            {aiEnabled ? 'Enabled' : 'Disabled'}
+          </span>
+        </div>
+        <p className="text-sm text-slate-500">
+          Enable advanced AI features powered by the Grok API, including model optimization and business context-aware recommendations.
+        </p>
       </div>
-      
-      {/* Forecast Periods */}
+
+      {/* AI Model Optimization (sub-toggle, only visible if AI Features is enabled) */}
+      {aiEnabled && (
+        <div className="pl-6 border-l-2 border-slate-200 space-y-2">
+          <Label htmlFor="grok-api-enabled" className="flex items-center gap-2 text-base">
+            <Brain className="h-4 w-4" />
+            AI Model Optimization
+          </Label>
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="grok-api-enabled"
+              checked={grokApiEnabled}
+              onCheckedChange={setGrokApiEnabled}
+            />
+            <span className="text-sm text-slate-600">
+              {grokApiEnabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+          <p className="text-sm text-slate-500">
+            Use the Grok API to optimize model parameters for best forecast accuracy. When disabled, traditional grid search will be used.
+          </p>
+
+          {/* AI Model Optimization Context (only visible if AI Model Optimization is enabled) */}
+          {grokApiEnabled && (
+            <div className="pl-6 border-l-2 border-slate-100 mt-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Sparkles className="h-4 w-4 text-purple-500" />
+                <span className="font-semibold text-purple-700">AI Model Optimization Context</span>
+              </div>
+              <p className="text-sm text-slate-500 mb-4">
+                These parameters guide the AI Model Optimization process and help tailor results to your business needs.
+              </p>
+              <BusinessContextSettings
+                businessContext={businessContext}
+                setBusinessContext={setBusinessContext}
+                disabled={!grokApiEnabled}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Forecast Periods (always visible) */}
       <div className="space-y-2">
         <Label htmlFor="forecast-periods" className="flex items-center gap-2">
           <BarChart3 className="h-4 w-4" />
@@ -52,35 +117,6 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
           Number of future periods to forecast (auto-detects your data frequency)
         </p>
       </div>
-
-      {/* Grok API Toggle */}
-      <div className="space-y-2">
-        <Label htmlFor="grok-api-enabled" className="flex items-center gap-2">
-          <Brain className="h-4 w-4" />
-          AI Optimization (Grok API)
-        </Label>
-        <div className="flex items-center space-x-2">
-          <Switch
-            id="grok-api-enabled"
-            checked={grokApiEnabled}
-            onCheckedChange={setGrokApiEnabled}
-          />
-          <span className="text-sm text-slate-600">
-            {grokApiEnabled ? 'Enabled' : 'Disabled'}
-          </span>
-        </div>
-        <p className="text-sm text-slate-500">
-          When enabled, AI optimization will use the Grok API to find optimal parameters. 
-          When disabled, only grid search optimization will be available.
-        </p>
-      </div>
-
-      {/* Business Context */}
-      <BusinessContextSettings
-        businessContext={businessContext}
-        setBusinessContext={setBusinessContext}
-        disabled={!grokApiEnabled}
-      />
     </div>
   );
 };

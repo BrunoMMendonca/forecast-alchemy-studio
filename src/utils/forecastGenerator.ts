@@ -1,5 +1,4 @@
-
-import { SalesData, ForecastResult } from '@/pages/Index';
+import { NormalizedSalesData, ForecastResult } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
 import { detectDateFrequency, generateForecastDates } from '@/utils/dateUtils';
 import { 
@@ -42,7 +41,7 @@ const calculateStandardizedAccuracy = (actual: number[], predicted: number[]): n
 
 export const generateForecastsForSKU = async (
   selectedSKU: string,
-  data: SalesData[],
+  data: NormalizedSalesData[],
   models: ModelConfig[],
   forecastPeriods: number,
   grokApiEnabled: boolean = true
@@ -51,15 +50,15 @@ export const generateForecastsForSKU = async (
   if (enabledModels.length === 0) return [];
 
   const skuData = data
-    .filter(d => d.sku === selectedSKU)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    .filter(d => d['Material Code'] === selectedSKU)
+    .sort((a, b) => new Date(a['Date']).getTime() - new Date(b['Date']).getTime());
 
   if (skuData.length < 3) {
     throw new Error(`Not enough data points for ${selectedSKU}. Need at least 3 data points.`);
   }
 
-  const frequency = detectDateFrequency(skuData.map(d => d.date));
-  const lastDate = new Date(Math.max(...skuData.map(d => new Date(d.date).getTime())));
+  const frequency = detectDateFrequency(skuData.map(d => d['Date']));
+  const lastDate = new Date(Math.max(...skuData.map(d => new Date(d['Date']).getTime())));
   const forecastDates = generateForecastDates(lastDate, forecastPeriods, frequency);
   const results: ForecastResult[] = [];
 
@@ -91,7 +90,7 @@ export const generateForecastsForSKU = async (
         break;
       case 'seasonal_moving_average':
         predictions = generateSeasonalMovingAverage(
-          skuData.map(d => d.sales),
+          skuData.map(d => d['Sales']),
           effectiveParameters?.window || 3,
           frequency.seasonalPeriod,
           forecastPeriods
@@ -99,7 +98,7 @@ export const generateForecastsForSKU = async (
         break;
       case 'holt_winters':
         predictions = generateHoltWinters(
-          skuData.map(d => d.sales),
+          skuData.map(d => d['Sales']),
           frequency.seasonalPeriod,
           forecastPeriods,
           effectiveParameters?.alpha || 0.3,
@@ -109,7 +108,7 @@ export const generateForecastsForSKU = async (
         break;
       case 'seasonal_naive':
         predictions = generateSeasonalNaive(
-          skuData.map(d => d.sales),
+          skuData.map(d => d['Sales']),
           frequency.seasonalPeriod,
           forecastPeriods
         );
@@ -117,7 +116,7 @@ export const generateForecastsForSKU = async (
     }
 
     // Use standardized accuracy calculation - same as optimization
-    const recentActual = skuData.slice(-Math.min(10, skuData.length)).map(d => d.sales);
+    const recentActual = skuData.slice(-Math.min(10, skuData.length)).map(d => d['Sales']);
     const syntheticPredicted = predictions.slice(0, recentActual.length);
     const accuracy = calculateStandardizedAccuracy(recentActual, syntheticPredicted);
 

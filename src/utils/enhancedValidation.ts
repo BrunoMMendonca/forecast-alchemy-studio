@@ -1,5 +1,4 @@
-
-import { SalesData } from '@/pages/Index';
+import { NormalizedSalesData } from '@/pages/Index';
 
 export interface ValidationResult {
   accuracy: number;
@@ -70,8 +69,8 @@ const calculateMetrics = (actual: number[], predicted: number[]): ValidationResu
 };
 
 export const walkForwardValidation = (
-  data: SalesData[],
-  generateForecast: (trainData: SalesData[], periods: number) => number[],
+  data: NormalizedSalesData[],
+  generateForecast: (trainData: NormalizedSalesData[], periods: number) => number[],
   config: ValidationConfig = ENHANCED_VALIDATION_CONFIG
 ): ValidationResult => {
   if (data.length < config.minValidationSize) {
@@ -97,7 +96,7 @@ export const walkForwardValidation = (
 
     try {
       const predictions = generateForecast(trainData, testData.length);
-      const actual = testData.map(d => d.sales);
+      const actual = testData.map(d => Number(d['Sales']));
 
       if (predictions.length > 0 && actual.length > 0) {
         allActual.push(...actual);
@@ -112,8 +111,8 @@ export const walkForwardValidation = (
 };
 
 export const timeSeriesCrossValidation = (
-  data: SalesData[],
-  generateForecast: (trainData: SalesData[], periods: number) => number[],
+  data: NormalizedSalesData[],
+  generateForecast: (trainData: NormalizedSalesData[], periods: number) => number[],
   config: ValidationConfig = ENHANCED_VALIDATION_CONFIG
 ): ValidationResult => {
   if (data.length < config.minValidationSize) {
@@ -142,7 +141,7 @@ export const timeSeriesCrossValidation = (
 
     try {
       const predictions = generateForecast(trainData, testData.length);
-      const actual = testData.map(d => d.sales);
+      const actual = testData.map(d => Number(d['Sales']));
 
       if (predictions.length > 0 && actual.length > 0) {
         allActual.push(...actual);

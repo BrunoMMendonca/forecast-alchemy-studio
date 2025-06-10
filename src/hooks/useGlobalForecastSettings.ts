@@ -1,6 +1,6 @@
-
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { BusinessContext, DEFAULT_BUSINESS_CONTEXT } from '@/types/businessContext';
+import { useAISettings } from './useAISettings';
 
 const GLOBAL_SETTINGS_KEY = 'global_forecast_settings';
 
@@ -24,6 +24,9 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
   const [forecastPeriods, setForecastPeriodsState] = useState<number>(DEFAULT_SETTINGS.forecastPeriods);
   const [businessContext, setBusinessContextState] = useState<BusinessContext>(DEFAULT_SETTINGS.businessContext);
   const [grokApiEnabled, setGrokApiEnabledState] = useState<boolean>(DEFAULT_SETTINGS.grokApiEnabled);
+
+  // Initialize AI settings
+  const { enabled: aiEnabled } = useAISettings();
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -88,12 +91,11 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
         businessContext: context,
         grokApiEnabled: grokEnabled
       };
-      const newValue = JSON.stringify(settings);
-      localStorage.setItem(GLOBAL_SETTINGS_KEY, newValue);
+      localStorage.setItem(GLOBAL_SETTINGS_KEY, JSON.stringify(settings));
       
       // Dispatch custom event for same-tab synchronization
       window.dispatchEvent(new CustomEvent('localStorageChange', {
-        detail: { key: GLOBAL_SETTINGS_KEY, newValue }
+        detail: { key: GLOBAL_SETTINGS_KEY, newValue: JSON.stringify(settings) }
       }));
     } catch (error) {
       // Silent error handling
@@ -124,14 +126,16 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
 
   const setGrokApiEnabled = useCallback((enabled: boolean) => {
     const oldEnabled = grokApiEnabled;
-    setGrokApiEnabledState(enabled);
-    saveSettings(forecastPeriods, businessContext, enabled);
+    // If AI is disabled, force Grok to be disabled
+    const newEnabled = enabled && aiEnabled;
+    setGrokApiEnabledState(newEnabled);
+    saveSettings(forecastPeriods, businessContext, newEnabled);
     
     // Trigger re-optimization if the value actually changed
-    if (oldEnabled !== enabled && props?.onSettingsChange) {
+    if (oldEnabled !== newEnabled && props?.onSettingsChange) {
       props.onSettingsChange('grokApiEnabled');
     }
-  }, [forecastPeriods, businessContext, grokApiEnabled, saveSettings, props]);
+  }, [forecastPeriods, businessContext, grokApiEnabled, saveSettings, props, aiEnabled]);
 
   const resetToDefaults = useCallback(() => {
     setForecastPeriodsState(DEFAULT_SETTINGS.forecastPeriods);

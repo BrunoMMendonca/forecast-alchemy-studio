@@ -1,6 +1,5 @@
-
 import { useState, useCallback } from 'react';
-import { SalesData } from '@/pages/Index';
+import { NormalizedSalesData } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
 import { optimizationLogger } from '@/utils/optimizationLogger';
 import { optimizeSingleModel } from '@/utils/singleModelOptimization';
@@ -31,7 +30,7 @@ export const useBatchOptimization = () => {
 
   const runOptimization = useCallback(async (
     skus: string[],
-    data: SalesData[],
+    data: NormalizedSalesData[],
     models: ModelConfig[],
     businessContext?: BusinessContext,
     forceGridSearch: boolean = false
@@ -70,7 +69,7 @@ export const useBatchOptimization = () => {
       
       for (let skuIndex = 0; skuIndex < skus.length; skuIndex++) {
         const sku = skus[skuIndex];
-        const skuData = data.filter(d => d.sku === sku);
+        const skuData = data.filter(d => d['Material Code'] === sku);
         
         setProgress({ currentSKU: sku, completedSKUs: skuIndex, totalSKUs });
         
@@ -156,12 +155,12 @@ export const useBatchOptimization = () => {
   }, [navigationAware, optimizationLogger]);
 
   const optimizeQueuedSKUs = useCallback(async (
-    data: SalesData[],
+    data: NormalizedSalesData[],
     models: ModelConfig[],
     queuedSKUs: string[],
     onComplete: (sku: string, modelId: string, parameters: any, confidence: number, reasoning: string, factors: any, expectedAccuracy: number, method: string, bothResults?: any) => void,
     onSKUComplete: (sku: string) => void,
-    getSKUsNeedingOptimization: (data: SalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[],
+    getSKUsNeedingOptimization: (data: NormalizedSalesData[], models: ModelConfig[]) => { sku: string; models: string[] }[],
     grokApiEnabled: boolean = true // Add grokApiEnabled parameter
   ) => {
     console.log('🚀 BATCH: Starting optimization for queued SKUs:', queuedSKUs);
@@ -179,7 +178,7 @@ export const useBatchOptimization = () => {
     try {
       for (let skuIndex = 0; skuIndex < queuedSKUs.length; skuIndex++) {
         const sku = queuedSKUs[skuIndex];
-        const skuData = data.filter(d => d.sku === sku);
+        const skuData = data.filter(d => String(d['Material Code']) === String(sku));
         
         console.log(`🚀 BATCH: Processing SKU ${sku} (${skuIndex + 1}/${queuedSKUs.length})`);
         setProgress({ currentSKU: sku, completedSKUs: skuIndex, totalSKUs: queuedSKUs.length });

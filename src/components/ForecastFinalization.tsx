@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,13 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Download, Edit3, Save, Trash2, Eye, TrendingUp, CheckCircle } from 'lucide-react';
-import { SalesData, ForecastResult } from '@/pages/Index';
+import { NormalizedSalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 import { exportForecastResults, generateSOPSummary, ExportOptions } from '@/utils/exportUtils';
 
 interface ForecastFinalizationProps {
-  historicalData: SalesData[];
-  cleanedData: SalesData[];
+  historicalData: NormalizedSalesData[];
+  cleanedData: NormalizedSalesData[];
   forecastResults: ForecastResult[];
 }
 
@@ -46,6 +45,15 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
   const models = useMemo(() => {
     return Array.from(new Set(forecastResults.map(r => r.model))).sort();
   }, [forecastResults]);
+
+  const descriptions = useMemo(() => {
+    const map: Record<string, string> = {};
+    (cleanedData.length > 0 ? cleanedData : historicalData).forEach(d => {
+      const sku = String(d.sku ?? d['Material Code']);
+      if (d.Description && !map[sku]) map[sku] = String(d.Description);
+    });
+    return map;
+  }, [cleanedData, historicalData]);
 
   // Auto-select first SKU when results change
   React.useEffect(() => {
@@ -259,12 +267,22 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
               <Label>SKU:</Label>
               <Select value={selectedSKU} onValueChange={setSelectedSKU}>
                 <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Select SKU" />
+                  <SelectValue placeholder="Select SKU">
+                    {selectedSKU ? (() => {
+                      const desc = descriptions[selectedSKU];
+                      return desc ? `${selectedSKU} - ${desc}` : selectedSKU;
+                    })() : ''}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {skus.map(sku => (
-                    <SelectItem key={sku} value={sku}>{sku}</SelectItem>
-                  ))}
+                  {skus.map(sku => {
+                    const desc = descriptions[sku];
+                    return (
+                      <SelectItem key={sku} value={sku}>
+                        {desc ? `${sku} - ${desc}` : sku}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>

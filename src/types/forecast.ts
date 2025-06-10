@@ -1,4 +1,3 @@
-
 export interface ModelConfig {
   id: string;
   name: string;
@@ -20,24 +19,56 @@ export interface ModelConfig {
   isSeasonal?: boolean;
 }
 
+export interface SalesData {
+  'Material Code': string;
+  'Description'?: string;
+  'Date': string;
+  'Sales': number;
+  [key: string]: string | number | undefined;
+}
+
 export interface ForecastPrediction {
   date: string;
   value: number;
+  confidence?: {
+    lower: number;
+    upper: number;
+  };
 }
 
 export interface ForecastResult {
-  model: string;
   sku: string;
+  model: string;
   predictions: ForecastPrediction[];
-  accuracy: number;
-  parameters: Record<string, number>;
-  mape: number;
-  mae: number;
-  rmse: number;
+  accuracy?: number;
+  parameters?: Record<string, number>;
 }
 
 export interface SeasonalConfig {
   enabled: boolean;
   period: number;
   strength: number;
+}
+
+export interface ForecastModel {
+  id: string;
+  name: string;
+  description: string;
+  parameters: {
+    name: string;
+    type: 'number' | 'boolean' | 'select';
+    default: number | boolean | string;
+    min?: number;
+    max?: number;
+    step?: number;
+    options?: string[];
+  }[];
+}
+
+export interface ForecastState {
+  forecastResults: ForecastResult[];
+  selectedSKU: string;
+  forecastPeriods: number;
+  isGenerating: boolean;
+  error: string | null;
 }

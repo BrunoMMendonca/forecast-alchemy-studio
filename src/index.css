@@ -99,3 +99,9 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Add global CSS rule to hide default dot markers */
+.no-dot .recharts-dot,
+.no-dot .recharts-line-dot {
+  display: none;
+}

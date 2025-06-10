@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from '@/components/ui/button';
 import { TrendingUp, Maximize2 } from 'lucide-react';
 import { ForecastResult } from '@/pages/Index';
+import { getBlueTone } from '@/utils/colors';
 
 interface ForecastChartProps {
   chartData: any[];
@@ -89,7 +89,7 @@ const ChartContent: React.FC<{ chartData: any[], selectedSKUResults: ForecastRes
             iconSize={10}
           />
           
-          {selectedSKUResults.map((result) => {
+          {selectedSKUResults.map((result, idx) => {
             const isBestModel = bestModel && result.model === bestModel.model;
             
             return (
@@ -97,11 +97,13 @@ const ChartContent: React.FC<{ chartData: any[], selectedSKUResults: ForecastRes
                 key={result.model}
                 type="monotone"
                 dataKey={result.model}
-                stroke={modelColors[result.model as keyof typeof modelColors] || '#64748b'}
+                stroke={getBlueTone(idx, selectedSKUResults.length)}
                 strokeWidth={isBestModel ? 3 : 2}
                 dot={false}
                 connectNulls={false}
                 strokeDasharray={isBestModel ? "0" : "0"}
+                activeDot={false}
+                className="no-dot"
               />
             );
           })}

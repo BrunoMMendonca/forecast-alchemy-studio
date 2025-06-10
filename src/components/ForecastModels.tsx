@@ -1,6 +1,5 @@
-
-import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react';
-import { SalesData, ForecastResult } from '@/pages/Index';
+import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
+import { NormalizedSalesData, ForecastResult } from '@/pages/Index';
 import { useModelController } from '@/hooks/useModelController';
 import { useOptimizationHandler } from '@/hooks/useOptimizationHandler';
 import { useAutoOptimization } from '@/hooks/useAutoOptimization';
@@ -8,41 +7,45 @@ import { useOptimizationTrigger } from '@/hooks/useOptimizationTrigger';
 import { ForecastModelsContent } from './ForecastModelsContent';
 import { OptimizationLogger } from './OptimizationLogger';
 
+interface OptimizationQueueItem {
+  sku: string;
+  modelId: string;
+  reason: string;
+  timestamp: number;
+}
+
+interface OptimizationQueue {
+  items: OptimizationQueueItem[];
+  queueSize: number;
+  uniqueSKUCount: number;
+}
+
 interface ForecastModelsProps {
-  data: SalesData[];
+  data: NormalizedSalesData[];
   forecastPeriods: number;
   onForecastGeneration: (results: ForecastResult[], selectedSKU: string) => void;
-  selectedSKU: string;
+  selectedSKUForResults: string;
   onSKUChange: (sku: string) => void;
   shouldStartOptimization?: boolean;
   onOptimizationStarted?: () => void;
-  optimizationQueue?: {
-    getSKUsInQueue: () => string[];
-    getQueuedCombinations: () => Array<{sku: string, modelId: string}>;
-    getModelsForSKU: (sku: string) => string[];
-    removeSKUsFromQueue: (skus: string[]) => void;
-    removeSKUModelPairsFromQueue: (pairs: Array<{sku: string, modelId: string}>) => void;
-    removeUnnecessarySKUs: (skus: string[]) => void;
-    queueSize: number;
-    uniqueSKUCount: number;
-  };
   grokApiEnabled?: boolean;
+  optimizationQueue: OptimizationQueue;
 }
 
 export const ForecastModels = forwardRef<any, ForecastModelsProps>(({ 
   data, 
   forecastPeriods,
   onForecastGeneration,
-  selectedSKU,
+  selectedSKUForResults,
   onSKUChange,
   shouldStartOptimization = false,
   onOptimizationStarted,
-  optimizationQueue,
-  grokApiEnabled = true
+  grokApiEnabled = true,
+  optimizationQueue
 }, ref) => {
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
   const componentMountedRef = useRef(false);
-  
+
   const {
     models,
     toggleModel,
@@ -51,22 +54,18 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     handleMethodSelection,
     generateForecasts
   } = useModelController(
-    selectedSKU,
+    selectedSKUForResults,
     data,
     forecastPeriods,
     undefined,
     onForecastGeneration
   );
 
-  const queuedCombinations = useMemo(() => {
-    return optimizationQueue?.getQueuedCombinations() || [];
-  }, [optimizationQueue?.queueSize]);
-
   const {
     isOptimizing,
     progress,
     handleQueueOptimization
-  } = useOptimizationHandler(data, selectedSKU, optimizationQueue, generateForecasts, grokApiEnabled);
+  } = useOptimizationHandler(data, selectedSKUForResults, generateForecasts, grokApiEnabled);
 
   useAutoOptimization({
     optimizationQueue,
@@ -87,18 +86,17 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 
   useEffect(() => {
     componentMountedRef.current = true;
-    
     return () => {
       componentMountedRef.current = false;
     };
   }, [grokApiEnabled]);
 
   useEffect(() => {
-    const skus = Array.from(new Set(data.map(d => d.sku))).sort();
-    if (skus.length > 0 && !selectedSKU) {
+    const skus = Array.from(new Set(data.map(d => d['Material Code']))).sort();
+    if (skus.length > 0 && !selectedSKUForResults) {
       onSKUChange(skus[0]);
     }
-  }, [data, selectedSKU, onSKUChange]);
+  }, [data, selectedSKUForResults, onSKUChange]);
 
   useImperativeHandle(ref, () => ({
     startOptimization: handleQueueOptimization
@@ -108,7 +106,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     <div className="space-y-6">
       <ForecastModelsContent
         data={data}
-        selectedSKU={selectedSKU}
+        selectedSKU={selectedSKUForResults}
         onSKUChange={onSKUChange}
         optimizationQueue={optimizationQueue}
         isOptimizing={isOptimizing}
