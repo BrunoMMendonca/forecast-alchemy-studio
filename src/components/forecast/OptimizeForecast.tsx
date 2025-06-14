@@ -1,19 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Loader2, Brain, Grid } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import type { SalesData, ModelConfig } from '@/types/forecast';
-import { runGridOptimization } from '@/utils/gridOptimization';
-import { runAIOptimization } from '@/utils/aiOptimization';
-import { BusinessContext } from '@/types/businessContext';
-import { useOptimizationStore } from '@/store/optimizationStore';
-import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
-import { OptimizationQueueItem } from '@/types/optimization';
-import { useOptimizationHandler } from '@/hooks/useOptimizationHandler';
+import { Switch } from '@/components/ui/switch';
 import { ProductSelector } from '@/components/ProductSelector';
+import type { SalesData, ModelConfig } from '@/types/forecast';
+import { BusinessContext } from '@/types/businessContext';
 
 interface OptimizeForecastProps {
   data: SalesData[];
@@ -21,7 +12,6 @@ interface OptimizeForecastProps {
   models: ModelConfig[];
   businessContext: BusinessContext;
   grokApiEnabled: boolean;
-  onOptimizationComplete: (modelId: string, parameters: Record<string, number>, method: string) => void;
   onSKUChange: (sku: string) => void;
 }
 
@@ -31,50 +21,9 @@ export const OptimizeForecast: React.FC<OptimizeForecastProps> = ({
   models,
   businessContext,
   grokApiEnabled,
-  onOptimizationComplete,
   onSKUChange,
 }) => {
-  const { toast } = useToast();
-  const [optimizingModel, setOptimizingModel] = useState<string | null>(null);
-  const [optimizationMethod, setOptimizationMethod] = useState<'grid' | 'ai'>('grid');
-  const { state } = useOptimizationStore();
-  const { addToQueue } = useOptimizationQueue();
-  const { handleQueueOptimization } = useOptimizationHandler(data, selectedSKU, () => {
-    if (onOptimizationComplete) {
-      onOptimizationComplete(optimizingModel || '', {}, optimizationMethod);
-    }
-  }, grokApiEnabled);
-
-  const handleOptimize = async (model: ModelConfig) => {
-    console.log('DEBUG handleOptimize selectedSKU:', selectedSKU, 'data:', data);
-    setOptimizingModel(model.id);
-    try {
-      // Always use selectedSKU for the queue item
-      const sku = selectedSKU;
-      const queueItem: OptimizationQueueItem = {
-        sku,
-        modelId: model.id,
-        reason: 'manual',
-        timestamp: Date.now()
-      };
-      await addToQueue([queueItem]);
-      // Trigger the optimization process
-      await handleQueueOptimization();
-      toast({
-        title: "Optimization Started",
-        description: `Started optimizing ${model.name} for SKU ${sku}`,
-      });
-    } catch (error) {
-      console.error('Error queueing optimization:', error);
-      toast({
-        title: "Optimization Error",
-        description: "Failed to start optimization. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setOptimizingModel(null);
-    }
-  };
+  const [optimizationMethod, setOptimizationMethod] = React.useState<'grid' | 'ai'>('grid');
 
   return (
     <div className="space-y-4">
@@ -88,7 +37,7 @@ export const OptimizeForecast: React.FC<OptimizeForecastProps> = ({
         <div className="space-y-1">
           <h2 className="text-2xl font-bold tracking-tight">Optimize Forecast</h2>
           <p className="text-muted-foreground">
-            Select optimization method and start the process
+            View model configurations and optimization status
           </p>
         </div>
         <div className="flex items-center space-x-2">
@@ -123,21 +72,18 @@ export const OptimizeForecast: React.FC<OptimizeForecastProps> = ({
                     <span className="text-sm text-gray-500">{value}</span>
                   </div>
                 ))}
-
-                <Button
-                  onClick={() => handleOptimize(model)}
-                  disabled={optimizingModel === model.id}
-                  className="w-full"
-                >
-                  {optimizingModel === model.id ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Optimizing...
-                    </>
-                  ) : (
-                    `Optimize with ${optimizationMethod === 'grid' ? 'Grid Search' : 'AI'}`
-                  )}
-                </Button>
+                {model.optimizationMethod && (
+                  <div className="mt-4 p-2 bg-gray-50 rounded-md">
+                    <div className="text-sm text-gray-600">
+                      Last optimized with: {model.optimizationMethod}
+                    </div>
+                    {model.optimizationConfidence && (
+                      <div className="text-sm text-gray-600">
+                        Confidence: {model.optimizationConfidence}%
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

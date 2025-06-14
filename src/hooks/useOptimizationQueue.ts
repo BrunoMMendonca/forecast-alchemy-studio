@@ -257,6 +257,15 @@ export const useOptimizationQueue = () => {
     processQueue();
   }, [processQueue, setStatus]);
 
+  // Auto-start processing when queue is not empty and not already optimizing
+  useEffect(() => {
+    if (queue.items.length > 0 && !queue.isOptimizing) {
+      setIsOptimizing(true);
+      processQueue();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queue.items, queue.isOptimizing]);
+
   return {
     queue,
     addToQueue,

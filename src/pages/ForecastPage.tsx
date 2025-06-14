@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ForecastModels } from '@/components/forecast/ForecastModels';
 import { ForecastResults } from '@/components/forecast/ForecastResults';
-import { ForecastControls } from '@/components/forecast/ForecastControls';
 import { ForecastSummaryStats } from '@/components/forecast/ForecastSummaryStats';
 import { OptimizeForecast } from '@/components/forecast/OptimizeForecast';
 import { TuneForecast } from '@/components/forecast/TuneForecast';
@@ -14,20 +13,17 @@ import { BusinessContext } from '@/types/businessContext';
 
 interface ForecastPageProps {
   data: SalesData[];
-  onBack: () => void;
   businessContext: BusinessContext;
   grokApiEnabled: boolean;
 }
 
 export const ForecastPage: React.FC<ForecastPageProps> = ({
   data,
-  onBack,
   businessContext,
   grokApiEnabled,
 }) => {
   const { toast } = useToast();
   const [selectedSKU, setSelectedSKU] = useState<string>('');
-  const [forecastPeriods, setForecastPeriods] = useState<number>(12);
   const [activeTab, setActiveTab] = useState<string>('forecast');
   const [optimizedModels, setOptimizedModels] = useState<Record<string, ModelConfig>>({});
   const [results, setResults] = useState<ForecastResult[]>([]);
@@ -43,7 +39,7 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
   } = useModelController(
     selectedSKU,
     data,
-    forecastPeriods,
+    12, // Default forecast periods, not user-editable here
     businessContext,
     (newResults, sku) => {
       setResults(newResults);
@@ -108,12 +104,6 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
 
   return (
     <div className="container mx-auto py-6 space-y-6">
-      <ForecastControls
-        onBack={onBack}
-        forecastPeriods={forecastPeriods}
-        onForecastPeriodsChange={setForecastPeriods}
-      />
-
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="optimize">Optimize</TabsTrigger>
@@ -127,7 +117,6 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
             models={models}
             businessContext={businessContext}
             grokApiEnabled={grokApiEnabled}
-            onOptimizationComplete={handleOptimizationComplete}
             onSKUChange={setSelectedSKU}
           />
         </TabsContent>

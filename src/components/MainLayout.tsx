@@ -1,10 +1,12 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { FloatingSettingsButton } from '@/components/FloatingSettingsButton';
 import { StepNavigation } from '@/components/StepNavigation';
 import { List } from 'lucide-react';
 import { BusinessContext } from '@/types/businessContext';
+import { useUnifiedState } from '@/hooks/useUnifiedState';
+import { useBatchOptimization } from '@/hooks/useBatchOptimization';
+import { getDefaultModels } from '@/utils/modelConfig';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -43,6 +45,35 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   settingsOpen,
   setSettingsOpen
 }) => {
+  // === DEV MENU START ===
+  // This block is for development only and can be easily erased.
+  const isDev = process.env.NODE_ENV === 'development';
+  const {
+    cleanedData,
+    models: stateModels,
+    setModels,
+    setIsOptimizing,
+    setOptimizationProgress
+  } = useUnifiedState();
+  const { runOptimization, isOptimizing: batchIsOptimizing } = useBatchOptimization();
+  const allSKUs = Array.from(new Set(cleanedData.map(d => d['Material Code'])));
+  const models = stateModels.length > 0 ? stateModels : getDefaultModels();
+
+  // Dropdown state
+  const [selectedSKU, setSelectedSKU] = useState<string>(allSKUs[0] || '');
+  const [selectedModelId, setSelectedModelId] = useState<string>(models[0]?.id || '');
+
+  const handleOptimizeAll = async () => {
+    await runOptimization(allSKUs, cleanedData, models, businessContext);
+  };
+
+  const handleOptimizeSKUModel = async () => {
+    const model = models.find(m => m.id === selectedModelId);
+    if (!model || !selectedSKU) return;
+    await runOptimization([selectedSKU], cleanedData, [model], businessContext);
+  };
+  // === DEV MENU END ===
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       <div className="container mx-auto px-4 py-8">
@@ -60,16 +91,21 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 📋 {queueSize} optimization combinations queued ({uniqueSKUCount} SKUs)
               </div>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onQueuePopupOpen}
-              className="gap-2"
-            >
-              <List className="h-4 w-4" />
-              View Queue
-            </Button>
           </div>
+        </div>
+
+        {/* Floating View Queue Button - always visible */}
+        <div className="fixed bottom-6 right-6 z-50">
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={onQueuePopupOpen}
+            className="gap-2 shadow-lg rounded-full px-6 py-3 bg-white border-blue-300 hover:bg-blue-50"
+            style={{ minWidth: 0 }}
+          >
+            <List className="h-5 w-5" />
+            View Queue
+          </Button>
         </div>
 
         {/* Floating Settings Button */}
@@ -83,6 +119,48 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           settingsOpen={settingsOpen}
           setSettingsOpen={setSettingsOpen}
         />
+
+        {/* === DEV MENU START === */}
+        {isDev && (
+          <div className="my-6 p-4 border-2 border-dashed border-red-400 bg-red-50 rounded-lg">
+            <div className="font-bold text-red-700 mb-2">DEV: Manual Optimization Trigger</div>
+            <Button onClick={handleOptimizeAll} disabled={batchIsOptimizing} className="mb-4">
+              Optimize All SKUs/Models
+            </Button>
+            <div className="flex items-center gap-2">
+              <label htmlFor="dev-sku-select" className="text-sm font-semibold">SKU:</label>
+              <select
+                id="dev-sku-select"
+                value={selectedSKU}
+                onChange={e => setSelectedSKU(e.target.value)}
+                className="border rounded px-2 py-1"
+              >
+                {allSKUs.map(sku => (
+                  <option key={sku} value={sku}>{sku}</option>
+                ))}
+              </select>
+              <label htmlFor="dev-model-select" className="text-sm font-semibold">Model:</label>
+              <select
+                id="dev-model-select"
+                value={selectedModelId}
+                onChange={e => setSelectedModelId(e.target.value)}
+                className="border rounded px-2 py-1"
+              >
+                {models.map(model => (
+                  <option key={model.id} value={model.id}>{model.name}</option>
+                ))}
+              </select>
+              <Button
+                onClick={handleOptimizeSKUModel}
+                disabled={batchIsOptimizing || !selectedSKU || !selectedModelId}
+                className="ml-2"
+              >
+                Optimize Selected
+              </Button>
+            </div>
+          </div>
+        )}
+        {/* === DEV MENU END === */}
 
         {/* Progress Steps */}
         <StepNavigation

@@ -65,7 +65,7 @@ export const runAIOptimization = async (
       interpretabilityNeeds: 'medium' as const
     };
 
-    console.log(`🤖 AI: Starting optimization for ${sku}:${model.id}`);
+    console.log(`🤖 AI: Starting optimization for ${sku}: ${model.id}`);
     
     const grokResult = await optimizeParametersWithGrok({
       modelType: model.id,
@@ -76,7 +76,7 @@ export const runAIOptimization = async (
       businessContext: contextToUse
     }, GROK_API_KEY, gridContext);
 
-    console.log(`✅ AI: Success for ${sku}:${model.id}`);
+    console.log(`✅ AI: Success for ${sku}: ${model.id}`);
     
     return {
       parameters: grokResult.optimizedParameters,
@@ -93,13 +93,13 @@ export const runAIOptimization = async (
     
     // More specific error handling
     if (errorMessage.includes('403')) {
-      console.error(`❌ AI: API authentication failed for ${sku}:${model.id} - Check API key validity and rate limits`);
+      console.error(`❌ AI: API authentication failed for ${sku}: ${model.id} - Check API key validity and rate limits`);
     } else if (errorMessage.includes('429')) {
-      console.error(`❌ AI: Rate limit exceeded for ${sku}:${model.id} - Please wait before retrying`);
+      console.error(`❌ AI: Rate limit exceeded for ${sku}: ${model.id} - Please wait before retrying`);
     } else if (errorMessage.includes('401')) {
-      console.error(`❌ AI: Unauthorized access for ${sku}:${model.id} - API key may be invalid`);
+      console.error(`❌ AI: Unauthorized access for ${sku}: ${model.id} - API key may be invalid`);
     } else {
-      console.error(`❌ AI: Failed for ${sku}:${model.id}:`, errorMessage);
+      console.error(`❌ AI: Failed for ${sku}: ${model.id}: - `, errorMessage);
     }
     
     return null;

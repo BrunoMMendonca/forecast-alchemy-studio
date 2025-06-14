@@ -112,6 +112,24 @@ export const optimizeParametersWithGrok = async (
   apiKey: string,
   gridBaseline?: { parameters: Record<string, number>; accuracy: number }
 ): Promise<GrokOptimizationResponse> => {
+  // DEFENSIVE CHECK: Ensure AI features are enabled before making any Grok API calls
+  try {
+    const aiSettings = localStorage.getItem('ai_settings');
+    if (aiSettings) {
+      const parsedSettings = JSON.parse(aiSettings);
+      if (!parsedSettings.enabled) {
+        throw new Error('AI features are disabled - Grok API optimization is not available');
+      }
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('AI features are disabled')) {
+      throw error;
+    }
+    // If there's an error reading settings, assume AI is disabled for safety
+    console.warn('Could not read AI settings, assuming AI features are disabled');
+    throw new Error('AI features status unknown - Grok API optimization is not available');
+  }
+
   // Validate API key before making request
   if (!apiKey || !apiKey.startsWith('xai-') || apiKey.length < 20) {
     throw new Error('Invalid API key format - must start with "xai-" and be at least 20 characters');
@@ -313,6 +331,24 @@ export const getModelRecommendation = async (
     interpretabilityNeeds?: 'low' | 'medium' | 'high';
   }
 ): Promise<GrokModelRecommendation> => {
+  // DEFENSIVE CHECK: Ensure AI features are enabled before making any Grok API calls
+  try {
+    const aiSettings = localStorage.getItem('ai_settings');
+    if (aiSettings) {
+      const parsedSettings = JSON.parse(aiSettings);
+      if (!parsedSettings.enabled) {
+        throw new Error('AI features are disabled - Grok API model recommendation is not available');
+      }
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('AI features are disabled')) {
+      throw error;
+    }
+    // If there's an error reading settings, assume AI is disabled for safety
+    console.warn('Could not read AI settings, assuming AI features are disabled');
+    throw new Error('AI features status unknown - Grok API model recommendation is not available');
+  }
+
   const dataStats = calculateDataStats(historicalData);
   
   const businessContextText = businessContext ? `

@@ -123,23 +123,25 @@ export function OptimizationQueuePopup({
                         </div>
                         {/* Show individual model pairs for this SKU */}
                         <div className="mt-1 flex flex-wrap gap-1">
-                          {modelsForSKU.map(modelId => {
-                            const model = optimizableModels.find(m => m.id === modelId);
-                            const modelName = model?.name || modelId;
-                            return (
-                              <Badge
-                                key={`${sku}-${modelId}-${queue.items.find(item => item.sku === sku && item.modelId === modelId)?.timestamp}`}
-                                variant="outline"
-                                className={`text-xs ${
-                                  isCurrentlyOptimizing
-                                    ? 'bg-blue-100 border-blue-300 text-blue-700'
-                                    : 'bg-gray-100'
-                                }`}
-                              >
-                                {modelName}
-                              </Badge>
-                            );
-                          })}
+                          {queue.items
+                            .filter(item => item.sku === sku)
+                            .map((item, idx) => {
+                              const model = optimizableModels.find(m => m.id === item.modelId);
+                              const modelName = model?.name || item.modelId;
+                              return (
+                                <Badge
+                                  key={`${sku}-${item.modelId}-${item.timestamp}-${idx}`}
+                                  variant="outline"
+                                  className={`text-xs ${
+                                    isCurrentlyOptimizing
+                                      ? 'bg-blue-100 border-blue-300 text-blue-700'
+                                      : 'bg-gray-100'
+                                  }`}
+                                >
+                                  {modelName}
+                                </Badge>
+                              );
+                            })}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
