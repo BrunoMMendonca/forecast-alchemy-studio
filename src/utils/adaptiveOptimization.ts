@@ -1,16 +1,61 @@
-
-import { SalesData } from '@/pages/Index';
+import { SalesData } from '@/types/forecast';
 import { generateMovingAverage, generateSimpleExponentialSmoothing, generateDoubleExponentialSmoothing } from './forecastAlgorithms';
 import { generateHoltWinters } from './seasonalUtils';
 import { ValidationConfig, ValidationResult, walkForwardValidation, timeSeriesCrossValidation, ENHANCED_VALIDATION_CONFIG } from './enhancedValidation';
+import { ForecastPrediction } from '@/types/forecast';
 
 interface OptimizationResult {
   parameters: Record<string, number>;
   accuracy: number;
   confidence: number;
-  method: 'ai_optimal' | 'grid_search' | 'adaptive_grid' | 'validation';
+  method: 'ai_optimal' | 'grid' | 'adaptive_grid' | 'validation';
   validationDetails: ValidationResult;
 }
+
+// Smart parameter ranges based on data characteristics
+const getSmartParameterRanges = (modelId: string, data: SalesData[]): Record<string, number[]> => {
+  const dataLength = data.length;
+  const sales = data.map(d => Number(d['Sales']));
+  const mean = sales.reduce((a, b) => a + b, 0) / sales.length;
+  const std = Math.sqrt(sales.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / sales.length);
+  
+  // Base ranges on data characteristics
+  const ranges: Record<string, Record<string, number[]>> = {
+    moving_average: {
+      window: Array.from({ length: 5 }, (_, i) => Math.max(2, Math.min(12, Math.floor(dataLength / (10 - i)))))
+    },
+    simple_exponential_smoothing: {
+      alpha: [0.1, 0.2, 0.3, 0.4, 0.5]
+    },
+    double_exponential_smoothing: {
+      alpha: [0.1, 0.2, 0.3, 0.4, 0.5],
+      beta: [0.1, 0.2, 0.3]
+    },
+    holt_winters: {
+      alpha: [0.2, 0.3, 0.4, 0.5, 0.6],
+      beta: [0.1, 0.2, 0.3, 0.4],
+      gamma: [0.1, 0.2, 0.3, 0.4],
+      seasonalPeriods: [12]
+    }
+  };
+
+  return ranges[modelId] || {};
+};
+
+// Early stopping criteria
+const shouldStopEarly = (
+  currentBest: { accuracy: number; confidence: number },
+  iterations: number,
+  maxIterations: number
+): boolean => {
+  // Stop if we have a very good result
+  if (currentBest.accuracy > 85 && currentBest.confidence > 80) return true;
+  
+  // Stop if we've done enough iterations
+  if (iterations >= maxIterations) return true;
+  
+  return false;
+};
 
 // Generate forecast using model with enhanced error handling
 const generateForecastForModel = (
@@ -20,185 +65,130 @@ const generateForecastForModel = (
   parameters: Record<string, number>
 ): number[] => {
   try {
+    console.log(`🔍 FORECAST: Generating forecast for ${modelId}`);
+    console.log(`📊 FORECAST: Training data length: ${trainData.length}`);
+    console.log(`📊 FORECAST: Parameters:`, parameters);
+
+    // Validate training data
+    if (trainData.length === 0) {
+      console.log('❌ FORECAST: Empty training data');
+      return [];
+    }
+
+    // Extract sales values from training data
+    const salesValues = trainData.map(d => {
+      const value = Number(d['Sales']);
+      if (isNaN(value)) {
+        console.log('❌ FORECAST: Invalid sales value:', d);
+        return 0;
+      }
+      return value;
+    });
+
+    if (salesValues.some(v => isNaN(v))) {
+      console.log('❌ FORECAST: Invalid sales values in training data');
+      return [];
+    }
+
+    let predictions: ForecastPrediction[] = [];
     switch (modelId) {
       case 'moving_average':
-        return generateMovingAverage(trainData, Math.round(parameters.window || 3), forecastPeriods);
+        predictions = generateMovingAverage(salesValues, Math.round(parameters.window), forecastPeriods);
+        break;
       case 'simple_exponential_smoothing':
       case 'exponential_smoothing':
-        return generateSimpleExponentialSmoothing(trainData, parameters.alpha || 0.3, forecastPeriods);
+        predictions = generateSimpleExponentialSmoothing(salesValues, parameters.alpha, forecastPeriods);
+        break;
       case 'double_exponential_smoothing':
-        return generateDoubleExponentialSmoothing(
-          trainData,
-          parameters.alpha || 0.3,
-          parameters.beta || 0.1,
+        predictions = generateDoubleExponentialSmoothing(
+          salesValues,
+          parameters.alpha,
+          parameters.beta,
           forecastPeriods
         );
+        break;
       case 'holt_winters':
-        return generateHoltWinters(
-          trainData.map(d => d.sales),
-          parameters.seasonalPeriods || 12,
+        predictions = generateHoltWinters(
+          salesValues,
+          parameters.seasonalPeriods,
           forecastPeriods,
-          parameters.alpha || 0.3,
-          parameters.beta || 0.1,
-          parameters.gamma || 0.1
+          parameters.alpha,
+          parameters.beta,
+          parameters.gamma
         );
+        break;
       default:
+        console.log(`❌ FORECAST: Unknown model type: ${modelId}`);
         return [];
     }
+
+    // Extract values from ForecastPrediction objects
+    const values = predictions.map(p => p.value);
+    console.log(`📈 FORECAST: Generated predictions:`, values);
+    return values;
   } catch (error) {
+    console.log(`❌ FORECAST: Error generating forecast:`, error);
     return [];
   }
 };
 
-// Define comprehensive parameter ranges with fallback levels
-const getParameterRanges = (modelId: string, level: number = 1): Record<string, number[]> => {
-  const ranges: Record<string, Record<number, Record<string, number[]>>> = {
-    moving_average: {
-      1: { window: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] },
-      2: { window: [3, 5, 7, 10, 12] },
-      3: { window: [3, 5, 7] },
-      4: { window: [3] }
-    },
-    seasonal_moving_average: {
-      1: { 
-        window: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-        seasonalPeriods: [4, 6, 12, 24, 52]
-      },
-      2: { 
-        window: [3, 5, 7, 10, 12],
-        seasonalPeriods: [12, 24, 52]
-      },
-      3: { 
-        window: [3, 5, 7],
-        seasonalPeriods: [12, 24]
-      },
-      4: { 
-        window: [3],
-        seasonalPeriods: [12]
-      }
-    },
-    simple_exponential_smoothing: {
-      1: { alpha: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95] },
-      2: { alpha: [0.1, 0.2, 0.3, 0.5, 0.7, 0.9] },
-      3: { alpha: [0.2, 0.3, 0.5] },
-      4: { alpha: [0.3] }
-    },
-    exponential_smoothing: {
-      1: { alpha: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95] },
-      2: { alpha: [0.1, 0.2, 0.3, 0.5, 0.7, 0.9] },
-      3: { alpha: [0.2, 0.3, 0.5] },
-      4: { alpha: [0.3] }
-    },
-    double_exponential_smoothing: {
-      1: {
-        alpha: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95],
-        beta: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
-      },
-      2: {
-        alpha: [0.1, 0.2, 0.3, 0.5, 0.7, 0.9],
-        beta: [0.1, 0.2, 0.3, 0.5]
-      },
-      3: {
-        alpha: [0.2, 0.3, 0.5],
-        beta: [0.1, 0.2]
-      },
-      4: {
-        alpha: [0.3],
-        beta: [0.1]
-      }
-    },
-    holt_winters: {
-      1: {
-        alpha: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5],
-        beta: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5],
-        gamma: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5],
-        seasonalPeriods: [4, 6, 12, 24, 52]
-      },
-      2: {
-        alpha: [0.1, 0.2, 0.3, 0.5],
-        beta: [0.1, 0.2, 0.3],
-        gamma: [0.1, 0.2, 0.3],
-        seasonalPeriods: [12, 24, 52]
-      },
-      3: {
-        alpha: [0.2, 0.3],
-        beta: [0.1, 0.2],
-        gamma: [0.1, 0.2],
-        seasonalPeriods: [12, 24]
-      },
-      4: {
-        alpha: [0.3],
-        beta: [0.1],
-        gamma: [0.1],
-        seasonalPeriods: [12]
-      }
-    }
-  };
-
-  return ranges[modelId]?.[level] || {};
-};
-
-// Grid search with multiple fallback levels - NEVER returns null
+// Smart grid search with early stopping
 export const adaptiveGridSearchOptimization = (
   modelId: string,
   data: SalesData[],
   aiParameters?: Record<string, number>,
   config: ValidationConfig = ENHANCED_VALIDATION_CONFIG
 ): OptimizationResult => {
-  if (data.length < config.minValidationSize * 2) {
-    return createGridSearchResult(modelId, data);
-  }
-
-  // Try grid search with multiple fallback levels
-  for (let level = 1; level <= 4; level++) {
-    const searchGrid = getParameterRanges(modelId, level);
-    
-    if (!searchGrid || Object.keys(searchGrid).length === 0) {
-      continue;
-    }
-
-    try {
-      const result = runGridSearchLevel(modelId, data, searchGrid, config, level);
-      if (result) {
-        return result;
-      }
-    } catch (error) {
-      continue;
-    }
-  }
-
-  // Absolute fallback
-  return createGridSearchResult(modelId, data);
-};
-
-// Run grid search for a specific level
-const runGridSearchLevel = (
-  modelId: string,
-  data: SalesData[],
-  searchGrid: Record<string, number[]>,
-  config: ValidationConfig,
-  level: number
-): OptimizationResult | null => {
-  const results: Array<{ params: Record<string, number>; validation: ValidationResult }> = [];
-  const paramNames = Object.keys(searchGrid);
-  const paramValues = Object.values(searchGrid);
+  console.log(`🔍 Starting smart grid search for ${modelId}`);
   
-  // Generate all combinations
-  const generateCombinations = (arrays: number[][], current: number[] = []): number[][] => {
-    if (arrays.length === 0) return [current];
-    const [first, ...rest] = arrays;
-    return first.flatMap(value => generateCombinations(rest, [...current, value]));
+  if (data.length < config.minValidationSize * 2) {
+    console.log(`⚠️ Insufficient data, using default parameters`);
+    return createDefaultResult(modelId);
+  }
+
+  const parameterRanges = getSmartParameterRanges(modelId, data);
+  console.log(`📊 Smart parameter ranges:`, parameterRanges);
+
+  const paramNames = Object.keys(parameterRanges);
+  const paramValues = Object.values(parameterRanges);
+  
+  // Calculate total combinations
+  const totalCombinations = paramValues.reduce((acc, values) => acc * values.length, 1);
+  const maxIterations = Math.min(totalCombinations, 50); // Cap at 50 iterations
+  
+  console.log(`📊 Testing up to ${maxIterations} combinations out of ${totalCombinations} total`);
+
+  let bestResult: OptimizationResult | null = null;
+  let iterations = 0;
+  
+  // Generate combinations on-the-fly instead of all at once
+  const generateNextCombination = (): number[] | null => {
+    if (iterations >= maxIterations) return null;
+    
+    const combination: number[] = [];
+    let temp = iterations;
+    
+    for (let i = paramValues.length - 1; i >= 0; i--) {
+      const values = paramValues[i];
+      const index = temp % values.length;
+      combination.unshift(values[index]);
+      temp = Math.floor(temp / values.length);
+    }
+    
+    iterations++;
+    return combination;
   };
 
-  const combinations = generateCombinations(paramValues);
+  while (true) {
+    const combination = generateNextCombination();
+    if (!combination) break;
 
-  let validResults = 0;
-  
-  for (const combo of combinations) {
     const parameters: Record<string, number> = {};
     paramNames.forEach((name, i) => {
-      parameters[name] = combo[i];
+      parameters[name] = combination[i];
     });
+
+    console.log(`🔄 Testing parameters:`, parameters);
 
     try {
       const generateForecast = (trainData: SalesData[], periods: number) => 
@@ -208,53 +198,59 @@ const runGridSearchLevel = (
         walkForwardValidation(data, generateForecast, config) :
         timeSeriesCrossValidation(data, generateForecast, config);
       
-      if (validation.accuracy > 0) {
-        results.push({ params: parameters, validation });
-        validResults++;
+      if (validation.accuracy >= 0 && validation.confidence >= 50) {
+        const result: OptimizationResult = {
+          parameters,
+          accuracy: validation.accuracy,
+          confidence: validation.confidence,
+          method: 'grid',
+          validationDetails: validation
+        };
+
+        if (!bestResult || 
+            (validation.accuracy > bestResult.accuracy && validation.confidence >= bestResult.confidence * 0.9)) {
+          bestResult = result;
+          console.log(`✅ New best result found:`, {
+            parameters,
+            accuracy: validation.accuracy.toFixed(2),
+            confidence: validation.confidence.toFixed(2)
+          });
+        }
       }
     } catch (error) {
+      console.log(`⚠️ Error with parameters:`, parameters, error);
       continue;
     }
-  }
 
-  if (results.length === 0) {
-    return null;
-  }
-
-  // Sort by accuracy
-  const sortedResults = results.sort((a, b) => {
-    const accuracyDiff = b.validation.accuracy - a.validation.accuracy;
-    if (Math.abs(accuracyDiff) > 0.5) return accuracyDiff;
-    
-    // Prefer simpler parameters
-    if (modelId === 'moving_average') {
-      return (a.params.window || 0) - (b.params.window || 0);
+    // Check early stopping criteria
+    if (bestResult && shouldStopEarly(bestResult, iterations, maxIterations)) {
+      console.log(`🛑 Early stopping triggered at iteration ${iterations}`);
+      break;
     }
-    
-    return 0;
-  });
+  }
 
-  const bestResult = sortedResults[0];
-  const confidence = Math.max(60, Math.min(95, bestResult.validation.confidence));
+  if (!bestResult) {
+    console.log(`⚠️ No valid results found, using default parameters`);
+    return createDefaultResult(modelId);
+  }
 
-  return {
-    parameters: bestResult.params,
-    accuracy: bestResult.validation.accuracy,
-    confidence: confidence,
-    method: 'grid_search',
-    validationDetails: bestResult.validation
-  };
+  return bestResult;
 };
 
-// Create grid search result using original parameters
-const createGridSearchResult = (modelId: string, data: SalesData[]): OptimizationResult => {
-  const defaultParams = getDefaultParameters(modelId);
-  
+// Create default result with reasonable parameters
+const createDefaultResult = (modelId: string): OptimizationResult => {
+  const defaultParams: Record<string, Record<string, number>> = {
+    moving_average: { window: 3 },
+    simple_exponential_smoothing: { alpha: 0.3 },
+    double_exponential_smoothing: { alpha: 0.3, beta: 0.1 },
+    holt_winters: { alpha: 0.3, beta: 0.1, gamma: 0.1, seasonalPeriods: 12 }
+  };
+
   return {
-    parameters: defaultParams,
+    parameters: defaultParams[modelId] || {},
     accuracy: 65,
     confidence: 60,
-    method: 'grid_search',
+    method: 'grid',
     validationDetails: {
       accuracy: 65,
       mape: 35,
@@ -263,25 +259,6 @@ const createGridSearchResult = (modelId: string, data: SalesData[]): Optimizatio
       mae: 0
     }
   };
-};
-
-// Get sensible default parameters for each model
-const getDefaultParameters = (modelId: string): Record<string, number> => {
-  switch (modelId) {
-    case 'moving_average':
-      return { window: 3 };
-    case 'seasonal_moving_average':
-      return { window: 3, seasonalPeriods: 12 };
-    case 'simple_exponential_smoothing':
-    case 'exponential_smoothing':
-      return { alpha: 0.3 };
-    case 'double_exponential_smoothing':
-      return { alpha: 0.3, beta: 0.1 };
-    case 'holt_winters':
-      return { alpha: 0.3, beta: 0.1, gamma: 0.1, seasonalPeriods: 12 };
-    default:
-      return {};
-  }
 };
 
 // Enhanced parameter validation with Grid baseline comparison

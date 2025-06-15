@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +12,7 @@ const getStepIcon = (step: OptimizationStep['step']) => {
     case 'ai_attempt': return '🤖';
     case 'ai_success': return '✅';
     case 'ai_rejected': return '❌';
-    case 'grid_search': return '🔍';
+    case 'grid': return '🔍';
     case 'validation': return '🧪';
     case 'complete': return '🎯';
     case 'error': return '⚠️';
@@ -30,7 +29,7 @@ const getStepBadgeVariant = (step: OptimizationStep['step']) => {
     case 'error': 
       return 'destructive';
     case 'ai_attempt': 
-    case 'grid_search': 
+    case 'grid': 
     case 'validation': 
       return 'secondary';
     default: 

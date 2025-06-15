@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/pages/Index';
@@ -98,7 +97,7 @@ export const useModelPreferences = (selectedSKU: string, data: SalesData[]) => {
             optimizationReasoning: `${methodType} optimization pending...`,
             optimizationFactors: undefined,
             expectedAccuracy: undefined,
-            optimizationMethod: actualMethod === 'grid' ? 'grid_search' : 'ai_optimization'
+            optimizationMethod: actualMethod === 'grid' ? 'grid' : 'ai_optimization'
           };
         }
       });

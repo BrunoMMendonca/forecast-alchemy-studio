@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { FloatingSettingsButton } from '@/components/FloatingSettingsButton';
 import { StepNavigation } from '@/components/StepNavigation';
-import { List } from 'lucide-react';
+import { List, Loader2 } from 'lucide-react';
 import { BusinessContext } from '@/types/businessContext';
 import { useUnifiedState } from '@/hooks/useUnifiedState';
 import { useBatchOptimization } from '@/hooks/useBatchOptimization';
@@ -25,6 +25,8 @@ interface MainLayoutProps {
   setGrokApiEnabled: (enabled: boolean) => void;
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
+  isOptimizing?: boolean;
+  paused: boolean;
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({
@@ -43,7 +45,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   grokApiEnabled,
   setGrokApiEnabled,
   settingsOpen,
-  setSettingsOpen
+  setSettingsOpen,
+  isOptimizing,
+  paused
 }) => {
   // === DEV MENU START ===
   // This block is for development only and can be easily erased.
@@ -100,9 +104,12 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             variant="outline"
             size="lg"
             onClick={onQueuePopupOpen}
-            className="gap-2 shadow-lg rounded-full px-6 py-3 bg-white border-blue-300 hover:bg-blue-50"
-            style={{ minWidth: 0 }}
+            className={`gap-2 shadow-lg rounded-full px-6 py-3 ${paused ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100' : 'bg-white border-blue-300 hover:bg-blue-50'}`}
+            style={{ minWidth: 0, marginRight: '8px' }}
           >
+            {isOptimizing && queueSize > 0 && (
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+            )}
             <List className="h-5 w-5" />
             View Queue
           </Button>

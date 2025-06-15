@@ -1,4 +1,3 @@
-
 const CACHE_KEY = 'forecast_optimization_cache';
 const CACHE_EXPIRY_HOURS = 24;
 
@@ -46,7 +45,7 @@ export const loadCacheFromStorage = (): OptimizationCache => {
         
         if (entry.parameters) {
           const method = entry.method?.startsWith('ai_') ? 'ai' : 
-                       entry.method === 'grid_search' ? 'grid' : 
+                       entry.method === 'grid' ? 'grid' : 
                        entry.method === 'manual' ? 'manual' : 'ai';
           
           if (!entry.dataHash?.startsWith('v2-')) {

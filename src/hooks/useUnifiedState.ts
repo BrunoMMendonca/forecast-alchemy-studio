@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { NormalizedSalesData, ForecastResult } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
 import { BusinessContext } from '@/types/businessContext';
+import { OptimizationQueueItem } from '@/types/optimization';
 
 interface UnifiedState {
   // Data state
@@ -22,12 +23,7 @@ interface UnifiedState {
   
   // Optimization state
   optimizationQueue: {
-    items: Array<{
-      sku: string;
-      modelId: string;
-      reason: 'csv_upload' | 'data_cleaning' | 'csv_import';
-      timestamp: number;
-    }>;
+    items: OptimizationQueueItem[];
     isOptimizing: boolean;
     progress: number;
   };
@@ -128,13 +124,13 @@ export const useUnifiedState = () => {
     setState(prev => ({
       ...prev,
       models: prev.models.map(model =>
-        model.id === modelId ? { ...model, ...updates } : model
+        model.id === modelId ? { ...model, ...updates, isWinner: updates.isWinner ?? model.isWinner } : model
       )
     }));
   }, []);
 
   // Optimization queue management
-  const addToQueue = useCallback((items: Array<{ sku: string; modelId: string; reason: 'csv_upload' | 'data_cleaning' | 'csv_import' }>) => {
+  const addToQueue = useCallback((items: OptimizationQueueItem[]) => {
     setState(prev => ({
       ...prev,
       optimizationQueue: {

@@ -1,9 +1,9 @@
-
 import { useRef, useEffect } from 'react';
 
 interface UseAutoOptimizationProps {
   optimizationQueue?: {
     queueSize: number;
+    items: any[];
   };
   isOptimizing: boolean;
   handleQueueOptimization: () => void;
@@ -24,12 +24,18 @@ export const useAutoOptimization = ({
 
   // AUTO-START OPTIMIZATION: React to queue changes with stable detection
   useEffect(() => {
+    console.log('🔄 FORECAST_MODELS: Checking auto-start conditions');
+    console.log('🔄 FORECAST_MODELS: - Queue:', optimizationQueue);
+    console.log('🔄 FORECAST_MODELS: - Component mounted:', componentMountedRef.current);
+    console.log('🔄 FORECAST_MODELS: - Is optimizing:', isOptimizing);
+    console.log('🔄 FORECAST_MODELS: - Last processed size:', lastProcessedQueueSizeRef.current);
+
     if (!optimizationQueue || !componentMountedRef.current) {
       console.log('🔄 FORECAST_MODELS: Skipping auto-start - no queue or not mounted');
       return;
     }
 
-    const currentQueueSize = optimizationQueue.queueSize;
+    const currentQueueSize = optimizationQueue.items?.length || 0;
     
     // Only process if queue size actually changed and increased
     if (currentQueueSize <= lastProcessedQueueSizeRef.current) {
@@ -60,6 +66,10 @@ export const useAutoOptimization = ({
           if (onOptimizationStarted) {
             onOptimizationStarted();
           }
+        } else {
+          console.log('🔄 FORECAST_MODELS: Conditions changed during timeout - skipping');
+          console.log('🔄 FORECAST_MODELS: - Component mounted:', componentMountedRef.current);
+          console.log('🔄 FORECAST_MODELS: - Is optimizing:', isOptimizing);
         }
       }, 100);
     } else {
@@ -68,17 +78,19 @@ export const useAutoOptimization = ({
       console.log('🔄 FORECAST_MODELS: - Not optimizing:', !isOptimizing);
       console.log('🔄 FORECAST_MODELS: - Component mounted:', componentMountedRef.current);
     }
-  }, [optimizationQueue?.queueSize, isOptimizing, handleQueueOptimization, onOptimizationStarted, grokApiEnabled]);
+  }, [optimizationQueue?.items, isOptimizing, handleQueueOptimization, onOptimizationStarted, grokApiEnabled]);
 
   // Reset processed queue size when optimization completes
   useEffect(() => {
     if (!isOptimizing) {
+      console.log('🔄 FORECAST_MODELS: Optimization completed, resetting last processed size');
       // Reset after optimization completes to allow new auto-starts
       setTimeout(() => {
-        lastProcessedQueueSizeRef.current = optimizationQueue?.queueSize || 0;
+        lastProcessedQueueSizeRef.current = optimizationQueue?.items?.length || 0;
+        console.log('🔄 FORECAST_MODELS: Reset last processed size to:', lastProcessedQueueSizeRef.current);
       }, 1000);
     }
-  }, [isOptimizing, optimizationQueue?.queueSize]);
+  }, [isOptimizing, optimizationQueue?.items]);
 
   return {
     lastProcessedQueueSizeRef

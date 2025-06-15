@@ -4,6 +4,18 @@ export interface DateFrequency {
   seasonalPeriod: number;
 }
 
+export const generateDates = (startDate: Date, periods: number): string[] => {
+  const dates: string[] = [];
+  const currentDate = new Date(startDate);
+  
+  for (let i = 0; i < periods; i++) {
+    currentDate.setMonth(currentDate.getMonth() + 1);
+    dates.push(currentDate.toISOString().split('T')[0]);
+  }
+  
+  return dates;
+};
+
 export const detectDateFrequency = (dates: string[]): DateFrequency => {
   if (dates.length < 2) {
     return { type: 'monthly', interval: 1, seasonalPeriod: 12 };

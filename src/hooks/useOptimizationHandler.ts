@@ -120,7 +120,20 @@ export const useOptimizationHandler = (
               bothResults.grid.reasoning,
               bothResults.grid.factors,
               bothResults.grid.expectedAccuracy,
-              'grid_search'
+              'grid'
+            );
+            // --- NEW: Copy Grid params to Manual after optimization ---
+            console.log('[OPTIMIZATION] Copying Grid parameters to Manual for', sku, modelId, bothResults.grid.parameters);
+            setCachedParameters(
+              sku,
+              modelId,
+              bothResults.grid.parameters,
+              dataHash,
+              70, // Default confidence for manual
+              'Manual parameters reset to Grid after optimization',
+              bothResults.grid.factors,
+              bothResults.grid.expectedAccuracy,
+              'manual'
             );
           }
         } else {
@@ -136,7 +149,8 @@ export const useOptimizationHandler = (
                 optimizationReasoning: reasoning,
                 optimizationFactors: typedFactors,
                 expectedAccuracy: expectedAccuracy,
-                optimizationMethod: method
+                optimizationMethod: method,
+                isWinner: bothResults?.selectedResult?.isWinner || false
               }
             : model
         );

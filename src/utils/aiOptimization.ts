@@ -1,4 +1,3 @@
-
 import { optimizeParametersWithGrok } from '@/utils/grokApiUtils';
 import { detectDateFrequency } from '@/utils/dateUtils';
 import { ModelConfig } from '@/types/forecast';
@@ -20,6 +19,7 @@ export interface OptimizationResult {
     businessImpact: string;
   };
   expectedAccuracy?: number;
+  isWinner: boolean;
 }
 
 export const isValidApiKey = (apiKey: string): boolean => {
@@ -42,7 +42,7 @@ export const runAIOptimization = async (
   skuData: SalesData[],
   sku: string,
   businessContext?: BusinessContext,
-  gridContext?: { parameters: Record<string, number>; accuracy: number },
+  gridBaseline?: { parameters: Record<string, number>; accuracy: number },
   grokApiEnabled: boolean = true
 ): Promise<OptimizationResult | null> => {
   if (!grokApiEnabled) {
@@ -74,10 +74,14 @@ export const runAIOptimization = async (
       seasonalPeriod: frequency.seasonalPeriod,
       targetMetric: 'accuracy',
       businessContext: contextToUse
-    }, GROK_API_KEY, gridContext);
+    }, GROK_API_KEY, gridBaseline);
 
     console.log(`✅ AI: Success for ${sku}: ${model.id}`);
     
+    if (!grokResult) {
+      return null;
+    }
+
     return {
       parameters: grokResult.optimizedParameters,
       confidence: grokResult.confidence || 75,
@@ -85,7 +89,8 @@ export const runAIOptimization = async (
       accuracy: grokResult.expectedAccuracy || 75,
       reasoning: grokResult.reasoning,
       factors: grokResult.factors,
-      expectedAccuracy: grokResult.expectedAccuracy
+      expectedAccuracy: grokResult.expectedAccuracy,
+      isWinner: true
     };
 
   } catch (error) {

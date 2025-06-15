@@ -24,7 +24,7 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
 }) => {
   const { toast } = useToast();
   const [selectedSKU, setSelectedSKU] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<string>('forecast');
+  const [activeTab, setActiveTab] = useState<string>('optimize');
   const [optimizedModels, setOptimizedModels] = useState<Record<string, ModelConfig>>({});
   const [results, setResults] = useState<ForecastResult[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -118,6 +118,7 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
             businessContext={businessContext}
             grokApiEnabled={grokApiEnabled}
             onSKUChange={setSelectedSKU}
+            onUpdateParameter={updateParameter}
           />
         </TabsContent>
 

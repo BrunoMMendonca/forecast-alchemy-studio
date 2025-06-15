@@ -1,11 +1,11 @@
-
 import { useEffect, useRef } from 'react';
-import { SalesData } from '@/pages/Index';
+import { NormalizedSalesData as SalesData } from '@/pages/Index';
 import { ModelConfig } from '@/types/forecast';
 import { getDefaultModels } from '@/utils/modelConfig';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useAutoBestMethod } from '@/hooks/useAutoBestMethod';
 import { getBestAvailableMethod } from '@/utils/cacheUtils';
+import { loadCacheFromStorage } from '@/utils/cacheStorageUtils';
 
 export const useModelOptimizationSync = (
   selectedSKU: string,
@@ -42,7 +42,7 @@ export const useModelOptimizationSync = (
     lastProcessedCacheVersionRef.current = cacheVersion;
     lastProcessedSKURef.current = selectedSKU;
     
-    const skuData = data.filter(d => d.sku === selectedSKU);
+    const skuData = data.filter(d => d['Material Code'] === selectedSKU);
     const currentDataHash = generateDataHash(skuData);
     currentDataHashRef.current = currentDataHash;
     
@@ -52,21 +52,39 @@ export const useModelOptimizationSync = (
     // Load automatic best methods
     const autoMethods = loadAutoBestMethod();
 
+    // Load the latest cache from localStorage
+    const latestCache = loadCacheFromStorage();
+
     const updatedModels = getDefaultModels().map(model => {
       const autoKey = `${selectedSKU}:${model.id}`;
-      const cached = cache[selectedSKU]?.[model.id];
-      
-      // Priority: Use user's explicit "selected" choice, fallback to automatic best method
-      let effectiveMethod = cached?.selected;
-      if (!effectiveMethod) {
-        effectiveMethod = autoMethods[autoKey] || getBestAvailableMethod(selectedSKU, model.id, currentDataHash, cache);
+      const cached = latestCache[selectedSKU]?.[model.id];
+      const manualCache = cached?.manual;
+      const selectedMethod = cached?.selected;
+
+      // If manual is selected or we have valid manual parameters, use those
+      if (selectedMethod === 'manual' || (manualCache && manualCache.dataHash === currentDataHash)) {
+        return {
+          ...model,
+          parameters: manualCache?.parameters || model.parameters,
+          optimizedParameters: undefined,
+          optimizationConfidence: undefined,
+          optimizationReasoning: undefined,
+          optimizationFactors: undefined,
+          expectedAccuracy: undefined,
+          optimizationMethod: 'manual',
+        };
       }
 
+      // For AI/Grid, use their respective cached parameters
       let selectedCache = null;
-      if (effectiveMethod === 'ai' && cached?.ai) {
+      if (selectedMethod === 'ai' && cached?.ai) {
         selectedCache = cached.ai;
-      } else if (effectiveMethod === 'grid' && cached?.grid) {
+      } else if (selectedMethod === 'grid' && cached?.grid) {
         selectedCache = cached.grid;
+      } else {
+        // Fallback to best available method if no explicit selection
+        const bestMethod = getBestAvailableMethod(selectedSKU, model.id, currentDataHash, latestCache);
+        selectedCache = bestMethod === 'ai' ? cached?.ai : cached?.grid;
       }
 
       if (selectedCache && selectedCache.dataHash === currentDataHash) {
@@ -77,7 +95,8 @@ export const useModelOptimizationSync = (
           optimizationReasoning: selectedCache.reasoning,
           optimizationFactors: selectedCache.factors,
           expectedAccuracy: selectedCache.expectedAccuracy,
-          optimizationMethod: selectedCache.method
+          optimizationMethod: selectedCache.method,
+          isWinner: selectedCache.isWinner || false
         };
       }
 
@@ -85,6 +104,10 @@ export const useModelOptimizationSync = (
     });
     
     setModels(updatedModels);
+    // Debug log: print parameters for each model after initialization
+    updatedModels.forEach(m => {
+      console.log(`[MODEL INIT] SKU: ${selectedSKU}, Model: ${m.id}, Parameters:`, m.parameters);
+    });
     
     // Reset forecast generation hash when models are updated from cache changes
     lastForecastGenerationHashRef.current = '';

@@ -1,40 +1,52 @@
 import type { ForecastPrediction } from '@/types/forecast';
-
-const generateDates = (startDate: Date, periods: number): string[] => {
-  const dates: string[] = [];
-  const currentDate = new Date(startDate);
-  
-  for (let i = 0; i < periods; i++) {
-    currentDate.setMonth(currentDate.getMonth() + 1);
-    dates.push(currentDate.toISOString().split('T')[0]);
-  }
-  
-  return dates;
-};
+import { generateDates } from '@/utils/dateUtils';
+import { NormalizedSalesData } from '@/pages/Index';
 
 export const generateMovingAverage = (
-  data: number[],
+  data: NormalizedSalesData[] | number[],
   windowSize: number,
   forecastPeriods: number
 ): ForecastPrediction[] => {
-  if (data.length === 0) return [];
+  if (data.length === 0) {
+    console.log('❌ FORECAST: Empty data array for moving average');
+    return [];
+  }
+  
+  console.log(`📊 FORECAST: Moving Average - Window: ${windowSize}, Data length: ${data.length}`);
+  console.log(`📈 FORECAST: Input data:`, data);
+  
+  // Extract sales values based on input type
+  const salesValues = Array.isArray(data) && typeof data[0] === 'object' && 'Sales' in data[0]
+    ? data.map(d => Number((d as NormalizedSalesData)['Sales']))
+    : data.map(d => Number(d));
+    
+  if (salesValues.some(isNaN)) {
+    console.log('❌ FORECAST: Invalid sales values in data');
+    return [];
+  }
   
   const lastDate = new Date();
   const dates = generateDates(lastDate, forecastPeriods);
   
   // Calculate the last moving average
-  const lastWindow = data.slice(-windowSize);
+  const lastWindow = salesValues.slice(-windowSize);
   const lastMA = lastWindow.reduce((sum, val) => sum + val, 0) / windowSize;
   
+  console.log(`📊 FORECAST: Last window values:`, lastWindow);
+  console.log(`📊 FORECAST: Last MA: ${lastMA}`);
+  
   // Generate predictions
-  return dates.map((date, index) => ({
+  const predictions = dates.map((date, index) => ({
     date,
-    value: lastMA,
+    value: Math.max(0, lastMA),
     confidence: {
-      lower: lastMA * 0.9,
+      lower: Math.max(0, lastMA * 0.9),
       upper: lastMA * 1.1,
     },
   }));
+
+  console.log(`📈 FORECAST: Generated predictions:`, predictions.map(p => p.value));
+  return predictions;
 };
 
 export const generateSimpleExponentialSmoothing = (
@@ -42,7 +54,13 @@ export const generateSimpleExponentialSmoothing = (
   alpha: number,
   forecastPeriods: number
 ): ForecastPrediction[] => {
-  if (data.length === 0) return [];
+  if (data.length === 0) {
+    console.log('❌ FORECAST: Empty data array for exponential smoothing');
+    return [];
+  }
+
+  console.log(`📊 FORECAST: Simple Exponential Smoothing - Alpha: ${alpha}, Data length: ${data.length}`);
+  console.log(`📈 FORECAST: Input data:`, data);
   
   const lastDate = new Date();
   const dates = generateDates(lastDate, forecastPeriods);
@@ -53,8 +71,10 @@ export const generateSimpleExponentialSmoothing = (
     lastSmoothed = alpha * data[i] + (1 - alpha) * lastSmoothed;
   }
   
+  console.log(`📊 FORECAST: Last smoothed value: ${lastSmoothed}`);
+  
   // Generate predictions
-  return dates.map((date, index) => ({
+  const predictions = dates.map((date, index) => ({
     date,
     value: lastSmoothed,
     confidence: {
@@ -62,6 +82,9 @@ export const generateSimpleExponentialSmoothing = (
       upper: lastSmoothed * 1.1,
     },
   }));
+
+  console.log(`📈 FORECAST: Generated predictions:`, predictions.map(p => p.value));
+  return predictions;
 };
 
 export const generateDoubleExponentialSmoothing = (

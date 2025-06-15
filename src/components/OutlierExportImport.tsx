@@ -1,7 +1,7 @@
-
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Upload } from 'lucide-react';
+import { getDefaultModels } from '@/utils/modelConfig';
 
 interface OutlierExportImportProps {
   onExport: () => void;
@@ -14,6 +14,14 @@ export const OutlierExportImport: React.FC<OutlierExportImportProps> = ({
   onImportClick,
   isExportDisabled
 }) => {
+  const handleImportDataCleaning = useCallback((importedSKUs: string[]) => {
+    console.log('handleImportDataCleaning called with:', importedSKUs);
+    const allModels = getDefaultModels();
+    console.log('Models used for queueing:', allModels);
+    // ...rest of the code
+    console.log('Jobs to add:', jobs);
+  }, []);
+
   return (
     <div className="bg-slate-50 rounded-lg p-4">
       <h3 className="text-lg font-semibold text-slate-800 mb-3">Data Cleaning Export/Import</h3>

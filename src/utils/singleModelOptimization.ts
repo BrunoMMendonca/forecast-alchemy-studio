@@ -1,25 +1,47 @@
-
 import { optimizationLogger } from '@/utils/optimizationLogger';
-import { ModelConfig } from '@/types/forecast';
-import { SalesData } from '@/pages/Index';
+import { ModelConfig, SalesData } from '@/types/forecast';
 import { BusinessContext } from '@/types/businessContext';
-import { runAIOptimization, OptimizationResult } from '@/utils/aiOptimization';
-import { runGridOptimization, GridOptimizationResult } from '@/utils/gridOptimization';
-import { hasOptimizableParameters } from '@/utils/modelConfig';
+// @ts-ignore
+import OptimizationWorker from '../workers/optimizationWorker.ts?worker';
 
 interface ProgressUpdater {
   setProgress: (updater: (prev: any) => any) => void;
 }
 
 interface MultiMethodResult {
-  aiResult?: OptimizationResult;
-  gridResult: GridOptimizationResult;
-  selectedResult: OptimizationResult | GridOptimizationResult;
+  aiResult?: any;
+  gridResult: any;
+  selectedResult: any;
   bothResults: {
-    ai?: OptimizationResult;
-    grid: GridOptimizationResult;
+    ai?: any;
+    grid: any;
+    manual: any;
   };
 }
+
+// Helper to run a job in the worker
+const runOptimizationInWorker = (job: {
+  type: 'grid' | 'ai';
+  model: ModelConfig;
+  skuData: SalesData[];
+  sku: string;
+  businessContext?: BusinessContext;
+  grokApiEnabled?: boolean;
+  gridBaseline?: any;
+}) => {
+  return new Promise<any>((resolve, reject) => {
+    const worker = new OptimizationWorker();
+    worker.onmessage = (event: MessageEvent) => {
+      resolve(event.data.result);
+      worker.terminate();
+  };
+    worker.onerror = (err) => {
+      reject(err);
+      worker.terminate();
+    };
+    worker.postMessage({ job });
+  });
+};
 
 export const optimizeSingleModel = async (
   model: ModelConfig,
@@ -28,13 +50,13 @@ export const optimizeSingleModel = async (
   progressUpdater: ProgressUpdater,
   forceGridSearch: boolean = false,
   businessContext?: BusinessContext,
-  onMethodComplete?: (method: 'grid' | 'ai', result: OptimizationResult | GridOptimizationResult) => void,
+  onMethodComplete?: (method: 'grid' | 'ai', result: any) => void,
   grokApiEnabled: boolean = true
 ): Promise<{
-  selectedResult: OptimizationResult | GridOptimizationResult;
-  bothResults?: { ai?: OptimizationResult; grid: GridOptimizationResult };
+  selectedResult: any;
+  bothResults?: { ai?: any; grid: any };
 }> => {
-  if (!hasOptimizableParameters(model)) {
+  if (!model.parameters || Object.keys(model.parameters).length === 0) {
     const defaultResult = { 
       parameters: model.parameters || {}, 
       confidence: 70, 
@@ -46,16 +68,21 @@ export const optimizeSingleModel = async (
         interpretability: 90,
         complexity: 10,
         businessImpact: 'Minimal risk with default parameters'
-      }
+      },
+      expectedAccuracy: 70
     };
-    
     return { 
       selectedResult: defaultResult
     };
   }
 
   if (forceGridSearch || !grokApiEnabled) {
-    const gridResult = await runGridOptimization(model, skuData, sku);
+    const gridResult = await runOptimizationInWorker({
+      type: 'grid',
+      model,
+      skuData,
+      sku
+    });
     if (onMethodComplete) {
       onMethodComplete('grid', gridResult);
     }
@@ -66,7 +93,6 @@ export const optimizeSingleModel = async (
   }
 
   const results = await runBothOptimizations(model, skuData, sku, progressUpdater, businessContext, onMethodComplete, grokApiEnabled);
-  
   return {
     selectedResult: results.selectedResult,
     bothResults: results.bothResults
@@ -79,18 +105,25 @@ const runBothOptimizations = async (
   sku: string,
   progressUpdater: ProgressUpdater,
   businessContext?: BusinessContext,
-  onMethodComplete?: (method: 'grid' | 'ai', result: OptimizationResult | GridOptimizationResult) => void,
+  onMethodComplete?: (method: 'grid' | 'ai', result: any) => void,
   grokApiEnabled: boolean = true
 ): Promise<MultiMethodResult> => {
   if (!grokApiEnabled) {
-    const gridResult = await runGridOptimization(model, skuData, sku);
+    const gridResult = await runOptimizationInWorker({
+      type: 'grid',
+      model,
+      skuData,
+      sku
+    });
     if (onMethodComplete) {
       onMethodComplete('grid', gridResult);
     }
+    // After grid, set manual parameters to grid result
+    let manualParams = gridResult.parameters;
     return {
       gridResult,
       selectedResult: gridResult,
-      bothResults: { grid: gridResult }
+      bothResults: { grid: gridResult, manual: manualParams }
     };
   }
   
@@ -102,13 +135,21 @@ const runBothOptimizations = async (
     parameters: model.parameters
   });
 
-  const gridResult = await runGridOptimization(model, skuData, sku);
+  const gridResult = await runOptimizationInWorker({
+    type: 'grid',
+    model,
+    skuData,
+    sku
+  });
   
+  // After grid, set manual parameters to grid result
+  let manualParams = gridResult.parameters;
+
   optimizationLogger.logStep({
     sku,
     modelId: model.id,
-    step: 'grid_search',
-    message: `Grid optimization complete with accuracy ${gridResult.accuracy.toFixed(1)}%`,
+    step: 'grid',
+    message: `Grid optimization complete with accuracy ${gridResult.accuracy?.toFixed(1)}%`,
     parameters: gridResult.parameters
   });
 
@@ -116,21 +157,29 @@ const runBothOptimizations = async (
     onMethodComplete('grid', gridResult);
   }
 
-  let aiResult: OptimizationResult | null = null;
-  
-  aiResult = await runAIOptimization(
-    model, 
-    skuData, 
-    sku, 
+  let aiResult: any = null;
+  aiResult = await runOptimizationInWorker({
+    type: 'ai',
+    model,
+    skuData,
+    sku,
     businessContext,
-    { parameters: gridResult.parameters, accuracy: gridResult.accuracy },
-    grokApiEnabled
-  );
-
-  let selectedResult: OptimizationResult | GridOptimizationResult;
+    grokApiEnabled,
+    gridBaseline: gridResult // Pass grid as baseline
+  });
   
+  let selectedResult: any;
   if (aiResult) {
-    selectedResult = aiResult;
+    // Compare AI and Grid results to determine winner
+    const aiScore = (aiResult.accuracy * 0.7) + (aiResult.confidence * 0.3);
+    const gridScore = (gridResult.accuracy * 0.7) + (gridResult.confidence * 0.3);
+    if (aiScore > gridScore) {
+      selectedResult = { ...aiResult, isWinner: true };
+      gridResult.isWinner = false;
+    } else {
+      selectedResult = { ...gridResult, isWinner: true };
+      aiResult.isWinner = false;
+    }
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
@@ -138,17 +187,15 @@ const runBothOptimizations = async (
       message: 'AI optimization succeeded',
       parameters: aiResult.parameters
     });
-    
     if (onMethodComplete) {
       onMethodComplete('ai', aiResult);
     }
-    
     progressUpdater.setProgress(prev => prev ? { 
       ...prev, 
       aiOptimized: prev.aiOptimized + 1
     } : null);
   } else {
-    selectedResult = gridResult;
+    selectedResult = { ...gridResult, isWinner: true }; // Grid is winner if AI fails
     optimizationLogger.logStep({
       sku,
       modelId: model.id,
@@ -159,12 +206,12 @@ const runBothOptimizations = async (
   }
 
   return {
-    aiResult: aiResult || undefined,
     gridResult,
     selectedResult,
     bothResults: {
+      grid: gridResult,
       ai: aiResult || undefined,
-      grid: gridResult
+      manual: manualParams // Add manual params for UI initialization
     }
   };
 };
@@ -176,19 +223,28 @@ export const getOptimizationByMethod = async (
   method: 'ai' | 'grid',
   businessContext?: BusinessContext,
   grokApiEnabled: boolean = true
-): Promise<OptimizationResult | GridOptimizationResult | null> => {
-  if (!hasOptimizableParameters(model)) {
+): Promise<any | null> => {
+  if (!model.parameters || Object.keys(model.parameters).length === 0) {
     return null;
   }
-
   if (method === 'grid') {
-    return await runGridOptimization(model, skuData, sku);
+    return await runOptimizationInWorker({
+      type: 'grid',
+      model,
+      skuData,
+      sku
+    });
   }
-  
   if (method === 'ai') {
-    return await runAIOptimization(model, skuData, sku, businessContext, undefined, grokApiEnabled);
+    return await runOptimizationInWorker({
+      type: 'ai',
+      model,
+      skuData,
+      sku,
+      businessContext,
+      grokApiEnabled
+    });
   }
-
   return null;
 };
 
@@ -216,7 +272,6 @@ export const optimizeModelForSKU = async (
   try {
     const progressUpdater = { setProgress: () => {} };
     const result = await optimizeSingleModel(model, skuData, sku, progressUpdater, false, businessContext, undefined, grokApiEnabled);
-    
     return {
       success: true,
       optimizedParameters: result.selectedResult.parameters,

@@ -1,10 +1,9 @@
-
 export interface OptimizationStep {
   id: string;
   timestamp: number;
   sku: string;
   modelId: string;
-  step: 'start' | 'ai_attempt' | 'ai_success' | 'ai_rejected' | 'grid_search' | 'validation' | 'complete' | 'error';
+  step: 'start' | 'ai_attempt' | 'ai_success' | 'ai_rejected' | 'grid' | 'validation' | 'complete' | 'error';
   message: string;
   parameters?: Record<string, number>;
   accuracy?: number;
@@ -68,7 +67,7 @@ class OptimizationLogger {
       case 'ai_rejected':
         this.currentLog.summary.aiRejected++;
         break;
-      case 'grid_search':
+      case 'grid':
         this.currentLog.summary.gridOptimized++;
         break;
       case 'error':

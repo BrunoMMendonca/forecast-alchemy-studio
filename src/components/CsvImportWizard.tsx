@@ -7,6 +7,7 @@ import { parseDateWithFormat } from '@/utils/dateUtils';
 
 interface CsvImportWizardProps {
   onDataReady: (data: any[][]) => void;
+  onFileNameChange?: (fileName: string) => void;
 }
 
 const SEPARATORS = [',', ';', '\t', '|'];
@@ -59,7 +60,7 @@ function trimEmptyRowsAndColumns(matrix: any[][]): any[][] {
   return matrix.slice(top, bottom + 1).map(row => row.slice(left, right + 1));
 }
 
-export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady }) => {
+export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, onFileNameChange }) => {
   const [file, setFile] = useState<File | null>(null);
   const [separator, setSeparator] = useState<string>(',');
   const [data, setData] = useState<any[][]>([]);
@@ -87,6 +88,9 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady })
       const f = e.target.files[0];
       setFile(f);
       setError(null);
+      if (typeof onFileNameChange === 'function') {
+        onFileNameChange(f.name);
+      }
       const reader = new FileReader();
       reader.onload = (event) => {
         const text = event.target?.result as string;
@@ -264,11 +268,14 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady })
             formattedDate = `${parsedDate.getFullYear()}-${pad(parsedDate.getMonth() + 1)}-${pad(parsedDate.getDate())}`;
           }
           entry['Date'] = formattedDate;
-          // Only set Sales if value is a valid number, otherwise undefined
+          // Convert sales value to number, defaulting to 0 if invalid
           const salesValue = row[i];
           const num = Number(salesValue);
-          entry['Sales'] = (salesValue === '' || !Number.isFinite(num)) ? undefined : num;
-          result.push(entry);
+          entry['Sales'] = (salesValue === '' || !Number.isFinite(num)) ? 0 : num;
+          // Only add entries that have required fields
+          if (entry['Material Code'] && entry['Date'] !== undefined) {
+            result.push(entry);
+          }
         }
       }
     }

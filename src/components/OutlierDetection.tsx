@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Zap, Clock } from 'lucide-react';
 import { NormalizedSalesData } from '@/pages/Index';
-import { useToast } from '@/hooks/use-toast';
 import { exportCleaningData, parseCleaningCSV, applyImportChanges, ImportPreview } from '@/utils/csvUtils';
 import { ImportPreviewDialog } from '@/components/ImportPreviewDialog';
 import { OutlierChart } from '@/components/OutlierChart';
@@ -18,6 +17,7 @@ interface OutlierDetectionProps {
   onDataCleaning: (cleanedData: NormalizedSalesData[], changedSKUs?: string[]) => void;
   onImportDataCleaning?: (importedSKUs: string[]) => void;
   queueSize?: number;
+  onFileNameChange?: (fileName: string) => void;
 }
 
 interface OutlierDataPoint extends NormalizedSalesData {
@@ -35,7 +35,8 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
   cleanedData, 
   onDataCleaning, 
   onImportDataCleaning,
-  queueSize = 0
+  queueSize = 0,
+  onFileNameChange
 }) => {
   const [selectedSKU, setSelectedSKU] = useState<string>('');
   const [threshold, setThreshold] = useState([2.5]);
@@ -48,7 +49,6 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
   const [highlightedDate, setHighlightedDate] = useState<string>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tableRef = useRef<HTMLDivElement>(null);
-  const { toast } = useToast();
   const [treatZeroAsOutlier, setTreatZeroAsOutlier] = useState(true);
 
   const skus = useMemo(() => {
@@ -160,26 +160,13 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
 
   const handleExportCleaning = () => {
     if (data.length === 0 || cleanedData.length === 0) {
-      toast({
-        title: "Export Error",
-        description: "No data available to export",
-        variant: "destructive",
-      });
       return;
     }
 
     try {
       exportCleaningData(data, cleanedData, threshold[0]);
-      toast({
-        title: "Export Successful",
-        description: `Data cleaning exported for ${new Set(cleanedData.map(d => d['Material Code'])).size} SKUs`,
-      });
     } catch (error) {
-      toast({
-        title: "Export Error",
-        description: error instanceof Error ? error.message : "Failed to export data",
-        variant: "destructive",
-      });
+      console.error("Export Error:", error instanceof Error ? error.message : "Failed to export data");
     }
   };
 
@@ -188,11 +175,6 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
     if (!file) return;
 
     if (!file.name.toLowerCase().endsWith('.csv')) {
-      toast({
-        title: "Invalid File",
-        description: "Please select a CSV file",
-        variant: "destructive",
-      });
       return;
     }
 
@@ -223,12 +205,11 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
         setImportMetadata(metadata);
         setImportFileName(file.name);
         setShowImportDialog(true);
+        if (onFileNameChange) {
+          onFileNameChange(file.name);
+        }
       } catch (error) {
-        toast({
-          title: "Import Error",
-          description: error instanceof Error ? error.message : "Failed to parse CSV file",
-          variant: "destructive",
-        });
+        console.error("Import Error:", error instanceof Error ? error.message : "Failed to parse CSV file");
       }
     };
     
@@ -252,8 +233,8 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
       // Extract SKUs that were modified during import
       const modifiedSKUs = Array.from(new Set(
         importPreviews
-          .filter(p => p.action === 'modify' || p.action === 'add_note')
-          .map(p => p['Material Code'])
+          .filter(p => (p.action === 'modify' || p.action === 'add_note') && p.sku)
+          .map(p => p.sku)
       ));
       onDataCleaning(allRows);
       // Notify parent about imported SKUs for optimization
@@ -262,21 +243,13 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
       }
       const modifications = importPreviews.filter(p => p.action === 'modify');
       const noteAdditions = importPreviews.filter(p => p.action === 'add_note');
-      toast({
-        title: "Import Successful",
-        description: `Applied ${modifications.length} value changes and ${noteAdditions.length} note additions`,
-      });
       setShowImportDialog(false);
       setImportPreviews([]);
       setImportErrors([]);
       setImportMetadata({});
       setImportFileName('');
     } catch (error) {
-      toast({
-        title: "Import Error",
-        description: error instanceof Error ? error.message : "Failed to apply changes",
-        variant: "destructive",
-      });
+      console.error("Import Error:", error instanceof Error ? error.message : "Failed to apply changes");
     }
   };
 
@@ -376,10 +349,6 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
     });
 
     const noteText = editData.note ? ` (Note: ${editData.note})` : '';
-    toast({
-      title: "Value Updated",
-      description: `Sales value for ${sku} on ${date} updated to ${editData.value.toLocaleString()}${noteText}`,
-    });
     setHighlightedDate(undefined);
   };
 
@@ -416,24 +385,6 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Optimization Status Alert */}
-      {queueSize > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center space-x-2">
-            <Clock className="h-4 w-4 text-blue-600" />
-            <span className="text-blue-800 font-medium">
-              Background Optimization Active
-            </span>
-            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-              {queueSize} SKU{queueSize !== 1 ? 's' : ''} in queue
-            </Badge>
-          </div>
-          <p className="text-blue-700 text-sm mt-1">
-            Any data changes will trigger re-optimization for affected SKUs to ensure models use the latest clean data.
-          </p>
-        </div>
-      )}
-
       {/* Export/Import Section */}
       <OutlierExportImport
         onExport={handleExportCleaning}

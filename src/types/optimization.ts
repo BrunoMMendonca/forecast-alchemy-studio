@@ -1,7 +1,16 @@
 export interface OptimizationQueueItem {
   sku: string;
   modelId: string;
-  reason: 'csv_upload' | 'manual' | 'settings_change';
+  reason:
+    | 'csv_upload'
+    | 'manual'
+    | 'settings_change'
+    | 'data_cleaning'
+    | 'ai'
+    | 'csv_upload_sales_data'
+    | 'csv_upload_data_cleaning'
+    | 'manual_edit_data_cleaning';
+  method: 'ai' | 'grid';
   priority?: number;
   timestamp: number;
 }
@@ -10,6 +19,7 @@ export interface OptimizationQueue {
   items: OptimizationQueueItem[];
   progress: Record<string, number>;
   isOptimizing: boolean;
+  paused: boolean;
 }
 
 export interface OptimizationProgress {
@@ -28,6 +38,7 @@ export interface OptimizationResult {
   confidence?: number;
   reasoning?: string;
   updatedAt: string;
+  isWinner?: boolean;
   // ...other metadata
 }
 

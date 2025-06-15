@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -40,7 +39,7 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
 
   const getMethodIcon = (method: string) => {
     if (method.startsWith('ai_')) return <Bot className="h-4 w-4" />;
-    if (method === 'grid_search') return <Grid3x3 className="h-4 w-4" />;
+    if (method === 'grid') return <Grid3x3 className="h-4 w-4" />;
     if (method === 'fallback') return <Shield className="h-4 w-4" />;
     return <Bot className="h-4 w-4" />;
   };
@@ -50,7 +49,7 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
       case 'ai_optimal': return 'AI Optimal';
       case 'ai_tolerance': return 'AI Tolerance';
       case 'ai_confidence': return 'AI Confidence';
-      case 'grid_search': return 'Grid';
+      case 'grid': return 'Grid';
       case 'fallback': return 'Fallback';
       default: return method.replace('_', ' ');
     }

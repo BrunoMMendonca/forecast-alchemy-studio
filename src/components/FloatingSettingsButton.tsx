@@ -1,12 +1,12 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Settings } from 'lucide-react';
 import { ForecastSettings } from '@/components/ForecastSettings';
-import { CacheDebugger } from '@/components/CacheDebugger';
+import { CacheDebugger } from './CacheDebugger';
 import { BusinessContext } from '@/types/businessContext';
+import { useOptimizationCacheContext } from '@/context/OptimizationCacheContext';
 
 interface FloatingSettingsButtonProps {
   forecastPeriods: number;
@@ -63,7 +63,7 @@ export const FloatingSettingsButton: React.FC<FloatingSettingsButtonProps> = ({
             </TabsContent>
             
             <TabsContent value="cache" className="mt-4">
-              <CacheDebugger />
+              <CacheDebugger cacheContext={useOptimizationCacheContext()} />
             </TabsContent>
           </Tabs>
         </DialogContent>

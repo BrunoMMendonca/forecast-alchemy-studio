@@ -1,3 +1,5 @@
+import { ForecastPrediction } from '@/types/forecast';
+import { generateDates } from '@/utils/dateUtils';
 
 export const calculateSeasonalDecomposition = (values: number[], seasonalPeriod: number) => {
   if (values.length < seasonalPeriod * 2) {
@@ -82,50 +84,154 @@ export const generateHoltWinters = (
   alpha: number = 0.3,
   beta: number = 0.1,
   gamma: number = 0.1
-): number[] => {
+): ForecastPrediction[] => {
+  // Validate input data
+  if (values.length === 0) {
+    console.log('❌ FORECAST: Empty data array for Holt-Winters');
+    return [];
+  }
+
+  if (values.some(v => isNaN(v) || !isFinite(v))) {
+    console.log('❌ FORECAST: Invalid values in input data');
+    return [];
+  }
+
+  // Validate and bound parameters
+  alpha = Math.max(0.01, Math.min(0.99, alpha));
+  beta = Math.max(0.01, Math.min(0.99, beta));
+  gamma = Math.max(0.01, Math.min(0.99, gamma));
+
+  // Adjust seasonal period if data is too short
+  let effectiveSeasonalPeriod = seasonalPeriod;
   if (values.length < seasonalPeriod * 2) {
-    // Fallback to simple exponential smoothing if not enough data
-    return generateExponentialSmoothing(values, alpha, periods);
+    effectiveSeasonalPeriod = Math.max(2, Math.floor(values.length / 2));
+    console.log(`⚠️ FORECAST: Adjusted seasonal period to ${effectiveSeasonalPeriod} due to limited data`);
   }
 
   // Initialize components
-  let level = values.slice(0, seasonalPeriod).reduce((sum, val) => sum + val, 0) / seasonalPeriod;
+  const initialValues = values.slice(0, effectiveSeasonalPeriod);
+  const initialSum = initialValues.reduce((sum, val) => sum + val, 0);
+  let level = initialSum / effectiveSeasonalPeriod;
   let trend = 0;
-  const seasonal: number[] = new Array(seasonalPeriod);
+  const seasonal: number[] = new Array(effectiveSeasonalPeriod).fill(1);
 
-  // Initialize seasonal factors
-  const firstSeasonAvg = values.slice(0, seasonalPeriod).reduce((sum, val) => sum + val, 0) / seasonalPeriod;
-  const secondSeasonAvg = values.slice(seasonalPeriod, seasonalPeriod * 2).reduce((sum, val) => sum + val, 0) / seasonalPeriod;
-  trend = (secondSeasonAvg - firstSeasonAvg) / seasonalPeriod;
+  // Initialize seasonal factors if we have enough data
+  if (values.length >= effectiveSeasonalPeriod * 2) {
+    const firstSeasonAvg = initialSum / effectiveSeasonalPeriod;
+    const secondSeasonAvg = values.slice(effectiveSeasonalPeriod, effectiveSeasonalPeriod * 2)
+      .reduce((sum, val) => sum + val, 0) / effectiveSeasonalPeriod;
+    
+    trend = (secondSeasonAvg - firstSeasonAvg) / effectiveSeasonalPeriod;
 
-  for (let i = 0; i < seasonalPeriod; i++) {
-    seasonal[i] = values[i] / firstSeasonAvg;
+    // Initialize seasonal factors with bounds checking
+    for (let i = 0; i < effectiveSeasonalPeriod; i++) {
+      if (firstSeasonAvg > 0) {
+        seasonal[i] = Math.max(0.1, Math.min(10, values[i] / firstSeasonAvg));
+      } else {
+        seasonal[i] = 1;
+      }
+    }
+  } else {
+    // Use simple initialization for shorter sequences
+    const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
+    if (avg > 0) {
+      for (let i = 0; i < effectiveSeasonalPeriod; i++) {
+        seasonal[i] = Math.max(0.1, Math.min(10, values[i % values.length] / avg));
+      }
+    }
   }
 
   // Update components through historical data
-  for (let i = seasonalPeriod; i < values.length; i++) {
-    const seasonIndex = i % seasonalPeriod;
+  for (let i = effectiveSeasonalPeriod; i < values.length; i++) {
+    const seasonIndex = i % effectiveSeasonalPeriod;
     const prevLevel = level;
     
-    level = alpha * (values[i] / seasonal[seasonIndex]) + (1 - alpha) * (prevLevel + trend);
+    // Update level with bounds checking
+    const seasonalFactor = seasonal[seasonIndex];
+    if (seasonalFactor > 0) {
+      level = alpha * (values[i] / seasonalFactor) + (1 - alpha) * (prevLevel + trend);
+    } else {
+      level = alpha * values[i] + (1 - alpha) * (prevLevel + trend);
+    }
+    
+    // Update trend
     trend = beta * (level - prevLevel) + (1 - beta) * trend;
-    seasonal[seasonIndex] = gamma * (values[i] / level) + (1 - gamma) * seasonal[seasonIndex];
+    
+    // Update seasonal with bounds checking
+    if (level > 0) {
+      seasonal[seasonIndex] = gamma * (values[i] / level) + (1 - gamma) * seasonal[seasonIndex];
+      seasonal[seasonIndex] = Math.max(0.1, Math.min(10, seasonal[seasonIndex]));
+    }
   }
 
   // Generate forecasts
-  const predictions: number[] = [];
+  const predictions: ForecastPrediction[] = [];
+  const dates = generateDates(new Date(), periods);
+
   for (let i = 0; i < periods; i++) {
-    const seasonIndex = (values.length + i) % seasonalPeriod;
+    const seasonIndex = (values.length + i) % effectiveSeasonalPeriod;
     const forecast = (level + (i + 1) * trend) * seasonal[seasonIndex];
-    predictions.push(Math.max(0, forecast));
+    
+    // Ensure forecast is valid
+    if (isNaN(forecast) || !isFinite(forecast)) {
+      console.log(`⚠️ FORECAST: Invalid forecast generated, using fallback`);
+      predictions.push({
+        date: dates[i],
+        value: Math.max(0, values[values.length - 1]),
+        confidence: {
+          lower: Math.max(0, values[values.length - 1] * 0.9),
+          upper: values[values.length - 1] * 1.1
+        }
+      });
+    } else {
+      predictions.push({
+        date: dates[i],
+        value: Math.max(0, forecast),
+        confidence: {
+          lower: Math.max(0, forecast * 0.9),
+          upper: forecast * 1.1
+        }
+      });
+    }
   }
 
+  console.log(`📈 FORECAST: Generated Holt-Winters predictions:`, predictions.map(p => p.value));
   return predictions;
 };
 
-const generateExponentialSmoothing = (values: number[], alpha: number, periods: number): number[] => {
-  let lastSmoothed = values[values.length - 1];
-  return new Array(periods).fill(lastSmoothed);
+const generateExponentialSmoothing = (values: number[], alpha: number, periods: number): ForecastPrediction[] => {
+  // Validate input data
+  if (values.length === 0) {
+    console.log('❌ FORECAST: Empty data array for exponential smoothing');
+    return [];
+  }
+
+  if (values.some(v => isNaN(v) || !isFinite(v))) {
+    console.log('❌ FORECAST: Invalid values in input data');
+    return [];
+  }
+
+  // Calculate the last smoothed value
+  let lastSmoothed = values[0];
+  for (let i = 1; i < values.length; i++) {
+    lastSmoothed = alpha * values[i] + (1 - alpha) * lastSmoothed;
+  }
+
+  console.log(`📊 FORECAST: Last smoothed value: ${lastSmoothed}`);
+
+  // Generate predictions
+  const dates = generateDates(new Date(), periods);
+  const predictions = dates.map((date) => ({
+    date,
+    value: Math.max(0, lastSmoothed),
+    confidence: {
+      lower: Math.max(0, lastSmoothed * 0.9),
+      upper: lastSmoothed * 1.1
+    }
+  }));
+
+  console.log(`📈 FORECAST: Generated exponential smoothing predictions:`, predictions.map(p => p.value));
+  return predictions;
 };
 
 export const generateSeasonalNaive = (

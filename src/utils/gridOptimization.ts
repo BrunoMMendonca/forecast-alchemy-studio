@@ -1,4 +1,3 @@
-
 import { adaptiveGridSearchOptimization } from '@/utils/adaptiveOptimization';
 import { ENHANCED_VALIDATION_CONFIG } from '@/utils/enhancedValidation';
 import { ModelConfig } from '@/types/forecast';
@@ -37,7 +36,7 @@ export const runGridOptimization = async (
   return {
     parameters: gridSearchResult.parameters,
     confidence: Math.max(60, gridSearchResult.confidence || 75),
-    method: 'grid_search',
+    method: 'grid',
     accuracy: gridSearchResult.accuracy,
     reasoning: `Grid systematically tested parameter combinations and selected the configuration with highest validation accuracy (${gridSearchResult.accuracy.toFixed(1)}%). This method provides reliable, data-driven parameter selection through comprehensive evaluation.`,
     factors: {

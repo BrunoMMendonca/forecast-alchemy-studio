@@ -1,18 +1,17 @@
-
 import { useCallback, useMemo } from 'react';
-import { SalesData } from '@/pages/Index';
+import { NormalizedSalesData } from '@/pages/Index';
 import { generateDataHash } from '@/utils/cacheUtils';
 
 export const useParameterController = (
   selectedSKU: string,
-  data: SalesData[],
+  data: NormalizedSalesData[],
   setModels: React.Dispatch<React.SetStateAction<any[]>>,
   setSelectedMethod: (sku: string, modelId: string, method: 'ai' | 'grid' | 'manual') => void,
   cacheManualParameters: (sku: string, modelId: string, parameters: Record<string, number>, dataHash: string) => void,
   cache: any
 ) => {
   const currentDataHash = useMemo(() => {
-    const skuData = data.filter(d => d.sku === selectedSKU);
+    const skuData = data.filter(d => d['Material Code'] === selectedSKU);
     return generateDataHash(skuData);
   }, [data, selectedSKU]);
 

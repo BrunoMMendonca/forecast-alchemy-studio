@@ -1,4 +1,3 @@
-
 import { SalesData } from '@/pages/Index';
 import { adaptiveGridSearchOptimization, enhancedParameterValidation } from '@/utils/adaptiveOptimization';
 import { ENHANCED_VALIDATION_CONFIG, ValidationConfig } from '@/utils/enhancedValidation';
@@ -7,7 +6,7 @@ interface OptimizationResult {
   parameters: Record<string, number>;
   accuracy: number;
   confidence: number;
-  method: 'grid_search' | 'validation' | 'ai_high_confidence' | 'ai_optimal' | 'adaptive_grid';
+  method: 'grid' | 'validation' | 'ai_high_confidence' | 'ai_optimal' | 'adaptive_grid';
 }
 
 // Export the enhanced grid search as the main grid search function
@@ -28,7 +27,7 @@ export const gridSearchOptimization = (
     parameters: result.parameters,
     accuracy: result.accuracy,
     confidence: result.confidence,
-    method: result.method === 'adaptive_grid' ? 'grid_search' : result.method
+    method: result.method === 'adaptive_grid' ? 'grid' : result.method
   };
 };
 

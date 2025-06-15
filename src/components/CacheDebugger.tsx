@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,10 +5,13 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trash2, Download, RefreshCw } from 'lucide-react';
-import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useManualAIPreferences } from '@/hooks/useManualAIPreferences';
 
-export const CacheDebugger: React.FC = () => {
+interface CacheDebuggerProps {
+  cacheContext: ReturnType<typeof import('@/hooks/useOptimizationCache').useOptimizationCache>;
+}
+
+export const CacheDebugger: React.FC<CacheDebuggerProps> = ({ cacheContext }) => {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [activeTab, setActiveTab] = useState('optimization');
   const [lastUpdate, setLastUpdate] = useState(new Date().toLocaleTimeString());
@@ -38,7 +40,7 @@ export const CacheDebugger: React.FC = () => {
     cacheVersion,
     clearAllCache, 
     clearCacheForSKU 
-  } = useOptimizationCache();
+  } = cacheContext;
   
   const { clearManualAIPreferences } = useManualAIPreferences();
 
@@ -104,7 +106,7 @@ export const CacheDebugger: React.FC = () => {
 
   const getMethodBadgeColor = (method?: string) => {
     if (method?.startsWith('ai_')) return 'bg-blue-500';
-    if (method === 'grid_search') return 'bg-green-500';
+    if (method === 'grid') return 'bg-green-500';
     if (method === 'manual') return 'bg-gray-500';
     return 'bg-gray-500';
   };

@@ -1,6 +1,5 @@
-
 import { useCallback } from 'react';
-import { OptimizationCache, OptimizedParameters, saveCacheToStorage } from '@/utils/cacheStorageUtils';
+import { OptimizationCache, OptimizedParameters, saveCacheToStorage, loadCacheFromStorage } from '@/utils/cacheStorageUtils';
 
 export const useCacheStorage = (
   setCache: React.Dispatch<React.SetStateAction<OptimizationCache>>,
@@ -34,9 +33,9 @@ export const useCacheStorage = (
     };
 
     const cacheMethod: 'ai' | 'grid' | 'manual' = 
-      method === 'grid_search' ? 'grid' :
-      method?.startsWith('ai_') ? 'ai' :
       method === 'manual' ? 'manual' :
+      method === 'grid' ? 'grid' :
+      method?.startsWith('ai_') ? 'ai' :
       'ai';
 
     setCache(prev => {
@@ -45,20 +44,23 @@ export const useCacheStorage = (
       if (!newCache[sku]) newCache[sku] = {};
       if (!newCache[sku][modelId]) newCache[sku][modelId] = {};
       
+      // Store parameters for the current method
       newCache[sku][modelId][cacheMethod] = optimizedParams;
       
-      // Auto-select best method
+      // Only update selected method if:
+      // 1. It's a manual update (user explicitly chose manual)
+      // 2. There's no explicit selection and we're not in manual mode
+      const currentSelected = newCache[sku][modelId].selected;
       if (cacheMethod === 'manual') {
         newCache[sku][modelId].selected = 'manual';
-      } else {
+      } else if (!currentSelected || currentSelected !== 'manual') {
         const hasAI = newCache[sku][modelId].ai;
         const hasGrid = newCache[sku][modelId].grid;
-        const currentSelected = newCache[sku][modelId].selected;
         
         const bestMethod = hasAI ? 'ai' : hasGrid ? 'grid' : 'manual';
         const shouldAutoSelect = !currentSelected || 
-          (currentSelected === 'manual' && bestMethod !== 'manual') || 
-          (currentSelected === 'grid' && bestMethod === 'ai');
+          (currentSelected !== 'manual' && 
+           (cacheMethod === 'ai' || cacheMethod === 'grid'));
         
         if (shouldAutoSelect) {
           newCache[sku][modelId].selected = bestMethod;

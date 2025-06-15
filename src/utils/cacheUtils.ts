@@ -3,7 +3,7 @@ import { ModelConfig } from '@/types/forecast';
 import { OptimizationCache, CACHE_EXPIRY_HOURS } from '@/utils/cacheStorageUtils';
 
 export const generateDataHash = (skuData: NormalizedSalesData[]): string => {
-  if (!skuData || skuData.length === 0) return 'empty';
+  if (!skuData || skuData.length === 0) return 'v2-0-empty';
   
   const sorted = [...skuData].sort((a, b) => a['Date'].localeCompare(b['Date']));
   const dataPoints = sorted.map(d => {
