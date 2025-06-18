@@ -21,6 +21,10 @@ interface FloatingSettingsButtonProps {
   setSettingsOpen: (open: boolean) => void;
   aiFailureThreshold: number;
   setAiFailureThreshold: (threshold: number) => void;
+  largeFileProcessingEnabled: boolean;
+  setLargeFileProcessingEnabled: (enabled: boolean) => void;
+  largeFileThreshold: number;
+  setLargeFileThreshold: (threshold: number) => void;
 }
 
 export const FloatingSettingsButton: React.FC<FloatingSettingsButtonProps> = ({
@@ -35,7 +39,11 @@ export const FloatingSettingsButton: React.FC<FloatingSettingsButtonProps> = ({
   settingsOpen,
   setSettingsOpen,
   aiFailureThreshold,
-  setAiFailureThreshold
+  setAiFailureThreshold,
+  largeFileProcessingEnabled,
+  setLargeFileProcessingEnabled,
+  largeFileThreshold,
+  setLargeFileThreshold
 }) => {
   return (
     <div className="fixed top-6 right-6 z-50">
@@ -71,6 +79,10 @@ export const FloatingSettingsButton: React.FC<FloatingSettingsButtonProps> = ({
                 setAiCsvImportEnabled={setAiCsvImportEnabled}
                 aiFailureThreshold={aiFailureThreshold}
                 setAiFailureThreshold={setAiFailureThreshold}
+                largeFileProcessingEnabled={largeFileProcessingEnabled}
+                setLargeFileProcessingEnabled={setLargeFileProcessingEnabled}
+                largeFileThreshold={largeFileThreshold}
+                setLargeFileThreshold={setLargeFileThreshold}
               />
             </TabsContent>
             

@@ -31,6 +31,10 @@ interface MainLayoutProps {
   paused: boolean;
   aiFailureThreshold: number;
   setAiFailureThreshold: (threshold: number) => void;
+  largeFileProcessingEnabled: boolean;
+  setLargeFileProcessingEnabled: (enabled: boolean) => void;
+  largeFileThreshold: number;
+  setLargeFileThreshold: (threshold: number) => void;
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({
@@ -55,7 +59,11 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   isOptimizing,
   paused,
   aiFailureThreshold,
-  setAiFailureThreshold
+  setAiFailureThreshold,
+  largeFileProcessingEnabled,
+  setLargeFileProcessingEnabled,
+  largeFileThreshold,
+  setLargeFileThreshold
 }) => {
   // === DEV MENU START ===
   // This block is for development only and can be easily erased.
@@ -137,6 +145,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           setAiFailureThreshold={setAiFailureThreshold}
           settingsOpen={settingsOpen}
           setSettingsOpen={setSettingsOpen}
+          largeFileProcessingEnabled={largeFileProcessingEnabled}
+          setLargeFileProcessingEnabled={setLargeFileProcessingEnabled}
+          largeFileThreshold={largeFileThreshold}
+          setLargeFileThreshold={setLargeFileThreshold}
         />
 
         {/* Progress Steps */}

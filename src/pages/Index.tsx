@@ -75,6 +75,10 @@ const Index = () => {
     setAiCsvImportEnabled,
     aiFailureThreshold,
     setAiFailureThreshold,
+    largeFileProcessingEnabled,
+    setLargeFileProcessingEnabled,
+    largeFileThreshold,
+    setLargeFileThreshold,
     resetToDefaults
   } = useGlobalSettings();
 
@@ -339,7 +343,11 @@ const Index = () => {
         settingsOpen={settingsOpen}
         setSettingsOpen={setSettingsOpen}
         isOptimizing={queue.isOptimizing}
-          paused={queue.paused}
+        paused={queue.paused}
+        largeFileProcessingEnabled={largeFileProcessingEnabled}
+        setLargeFileProcessingEnabled={setLargeFileProcessingEnabled}
+        largeFileThreshold={largeFileThreshold}
+        setLargeFileThreshold={setLargeFileThreshold}
       >
         <ForecastPage
           data={cleanedData.length > 0 ? cleanedData : salesData}
@@ -385,6 +393,10 @@ const Index = () => {
         setSettingsOpen={setSettingsOpen}
         isOptimizing={queue.isOptimizing}
         paused={queue.paused}
+        largeFileProcessingEnabled={largeFileProcessingEnabled}
+        setLargeFileProcessingEnabled={setLargeFileProcessingEnabled}
+        largeFileThreshold={largeFileThreshold}
+        setLargeFileThreshold={setLargeFileThreshold}
       >
         <StepContent
           currentStep={currentStep}

@@ -84,10 +84,10 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
   const [aiTransformResult, setAiTransformResult] = useState<AITransformResult | null>(null);
   const [showAiSuggestions, setShowAiSuggestions] = useState(true);
   const [currentQuestion, setCurrentQuestion] = useState<AIQuestion | null>(null);
-  const { aiCsvImportEnabled } = useGlobalSettings();
+  const { aiCsvImportEnabled, largeFileProcessingEnabled, largeFileThreshold } = useGlobalSettings();
 
   // New state for AI-powered flow
-  const [aiStep, setAiStep] = useState<'upload' | 'describe' | 'ai-preview' | 'ai-mapping' | 'manual'>('upload');
+  const [aiStep, setAiStep] = useState<'upload' | 'describe' | 'ai-preview' | 'ai-mapping' | 'manual' | 'config'>('upload');
   const [aiResult, setAiResult] = useState<any[][] | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -96,6 +96,12 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
 
   // Add a loading state for manual preview parsing
   const [manualLoading, setManualLoading] = useState(false);
+
+  // State for configuration-based large file processing
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [generatedConfig, setGeneratedConfig] = useState<any>(null);
+  const [configApplied, setConfigApplied] = useState(false);
 
   const DATE_FORMAT_OPTIONS = [
     { value: 'dd/mm/yyyy', label: 'dd/mm/yyyy' },
@@ -187,29 +193,47 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
       reader.onload = (event) => {
         const text = event.target?.result as string;
         setOriginalCsv(text);
-        // Estimate tokens for AI
-        const estimatedTokens = Math.ceil(text.length / 4);
-        const maxTokens = 100000;
+        
+        // Check file size
+        const fileSize = text.length;
+        const isLargeFile = fileSize > largeFileThreshold;
+        
         // If AI CSV import is disabled, always go straight to manual
         if (!aiCsvImportEnabled) {
           setAiStep('manual');
           setStep('preview');
           // Auto-detect separator and parse CSV for preview
-        const detected = autoDetectSeparator(text.split('\n')[0]);
-        setSeparator(detected);
-        parseCsv(text, detected);
+          const detected = autoDetectSeparator(text.split('\n')[0]);
+          setSeparator(detected);
+          parseCsv(text, detected);
           return;
         }
+        
         // Decide which flow to use
-        if (aiCsvImportEnabled && estimatedTokens <= maxTokens) {
+        if (isLargeFile && largeFileProcessingEnabled) {
+          // Use configuration-based processing for large files
+          setAiStep('config');
+          setStep('preview');
+          // Parse a small chunk for preview
+          const lines = text.split('\n');
+          const chunk = lines.slice(0, 10).join('\n'); // First 10 lines for preview
+          const detected = autoDetectSeparator(lines[0]);
+          setSeparator(detected);
+          parseCsv(chunk, detected);
+        } else if (aiCsvImportEnabled && !isLargeFile) {
+          // Use direct AI processing for small files
           setAiStep('describe');
-        } else if (aiCsvImportEnabled && estimatedTokens > maxTokens) {
-          setError(`File too large for AI processing (estimated ${estimatedTokens.toLocaleString()} tokens). Switching to manual import.`);
+        } else if (aiCsvImportEnabled && isLargeFile && !largeFileProcessingEnabled) {
+          // Large file but configuration processing is disabled
+          setError(`File too large for direct AI processing (${(fileSize / 1024).toFixed(1)}KB). Enable "Large File Processing" in settings to use configuration-based processing.`);
           setTimeout(() => {
             setAiStep('manual');
             setStep('preview');
             setError(null);
-          }, 2000);
+            const detected = autoDetectSeparator(text.split('\n')[0]);
+            setSeparator(detected);
+            parseCsv(text, detected);
+          }, 3000);
         }
       };
       reader.readAsText(f);
@@ -494,6 +518,70 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
     }
   };
 
+  // Configuration-based processing for large files
+  const handleConfigProcessing = async () => {
+    setConfigLoading(true);
+    setConfigError(null);
+    try {
+      // Parse a sample of the CSV for AI analysis
+      const lines = originalCsv.split('\n');
+      const sampleLines = lines.slice(0, 5); // First 5 lines for AI analysis
+      const sampleCsv = sampleLines.join('\n');
+      
+      // Generate configuration using AI
+      const response = await fetch('http://localhost:3001/api/grok-generate-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          csvChunk: sampleCsv, 
+          instructions: aiCsvInstructions,
+          fileSize: originalCsv.length 
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      setGeneratedConfig(result.config);
+      
+      // Apply configuration to full CSV
+      const applyResponse = await fetch('http://localhost:3001/api/apply-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          csvData: originalCsv, 
+          config: result.config 
+        }),
+      });
+      
+      if (!applyResponse.ok) {
+        const errorData = await applyResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${applyResponse.status}: ${applyResponse.statusText}`);
+      }
+      
+      const applyResult = await applyResponse.json();
+      setAiResult(applyResult.transformedData);
+      setConfigApplied(true);
+      setAiStep('ai-preview');
+      
+    } catch (err: any) {
+      setConfigError(err.message);
+      // Fallback to manual import
+      setTimeout(() => {
+        setAiStep('manual');
+        setStep('preview');
+        const detected = autoDetectSeparator(originalCsv.split('\n')[0]);
+        setSeparator(detected);
+        parseCsv(originalCsv, detected);
+      }, 3000);
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
   // Top-level hooks for mapping (AI and manual)
   const aiMappingHeader = useMemo(() => (aiResult ? aiResult[0] : []), [aiResult]);
   const aiMappingRows = useMemo(() => (aiResult ? aiResult.slice(1) : []), [aiResult]);
@@ -614,15 +702,77 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
       </div>
     );
   }
+
+  // Configuration-based processing step
+  if (step === 'preview' && aiCsvImportEnabled && aiStep === 'config') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[300px] py-12">
+        <div className="mb-8 text-center">
+          <div className="text-slate-700 text-lg font-semibold mb-2">Large File Detected</div>
+          <div className="text-slate-500 text-base">
+            Your file is {(originalCsv.length / 1024).toFixed(1)}KB. Using configuration-based processing for optimal performance.
+          </div>
+        </div>
+        
+        {configError && (
+          <Alert className="mb-4 max-w-md">
+            <AlertTitle>Processing Error</AlertTitle>
+            <AlertDescription>{configError}</AlertDescription>
+          </Alert>
+        )}
+        
+        <div className="flex flex-col md:flex-row gap-8">
+          <button
+            className="flex flex-col items-center justify-center bg-green-50 hover:bg-green-100 border-2 border-green-200 hover:border-green-400 rounded-xl shadow-md px-10 py-8 transition-all duration-200 w-72 focus:outline-none"
+            onClick={handleConfigProcessing}
+            disabled={configLoading}
+          >
+            <Bot className="w-10 h-10 text-green-600 mb-3" />
+            <span className="text-xl font-bold text-green-800 mb-1">Process with AI</span>
+            <span className="text-slate-700 text-base mb-2 text-center">AI will analyze your data and generate a transformation configuration.</span>
+            {configLoading && <span className="text-green-600 mt-2">Processing...</span>}
+          </button>
+          
+          <button
+            className="flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 border-2 border-slate-200 hover:border-slate-400 rounded-xl shadow-md px-10 py-8 transition-all duration-200 w-72 focus:outline-none"
+            onClick={() => {
+              setAiStep('manual');
+              setStep('preview');
+              if (originalCsv) {
+                setManualLoading(true);
+                const detected = autoDetectSeparator(originalCsv.split('\n')[0]);
+                setSeparator(detected);
+                parseCsv(originalCsv, detected);
+                setTimeout(() => setManualLoading(false), 500);
+              }
+            }}
+          >
+            <User className="w-10 h-10 text-slate-600 mb-3" />
+            <span className="text-xl font-bold text-slate-800 mb-1">Manual Import</span>
+            <span className="text-slate-700 text-base mb-2 text-center">Manually review, map, and import your CSV data step by step.</span>
+          </button>
+        </div>
+        
+        {generatedConfig && (
+          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg max-w-md">
+            <h4 className="font-medium text-blue-800 mb-2">Generated Configuration</h4>
+            <pre className="text-xs text-blue-700 overflow-auto">
+              {JSON.stringify(generatedConfig, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
+    );
+  }
   
   if (aiCsvImportEnabled && aiStep !== 'upload' && aiStep !== 'manual') {
     if (aiStep === 'describe') {
-  return (
+      return (
         <div className="flex flex-col items-center justify-center min-h-[300px] py-12">
           <div className="mb-8 text-center">
             <div className="text-slate-700 text-lg font-semibold mb-2">How would you like to import your data?</div>
             <div className="text-slate-500 text-base">Choose a method below to continue.</div>
-                </div>
+          </div>
           <div className="flex flex-col md:flex-row gap-8">
             <button
               className="flex flex-col items-center justify-center bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 hover:border-blue-400 rounded-xl shadow-md px-10 py-8 transition-all duration-200 w-72 focus:outline-none"
@@ -652,8 +802,8 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
               <span className="text-xl font-bold text-slate-800 mb-1">Manual Import</span>
               <span className="text-slate-700 text-base mb-2 text-center">Manually review, map, and import your CSV data step by step.</span>
             </button>
-            </div>
           </div>
+        </div>
       );
     }
     if (aiStep === 'ai-preview' && aiResult) {
