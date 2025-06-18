@@ -85,20 +85,9 @@ export const StepContent: React.FC<StepContentProps> = ({
           <CardDescription>
             Upload a CSV file containing your historical sales data with columns: Date, SKU, Sales
           </CardDescription>
-          {lastImportFileName && lastImportTime && (
-            <div className="mt-4 p-3 rounded-lg bg-blue-50 border border-blue-200 flex items-start gap-3">
-              <Upload className="h-5 w-5 text-blue-600 mt-1" />
-              <div>
-                <div className="font-semibold text-blue-800 mb-1">A file has already been loaded.</div>
-                <div className="text-sm text-blue-900">File: <span className="font-mono">{lastImportFileName}</span></div>
-                <div className="text-xs text-blue-700 mb-1">Imported on: {lastImportTime}</div>
-                <div className="text-xs text-blue-700 italic">You do not need to upload again unless you want to load a new file.</div>
-              </div>
-            </div>
-          )}
         </CardHeader>
         <CardContent>
-          <CsvImportWizard onDataReady={handleCsvDataReady} onFileNameChange={handleFileNameChange} />
+          <CsvImportWizard onDataReady={handleCsvDataReady} onFileNameChange={handleFileNameChange} lastImportFileName={lastImportFileName} lastImportTime={lastImportTime} />
         </CardContent>
       </Card>
     );

@@ -304,6 +304,16 @@ const Index = () => {
     }
   }, [addToQueue, queue.items, aiEnabled, globalaiForecastModelOptimizationEnabled]);
 
+  useEffect(() => {
+    const handleGoToStep = (e) => {
+      if (e.detail && typeof e.detail.step === 'number') {
+        setCurrentStep(e.detail.step);
+      }
+    };
+    window.addEventListener('goToStep', handleGoToStep);
+    return () => window.removeEventListener('goToStep', handleGoToStep);
+  }, [setCurrentStep]);
+
   // If we're on the forecast step, render the new ForecastPage
   if (currentStep === 3) {
     return (

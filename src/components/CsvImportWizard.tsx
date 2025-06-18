@@ -8,12 +8,14 @@ import { transformDataWithAI, AITransformResult } from '@/utils/aiDataTransform'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AIQuestionDialog } from './AIQuestionDialog';
 import { aiService, AIQuestion, AIResponse } from '@/services/aiService';
-import { useSettings } from '@/hooks/useSettings';
+import { useGlobalSettings } from '@/hooks/useGlobalSettings';
 import aiCsvInstructions from '@/config/ai_csv_instructions.txt?raw';
 
 interface CsvImportWizardProps {
   onDataReady: (data: any[][]) => void;
   onFileNameChange?: (fileName: string) => void;
+  lastImportFileName?: string | null;
+  lastImportTime?: string | null;
 }
 
 const SEPARATORS = [',', ';', '\t', '|'];
@@ -66,7 +68,7 @@ function trimEmptyRowsAndColumns(matrix: any[][]): any[][] {
   return matrix.slice(top, bottom + 1).map(row => row.slice(left, right + 1));
 }
 
-export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, onFileNameChange }) => {
+export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, onFileNameChange, lastImportFileName, lastImportTime }) => {
   const [file, setFile] = useState<File | null>(null);
   const [separator, setSeparator] = useState<string>(',');
   const [data, setData] = useState<any[][]>([]);
@@ -77,14 +79,12 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
   const [columnRoles, setColumnRoles] = useState<ColumnRole[]>([]);
   const [dateRange, setDateRange] = useState<{ start: number; end: number }>({ start: -1, end: -1 });
   const [isDragging, setIsDragging] = useState(false);
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [customAggTypes, setCustomAggTypes] = useState<string[]>([]);
   const [dateFormat, setDateFormat] = useState<string>('dd/mm/yyyy');
   const [aiTransformResult, setAiTransformResult] = useState<AITransformResult | null>(null);
   const [showAiSuggestions, setShowAiSuggestions] = useState(true);
   const [currentQuestion, setCurrentQuestion] = useState<AIQuestion | null>(null);
-  const { settings } = useSettings();
-  const aiCsvImportEnabled = settings.aiCsvImportEnabled;
+  const { aiCsvImportEnabled } = useGlobalSettings();
 
   // New state for AI-powered flow
   const [aiStep, setAiStep] = useState<'upload' | 'describe' | 'ai-preview' | 'ai-mapping' | 'manual'>('upload');
@@ -163,7 +163,6 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
     const files = Array.from(e.dataTransfer.files);
     const csvFile = files.find(file => file.type === 'text/csv' || file.name.endsWith('.csv'));
     if (csvFile) {
-      setUploadedFileName(csvFile.name);
       handleFileChange({ target: { files: [csvFile] } } as any);
     } else {
       setError('Please upload a CSV file');
@@ -191,23 +190,26 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
         // Estimate tokens for AI
         const estimatedTokens = Math.ceil(text.length / 4);
         const maxTokens = 100000;
+        // If AI CSV import is disabled, always go straight to manual
+        if (!aiCsvImportEnabled) {
+          setAiStep('manual');
+          setStep('preview');
+          // Auto-detect separator and parse CSV for preview
+        const detected = autoDetectSeparator(text.split('\n')[0]);
+        setSeparator(detected);
+        parseCsv(text, detected);
+          return;
+        }
         // Decide which flow to use
         if (aiCsvImportEnabled && estimatedTokens <= maxTokens) {
           setAiStep('describe');
-          console.log('[handleFileChange] AI flow: setAiStep("describe")');
         } else if (aiCsvImportEnabled && estimatedTokens > maxTokens) {
           setError(`File too large for AI processing (estimated ${estimatedTokens.toLocaleString()} tokens). Switching to manual import.`);
           setTimeout(() => {
+            setAiStep('manual');
             setStep('preview');
-            console.log('[handleFileChange] Large file: setStep("preview")');
+            setError(null);
           }, 2000);
-        } else {
-          // Manual flow
-          const detected = autoDetectSeparator(text.split('\n')[0]);
-          setSeparator(detected);
-          parseCsv(text, detected);
-          setStep('preview');
-          console.log('[handleFileChange] Manual flow: setStep("preview")');
         }
       };
       reader.readAsText(f);
@@ -230,7 +232,7 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
           setData(trimmed.slice(1, 11)); // Show first 10 rows for preview
           
           // Apply AI analysis if enabled
-          if (settings.ai.enabled) {
+          if (aiCsvImportEnabled) {
             try {
               const questions = await aiService.analyzeData(trimmed);
               for (const question of questions) {
@@ -572,14 +574,55 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
   }, [aiMappingNormalizedData]);
 
   // Main render logic:
+  if (step === 'preview' && aiCsvImportEnabled && aiStep === 'describe') {
+    // Render the AI/Manual selection menu (reuse the same JSX as in your aiStep === 'describe' block)
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[300px] py-12">
+        <div className="mb-8 text-center">
+          <div className="text-slate-700 text-lg font-semibold mb-2">How would you like to import your data?</div>
+          <div className="text-slate-500 text-base">Choose a method below to continue.</div>
+        </div>
+        <div className="flex flex-col md:flex-row gap-8">
+          <button
+            className="flex flex-col items-center justify-center bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 hover:border-blue-400 rounded-xl shadow-md px-10 py-8 transition-all duration-200 w-72 focus:outline-none"
+            onClick={handleAITransform}
+            disabled={aiLoading}
+          >
+            <Bot className="w-10 h-10 text-blue-600 mb-3" />
+            <span className="text-xl font-bold text-blue-800 mb-1">Use AI</span>
+            <span className="text-slate-700 text-base mb-2 text-center">Let AI automatically clean, map, and transform your data for you.</span>
+            {aiLoading && <span className="text-blue-600 mt-2">Processing...</span>}
+          </button>
+          <button
+            className="flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 border-2 border-slate-200 hover:border-slate-400 rounded-xl shadow-md px-10 py-8 transition-all duration-200 w-72 focus:outline-none"
+            onClick={() => {
+              setAiStep('manual');
+              if (originalCsv) {
+                setManualLoading(true);
+                const detected = autoDetectSeparator(originalCsv.split('\n')[0]);
+                setSeparator(detected);
+                parseCsv(originalCsv, detected);
+                setTimeout(() => setManualLoading(false), 500);
+              }
+            }}
+          >
+            <User className="w-10 h-10 text-slate-600 mb-3" />
+            <span className="text-xl font-bold text-slate-800 mb-1">Manual Import</span>
+            <span className="text-slate-700 text-base mb-2 text-center">Manually review, map, and import your CSV data step by step.</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
   if (aiCsvImportEnabled && aiStep !== 'upload' && aiStep !== 'manual') {
     if (aiStep === 'describe') {
-      return (
+  return (
         <div className="flex flex-col items-center justify-center min-h-[300px] py-12">
           <div className="mb-8 text-center">
             <div className="text-slate-700 text-lg font-semibold mb-2">How would you like to import your data?</div>
             <div className="text-slate-500 text-base">Choose a method below to continue.</div>
-          </div>
+                </div>
           <div className="flex flex-col md:flex-row gap-8">
             <button
               className="flex flex-col items-center justify-center bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 hover:border-blue-400 rounded-xl shadow-md px-10 py-8 transition-all duration-200 w-72 focus:outline-none"
@@ -609,8 +652,8 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
               <span className="text-xl font-bold text-slate-800 mb-1">Manual Import</span>
               <span className="text-slate-700 text-base mb-2 text-center">Manually review, map, and import your CSV data step by step.</span>
             </button>
+            </div>
           </div>
-        </div>
       );
     }
     if (aiStep === 'ai-preview' && aiResult) {
@@ -665,7 +708,6 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
   
   // Mapping step - available for both AI and manual flows
   if (step === 'mapping') {
-    console.log('[Render] Mapping step, aiStep:', aiStep);
     const isAIMapping = aiStep === 'ai-mapping';
     const mappingHeader = isAIMapping ? aiMappingHeader : manualMappingHeader;
     const mappingRows = isAIMapping ? aiMappingRows : manualMappingRows;
@@ -677,8 +719,8 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
   
     // Now, use these variables in your return JSX below
     return (
-      <div className="space-y-6">
-        <h3 className="text-lg font-semibold">Step 2: Map Columns</h3>
+        <div className="space-y-6">
+          <h3 className="text-lg font-semibold">Step 2: Map Columns</h3>
         {aiTransformResult && isAIMapping && (
           <div className="mb-4">
             <h4 className="font-medium mb-2">AI-Suggested Mappings</h4>
@@ -691,52 +733,52 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
             </div>
           </div>
         )}
-        <div className="mb-4">
-          <h4 className="font-medium mb-2">Custom Aggregatable Fields</h4>
-          <div className="flex flex-wrap gap-2 items-center">
-            {customAggTypes.map((type) => (
-              <span key={type} className="flex items-center bg-blue-100 text-blue-800 rounded px-2 py-1 text-xs">
-                Σ {type}
-                <button
-                  className="ml-1 text-blue-500 hover:text-red-500"
-                  onClick={() => {
-                    setCustomAggTypes(prev => prev.filter(t => t !== type));
+          <div className="mb-4">
+            <h4 className="font-medium mb-2">Custom Aggregatable Fields</h4>
+            <div className="flex flex-wrap gap-2 items-center">
+              {customAggTypes.map((type) => (
+                <span key={type} className="flex items-center bg-blue-100 text-blue-800 rounded px-2 py-1 text-xs">
+                  Σ {type}
+                  <button
+                    className="ml-1 text-blue-500 hover:text-red-500"
+                    onClick={() => {
+                      setCustomAggTypes(prev => prev.filter(t => t !== type));
                     if (isAIMapping) {
                       setAiColumnRoles(prev => prev.map(role => role === type ? 'Ignore' : role));
                     } else {
                       setColumnRoles(prev => prev.map(role => role === type ? 'Ignore' : role));
                     }
-                  }}
-                  aria-label={`Remove custom field ${type}`}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-            <input
-              type="text"
-              className="border rounded px-1 py-0.5 text-xs w-32"
-              placeholder="Add custom field..."
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  const val = e.currentTarget.value.trim();
-                  if (val && !customAggTypes.includes(val)) {
-                    setCustomAggTypes(prev => [...prev, val]);
-                    e.currentTarget.value = '';
+                    }}
+                    aria-label={`Remove custom field ${type}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                type="text"
+                className="border rounded px-1 py-0.5 text-xs w-32"
+                placeholder="Add custom field..."
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const val = e.currentTarget.value.trim();
+                    if (val && !customAggTypes.includes(val)) {
+                      setCustomAggTypes(prev => [...prev, val]);
+                      e.currentTarget.value = '';
+                    }
                   }
-                }
-              }}
-            />
+                }}
+              />
+            </div>
           </div>
-        </div>
-        <div className="overflow-x-auto border rounded">
-          <table className="min-w-full text-xs">
-            <thead>
-              <tr>
+          <div className="overflow-x-auto border rounded">
+            <table className="min-w-full text-xs">
+              <thead>
+                <tr>
                 {mappingHeader.map((h, i) => (
-                  <th key={i} className="px-2 py-1 bg-slate-100 border-b">
-                    <div>{h}</div>
-                    <select
+                    <th key={i} className="px-2 py-1 bg-slate-100 border-b">
+                      <div>{h}</div>
+                      <select
                       value={mappingRoles[i] || 'Ignore'}
                       onChange={e => {
                         if (isAIMapping) {
@@ -747,113 +789,119 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
                           handleRoleChange(i, e.target.value as ColumnRole);
                         }
                       }}
-                      className="mt-1 border rounded px-1 py-0.5 text-xs"
-                    >
-                      {DROPDOWN_OPTIONS.filter(opt => {
-                        if (
-                          opt.label.startsWith('Σ ') &&
-                          !customAggTypes.includes(opt.value) &&
+                        className="mt-1 border rounded px-1 py-0.5 text-xs"
+                      >
+                        {DROPDOWN_OPTIONS.filter(opt => {
+                          if (
+                            opt.label.startsWith('Σ ') &&
+                            !customAggTypes.includes(opt.value) &&
                           mappingHeader.some((header, idx) =>
-                            idx !== i &&
+                              idx !== i &&
                             (mappingRoles[idx] === 'Material Code' || mappingRoles[idx] === 'Description') &&
-                            header === opt.value
-                          )
-                        ) {
-                          return false;
-                        }
-                        if (
-                          opt.value === 'Date' &&
-                          !(
+                              header === opt.value
+                            )
+                          ) {
+                            return false;
+                          }
+                          if (
+                            opt.value === 'Date' &&
+                            !(
                             isDateString(mappingHeader[i]) ||
                             mappingRows.every(row => {
-                              const cell = row[i];
-                              return cell === '' || cell === undefined || !isNaN(Number(cell));
-                            })
-                          )
-                        ) {
-                          return false;
-                        }
-                        return true;
-                      }).map(opt => {
-                        const isMultiAllowed = opt.value === 'Ignore' || opt.value === 'Date';
+                                const cell = row[i];
+                                return cell === '' || cell === undefined || !isNaN(Number(cell));
+                              })
+                            )
+                          ) {
+                            return false;
+                          }
+                          return true;
+                        }).map(opt => {
+                          const isMultiAllowed = opt.value === 'Ignore' || opt.value === 'Date';
                         const isAssignedElsewhere = mappingRoles.some((role, idx) => idx !== i && role === opt.value);
-                        return (
-                          <option key={opt.value} value={opt.value} disabled={!isMultiAllowed && isAssignedElsewhere}>
-                            {opt.label}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {mappingRows.map((row, i) => (
-                <tr key={i}>
-                  {row.map((cell, j) => <td key={j} className="px-2 py-1 border-b">{cell}</td>)}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {dateRange.start !== -1 && dateRange.end !== -1 && (
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-xs">Date columns from</span>
-            <select
-              value={dateRange.start}
-              onChange={e => handleDateRangeChange('start', Number(e.target.value))}
-              className="border rounded px-1 py-0.5 text-xs"
-            >
-              {columnRoles.map((role, i) => role === 'Date' && <option key={i} value={i}>{previewHeader[i]}</option>)}
-            </select>
-            <span className="text-xs">to</span>
-            <select
-              value={dateRange.end}
-              onChange={e => handleDateRangeChange('end', Number(e.target.value))}
-              className="border rounded px-1 py-0.5 text-xs"
-            >
-              {columnRoles.map((role, i) => role === 'Date' && <option key={i} value={i}>{previewHeader[i]}</option>)}
-            </select>
-          </div>
-        )}
-        <div className="mt-4">
-          <h4 className="font-medium mb-2">Preview Normalized Data</h4>
-          <div className="overflow-x-auto border rounded">
-            <table className="min-w-full text-xs">
-              <thead>
-                <tr>
-                  {mappingNormalizedHeaders.map(h => <th key={h} className="px-2 py-1 bg-slate-100 border-b">{h}</th>)}
+                          return (
+                            <option key={opt.value} value={opt.value} disabled={!isMultiAllowed && isAssignedElsewhere}>
+                              {opt.label}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {mappingNormalizedData.slice(0, 10).map((row, i) => (
+              {mappingRows.map((row, i) => (
                   <tr key={i}>
-                    {mappingNormalizedHeaders.map(h => <td key={h} className="px-2 py-1 border-b">{row[h]}</td>)}
+                    {row.map((cell, j) => <td key={j} className="px-2 py-1 border-b">{cell}</td>)}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
-        <div className="flex justify-between mt-4">
-          <Button variant="outline" onClick={() => setStep('preview')}>Back</Button>
-          <div className="flex flex-col items-end">
+          {dateRange.start !== -1 && dateRange.end !== -1 && (
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-xs">Date columns from</span>
+              <select
+                value={dateRange.start}
+                onChange={e => handleDateRangeChange('start', Number(e.target.value))}
+                className="border rounded px-1 py-0.5 text-xs"
+              >
+                {columnRoles.map((role, i) => role === 'Date' && <option key={i} value={i}>{previewHeader[i]}</option>)}
+              </select>
+              <span className="text-xs">to</span>
+              <select
+                value={dateRange.end}
+                onChange={e => handleDateRangeChange('end', Number(e.target.value))}
+                className="border rounded px-1 py-0.5 text-xs"
+              >
+                {columnRoles.map((role, i) => role === 'Date' && <option key={i} value={i}>{previewHeader[i]}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="mt-4">
+            <h4 className="font-medium mb-2">Preview Normalized Data</h4>
+            <div className="overflow-x-auto border rounded">
+              <table className="min-w-full text-xs">
+                <thead>
+                  <tr>
+                  {mappingNormalizedHeaders.map(h => <th key={h} className="px-2 py-1 bg-slate-100 border-b">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                {mappingNormalizedData.slice(0, 10).map((row, i) => (
+                    <tr key={i}>
+                    {mappingNormalizedHeaders.map(h => <td key={h} className="px-2 py-1 border-b">{row[h]}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="flex justify-between mt-4">
+          {/* From Mapping to Preview */}
+          <Button variant="outline" onClick={() => {
+            if (aiCsvImportEnabled) {
+              setStep('preview');
+            } else {
+              setStep('preview');
+            }
+          }}>Back</Button>
+            <div className="flex flex-col items-end">
             <Button onClick={() => {
               // Always use the normalized (long) data for both AI and manual
               const headers = mappingNormalizedHeaders;
               const dataRows = mappingNormalizedData.map(row => headers.map(h => row[h]));
               const finalData = [headers, ...dataRows];
-              console.log('[Mapping] Final data format (long):', finalData);
               onDataReady(finalData);
             }} disabled={mappingNormalizedData.length === 0 || !mappingHasMaterialCode}>
-              Confirm Mapping & Import
-            </Button>
+                Confirm Mapping & Import
+              </Button>
             {!mappingHasMaterialCode && (
-              <span className="text-xs text-red-600 mt-1">You must map at least one column as <b>Material Code</b> to continue.</span>
-            )}
+                <span className="text-xs text-red-600 mt-1">You must map at least one column as <b>Material Code</b> to continue.</span>
+              )}
+            </div>
           </div>
-        </div>
       </div>
     );
   }
@@ -861,6 +909,29 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
   if (step === 'upload') {
     return (
       <div className="space-y-4">
+        {lastImportFileName && (
+          <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-4 flex flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="font-semibold text-blue-800 mb-1">A file has already been loaded.</div>
+              <div className="text-sm text-blue-700">File: <span className="font-mono">{lastImportFileName}</span></div>
+              {lastImportTime && <div className="text-xs text-blue-600">Imported on: {lastImportTime}</div>}
+              <div className="text-xs text-blue-600 mt-1">You can continue with your current file or upload a new one below.</div>
+            </div>
+            <Button
+              className="mt-4 md:mt-0 md:ml-8"
+              onClick={() => {
+                // Go to Clean & Prepare step (step 1)
+                if (typeof window !== 'undefined') {
+                  const event = new CustomEvent('goToStep', { detail: { step: 1 } });
+                  window.dispatchEvent(event);
+                }
+              }}
+              variant="default"
+            >
+              Continue with Current File
+            </Button>
+        </div>
+      )}
         <div
           className={`border-2 border-dashed rounded-lg p-8 text-center transition-all duration-300 cursor-pointer ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-slate-50 hover:border-slate-400'}`}
           onDrop={handleDrop}
@@ -868,66 +939,17 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
           onDragLeave={() => setIsDragging(false)}
           onClick={handleDropAreaClick}
         >
-          {uploadedFileName ? (
-            <div className="space-y-4">
-              <Upload className="h-12 w-12 text-green-600 mx-auto" />
-              <div>
-                <h3 className="text-lg font-semibold text-green-800">File Uploaded Successfully</h3>
-                <p className="text-green-600">{uploadedFileName}</p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <Upload className={`h-12 w-12 mx-auto transition-colors ${isDragging ? 'text-blue-600' : 'text-slate-400'}`} />
-              <div>
-                <h3 className="text-lg font-semibold text-slate-700">Drop your CSV file here</h3>
-                <p className="text-slate-500">or click to browse files</p>
-              </div>
-            </div>
-          )}
+          <Upload className={`h-12 w-12 mx-auto transition-colors ${isDragging ? 'text-blue-600' : 'text-slate-400'}`} />
+          <div>
+            <h3 className="text-lg font-semibold text-slate-700">Drop your CSV file here</h3>
+            <p className="text-slate-500">or click to browse files</p>
+          </div>
         </div>
         <input
           id="csv-upload-input"
           type="file"
           accept=".csv,text/csv"
-          onChange={e => {
-            if (e.target.files && e.target.files[0]) {
-              const file = e.target.files[0];
-              setUploadedFileName(file.name);
-              setFile(file);
-              setError(null);
-              if (typeof onFileNameChange === 'function') {
-                onFileNameChange(file.name);
-              }
-              const reader = new FileReader();
-              reader.onload = (event) => {
-                const text = event.target?.result as string;
-                setOriginalCsv(text);
-                // Estimate tokens for AI
-                const estimatedTokens = Math.ceil(text.length / 4);
-                const maxTokens = 100000;
-                // Decide which flow to use
-                if (aiCsvImportEnabled && estimatedTokens <= maxTokens) {
-                  setAiStep('describe');
-                  console.log('[handleFileChange] AI flow: setAiStep("describe")');
-                } else if (aiCsvImportEnabled && estimatedTokens > maxTokens) {
-                  setError(`File too large for AI processing (estimated ${estimatedTokens.toLocaleString()} tokens). Switching to manual import.`);
-                  setTimeout(() => {
-                    setStep('preview');
-                    console.log('[handleFileChange] Large file: setStep("preview")');
-                  }, 2000);
-                } else {
-                  // Manual flow
-                  const detected = autoDetectSeparator(text.split('\n')[0]);
-                  setSeparator(detected);
-                  parseCsv(text, detected);
-                  setStep('preview');
-                  console.log('[handleFileChange] Manual flow: setStep("preview")');
-                }
-              };
-              reader.readAsText(file);
-            }
-          }}
+          onChange={handleFileChange}
           className="hidden"
         />
         {error && <div className="text-red-600">{error}</div>}
@@ -936,8 +958,8 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
             Browse Files
           </Button>
         </div>
-      </div>
-    );
+    </div>
+  );
   } else if (step === 'preview') {
     // show manual preview UI (classic style with separator)
     return (
@@ -1063,12 +1085,19 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
                     </tbody>
                   </table>
                 </div>
+                {/* From Preview to Upload (AI OFF) or Describe (AI ON) */}
                 <div className="flex justify-between mt-4">
-                  <Button variant="outline" onClick={() => setStep('upload')}>Back</Button>
+                  <Button variant="outline" onClick={() => {
+                    if (aiCsvImportEnabled) {
+                      setAiStep('describe');
+                    } else {
+                      setStep('upload');
+                    }
+                  }}>Back</Button>
                   <Button
                     onClick={() => {
-                      console.log('[Manual] Next: Mapping clicked, data.length:', data.length);
                       setStep('mapping');
+                      setAiStep('manual');
                     }}
                     disabled={data.length === 0}
                   >
@@ -1078,9 +1107,9 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
               </div>
             )}
           </>
-        )}
-      </div>
-    );
+      )}
+    </div>
+  );
   }
   return null;
 }; 

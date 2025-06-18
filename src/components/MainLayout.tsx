@@ -139,48 +139,6 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           setSettingsOpen={setSettingsOpen}
         />
 
-        {/* === DEV MENU START === */}
-        {isDev && (
-          <div className="my-6 p-4 border-2 border-dashed border-red-400 bg-red-50 rounded-lg">
-            <div className="font-bold text-red-700 mb-2">DEV: Manual Optimization Trigger</div>
-            <Button onClick={handleOptimizeAll} disabled={batchIsOptimizing} className="mb-4">
-              Optimize All SKUs/Models
-            </Button>
-            <div className="flex items-center gap-2">
-              <label htmlFor="dev-sku-select" className="text-sm font-semibold">SKU:</label>
-              <select
-                id="dev-sku-select"
-                value={selectedSKU}
-                onChange={e => setSelectedSKU(e.target.value)}
-                className="border rounded px-2 py-1"
-              >
-                {allSKUs.map((sku, index) => (
-                  <option key={`sku-${sku}-${index}`} value={sku}>{sku}</option>
-                ))}
-              </select>
-              <label htmlFor="dev-model-select" className="text-sm font-semibold">Model:</label>
-              <select
-                id="dev-model-select"
-                value={selectedModelId}
-                onChange={e => setSelectedModelId(e.target.value)}
-                className="border rounded px-2 py-1"
-              >
-                {models.map((model, index) => (
-                  <option key={`model-${model.id}-${index}`} value={model.id}>{model.name}</option>
-                ))}
-              </select>
-              <Button
-                onClick={handleOptimizeSKUModel}
-                disabled={batchIsOptimizing || !selectedSKU || !selectedModelId}
-                className="ml-2"
-              >
-                Optimize Selected
-              </Button>
-            </div>
-          </div>
-        )}
-        {/* === DEV MENU END === */}
-
         {/* Progress Steps */}
         <StepNavigation
           currentStep={currentStep}
