@@ -26,7 +26,7 @@ const runOptimizationInWorker = (job: {
   skuData: SalesData[];
   sku: string;
   businessContext?: BusinessContext;
-  grokApiEnabled?: boolean;
+  aiForecastModelOptimizationEnabled?: boolean;
   gridBaseline?: any;
 }) => {
   return new Promise<any>((resolve, reject) => {
@@ -51,7 +51,7 @@ export const optimizeSingleModel = async (
   forceGridSearch: boolean = false,
   businessContext?: BusinessContext,
   onMethodComplete?: (method: 'grid' | 'ai', result: any) => void,
-  grokApiEnabled: boolean = true
+  aiForecastModelOptimizationEnabled: boolean = true
 ): Promise<{
   selectedResult: any;
   bothResults?: { ai?: any; grid: any };
@@ -76,7 +76,7 @@ export const optimizeSingleModel = async (
     };
   }
 
-  if (forceGridSearch || !grokApiEnabled) {
+  if (forceGridSearch || !aiForecastModelOptimizationEnabled) {
     const gridResult = await runOptimizationInWorker({
       type: 'grid',
       model,
@@ -92,7 +92,7 @@ export const optimizeSingleModel = async (
     };
   }
 
-  const results = await runBothOptimizations(model, skuData, sku, progressUpdater, businessContext, onMethodComplete, grokApiEnabled);
+  const results = await runBothOptimizations(model, skuData, sku, progressUpdater, businessContext, onMethodComplete, aiForecastModelOptimizationEnabled);
   return {
     selectedResult: results.selectedResult,
     bothResults: results.bothResults
@@ -106,9 +106,9 @@ const runBothOptimizations = async (
   progressUpdater: ProgressUpdater,
   businessContext?: BusinessContext,
   onMethodComplete?: (method: 'grid' | 'ai', result: any) => void,
-  grokApiEnabled: boolean = true
+  aiForecastModelOptimizationEnabled: boolean = true
 ): Promise<MultiMethodResult> => {
-  if (!grokApiEnabled) {
+  if (!aiForecastModelOptimizationEnabled) {
     const gridResult = await runOptimizationInWorker({
       type: 'grid',
       model,
@@ -164,7 +164,7 @@ const runBothOptimizations = async (
     skuData,
     sku,
     businessContext,
-    grokApiEnabled,
+    aiForecastModelOptimizationEnabled,
     gridBaseline: gridResult // Pass grid as baseline
   });
   
@@ -222,7 +222,7 @@ export const getOptimizationByMethod = async (
   sku: string,
   method: 'ai' | 'grid',
   businessContext?: BusinessContext,
-  grokApiEnabled: boolean = true
+  aiForecastModelOptimizationEnabled: boolean = true
 ): Promise<any | null> => {
   if (!model.parameters || Object.keys(model.parameters).length === 0) {
     return null;
@@ -242,7 +242,7 @@ export const getOptimizationByMethod = async (
       skuData,
       sku,
       businessContext,
-      grokApiEnabled
+      aiForecastModelOptimizationEnabled
     });
   }
   return null;
@@ -253,7 +253,7 @@ export const optimizeModelForSKU = async (
   skuData: SalesData[],
   model: ModelConfig,
   businessContext?: BusinessContext,
-  grokApiEnabled: boolean = true
+  aiForecastModelOptimizationEnabled: boolean = true
 ): Promise<{
   success: boolean;
   optimizedParameters?: Record<string, number>;
@@ -271,7 +271,7 @@ export const optimizeModelForSKU = async (
 }> => {
   try {
     const progressUpdater = { setProgress: () => {} };
-    const result = await optimizeSingleModel(model, skuData, sku, progressUpdater, false, businessContext, undefined, grokApiEnabled);
+    const result = await optimizeSingleModel(model, skuData, sku, progressUpdater, false, businessContext, undefined, aiForecastModelOptimizationEnabled);
     return {
       success: true,
       optimizedParameters: result.selectedResult.parameters,

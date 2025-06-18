@@ -27,14 +27,14 @@ export const useParameterOptimization = () => {
     model: ModelConfig, 
     skuData: SalesData[], 
     frequency: any,
-    grokApiEnabled: boolean = true
+    aiForecastModelOptimizationEnabled: boolean = true
   ): Promise<Record<string, number> | undefined> => {
     if (!model.parameters || Object.keys(model.parameters).length === 0) {
       console.log(`⚠️ useParameterOptimization: No parameters for ${model.name}`);
       return model.parameters;
     }
 
-    if (!grokApiEnabled) {
+    if (!aiForecastModelOptimizationEnabled) {
       console.log('🔑 useParameterOptimization: Grok API disabled in global settings');
       toast({
         title: "AI Optimization Disabled",

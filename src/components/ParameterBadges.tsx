@@ -5,7 +5,7 @@ import { Bot, Grid3X3, User } from 'lucide-react';
 
 interface ParameterBadgesProps {
   canOptimize: boolean;
-  grokApiEnabled: boolean;
+  aiForecastModelOptimizationEnabled: boolean;
   localSelectedMethod: 'ai' | 'grid' | 'manual' | undefined;
   cacheVersion: number;
   onMethodChange: (method: 'ai' | 'grid' | 'manual') => void;
@@ -13,7 +13,7 @@ interface ParameterBadgesProps {
 
 export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
   canOptimize,
-  grokApiEnabled,
+  aiForecastModelOptimizationEnabled,
   localSelectedMethod,
   cacheVersion,
   onMethodChange,
@@ -33,7 +33,7 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
   return (
     <div className="flex items-center gap-2">
       {/* AI Badge - Only show when Grok API is enabled */}
-      {grokApiEnabled && (
+      {aiForecastModelOptimizationEnabled && (
         <Badge 
           key={`ai-${localSelectedMethod}-${cacheVersion}`}
           variant={isAI ? "default" : "outline"} 

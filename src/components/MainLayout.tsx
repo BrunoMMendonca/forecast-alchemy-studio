@@ -21,12 +21,14 @@ interface MainLayoutProps {
   setForecastPeriods: (periods: number) => void;
   businessContext: BusinessContext;
   setBusinessContext: (context: BusinessContext) => void;
-  grokApiEnabled: boolean;
-  setGrokApiEnabled: (enabled: boolean) => void;
+  aiForecastModelOptimizationEnabled: boolean;
+  setaiForecastModelOptimizationEnabled: (enabled: boolean) => void;
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
   isOptimizing?: boolean;
   paused: boolean;
+  aiFailureThreshold: number;
+  setAiFailureThreshold: (threshold: number) => void;
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({
@@ -42,12 +44,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   setForecastPeriods,
   businessContext,
   setBusinessContext,
-  grokApiEnabled,
-  setGrokApiEnabled,
+  aiForecastModelOptimizationEnabled,
+  setaiForecastModelOptimizationEnabled,
   settingsOpen,
   setSettingsOpen,
   isOptimizing,
-  paused
+  paused,
+  aiFailureThreshold,
+  setAiFailureThreshold
 }) => {
   // === DEV MENU START ===
   // This block is for development only and can be easily erased.
@@ -121,8 +125,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           setForecastPeriods={setForecastPeriods}
           businessContext={businessContext}
           setBusinessContext={setBusinessContext}
-          grokApiEnabled={grokApiEnabled}
-          setGrokApiEnabled={setGrokApiEnabled}
+          aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
+          setaiForecastModelOptimizationEnabled={setaiForecastModelOptimizationEnabled}
+          aiFailureThreshold={aiFailureThreshold}
+          setAiFailureThreshold={setAiFailureThreshold}
           settingsOpen={settingsOpen}
           setSettingsOpen={setSettingsOpen}
         />

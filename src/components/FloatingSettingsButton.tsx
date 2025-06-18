@@ -13,10 +13,12 @@ interface FloatingSettingsButtonProps {
   setForecastPeriods: (periods: number) => void;
   businessContext: BusinessContext;
   setBusinessContext: (context: BusinessContext) => void;
-  grokApiEnabled: boolean;
-  setGrokApiEnabled: (enabled: boolean) => void;
+  aiForecastModelOptimizationEnabled: boolean;
+  setaiForecastModelOptimizationEnabled: (enabled: boolean) => void;
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
+  aiFailureThreshold: number;
+  setAiFailureThreshold: (threshold: number) => void;
 }
 
 export const FloatingSettingsButton: React.FC<FloatingSettingsButtonProps> = ({
@@ -24,10 +26,12 @@ export const FloatingSettingsButton: React.FC<FloatingSettingsButtonProps> = ({
   setForecastPeriods,
   businessContext,
   setBusinessContext,
-  grokApiEnabled,
-  setGrokApiEnabled,
+  aiForecastModelOptimizationEnabled,
+  setaiForecastModelOptimizationEnabled,
   settingsOpen,
-  setSettingsOpen
+  setSettingsOpen,
+  aiFailureThreshold,
+  setAiFailureThreshold
 }) => {
   return (
     <div className="fixed top-6 right-6 z-50">
@@ -57,8 +61,10 @@ export const FloatingSettingsButton: React.FC<FloatingSettingsButtonProps> = ({
                 setForecastPeriods={setForecastPeriods}
                 businessContext={businessContext}
                 setBusinessContext={setBusinessContext}
-                grokApiEnabled={grokApiEnabled}
-                setGrokApiEnabled={setGrokApiEnabled}
+                aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
+                setaiForecastModelOptimizationEnabled={setaiForecastModelOptimizationEnabled}
+                aiFailureThreshold={aiFailureThreshold}
+                setAiFailureThreshold={setAiFailureThreshold}
               />
             </TabsContent>
             

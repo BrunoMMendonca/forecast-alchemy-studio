@@ -5,13 +5,13 @@ import {
   generateSeasonalMovingAverage, 
   generateHoltWinters, 
   generateSeasonalNaive 
-} from '@/utils/seasonalUtils';
+} from './seasonalForecastAlgorithms';
 import { 
   generateMovingAverage, 
   generateSimpleExponentialSmoothing, 
   generateDoubleExponentialSmoothing,
   generateLinearTrend 
-} from '@/utils/forecastAlgorithms';
+} from './nonSeasonalForecastAlgorithms';
 
 // Standardized accuracy calculation - same as used in optimization
 const calculateStandardizedAccuracy = (actual: number[], predicted: number[]): number => {
@@ -44,7 +44,7 @@ export const generateForecastsForSKU = async (
   data: NormalizedSalesData[],
   models: ModelConfig[],
   forecastPeriods: number,
-  grokApiEnabled: boolean = true
+  aiForecastModelOptimizationEnabled: boolean = true
 ): Promise<ForecastResult[]> => {
   const enabledModels = models.filter(m => m.enabled);
   if (enabledModels.length === 0) return [];
@@ -68,23 +68,31 @@ export const generateForecastsForSKU = async (
     let predictions: number[] = [];
 
     switch (model.id) {
-      case 'moving_average':
-        predictions = generateMovingAverage(skuData, effectiveParameters?.window || 3, forecastPeriods);
+      case 'moving_average': {
+        const preds = generateMovingAverage(skuData, effectiveParameters?.window || 3, forecastPeriods);
+        predictions = preds.map(p => p.value);
         break;
-      case 'simple_exponential_smoothing':
-        predictions = generateSimpleExponentialSmoothing(skuData, effectiveParameters?.alpha || 0.3, forecastPeriods);
+      }
+      case 'simple_exponential_smoothing': {
+        const preds = generateSimpleExponentialSmoothing(skuData.map(d => d['Sales']), effectiveParameters?.alpha || 0.3, forecastPeriods);
+        predictions = preds.map(p => p.value);
         break;
-      case 'double_exponential_smoothing':
-        predictions = generateDoubleExponentialSmoothing(
-          skuData, 
+      }
+      case 'double_exponential_smoothing': {
+        const preds = generateDoubleExponentialSmoothing(
+          skuData.map(d => d['Sales']),
           effectiveParameters?.alpha || 0.3, 
           effectiveParameters?.beta || 0.1, 
           forecastPeriods
         );
+        predictions = preds.map(p => p.value);
         break;
-      case 'exponential_smoothing':
-        predictions = generateSimpleExponentialSmoothing(skuData, effectiveParameters?.alpha || 0.3, forecastPeriods);
+      }
+      case 'exponential_smoothing': {
+        const preds = generateSimpleExponentialSmoothing(skuData.map(d => d['Sales']), effectiveParameters?.alpha || 0.3, forecastPeriods);
+        predictions = preds.map(p => p.value);
         break;
+      }
       case 'linear_trend':
         predictions = generateLinearTrend(skuData, forecastPeriods);
         break;
@@ -96,8 +104,8 @@ export const generateForecastsForSKU = async (
           forecastPeriods
         );
         break;
-      case 'holt_winters':
-        predictions = generateHoltWinters(
+      case 'holt_winters': {
+        const preds = generateHoltWinters(
           skuData.map(d => d['Sales']),
           frequency.seasonalPeriod,
           forecastPeriods,
@@ -105,7 +113,9 @@ export const generateForecastsForSKU = async (
           effectiveParameters?.beta || 0.1,
           effectiveParameters?.gamma || 0.1
         );
+        predictions = preds.map(p => p.value);
         break;
+      }
       case 'seasonal_naive':
         predictions = generateSeasonalNaive(
           skuData.map(d => d['Sales']),

@@ -12,9 +12,6 @@ export const generateMovingAverage = (
     return [];
   }
   
-  console.log(`📊 FORECAST: Moving Average - Window: ${windowSize}, Data length: ${data.length}`);
-  console.log(`📈 FORECAST: Input data:`, data);
-  
   // Extract sales values based on input type
   const salesValues = Array.isArray(data) && typeof data[0] === 'object' && 'Sales' in data[0]
     ? data.map(d => Number((d as NormalizedSalesData)['Sales']))
@@ -32,9 +29,6 @@ export const generateMovingAverage = (
   const lastWindow = salesValues.slice(-windowSize);
   const lastMA = lastWindow.reduce((sum, val) => sum + val, 0) / windowSize;
   
-  console.log(`📊 FORECAST: Last window values:`, lastWindow);
-  console.log(`📊 FORECAST: Last MA: ${lastMA}`);
-  
   // Generate predictions
   const predictions = dates.map((date, index) => ({
     date,
@@ -45,7 +39,6 @@ export const generateMovingAverage = (
     },
   }));
 
-  console.log(`📈 FORECAST: Generated predictions:`, predictions.map(p => p.value));
   return predictions;
 };
 
@@ -59,9 +52,6 @@ export const generateSimpleExponentialSmoothing = (
     return [];
   }
 
-  console.log(`📊 FORECAST: Simple Exponential Smoothing - Alpha: ${alpha}, Data length: ${data.length}`);
-  console.log(`📈 FORECAST: Input data:`, data);
-  
   const lastDate = new Date();
   const dates = generateDates(lastDate, forecastPeriods);
   
@@ -70,8 +60,6 @@ export const generateSimpleExponentialSmoothing = (
   for (let i = 1; i < data.length; i++) {
     lastSmoothed = alpha * data[i] + (1 - alpha) * lastSmoothed;
   }
-  
-  console.log(`📊 FORECAST: Last smoothed value: ${lastSmoothed}`);
   
   // Generate predictions
   const predictions = dates.map((date, index) => ({
@@ -83,7 +71,6 @@ export const generateSimpleExponentialSmoothing = (
     },
   }));
 
-  console.log(`📈 FORECAST: Generated predictions:`, predictions.map(p => p.value));
   return predictions;
 };
 

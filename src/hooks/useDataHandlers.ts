@@ -14,7 +14,7 @@ export const useDataHandlers = () => {
     setSelectedSKU,
     addToQueue,
     optimizationQueue,
-    grokApiEnabled
+    aiForecastModelOptimizationEnabled
   } = useUnifiedState();
 
   // RAW SALES DATA CSV UPLOAD
@@ -44,14 +44,16 @@ export const useDataHandlers = () => {
           timestamp: Date.now()
         });
         // Add AI job if enabled
-        if (grokApiEnabled) {
-          jobs.push({
+        if (aiForecastModelOptimizationEnabled) {
+          const aiJob: OptimizationQueueItem = {
             sku,
             modelId: model.id,
             reason: 'csv_upload_sales_data',
             method: 'ai',
             timestamp: Date.now()
-          });
+          };
+          console.log('[QUEUE][useDataHandlers] handleDataUpload: Adding AI job:', aiJob, 'aiForecastModelOptimizationEnabled:', aiForecastModelOptimizationEnabled);
+          jobs.push(aiJob);
         }
         return jobs;
       })
@@ -59,8 +61,10 @@ export const useDataHandlers = () => {
     // Filter out jobs already in the queue (by sku, modelId, reason, method)
     const existingPairs = new Set(optimizationQueue.items.map(item => `${item.sku}__${item.modelId}__${item.reason}__${item.method}`));
     const newJobs = allJobs.filter(job => !existingPairs.has(`${job.sku}__${job.modelId}__${job.reason}__${job.method}`));
+    console.log(`[QUEUE][useDataHandlers] handleDataUpload: Current queue size before update: ${optimizationQueue.items.length}`);
     addToQueue(newJobs);
-  }, [setCleanedData, setForecastResults, setModels, addToQueue, optimizationQueue.items, grokApiEnabled]);
+    console.log(`[QUEUE][useDataHandlers] handleDataUpload: Current queue size after update: ${optimizationQueue.items.length}`);
+  }, [setCleanedData, setForecastResults, setModels, addToQueue, optimizationQueue.items, aiForecastModelOptimizationEnabled]);
 
   // DATA CLEANING CSV UPLOAD
   const handleImportDataCleaning = useCallback((importedSKUs: string[]) => {
@@ -78,28 +82,32 @@ export const useDataHandlers = () => {
             method: 'grid',
             timestamp: Date.now()
           });
-          if (grokApiEnabled) {
-            jobs.push({
+          if (aiForecastModelOptimizationEnabled) {
+            const aiJob: OptimizationQueueItem = {
               sku,
               modelId: model.id,
               reason: 'csv_upload_data_cleaning',
               method: 'ai',
               timestamp: Date.now()
-            });
+            };
+            console.log('[QUEUE][useDataHandlers] handleImportDataCleaning: Adding AI job:', aiJob, 'aiForecastModelOptimizationEnabled:', aiForecastModelOptimizationEnabled);
+            jobs.push(aiJob);
           }
           return jobs;
         })
       );
       const existingPairs = new Set(optimizationQueue.items.map(item => `${item.sku}__${item.modelId}__${item.reason}__${item.method}`));
       const newJobs = allJobs.filter(job => !existingPairs.has(`${job.sku}__${job.modelId}__${job.reason}__${job.method}`));
+      console.log(`[QUEUE][useDataHandlers] handleImportDataCleaning: Current queue size before update: ${optimizationQueue.items.length}`);
       console.log('Adding jobs to queue:', newJobs);
       addToQueue(newJobs);
+      console.log(`[QUEUE][useDataHandlers] handleImportDataCleaning: Current queue size after update: ${optimizationQueue.items.length}`);
       toast({
         title: "Import Optimization Triggered",
         description: `${validSKUs.length} SKU${validSKUs.length > 1 ? 's' : ''} queued for optimization after import. Optimization starting automatically...`,
       });
     }
-  }, [addToQueue, optimizationQueue.items, grokApiEnabled, toast]);
+  }, [addToQueue, optimizationQueue.items, aiForecastModelOptimizationEnabled, toast]);
 
   // MANUAL DATA CLEANING EDIT
   const handleManualEditDataCleaning = useCallback((sku: string) => {
@@ -114,21 +122,25 @@ export const useDataHandlers = () => {
         method: 'grid',
         timestamp: Date.now()
       });
-      if (grokApiEnabled) {
-        jobs.push({
+      if (aiForecastModelOptimizationEnabled) {
+        const aiJob: OptimizationQueueItem = {
           sku,
           modelId: model.id,
           reason: 'manual_edit_data_cleaning',
           method: 'ai',
           timestamp: Date.now()
-        });
+        };
+        console.log('[QUEUE][useDataHandlers] handleManualEditDataCleaning: Adding AI job:', aiJob, 'aiForecastModelOptimizationEnabled:', aiForecastModelOptimizationEnabled);
+        jobs.push(aiJob);
       }
       return jobs;
     });
     const existingPairs = new Set(optimizationQueue.items.map(item => `${item.sku}__${item.modelId}__${item.reason}__${item.method}`));
     const newJobs = allJobs.filter(job => !existingPairs.has(`${job.sku}__${job.modelId}__${job.reason}__${job.method}`));
+    console.log(`[QUEUE][useDataHandlers] handleManualEditDataCleaning: Current queue size before update: ${optimizationQueue.items.length}`);
     addToQueue(newJobs);
-  }, [addToQueue, optimizationQueue.items, grokApiEnabled]);
+    console.log(`[QUEUE][useDataHandlers] handleManualEditDataCleaning: Current queue size after update: ${optimizationQueue.items.length}`);
+  }, [addToQueue, optimizationQueue.items, aiForecastModelOptimizationEnabled]);
 
   const handleForecastGeneration = useCallback((results: ForecastResult[], selectedSKU?: string) => {
     setForecastResults(results);

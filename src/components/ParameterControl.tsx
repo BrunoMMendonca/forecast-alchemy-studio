@@ -12,7 +12,7 @@ interface ParameterControlProps {
   onResetToManual: () => void;
   onMethodSelection?: (method: 'ai' | 'grid' | 'manual') => void;
   disabled?: boolean;
-  grokApiEnabled?: boolean;
+  aiForecastModelOptimizationEnabled?: boolean;
 }
 
 export const ParameterControl: React.FC<ParameterControlProps> = (props) => {

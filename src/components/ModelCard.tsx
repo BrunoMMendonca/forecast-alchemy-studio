@@ -13,7 +13,7 @@ interface ModelCardProps {
   onUpdateParameter: (modelId: string, paramName: string, value: any) => void;
   onResetToManual: (modelId: string) => void;
   onMethodSelection: (modelId: string, method: 'ai' | 'grid' | 'manual') => void;
-  grokApiEnabled: boolean;
+  aiForecastModelOptimizationEnabled: boolean;
   disableToggle?: boolean;
 }
 
@@ -23,7 +23,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   onUpdateParameter,
   onResetToManual,
   onMethodSelection,
-  grokApiEnabled,
+  aiForecastModelOptimizationEnabled,
   disableToggle = false
 }) => {
   return (
@@ -65,7 +65,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
           >
             <option value="manual">Manual</option>
             <option value="grid">Grid Search</option>
-            {grokApiEnabled && <option value="ai">AI Optimization</option>}
+            {aiForecastModelOptimizationEnabled && <option value="ai">AI Optimization</option>}
           </select>
         </div>
 

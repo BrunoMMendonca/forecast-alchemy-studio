@@ -9,29 +9,29 @@ interface UnifiedState {
   salesData: NormalizedSalesData[];
   cleanedData: NormalizedSalesData[];
   forecastResults: ForecastResult[];
-  
+
   // UI state
   currentStep: number;
   settingsOpen: boolean;
   isQueuePopupOpen: boolean;
-  
+
   // SKU state
   selectedSKU: string;
-  
+
   // Model state
   models: ModelConfig[];
-  
+
   // Optimization state
   optimizationQueue: {
     items: OptimizationQueueItem[];
     isOptimizing: boolean;
-    progress: number;
+    progress: Record<string, number>;
+    paused: boolean;
   };
-  
+
   // Settings state
   forecastPeriods: number;
   businessContext: BusinessContext;
-  grokApiEnabled: boolean;
 }
 
 const DEFAULT_STATE: UnifiedState = {
@@ -46,7 +46,8 @@ const DEFAULT_STATE: UnifiedState = {
   optimizationQueue: {
     items: [],
     isOptimizing: false,
-    progress: 0
+    progress: {},
+    paused: false
   },
   forecastPeriods: 12,
   businessContext: {
@@ -54,8 +55,7 @@ const DEFAULT_STATE: UnifiedState = {
     planningPurpose: 'tactical',
     updateFrequency: 'weekly',
     interpretabilityNeeds: 'medium'
-  },
-  grokApiEnabled: true
+  }
 };
 
 const STORAGE_KEY = 'forecast_unified_state';
@@ -130,48 +130,43 @@ export const useUnifiedState = () => {
   }, []);
 
   // Optimization queue management
-  const addToQueue = useCallback((items: OptimizationQueueItem[]) => {
+  const setOptimizationQueue = useCallback((updater: (prev: UnifiedState['optimizationQueue']) => UnifiedState['optimizationQueue']) => {
     setState(prev => ({
       ...prev,
-      optimizationQueue: {
-        ...prev.optimizationQueue,
-        items: [
-          ...prev.optimizationQueue.items,
-          ...items.map(item => ({ ...item, timestamp: Date.now() }))
-        ]
-      }
+      optimizationQueue: updater(prev.optimizationQueue)
     }));
   }, []);
+
+  const addToQueue = useCallback((items: OptimizationQueueItem[]) => {
+    setOptimizationQueue(prev => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        ...items.map(item => ({ ...item, timestamp: Date.now() }))
+      ]
+    }));
+  }, [setOptimizationQueue]);
 
   const removeFromQueue = useCallback((skus: string[]) => {
-    setState(prev => ({
+    setOptimizationQueue(prev => ({
       ...prev,
-      optimizationQueue: {
-        ...prev.optimizationQueue,
-        items: prev.optimizationQueue.items.filter(item => !skus.includes(item.sku))
-      }
+      items: prev.items.filter(item => !skus.includes(item.sku))
     }));
-  }, []);
+  }, [setOptimizationQueue]);
 
-  const setOptimizationProgress = useCallback((progress: number) => {
-    setState(prev => ({
+  const setOptimizationProgress = useCallback((sku: string, value: number) => {
+    setOptimizationQueue(prev => ({
       ...prev,
-      optimizationQueue: {
-        ...prev.optimizationQueue,
-        progress
-      }
+      progress: { ...prev.progress, [sku]: value }
     }));
-  }, []);
+  }, [setOptimizationQueue]);
 
   const setIsOptimizing = useCallback((isOptimizing: boolean) => {
-    setState(prev => ({
+    setOptimizationQueue(prev => ({
       ...prev,
-      optimizationQueue: {
-        ...prev.optimizationQueue,
-        isOptimizing
-      }
+      isOptimizing
     }));
-  }, []);
+  }, [setOptimizationQueue]);
 
   // Settings management
   const setForecastPeriods = useCallback((periods: number) => {
@@ -180,10 +175,6 @@ export const useUnifiedState = () => {
 
   const setBusinessContext = useCallback((context: BusinessContext) => {
     updateState({ businessContext: context });
-  }, [updateState]);
-
-  const setGrokApiEnabled = useCallback((enabled: boolean) => {
-    updateState({ grokApiEnabled: enabled });
   }, [updateState]);
 
   return {
@@ -208,6 +199,7 @@ export const useUnifiedState = () => {
     updateModel,
     
     // Optimization queue management
+    setOptimizationQueue,
     addToQueue,
     removeFromQueue,
     setOptimizationProgress,
@@ -216,7 +208,6 @@ export const useUnifiedState = () => {
     // Settings management
     setForecastPeriods,
     setBusinessContext,
-    setGrokApiEnabled,
 
     // State update helper
     updateState

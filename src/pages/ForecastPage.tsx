@@ -14,13 +14,13 @@ import { BusinessContext } from '@/types/businessContext';
 interface ForecastPageProps {
   data: SalesData[];
   businessContext: BusinessContext;
-  grokApiEnabled: boolean;
+  aiForecastModelOptimizationEnabled: boolean;
 }
 
 export const ForecastPage: React.FC<ForecastPageProps> = ({
   data,
   businessContext,
-  grokApiEnabled,
+  aiForecastModelOptimizationEnabled,
 }) => {
   const { toast } = useToast();
   const [selectedSKU, setSelectedSKU] = useState<string>('');
@@ -116,7 +116,7 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
             selectedSKU={selectedSKU}
             models={models}
             businessContext={businessContext}
-            grokApiEnabled={grokApiEnabled}
+            aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
             onSKUChange={setSelectedSKU}
             onUpdateParameter={updateParameter}
           />

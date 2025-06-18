@@ -43,9 +43,9 @@ export const runAIOptimization = async (
   sku: string,
   businessContext?: BusinessContext,
   gridBaseline?: { parameters: Record<string, number>; accuracy: number },
-  grokApiEnabled: boolean = true
+  aiForecastModelOptimizationEnabled: boolean = true
 ): Promise<OptimizationResult | null> => {
-  if (!grokApiEnabled) {
+  if (!aiForecastModelOptimizationEnabled) {
     console.log('🔑 AI: Grok API disabled in global settings, skipping AI optimization');
     return null;
   }

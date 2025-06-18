@@ -29,7 +29,7 @@ interface ForecastModelsContentProps {
   onUpdateParameter: (modelId: string, paramName: string, value: any) => void;
   onResetToManual: (modelId: string) => void;
   onMethodSelection: (modelId: string, method: string) => void;
-  grokApiEnabled: boolean;
+  aiForecastModelOptimizationEnabled: boolean;
 }
 
 export const ForecastModelsContent: React.FC<ForecastModelsContentProps> = ({
@@ -45,7 +45,7 @@ export const ForecastModelsContent: React.FC<ForecastModelsContentProps> = ({
   onUpdateParameter,
   onResetToManual,
   onMethodSelection,
-  grokApiEnabled
+  aiForecastModelOptimizationEnabled
 }) => {
   return (
     <div className="space-y-6">
@@ -75,7 +75,7 @@ export const ForecastModelsContent: React.FC<ForecastModelsContentProps> = ({
               onUpdateParameter={onUpdateParameter}
               onResetToManual={onResetToManual}
               onMethodSelection={onMethodSelection}
-              grokApiEnabled={grokApiEnabled}
+              aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
               disableToggle={disableToggle}
             />
           );

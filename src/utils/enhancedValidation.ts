@@ -38,9 +38,9 @@ const calculateMetrics = (actual: number[], predicted: number[]): ValidationResu
   let validCount = 0;
 
   const length = Math.min(actual.length, predicted.length);
-  console.log(`📊 VALIDATION: Calculating metrics for ${length} points`);
-  console.log(`📈 VALIDATION: Actual values:`, actual);
-  console.log(`📈 VALIDATION: Predicted values:`, predicted);
+  // console.log(`📊 VALIDATION: Calculating metrics for ${length} points`);
+  // console.log(`📈 VALIDATION: Actual values:`, actual);
+  // console.log(`📈 VALIDATION: Predicted values:`, predicted);
 
   for (let i = 0; i < length; i++) {
     const actualValue = actual[i];
@@ -93,7 +93,7 @@ export const walkForwardValidation = (
   );
   const maxSteps = Math.min(config.maxSteps, Math.floor((data.length - minTrainSize) / config.testSize));
 
-  console.log(`📊 VALIDATION: Data length: ${data.length}, Min train size: ${minTrainSize}, Max steps: ${maxSteps}`);
+  // console.log(`📊 VALIDATION: Data length: ${data.length}, Min train size: ${minTrainSize}, Max steps: ${maxSteps}`);
 
   if (maxSteps <= 0) {
     console.log('❌ VALIDATION: Invalid max steps');
@@ -124,9 +124,9 @@ export const walkForwardValidation = (
         return value;
       });
 
-      console.log(`📊 VALIDATION: Step ${step} - Train size: ${trainSize}, Test size: ${testData.length}`);
-      console.log(`📈 VALIDATION: Actual values:`, actual);
-      console.log(`📈 VALIDATION: Predictions:`, predictions);
+      // console.log(`📊 VALIDATION: Step ${step} - Train size: ${trainSize}, Test size: ${testData.length}`);
+      // console.log(`📈 VALIDATION: Actual values:`, actual);
+      // console.log(`📈 VALIDATION: Predictions:`, predictions);
 
       if (predictions.length > 0 && actual.length > 0) {
         allActual.push(...actual);

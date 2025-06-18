@@ -13,8 +13,10 @@ interface ForecastSettingsProps {
   setForecastPeriods: (periods: number) => void;
   businessContext: BusinessContext;
   setBusinessContext: (context: BusinessContext) => void;
-  grokApiEnabled: boolean;
-  setGrokApiEnabled: (enabled: boolean) => void;
+  aiForecastModelOptimizationEnabled: boolean;
+  setaiForecastModelOptimizationEnabled: (enabled: boolean) => void;
+  aiFailureThreshold: number;
+  setAiFailureThreshold: (threshold: number) => void;
 }
 
 export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
@@ -22,14 +24,16 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
   setForecastPeriods,
   businessContext,
   setBusinessContext,
-  grokApiEnabled,
-  setGrokApiEnabled
+  aiForecastModelOptimizationEnabled,
+  setaiForecastModelOptimizationEnabled,
+  aiFailureThreshold,
+  setAiFailureThreshold
 }) => {
   const { enabled: aiEnabled, setEnabled: setAIEnabled } = useAISettings({
     onSettingsChange: (enabled) => {
       // If AI Features is disabled, also disable AI Model Optimization
       if (!enabled) {
-        setGrokApiEnabled(false);
+        setaiForecastModelOptimizationEnabled(false);
       }
     }
   });
@@ -67,19 +71,33 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
           <div className="flex items-center space-x-2">
             <Switch
               id="grok-api-enabled"
-              checked={grokApiEnabled}
-              onCheckedChange={setGrokApiEnabled}
+              checked={aiForecastModelOptimizationEnabled}
+              onCheckedChange={setaiForecastModelOptimizationEnabled}
             />
             <span className="text-sm text-slate-600">
-              {grokApiEnabled ? 'Enabled' : 'Disabled'}
+              {aiForecastModelOptimizationEnabled ? 'Enabled' : 'Disabled'}
             </span>
           </div>
           <p className="text-sm text-slate-500">
             Use the Grok API to optimize model parameters for best forecast accuracy. When disabled, traditional grid search will be used.
           </p>
+          {/* AI Failure Threshold Setting */}
+          <div className="flex items-center space-x-2 mt-2">
+            <Label htmlFor="ai-failure-threshold" className="text-sm">AI Failure Threshold</Label>
+            <Input
+              id="ai-failure-threshold"
+              type="number"
+              min={1}
+              max={20}
+              value={aiFailureThreshold}
+              onChange={e => setAiFailureThreshold(Number(e.target.value))}
+              className="w-20"
+            />
+            <span className="text-xs text-slate-500">(Disable AI after this many consecutive failures. Default: 5)</span>
+          </div>
 
           {/* AI Model Optimization Context (only visible if AI Model Optimization is enabled) */}
-          {grokApiEnabled && (
+          {aiForecastModelOptimizationEnabled && (
             <div className="pl-6 border-l-2 border-slate-100 mt-4">
               <div className="flex items-center gap-2 mb-1">
                 <Sparkles className="h-4 w-4 text-purple-500" />
@@ -91,7 +109,7 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
               <BusinessContextSettings
                 businessContext={businessContext}
                 setBusinessContext={setBusinessContext}
-                disabled={!grokApiEnabled}
+                disabled={!aiForecastModelOptimizationEnabled}
               />
             </div>
           )}

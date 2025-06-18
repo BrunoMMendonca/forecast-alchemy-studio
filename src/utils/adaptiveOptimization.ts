@@ -1,6 +1,6 @@
 import { SalesData } from '@/types/forecast';
-import { generateMovingAverage, generateSimpleExponentialSmoothing, generateDoubleExponentialSmoothing } from './forecastAlgorithms';
-import { generateHoltWinters } from './seasonalUtils';
+import { generateMovingAverage, generateSimpleExponentialSmoothing, generateDoubleExponentialSmoothing } from './nonSeasonalForecastAlgorithms';
+import { generateHoltWinters, generateSeasonalMovingAverage } from './seasonalForecastAlgorithms';
 import { ValidationConfig, ValidationResult, walkForwardValidation, timeSeriesCrossValidation, ENHANCED_VALIDATION_CONFIG } from './enhancedValidation';
 import { ForecastPrediction } from '@/types/forecast';
 
@@ -65,9 +65,9 @@ const generateForecastForModel = (
   parameters: Record<string, number>
 ): number[] => {
   try {
-    console.log(`🔍 FORECAST: Generating forecast for ${modelId}`);
-    console.log(`📊 FORECAST: Training data length: ${trainData.length}`);
-    console.log(`📊 FORECAST: Parameters:`, parameters);
+    // console.log(`🔍 FORECAST: Generating forecast for ${modelId}`);
+    // console.log(`📊 FORECAST: Training data length: ${trainData.length}`);
+    // console.log(`📊 FORECAST: Parameters:`, parameters);
 
     // Validate training data
     if (trainData.length === 0) {
@@ -117,6 +117,13 @@ const generateForecastForModel = (
           parameters.gamma
         );
         break;
+      case 'seasonal_moving_average':
+        return generateSeasonalMovingAverage(
+          salesValues,
+          parameters.window,
+          parameters.seasonalPeriods,
+          forecastPeriods
+        );
       default:
         console.log(`❌ FORECAST: Unknown model type: ${modelId}`);
         return [];
@@ -124,7 +131,7 @@ const generateForecastForModel = (
 
     // Extract values from ForecastPrediction objects
     const values = predictions.map(p => p.value);
-    console.log(`📈 FORECAST: Generated predictions:`, values);
+    // console.log(`📈 FORECAST: Generated predictions:`, values);
     return values;
   } catch (error) {
     console.log(`❌ FORECAST: Error generating forecast:`, error);
@@ -139,7 +146,7 @@ export const adaptiveGridSearchOptimization = (
   aiParameters?: Record<string, number>,
   config: ValidationConfig = ENHANCED_VALIDATION_CONFIG
 ): OptimizationResult => {
-  console.log(`🔍 Starting smart grid search for ${modelId}`);
+  // console.log(`🔍 Starting smart grid search for ${modelId}`);
   
   if (data.length < config.minValidationSize * 2) {
     console.log(`⚠️ Insufficient data, using default parameters`);
@@ -147,7 +154,7 @@ export const adaptiveGridSearchOptimization = (
   }
 
   const parameterRanges = getSmartParameterRanges(modelId, data);
-  console.log(`📊 Smart parameter ranges:`, parameterRanges);
+  // console.log(`📊 Smart parameter ranges:`, parameterRanges);
 
   const paramNames = Object.keys(parameterRanges);
   const paramValues = Object.values(parameterRanges);
@@ -156,7 +163,7 @@ export const adaptiveGridSearchOptimization = (
   const totalCombinations = paramValues.reduce((acc, values) => acc * values.length, 1);
   const maxIterations = Math.min(totalCombinations, 50); // Cap at 50 iterations
   
-  console.log(`📊 Testing up to ${maxIterations} combinations out of ${totalCombinations} total`);
+  // console.log(`📊 Testing up to ${maxIterations} combinations out of ${totalCombinations} total`);
 
   let bestResult: OptimizationResult | null = null;
   let iterations = 0;
@@ -188,7 +195,7 @@ export const adaptiveGridSearchOptimization = (
       parameters[name] = combination[i];
     });
 
-    console.log(`🔄 Testing parameters:`, parameters);
+    // console.log(`🔄 Testing parameters:`, parameters);
 
     try {
       const generateForecast = (trainData: SalesData[], periods: number) => 

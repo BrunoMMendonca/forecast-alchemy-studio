@@ -28,7 +28,7 @@ interface ForecastModelsProps {
   onSKUChange: (sku: string) => void;
   shouldStartOptimization?: boolean;
   onOptimizationStarted?: () => void;
-  grokApiEnabled?: boolean;
+  aiForecastModelOptimizationEnabled?: boolean;
   optimizationQueue: OptimizationQueue;
 }
 
@@ -40,7 +40,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   onSKUChange,
   shouldStartOptimization = false,
   onOptimizationStarted,
-  grokApiEnabled = true,
+  aiForecastModelOptimizationEnabled = true,
   optimizationQueue
 }, ref) => {
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
@@ -65,14 +65,14 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     isOptimizing,
     progress,
     handleQueueOptimization
-  } = useOptimizationHandler(data, selectedSKUForResults, generateForecasts, grokApiEnabled);
+  } = useOptimizationHandler(data, selectedSKUForResults, generateForecasts, aiForecastModelOptimizationEnabled);
 
   useAutoOptimization({
     optimizationQueue,
     isOptimizing,
     handleQueueOptimization,
     onOptimizationStarted,
-    grokApiEnabled,
+    aiForecastModelOptimizationEnabled,
     componentMountedRef
   });
 
@@ -89,7 +89,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     return () => {
       componentMountedRef.current = false;
     };
-  }, [grokApiEnabled]);
+  }, [aiForecastModelOptimizationEnabled]);
 
   useEffect(() => {
     const skus = Array.from(new Set(data.map(d => d['Material Code']))).sort();
@@ -117,7 +117,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
         onUpdateParameter={updateParameter}
         onResetToManual={resetToManual}
         onMethodSelection={handleMethodSelection}
-        grokApiEnabled={grokApiEnabled}
+        aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
       />
 
       <OptimizationLogger 

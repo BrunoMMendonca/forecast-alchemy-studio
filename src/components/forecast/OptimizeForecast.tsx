@@ -13,7 +13,7 @@ interface OptimizeForecastProps {
   selectedSKU: string;
   models: ModelConfig[];
   businessContext: BusinessContext;
-  grokApiEnabled: boolean;
+  aiForecastModelOptimizationEnabled: boolean;
   onSKUChange: (sku: string) => void;
   onUpdateParameter: (modelId: string, parameter: string, value: number) => void;
 }
@@ -30,7 +30,7 @@ export const OptimizeForecast: React.FC<OptimizeForecastProps> = ({
   selectedSKU,
   models,
   businessContext,
-  grokApiEnabled,
+  aiForecastModelOptimizationEnabled,
   onSKUChange,
   onUpdateParameter,
 }) => {
@@ -68,17 +68,17 @@ export const OptimizeForecast: React.FC<OptimizeForecastProps> = ({
         const gridScore = cacheEntry?.grid?.confidence || 0;
         
         // Auto-select best method (AI or Grid)
-        if (aiScore >= gridScore && aiScore > 0 && grokApiEnabled) {
+        if (aiScore >= gridScore && aiScore > 0 && aiForecastModelOptimizationEnabled) {
           updated[key] = 'ai';
         } else if (gridScore > 0) {
           updated[key] = 'grid';
         } else {
-          updated[key] = grokApiEnabled ? 'ai' : 'grid';
+          updated[key] = aiForecastModelOptimizationEnabled ? 'ai' : 'grid';
         }
       });
       return updated;
     });
-  }, [grokApiEnabled, models, selectedSKU, cache]);
+  }, [aiForecastModelOptimizationEnabled, models, selectedSKU, cache]);
 
   // On method change, update cache and load parameters for that method
   const handleMethodChange = (modelId: string, method: 'manual' | 'grid' | 'ai') => {
@@ -196,12 +196,12 @@ export const OptimizeForecast: React.FC<OptimizeForecastProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {models.map((model) => {
           const isOptimizable = !!model.parameters && Object.keys(model.parameters ?? {}).length > 0;
-          const selectedMethod = modelMethods[getMethodKey(selectedSKU, model.id)] || model.optimizationMethod || (grokApiEnabled ? 'ai' : 'grid');
+          const selectedMethod = modelMethods[getMethodKey(selectedSKU, model.id)] || model.optimizationMethod || (aiForecastModelOptimizationEnabled ? 'ai' : 'grid');
 
           // Use memoized cache results for this model
           const { ai, grid, manual, currentDataHash } = allCacheResults[model.id] || { ai: undefined, grid: undefined, manual: {}, currentDataHash: '' };
 
-          const aiAvailable = !!ai && grokApiEnabled;
+          const aiAvailable = !!ai && aiForecastModelOptimizationEnabled;
           const gridAvailable = !!grid;
           const manualAvailable = isOptimizable; // Always allow manual for optimizable models
           // Only show parameters for the selected method

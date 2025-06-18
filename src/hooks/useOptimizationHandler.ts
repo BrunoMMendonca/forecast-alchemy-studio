@@ -12,7 +12,7 @@ export const useOptimizationHandler = (
   data: NormalizedSalesData[],
   selectedSKU: string,
   onOptimizationComplete?: () => void,
-  grokApiEnabled: boolean = true
+  aiForecastModelOptimizationEnabled: boolean = true
 ) => {
   const {
     generateDataHash,
@@ -164,7 +164,7 @@ export const useOptimizationHandler = (
         // Get SKUs needing optimization
         return skusToOptimize.map(sku => ({ sku, models: optimizableModels.map(m => m.id) }));
       },
-      grokApiEnabled
+      aiForecastModelOptimizationEnabled
     );
     setIsOptimizing(false);
     markOptimizationCompleted(data);

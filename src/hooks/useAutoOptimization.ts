@@ -8,7 +8,7 @@ interface UseAutoOptimizationProps {
   isOptimizing: boolean;
   handleQueueOptimization: () => void;
   onOptimizationStarted?: () => void;
-  grokApiEnabled: boolean;
+  aiForecastModelOptimizationEnabled: boolean;
   componentMountedRef: React.MutableRefObject<boolean>;
 }
 
@@ -17,7 +17,7 @@ export const useAutoOptimization = ({
   isOptimizing,
   handleQueueOptimization,
   onOptimizationStarted,
-  grokApiEnabled,
+  aiForecastModelOptimizationEnabled,
   componentMountedRef
 }: UseAutoOptimizationProps) => {
   const lastProcessedQueueSizeRef = useRef(0);
@@ -56,7 +56,7 @@ export const useAutoOptimization = ({
       console.log('🚀 FORECAST_MODELS: - Queue size:', currentQueueSize);
       console.log('🚀 FORECAST_MODELS: - Is optimizing:', isOptimizing);
       console.log('🚀 FORECAST_MODELS: - Component mounted:', componentMountedRef.current);
-      console.log('🚀 FORECAST_MODELS: - Grok API enabled:', grokApiEnabled);
+      console.log('🚀 FORECAST_MODELS: - Grok API enabled:', aiForecastModelOptimizationEnabled);
       
       // Use timeout to avoid potential race conditions
       setTimeout(() => {
@@ -78,7 +78,7 @@ export const useAutoOptimization = ({
       console.log('🔄 FORECAST_MODELS: - Not optimizing:', !isOptimizing);
       console.log('🔄 FORECAST_MODELS: - Component mounted:', componentMountedRef.current);
     }
-  }, [optimizationQueue?.items, isOptimizing, handleQueueOptimization, onOptimizationStarted, grokApiEnabled]);
+  }, [optimizationQueue?.items, isOptimizing, handleQueueOptimization, onOptimizationStarted, aiForecastModelOptimizationEnabled]);
 
   // Reset processed queue size when optimization completes
   useEffect(() => {

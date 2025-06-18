@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { BusinessContext, DEFAULT_BUSINESS_CONTEXT } from '@/types/businessContext';
 import { useAISettings } from './useAISettings';
 
@@ -7,23 +7,26 @@ const GLOBAL_SETTINGS_KEY = 'global_forecast_settings';
 interface GlobalForecastSettings {
   forecastPeriods: number;
   businessContext: BusinessContext;
-  grokApiEnabled: boolean;
+  aiForecastModelOptimizationEnabled: boolean;
+  aiFailureThreshold: number;
 }
 
 const DEFAULT_SETTINGS: GlobalForecastSettings = {
   forecastPeriods: 12,
   businessContext: DEFAULT_BUSINESS_CONTEXT,
-  grokApiEnabled: true
+  aiForecastModelOptimizationEnabled: true,
+  aiFailureThreshold: 5
 };
 
 interface UseGlobalForecastSettingsProps {
-  onSettingsChange?: (changedSetting: 'forecastPeriods' | 'businessContext' | 'grokApiEnabled') => void;
+  onSettingsChange?: (changedSetting: 'forecastPeriods' | 'businessContext' | 'aiForecastModelOptimizationEnabled' | 'aiFailureThreshold') => void;
 }
 
 export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps) => {
   const [forecastPeriods, setForecastPeriodsState] = useState<number>(DEFAULT_SETTINGS.forecastPeriods);
   const [businessContext, setBusinessContextState] = useState<BusinessContext>(DEFAULT_SETTINGS.businessContext);
-  const [grokApiEnabled, setGrokApiEnabledState] = useState<boolean>(DEFAULT_SETTINGS.grokApiEnabled);
+  const [aiForecastModelOptimizationEnabled, setaiForecastModelOptimizationEnabledState] = useState<boolean>(DEFAULT_SETTINGS.aiForecastModelOptimizationEnabled);
+  const [aiFailureThreshold, setAiFailureThresholdState] = useState<number>(DEFAULT_SETTINGS.aiFailureThreshold);
 
   // Initialize AI settings
   const { enabled: aiEnabled } = useAISettings();
@@ -36,7 +39,8 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
         const settings: GlobalForecastSettings = JSON.parse(stored);
         setForecastPeriodsState(settings.forecastPeriods || DEFAULT_SETTINGS.forecastPeriods);
         setBusinessContextState(settings.businessContext || DEFAULT_SETTINGS.businessContext);
-        setGrokApiEnabledState(settings.grokApiEnabled ?? DEFAULT_SETTINGS.grokApiEnabled);
+        setaiForecastModelOptimizationEnabledState(settings.aiForecastModelOptimizationEnabled ?? DEFAULT_SETTINGS.aiForecastModelOptimizationEnabled);
+        setAiFailureThresholdState(settings.aiFailureThreshold ?? DEFAULT_SETTINGS.aiFailureThreshold);
       }
     } catch (error) {
       // Silent error handling
@@ -51,7 +55,8 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
           const settings: GlobalForecastSettings = JSON.parse(event.newValue);
           setForecastPeriodsState(settings.forecastPeriods || DEFAULT_SETTINGS.forecastPeriods);
           setBusinessContextState(settings.businessContext || DEFAULT_SETTINGS.businessContext);
-          setGrokApiEnabledState(settings.grokApiEnabled ?? DEFAULT_SETTINGS.grokApiEnabled);
+          setaiForecastModelOptimizationEnabledState(settings.aiForecastModelOptimizationEnabled ?? DEFAULT_SETTINGS.aiForecastModelOptimizationEnabled);
+          setAiFailureThresholdState(settings.aiFailureThreshold ?? DEFAULT_SETTINGS.aiFailureThreshold);
         } catch (error) {
           // Silent error handling
         }
@@ -68,7 +73,8 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
           const settings: GlobalForecastSettings = JSON.parse(event.detail.newValue);
           setForecastPeriodsState(settings.forecastPeriods || DEFAULT_SETTINGS.forecastPeriods);
           setBusinessContextState(settings.businessContext || DEFAULT_SETTINGS.businessContext);
-          setGrokApiEnabledState(settings.grokApiEnabled ?? DEFAULT_SETTINGS.grokApiEnabled);
+          setaiForecastModelOptimizationEnabledState(settings.aiForecastModelOptimizationEnabled ?? DEFAULT_SETTINGS.aiForecastModelOptimizationEnabled);
+          setAiFailureThresholdState(settings.aiFailureThreshold ?? DEFAULT_SETTINGS.aiFailureThreshold);
         } catch (error) {
           // Silent error handling
         }
@@ -84,12 +90,13 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
   }, []);
 
   // Save settings to localStorage whenever they change
-  const saveSettings = useCallback((periods: number, context: BusinessContext, grokEnabled: boolean) => {
+  const saveSettings = useCallback((periods: number, context: BusinessContext, grokEnabled: boolean, aiFailureThreshold: number) => {
     try {
       const settings: GlobalForecastSettings = {
         forecastPeriods: periods,
         businessContext: context,
-        grokApiEnabled: grokEnabled
+        aiForecastModelOptimizationEnabled: grokEnabled,
+        aiFailureThreshold
       };
       localStorage.setItem(GLOBAL_SETTINGS_KEY, JSON.stringify(settings));
       
@@ -102,60 +109,70 @@ export const useGlobalForecastSettings = (props?: UseGlobalForecastSettingsProps
     }
   }, []);
 
+  const onSettingsChangeRef = useRef<UseGlobalForecastSettingsProps['onSettingsChange']>(props?.onSettingsChange);
+
+  // Allow dynamic assignment of the handler
+  const setOnSettingsChange = useCallback((handler: UseGlobalForecastSettingsProps['onSettingsChange']) => {
+    onSettingsChangeRef.current = handler;
+  }, []);
+
   const setForecastPeriods = useCallback((periods: number) => {
     const oldPeriods = forecastPeriods;
     setForecastPeriodsState(periods);
-    saveSettings(periods, businessContext, grokApiEnabled);
-    
-    // Trigger re-optimization if the value actually changed
-    if (oldPeriods !== periods && props?.onSettingsChange) {
-      props.onSettingsChange('forecastPeriods');
+    saveSettings(periods, businessContext, aiForecastModelOptimizationEnabled, aiFailureThreshold);
+    if (oldPeriods !== periods && onSettingsChangeRef.current) {
+      onSettingsChangeRef.current('forecastPeriods');
     }
-  }, [forecastPeriods, businessContext, grokApiEnabled, saveSettings, props]);
+  }, [forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, aiFailureThreshold, saveSettings]);
 
   const setBusinessContext = useCallback((context: BusinessContext) => {
     const oldContext = businessContext;
     setBusinessContextState(context);
-    saveSettings(forecastPeriods, context, grokApiEnabled);
-    
-    // Trigger re-optimization if the value actually changed
-    if (JSON.stringify(oldContext) !== JSON.stringify(context) && props?.onSettingsChange) {
-      props.onSettingsChange('businessContext');
+    saveSettings(forecastPeriods, context, aiForecastModelOptimizationEnabled, aiFailureThreshold);
+    if (JSON.stringify(oldContext) !== JSON.stringify(context) && onSettingsChangeRef.current) {
+      onSettingsChangeRef.current('businessContext');
     }
-  }, [forecastPeriods, businessContext, grokApiEnabled, saveSettings, props]);
+  }, [forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, aiFailureThreshold, saveSettings]);
 
-  const setGrokApiEnabled = useCallback((enabled: boolean) => {
-    const oldEnabled = grokApiEnabled;
-    // If AI is disabled, force Grok to be disabled
+  const setaiForecastModelOptimizationEnabled = useCallback((enabled: boolean) => {
+    const oldEnabled = aiForecastModelOptimizationEnabled;
     const newEnabled = enabled && aiEnabled;
-    setGrokApiEnabledState(newEnabled);
-    saveSettings(forecastPeriods, businessContext, newEnabled);
-    
-    // Trigger re-optimization if the value actually changed
-    if (oldEnabled !== newEnabled && props?.onSettingsChange) {
-      props.onSettingsChange('grokApiEnabled');
+    setaiForecastModelOptimizationEnabledState(newEnabled);
+    saveSettings(forecastPeriods, businessContext, newEnabled, aiFailureThreshold);
+    if (oldEnabled !== newEnabled && onSettingsChangeRef.current) {
+      onSettingsChangeRef.current('aiForecastModelOptimizationEnabled');
     }
-  }, [forecastPeriods, businessContext, grokApiEnabled, saveSettings, props, aiEnabled]);
+  }, [forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, aiFailureThreshold, saveSettings, aiEnabled]);
+
+  const setAiFailureThreshold = useCallback((threshold: number) => {
+    setAiFailureThresholdState(threshold);
+    saveSettings(forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, threshold);
+    if (onSettingsChangeRef.current) {
+      onSettingsChangeRef.current('aiForecastModelOptimizationEnabled');
+    }
+  }, [forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, aiFailureThreshold, saveSettings]);
 
   const resetToDefaults = useCallback(() => {
     setForecastPeriodsState(DEFAULT_SETTINGS.forecastPeriods);
     setBusinessContextState(DEFAULT_SETTINGS.businessContext);
-    setGrokApiEnabledState(DEFAULT_SETTINGS.grokApiEnabled);
-    saveSettings(DEFAULT_SETTINGS.forecastPeriods, DEFAULT_SETTINGS.businessContext, DEFAULT_SETTINGS.grokApiEnabled);
-    
-    // Trigger re-optimization for reset
-    if (props?.onSettingsChange) {
-      props.onSettingsChange('forecastPeriods');
+    setaiForecastModelOptimizationEnabledState(DEFAULT_SETTINGS.aiForecastModelOptimizationEnabled);
+    setAiFailureThresholdState(DEFAULT_SETTINGS.aiFailureThreshold);
+    saveSettings(DEFAULT_SETTINGS.forecastPeriods, DEFAULT_SETTINGS.businessContext, DEFAULT_SETTINGS.aiForecastModelOptimizationEnabled, DEFAULT_SETTINGS.aiFailureThreshold);
+    if (onSettingsChangeRef.current) {
+      onSettingsChangeRef.current('forecastPeriods');
     }
-  }, [saveSettings, props]);
+  }, [saveSettings]);
 
   return {
     forecastPeriods,
     setForecastPeriods,
     businessContext,
     setBusinessContext,
-    grokApiEnabled,
-    setGrokApiEnabled,
-    resetToDefaults
+    aiForecastModelOptimizationEnabled,
+    setaiForecastModelOptimizationEnabled,
+    aiFailureThreshold,
+    setAiFailureThreshold,
+    resetToDefaults,
+    setOnSettingsChange
   };
 };

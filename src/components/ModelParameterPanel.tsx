@@ -13,7 +13,7 @@ interface ModelParameterPanelProps {
   onResetModel: (modelId: string) => void;
   isOptimizing: boolean;
   optimizingModel: string | null;
-  grokApiEnabled?: boolean;
+  aiForecastModelOptimizationEnabled?: boolean;
 }
 
 export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
@@ -25,7 +25,7 @@ export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
   onResetModel,
   isOptimizing,
   optimizingModel,
-  grokApiEnabled
+  aiForecastModelOptimizationEnabled
 }) => {
   return (
     <div className="space-y-4">
@@ -39,7 +39,7 @@ export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
           onParameterUpdate={(parameter, value) => onUpdateParameter(model.id, parameter, value)}
           onResetToManual={() => onResetModel(model.id)}
           isOptimizing={isOptimizing && optimizingModel === model.id}
-          grokApiEnabled={grokApiEnabled}
+          aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
         />
       ))}
     </div>

@@ -18,7 +18,7 @@ interface ParameterControlContainerProps {
   onResetToManual: () => void;
   onMethodSelection?: (method: 'ai' | 'grid' | 'manual') => void;
   disabled?: boolean;
-  grokApiEnabled?: boolean;
+  aiForecastModelOptimizationEnabled?: boolean;
 }
 
 export const ParameterControlContainer: React.FC<ParameterControlContainerProps> = ({
@@ -29,7 +29,7 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
   onResetToManual,
   onMethodSelection,
   disabled = false,
-  grokApiEnabled = true,
+  aiForecastModelOptimizationEnabled = true,
 }) => {
   const {
     isReasoningExpanded,
@@ -87,7 +87,7 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
             
             <ParameterBadges
               canOptimize={canOptimize}
-              grokApiEnabled={grokApiEnabled}
+              aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
               localSelectedMethod={localSelectedMethod}
               cacheVersion={cacheVersion}
               onMethodChange={handlePreferenceChange}

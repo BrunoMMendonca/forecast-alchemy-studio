@@ -10,7 +10,7 @@ export const useOptimization = (
   selectedSKU: string,
   data: SalesData[],
   businessContext?: BusinessContext,
-  grokApiEnabled: boolean = true
+  aiForecastModelOptimizationEnabled: boolean = true
 ) => {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizingModel, setOptimizingModel] = useState<string | null>(null);
@@ -37,7 +37,7 @@ export const useOptimization = (
     }
 
     // If AI method is requested but Grok API is disabled, fall back to grid
-    if (method === 'ai' && !grokApiEnabled) {
+    if (method === 'ai' && !aiForecastModelOptimizationEnabled) {
       console.log('useOptimization: Grok API disabled, falling back to grid optimization');
       method = 'grid';
     }
@@ -53,7 +53,7 @@ export const useOptimization = (
         return null;
       }
 
-      const result = await getOptimizationByMethod(model, skuData, selectedSKU, method, businessContext, grokApiEnabled);
+      const result = await getOptimizationByMethod(model, skuData, selectedSKU, method, businessContext, aiForecastModelOptimizationEnabled);
       
       return result ? {
         parameters: result.parameters,
@@ -68,7 +68,7 @@ export const useOptimization = (
       setIsOptimizing(false);
       setOptimizingModel(null);
     }
-  }, [selectedSKU, data, businessContext, grokApiEnabled]);
+  }, [selectedSKU, data, businessContext, aiForecastModelOptimizationEnabled]);
 
   return {
     isOptimizing,

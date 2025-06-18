@@ -13,7 +13,7 @@ interface OptimizationJob {
   skuData: SalesData[];
   sku: string;
   businessContext?: BusinessContext;
-  grokApiEnabled?: boolean;
+  aiForecastModelOptimizationEnabled?: boolean;
 }
 
 self.onmessage = async (event) => {
@@ -30,7 +30,7 @@ self.onmessage = async (event) => {
         job.sku,
         job.businessContext,
         undefined,
-        job.grokApiEnabled
+        job.aiForecastModelOptimizationEnabled
       );
     } else {
       result = { error: 'Unknown optimization type' };

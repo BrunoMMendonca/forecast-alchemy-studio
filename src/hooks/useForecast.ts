@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { SalesData, ForecastResult, ForecastState } from '@/types/forecast';
-import { generateMovingAverage, generateSimpleExponentialSmoothing, generateDoubleExponentialSmoothing } from '@/utils/forecastAlgorithms';
+import { generateMovingAverage, generateSimpleExponentialSmoothing, generateDoubleExponentialSmoothing } from '@/utils/nonSeasonalForecastAlgorithms';
 
 const initialState: ForecastState = {
   forecastResults: [],

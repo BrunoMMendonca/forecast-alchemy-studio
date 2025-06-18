@@ -3,10 +3,13 @@ import { OptimizationQueuePopup } from '@/components/OptimizationQueuePopup';
 import { MainLayout } from '@/components/MainLayout';
 import { StepContent } from '@/components/StepContent';
 import { useUnifiedState } from '@/hooks/useUnifiedState';
-import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
 import { ForecastPage } from './ForecastPage';
 import { getDefaultModels, hasOptimizableParameters } from '@/utils/modelConfig';
 import { useOptimizationCacheContext } from '@/context/OptimizationCacheContext';
+import { useGlobalForecastSettings } from '@/hooks/useGlobalForecastSettings';
+import type { OptimizationQueueItem } from '@/types/optimization';
+import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
+import { useAISettings } from '@/hooks/useAISettings';
 
 export interface NormalizedSalesData {
   'Material Code': string;
@@ -36,7 +39,6 @@ const Index = () => {
     models,
     forecastPeriods,
     businessContext,
-    grokApiEnabled,
     
     // Data management
     setSalesData,
@@ -58,8 +60,21 @@ const Index = () => {
     // Settings management
     setForecastPeriods,
     setBusinessContext,
-    setGrokApiEnabled
   } = useUnifiedState();
+
+  const { enabled: aiEnabled } = useAISettings();
+
+  const {
+    forecastPeriods: globalForecastPeriods,
+    setForecastPeriods: setGlobalForecastPeriods,
+    businessContext: globalBusinessContext,
+    setBusinessContext: setGlobalBusinessContext,
+    aiForecastModelOptimizationEnabled: globalaiForecastModelOptimizationEnabled,
+    setaiForecastModelOptimizationEnabled: setGlobalaiForecastModelOptimizationEnabled,
+    aiFailureThreshold,
+    setAiFailureThreshold,
+    resetToDefaults
+  } = useGlobalForecastSettings();
 
   const {
     queue,
@@ -69,12 +84,64 @@ const Index = () => {
     setIsOptimizing,
     processQueue,
     setPaused
-  } = useOptimizationQueue();
+  } = useOptimizationQueue(cleanedData, salesData, aiEnabled, globalaiForecastModelOptimizationEnabled);
 
   const { clearAllCache } = useOptimizationCacheContext();
 
   const [lastImportFileName, setLastImportFileName] = useState<string | null>(null);
   const [lastImportTime, setLastImportTime] = useState<string | null>(null);
+  const [pendingQueueJobs, setPendingQueueJobs] = useState<OptimizationQueueItem[] | null>(null);
+  const [pendingUpload, setPendingUpload] = useState(false);
+
+  const handleGlobalSettingsChange = useCallback((changedSetting: 'forecastPeriods' | 'businessContext' | 'aiForecastModelOptimizationEnabled' | 'aiFailureThreshold') => {
+    if (cleanedData.length > 0) {
+      const allSKUs = Array.from(new Set(cleanedData.map(d => d['Material Code'])));
+      removeFromQueue(allSKUs);
+      const optimizableModels = getDefaultModels().filter(hasOptimizableParameters);
+      const jobs = allSKUs.flatMap(sku =>
+        optimizableModels.flatMap(model => {
+          const jobs = [];
+          jobs.push({
+            sku,
+            modelId: model.id,
+            reason: 'settings_change',
+            method: 'grid',
+            timestamp: Date.now()
+          });
+          console.log('[QUEUE] handleGlobalSettingsChange: AI Enabled:', aiEnabled, 'AI Optimization Enabled:', globalaiForecastModelOptimizationEnabled);
+          if (aiEnabled && globalaiForecastModelOptimizationEnabled) {
+            jobs.push({
+              sku,
+              modelId: model.id,
+              reason: 'settings_change',
+              method: 'ai',
+              timestamp: Date.now()
+            });
+          }
+          return jobs;
+        })
+      );
+      const existingPairs = new Set(queue.items.map(item => `${item.sku}__${item.modelId}__${item.reason}__${item.method}`));
+      const newJobs = jobs.filter(job => !existingPairs.has(`${job.sku}__${job.modelId}__${job.reason}__${job.method}`));
+      console.log(`[QUEUE] handleGlobalSettingsChange: Current queue size before update: ${queue.items.length}`);
+      addToQueue(newJobs);
+      console.log(`[QUEUE] handleGlobalSettingsChange: Current queue size after update: ${queue.items.length}`);
+    }
+  }, [cleanedData, removeFromQueue, addToQueue, aiEnabled, globalaiForecastModelOptimizationEnabled, queue.items]);
+
+  // Use a ref to always have the latest handleGlobalSettingsChange
+  const handleGlobalSettingsChangeRef = React.useRef(handleGlobalSettingsChange);
+  useEffect(() => {
+    handleGlobalSettingsChangeRef.current = handleGlobalSettingsChange;
+  }, [handleGlobalSettingsChange]);
+
+  // Set up the onSettingsChange handler in useGlobalForecastSettings
+  useEffect(() => {
+    // If your useGlobalForecastSettings supports dynamic handler assignment, do it here
+    // Otherwise, you may need to refactor the hook to support this
+    // Example (pseudo-code):
+    // setOnSettingsChange(handleGlobalSettingsChangeRef.current);
+  }, []);
 
   // Listen for the global queue popup event
   useEffect(() => {
@@ -89,136 +156,74 @@ const Index = () => {
     };
   }, [setIsQueuePopupOpen]);
 
-  // Sync queue state with unified state
+  // Combined useEffect for queue state logging and auto-starting
   useEffect(() => {
-    console.log('🔄 INDEX: Syncing queue state');
-    console.log('🔄 INDEX: - Queue items:', queue.items);
-    console.log('🔄 INDEX: - Queue size:', queue.items.length);
-    console.log('🔄 INDEX: - Is optimizing:', queue.isOptimizing);
-
-    if (queue.items.length > 0 && !queue.isOptimizing) {
-      console.log('🚀 INDEX: Starting queue processing');
+    const dataReady = (cleanedData.length > 0 ? cleanedData : salesData).length > 0;
+    if (
+      queue.items.length > 0 &&
+      !queue.isOptimizing &&
+      !queue.paused &&
+      dataReady
+    ) {
       processQueue();
     }
-  }, [queue.items, queue.isOptimizing, processQueue]);
+  }, [queue.items, queue.isOptimizing, queue.paused, processQueue, cleanedData, salesData]);
 
-  const handleGlobalSettingsChange = (changedSetting: 'forecastPeriods' | 'businessContext' | 'grokApiEnabled') => {
-    if (cleanedData.length > 0) {
-      const allSKUs = Array.from(new Set(cleanedData.map(d => d['Material Code'])));
-      removeFromQueue(allSKUs);
+  const handleDataUpload = useCallback((data: NormalizedSalesData[], fileName?: string) => {
+    setSalesData(data);
+    setCleanedData(data);
+    console.log('✅ Data uploaded. salesData and cleanedData set:', data.length);
+    setCurrentStep(1);
+    if (fileName) setLastImportFileName(fileName);
+    setLastImportTime(new Date().toLocaleString());
+    setPendingUpload(true);
+  }, [setSalesData, setCleanedData, setCurrentStep]);
+
+  useEffect(() => {
+    if (pendingUpload && salesData.length > 0) {
+      const skusInOrder = Array.from(new Set(salesData.map(d => d['Material Code'])));
       const optimizableModels = getDefaultModels().filter(hasOptimizableParameters);
-      const jobs = allSKUs.flatMap(sku =>
+      const jobs = skusInOrder.flatMap(sku =>
         optimizableModels.flatMap(model => {
           const jobs = [];
-          // Always add Grid job
-          jobs.push({
-            sku,
-            modelId: model.id,
-            reason: 'settings_change',
-            method: 'grid',
-            timestamp: Date.now()
-          });
-          // Add AI job if enabled
-          if (grokApiEnabled) {
-            jobs.push({
-          sku,
-          modelId: model.id,
-              reason: 'settings_change',
-              method: 'ai',
-          timestamp: Date.now()
-            });
+          jobs.push({ sku, modelId: model.id, reason: 'csv_upload_sales_data', method: 'grid', timestamp: Date.now() });
+          if (aiEnabled && globalaiForecastModelOptimizationEnabled) {
+            jobs.push({ sku, modelId: model.id, reason: 'csv_upload_sales_data', method: 'ai', timestamp: Date.now() });
           }
           return jobs;
         })
       );
-      const existingPairs = new Set(queue.items.map(item => `${item.sku}__${item.modelId}__${item.reason}__${item.method}`));
-      const newJobs = jobs.filter(job => !existingPairs.has(`${job.sku}__${job.modelId}__${job.reason}__${job.method}`));
-      addToQueue(newJobs);
+      console.log(`[QUEUE] useEffect pendingUpload: Current queue size before update: ${queue.items.length}`);
+      addToQueue(jobs);
+      console.log(`[QUEUE] useEffect pendingUpload: Current queue size after update: ${queue.items.length}`);
+      setPendingUpload(false);
     }
-  };
-
-  const handleDataUpload = useCallback((data: NormalizedSalesData[], fileName?: string) => {
-    console.log('📥 INDEX: Handling data upload');
-    setSalesData(data);
-    setCleanedData(data);
-    setCurrentStep(1);
-    if (fileName) setLastImportFileName(fileName);
-    setLastImportTime(new Date().toLocaleString());
-    
-    const skusInOrder = Array.from(new Set(data.map(d => d['Material Code'])));
-    const optimizableModels = getDefaultModels().filter(hasOptimizableParameters);
-    const jobs = skusInOrder.flatMap(sku =>
-      optimizableModels.flatMap(model => {
-        const jobs = [];
-        // Always add Grid job
-        jobs.push({
-          sku,
-          modelId: model.id,
-          reason: 'csv_upload_sales_data',
-          method: 'grid',
-          timestamp: Date.now()
-        });
-        // Add AI job if enabled
-        if (grokApiEnabled) {
-          jobs.push({
-        sku,
-        modelId: model.id,
-            reason: 'csv_upload_sales_data',
-            method: 'ai',
-        timestamp: Date.now()
-          });
-        }
-        return jobs;
-      })
-    );
-    const existingPairs = new Set(queue.items.map(item => `${item.sku}__${item.modelId}__${item.reason}__${item.method}`));
-    const newJobs = jobs.filter(job => !existingPairs.has(`${job.sku}__${job.modelId}__${job.reason}__${job.method}`));
-    console.log('📥 INDEX: Adding jobs to queue:', newJobs);
-    addToQueue(newJobs);
-  }, [setSalesData, setCleanedData, setCurrentStep, addToQueue, queue.items, grokApiEnabled]);
+  }, [pendingUpload, salesData, addToQueue, aiEnabled, globalaiForecastModelOptimizationEnabled, queue.items]);
 
   const handleDataCleaning = useCallback((data: NormalizedSalesData[], changedSKUs?: string[]) => {
     console.log('🧹 INDEX: Handling data cleaning');
     setCleanedData(data);
-    
-    // If specific SKUs were changed, only queue those
     if (changedSKUs && changedSKUs.length > 0) {
       const currentSKUs = Array.from(new Set(data.map(d => d['Material Code'])));
       const validChangedSKUs = changedSKUs.filter(sku => currentSKUs.includes(sku));
-      
       if (validChangedSKUs.length > 0) {
         const optimizableModels = getDefaultModels().filter(hasOptimizableParameters);
         const jobs = validChangedSKUs.flatMap(sku =>
           optimizableModels.flatMap(model => {
             const jobs = [];
-            // Always add Grid job
-            jobs.push({
-              sku,
-              modelId: model.id,
-              reason: 'manual_edit_data_cleaning',
-              method: 'grid',
-              timestamp: Date.now()
-            });
-            // Add AI job if enabled
-            if (grokApiEnabled) {
-              jobs.push({
-            sku,
-            modelId: model.id,
-                reason: 'manual_edit_data_cleaning',
-                method: 'ai',
-            timestamp: Date.now()
-              });
+            jobs.push({ sku, modelId: model.id, reason: 'data_cleaning', method: 'grid', timestamp: Date.now() });
+            if (aiEnabled && globalaiForecastModelOptimizationEnabled) {
+              jobs.push({ sku, modelId: model.id, reason: 'data_cleaning', method: 'ai', timestamp: Date.now() });
             }
             return jobs;
           })
         );
-        const existingPairs = new Set(queue.items.map(item => `${item.sku}__${item.modelId}__${item.reason}__${item.method}`));
-        const newJobs = jobs.filter(job => !existingPairs.has(`${job.sku}__${job.modelId}__${job.reason}__${job.method}`));
-        console.log('🧹 INDEX: Adding jobs to queue:', newJobs);
-        addToQueue(newJobs);
+        console.log(`[QUEUE] handleDataCleaning: Current queue size before update: ${queue.items.length}`);
+        addToQueue(jobs);
+        console.log(`[QUEUE] handleDataCleaning: Current queue size after update: ${queue.items.length}`);
       }
     }
-  }, [setCleanedData, addToQueue, queue.items, grokApiEnabled]);
+  }, [setCleanedData, addToQueue, aiEnabled, globalaiForecastModelOptimizationEnabled, queue.items]);
 
   const handleForecastGeneration = useCallback((results: ForecastResult[], sku: string) => {
     setForecastResults(results);
@@ -260,7 +265,6 @@ const Index = () => {
       const jobs = validSKUs.flatMap(sku =>
         optimizableModels.flatMap(model => {
           const jobs = [];
-          // Always add Grid job
           jobs.push({
             sku,
             modelId: model.id,
@@ -268,14 +272,13 @@ const Index = () => {
             method: 'grid',
             timestamp: Date.now()
           });
-          // Add AI job if enabled
-          if (grokApiEnabled) {
+          if (aiEnabled && globalaiForecastModelOptimizationEnabled) {
             jobs.push({
-          sku,
-          modelId: model.id,
+              sku,
+              modelId: model.id,
               reason: 'csv_upload_data_cleaning',
               method: 'ai',
-          timestamp: Date.now()
+              timestamp: Date.now()
             });
           }
           return jobs;
@@ -286,7 +289,7 @@ const Index = () => {
       console.log('Adding jobs to queue:', newJobs);
       addToQueue(newJobs);
     }
-  }, [addToQueue, queue.items, grokApiEnabled]);
+  }, [addToQueue, queue.items, aiEnabled, globalaiForecastModelOptimizationEnabled]);
 
   // If we're on the forecast step, render the new ForecastPage
   if (currentStep === 3) {
@@ -300,12 +303,14 @@ const Index = () => {
         forecastResultsLength={forecastResults.length}
         onStepClick={setCurrentStep}
         onQueuePopupOpen={() => setIsQueuePopupOpen(true)}
-        forecastPeriods={forecastPeriods}
-        setForecastPeriods={setForecastPeriods}
-        businessContext={businessContext}
-        setBusinessContext={setBusinessContext}
-        grokApiEnabled={grokApiEnabled}
-        setGrokApiEnabled={setGrokApiEnabled}
+        forecastPeriods={globalForecastPeriods}
+        setForecastPeriods={setGlobalForecastPeriods}
+        businessContext={globalBusinessContext}
+        setBusinessContext={setGlobalBusinessContext}
+        aiForecastModelOptimizationEnabled={globalaiForecastModelOptimizationEnabled}
+        setaiForecastModelOptimizationEnabled={setGlobalaiForecastModelOptimizationEnabled}
+        aiFailureThreshold={aiFailureThreshold}
+        setAiFailureThreshold={setAiFailureThreshold}
         settingsOpen={settingsOpen}
         setSettingsOpen={setSettingsOpen}
         isOptimizing={queue.isOptimizing}
@@ -313,8 +318,8 @@ const Index = () => {
       >
         <ForecastPage
           data={cleanedData.length > 0 ? cleanedData : salesData}
-          businessContext={businessContext}
-          grokApiEnabled={grokApiEnabled}
+          businessContext={globalBusinessContext}
+          aiForecastModelOptimizationEnabled={globalaiForecastModelOptimizationEnabled}
         />
       </MainLayout>
         <OptimizationQueuePopup
@@ -341,12 +346,14 @@ const Index = () => {
         forecastResultsLength={forecastResults.length}
         onStepClick={setCurrentStep}
         onQueuePopupOpen={() => setIsQueuePopupOpen(true)}
-        forecastPeriods={forecastPeriods}
-        setForecastPeriods={setForecastPeriods}
-        businessContext={businessContext}
-        setBusinessContext={setBusinessContext}
-        grokApiEnabled={grokApiEnabled}
-        setGrokApiEnabled={setGrokApiEnabled}
+        forecastPeriods={globalForecastPeriods}
+        setForecastPeriods={setGlobalForecastPeriods}
+        businessContext={globalBusinessContext}
+        setBusinessContext={setGlobalBusinessContext}
+        aiForecastModelOptimizationEnabled={globalaiForecastModelOptimizationEnabled}
+        setaiForecastModelOptimizationEnabled={setGlobalaiForecastModelOptimizationEnabled}
+        aiFailureThreshold={aiFailureThreshold}
+        setAiFailureThreshold={setAiFailureThreshold}
         settingsOpen={settingsOpen}
         setSettingsOpen={setSettingsOpen}
         isOptimizing={queue.isOptimizing}
@@ -364,13 +371,13 @@ const Index = () => {
           onSKUChange={setSelectedSKU}
           shouldStartOptimization={shouldStartOptimization}
           onOptimizationStarted={handleOptimizationStarted}
-          grokApiEnabled={grokApiEnabled}
+          aiForecastModelOptimizationEnabled={globalaiForecastModelOptimizationEnabled}
           optimizationQueue={{
             items: queue.items,
             queueSize: queue.items.length,
             uniqueSKUCount: new Set(queue.items.map(item => item.sku)).size
           }}
-          forecastPeriods={forecastPeriods}
+          forecastPeriods={globalForecastPeriods}
           onStepChange={setCurrentStep}
           queueSize={queue.items.length}
           onImportDataCleaning={handleImportDataCleaning}

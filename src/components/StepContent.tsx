@@ -21,7 +21,7 @@ interface StepContentProps {
   selectedSKUForResults: string;
   queueSize: number;
   forecastPeriods: number;
-  grokApiEnabled: boolean;
+  aiForecastModelOptimizationEnabled: boolean;
   onDataUpload: (data: NormalizedSalesData[], fileName?: string) => void;
   onDataCleaning: (cleaned: NormalizedSalesData[], changedSKUs?: string[]) => void;
   onImportDataCleaning: (importedSKUs: string[]) => void;
@@ -52,7 +52,7 @@ export const StepContent: React.FC<StepContentProps> = ({
   selectedSKUForResults,
   queueSize,
   forecastPeriods,
-  grokApiEnabled,
+  aiForecastModelOptimizationEnabled,
   onDataUpload,
   onDataCleaning,
   onImportDataCleaning,
@@ -174,7 +174,7 @@ export const StepContent: React.FC<StepContentProps> = ({
             onSKUChange={onSKUChange}
             shouldStartOptimization={shouldStartOptimization()}
             onOptimizationStarted={onOptimizationStarted}
-            grokApiEnabled={grokApiEnabled}
+            aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
             optimizationQueue={optimizationQueue}
           />
         </div>

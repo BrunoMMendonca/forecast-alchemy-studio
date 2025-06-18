@@ -195,7 +195,7 @@ export const generateHoltWinters = (
     }
   }
 
-  console.log(`📈 FORECAST: Generated Holt-Winters predictions:`, predictions.map(p => p.value));
+  // console.log(`📈 FORECAST: Generated Holt-Winters predictions:`, predictions.map(p => p.value));
   return predictions;
 };
 
@@ -217,8 +217,6 @@ const generateExponentialSmoothing = (values: number[], alpha: number, periods: 
     lastSmoothed = alpha * values[i] + (1 - alpha) * lastSmoothed;
   }
 
-  console.log(`📊 FORECAST: Last smoothed value: ${lastSmoothed}`);
-
   // Generate predictions
   const dates = generateDates(new Date(), periods);
   const predictions = dates.map((date) => ({
@@ -230,7 +228,7 @@ const generateExponentialSmoothing = (values: number[], alpha: number, periods: 
     }
   }));
 
-  console.log(`📈 FORECAST: Generated exponential smoothing predictions:`, predictions.map(p => p.value));
+  // console.log(`📈 FORECAST: Generated exponential smoothing predictions:`, predictions.map(p => p.value));
   return predictions;
 };
 
