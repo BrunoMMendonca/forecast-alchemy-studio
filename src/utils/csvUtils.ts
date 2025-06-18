@@ -238,3 +238,74 @@ export const applyImportChanges = (
   
   return updatedData;
 };
+
+export interface TransformedCSVData {
+  headers: string[];
+  rows: string[][];
+}
+
+export const transformYearMonthCSV = (csvText: string, delimiter: string = ';'): TransformedCSVData => {
+  const lines = csvText.split('\n').map(line => line.trim()).filter(line => line);
+  if (lines.length < 2) return { headers: [], rows: [] };
+
+  // Parse headers
+  const headers = lines[0].split(delimiter).map(h => h.trim());
+  const yearIdx = headers.findIndex(h => h.toUpperCase() === 'YEAR');
+  const monthIdx = headers.findIndex(h => h.toUpperCase() === 'MONTH');
+  const valueIdx = headers.findIndex(h => h.toUpperCase() === 'RETAIL SALES');
+  const itemCodeIdx = headers.findIndex(h => h.toUpperCase() === 'ITEM CODE');
+  const itemDescIdx = headers.findIndex(h => h.toUpperCase() === 'ITEM DESCRIPTION');
+
+  if (yearIdx === -1 || monthIdx === -1 || valueIdx === -1) {
+    throw new Error('Required columns (YEAR, MONTH, RETAIL SALES) not found');
+  }
+
+  // Group data by item code and description
+  const itemGroups = new Map<string, { desc: string; dates: Map<string, string> }>();
+
+  // Process data rows
+  for (let i = 1; i < lines.length; i++) {
+    const cells = lines[i].split(delimiter).map(cell => cell.trim());
+    if (cells.length < Math.max(yearIdx, monthIdx, valueIdx) + 1) continue;
+
+    const year = cells[yearIdx];
+    const month = cells[monthIdx].padStart(2, '0');
+    const value = parseFloat(cells[valueIdx]) || 0;
+    const itemCode = cells[itemCodeIdx] || '';
+    const itemDesc = cells[itemDescIdx] || '';
+
+    const date = `${year}-${month}-01`;
+    const key = `${itemCode}|${itemDesc}`;
+
+    if (!itemGroups.has(key)) {
+      itemGroups.set(key, { desc: itemDesc, dates: new Map() });
+    }
+    itemGroups.get(key)!.dates.set(date, value.toString());
+  }
+
+  // Get all unique dates
+  const allDates = new Set<string>();
+  itemGroups.forEach(group => {
+    group.dates.forEach((_, date) => allDates.add(date));
+  });
+  const sortedDates = Array.from(allDates).sort();
+
+  // Create new headers
+  const newHeaders = ['Material Code', 'Description', ...sortedDates];
+
+  // Create new rows
+  const newRows: string[][] = [];
+  itemGroups.forEach((group, key) => {
+    const [itemCode] = key.split('|');
+    const row = [itemCode, group.desc];
+    sortedDates.forEach(date => {
+      row.push((group.dates.get(date) || 0).toString());
+    });
+    newRows.push(row);
+  });
+
+  return {
+    headers: newHeaders,
+    rows: newRows
+  };
+};

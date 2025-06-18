@@ -23,6 +23,8 @@ interface MainLayoutProps {
   setBusinessContext: (context: BusinessContext) => void;
   aiForecastModelOptimizationEnabled: boolean;
   setaiForecastModelOptimizationEnabled: (enabled: boolean) => void;
+  aiCsvImportEnabled: boolean;
+  setAiCsvImportEnabled: (enabled: boolean) => void;
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
   isOptimizing?: boolean;
@@ -46,6 +48,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   setBusinessContext,
   aiForecastModelOptimizationEnabled,
   setaiForecastModelOptimizationEnabled,
+  aiCsvImportEnabled,
+  setAiCsvImportEnabled,
   settingsOpen,
   setSettingsOpen,
   isOptimizing,
@@ -64,7 +68,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     setOptimizationProgress
   } = useUnifiedState();
   const { runOptimization, isOptimizing: batchIsOptimizing } = useBatchOptimization();
-  const allSKUs = Array.from(new Set(cleanedData.map(d => d['Material Code'])));
+  const allSKUs = Array.from(new Set(cleanedData.map(d => d['Material Code']).filter(Boolean)));
   const models = stateModels.length > 0 ? stateModels : getDefaultModels();
 
   // Dropdown state
@@ -127,6 +131,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           setBusinessContext={setBusinessContext}
           aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
           setaiForecastModelOptimizationEnabled={setaiForecastModelOptimizationEnabled}
+          aiCsvImportEnabled={aiCsvImportEnabled}
+          setAiCsvImportEnabled={setAiCsvImportEnabled}
           aiFailureThreshold={aiFailureThreshold}
           setAiFailureThreshold={setAiFailureThreshold}
           settingsOpen={settingsOpen}
@@ -148,8 +154,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 onChange={e => setSelectedSKU(e.target.value)}
                 className="border rounded px-2 py-1"
               >
-                {allSKUs.map(sku => (
-                  <option key={sku} value={sku}>{sku}</option>
+                {allSKUs.map((sku, index) => (
+                  <option key={`sku-${sku}-${index}`} value={sku}>{sku}</option>
                 ))}
               </select>
               <label htmlFor="dev-model-select" className="text-sm font-semibold">Model:</label>
@@ -159,8 +165,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 onChange={e => setSelectedModelId(e.target.value)}
                 className="border rounded px-2 py-1"
               >
-                {models.map(model => (
-                  <option key={model.id} value={model.id}>{model.name}</option>
+                {models.map((model, index) => (
+                  <option key={`model-${model.id}-${index}`} value={model.id}>{model.name}</option>
                 ))}
               </select>
               <Button

@@ -17,6 +17,8 @@ interface ForecastSettingsProps {
   setaiForecastModelOptimizationEnabled: (enabled: boolean) => void;
   aiFailureThreshold: number;
   setAiFailureThreshold: (threshold: number) => void;
+  aiCsvImportEnabled: boolean;
+  setAiCsvImportEnabled: (enabled: boolean) => void;
 }
 
 export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
@@ -27,7 +29,9 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
   aiForecastModelOptimizationEnabled,
   setaiForecastModelOptimizationEnabled,
   aiFailureThreshold,
-  setAiFailureThreshold
+  setAiFailureThreshold,
+  aiCsvImportEnabled,
+  setAiCsvImportEnabled
 }) => {
   const { enabled: aiEnabled, setEnabled: setAIEnabled } = useAISettings({
     onSettingsChange: (enabled) => {
@@ -60,6 +64,29 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
           Enable advanced AI features powered by the Grok API, including model optimization and business context-aware recommendations.
         </p>
       </div>
+
+      {/* AI CSV Import Wizard (sub-toggle, only visible if AI Features is enabled) */}
+      {aiEnabled && (
+        <div className="pl-6 border-l-2 border-slate-200 space-y-2">
+          <Label htmlFor="ai-csv-import-enabled" className="flex items-center gap-2 text-base">
+            <Sparkles className="h-4 w-4" />
+            AI-Powered CSV Import Wizard
+          </Label>
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="ai-csv-import-enabled"
+              checked={aiCsvImportEnabled}
+              onCheckedChange={setAiCsvImportEnabled}
+            />
+            <span className="text-sm text-slate-600">
+              {aiCsvImportEnabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+          <p className="text-sm text-slate-500">
+            Enable the AI-powered CSV Import Wizard to get interactive suggestions and data transformations during CSV import.
+          </p>
+        </div>
+      )}
 
       {/* AI Model Optimization (sub-toggle, only visible if AI Features is enabled) */}
       {aiEnabled && (

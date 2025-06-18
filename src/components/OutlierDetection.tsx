@@ -403,7 +403,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
       {/* Controls */}
       <OutlierControls
         selectedSKU={selectedSKU}
-        skus={skus}
+        skus={Array.from(new Set(skus.filter(Boolean)))}
         threshold={threshold}
         onSKUChange={setSelectedSKU}
         onThresholdChange={setThreshold}

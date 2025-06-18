@@ -14,7 +14,7 @@ import { BusinessContext } from '@/types/businessContext';
 import { useUnifiedState } from '@/hooks/useUnifiedState';
 import { useOptimizationCacheContext } from '@/context/OptimizationCacheContext';
 import { generateDataHash } from '@/utils/cacheUtils';
-import { useGlobalForecastSettings } from '@/hooks/useGlobalForecastSettings';
+import { useGlobalSettings } from '@/hooks/useGlobalSettings';
 
 interface OptimizationJob {
   sku: string;
@@ -45,7 +45,7 @@ export const useOptimizationQueue = (cleanedData: SalesData[], salesData: SalesD
   const { setCachedParameters, setSelectedMethod, cache } = useOptimizationCacheContext();
   const unifiedState = useUnifiedState();
   const models = unifiedState.models.length > 0 ? unifiedState.models : getDefaultModels();
-  const { aiFailureThreshold, setaiForecastModelOptimizationEnabled } = useGlobalForecastSettings();
+  const { aiFailureThreshold, setaiForecastModelOptimizationEnabled } = useGlobalSettings();
   const [aiFailureCount, setAiFailureCount] = useState(() => {
     const saved = localStorage.getItem('aiFailureCount');
     return saved ? parseInt(saved, 10) : 0;

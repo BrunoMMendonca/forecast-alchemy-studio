@@ -69,6 +69,7 @@ export const StepContent: React.FC<StepContentProps> = ({
 
   if (currentStep === 0) {
     const handleCsvDataReady = (data: any[]) => {
+      console.log('[StepContent] Data received from CsvImportWizard:', data);
       onDataUpload(data, localFileName || undefined);
     };
     const handleFileNameChange = (fileName: string) => {
@@ -104,6 +105,7 @@ export const StepContent: React.FC<StepContentProps> = ({
   }
 
   if (currentStep === 1) {
+    console.log('[StepContent] salesData in Clean & Prepare:', salesData);
     return (
       <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
         <CardHeader>

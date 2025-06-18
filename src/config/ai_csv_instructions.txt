@@ -1,0 +1,9 @@
+Please transform the input CSV so that each row represents a different product and:
+1- Column 1 is the product code (or Material, Code, SKU number, Etc)
+2- Column 2 is the product description (if available). If not available use "{product code} - name"
+3- The following columns are non date columns that might be used in a pivot table. Meaning that the aggregated result might be useful for the user. (example: Brand, Category, Supplier, Etc)
+4- The final columns are dates as headers in the "YYYY-MM-DD" format with the sales values for that SKU.
+You might need to transpose the data accordingly.
+You might need to combine separate columns to create a date (year / month) column.
+Ignore any irrelevant columns and row (blanks, etc)
+Output as a CSV.

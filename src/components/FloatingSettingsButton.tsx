@@ -15,6 +15,8 @@ interface FloatingSettingsButtonProps {
   setBusinessContext: (context: BusinessContext) => void;
   aiForecastModelOptimizationEnabled: boolean;
   setaiForecastModelOptimizationEnabled: (enabled: boolean) => void;
+  aiCsvImportEnabled: boolean;
+  setAiCsvImportEnabled: (enabled: boolean) => void;
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
   aiFailureThreshold: number;
@@ -28,6 +30,8 @@ export const FloatingSettingsButton: React.FC<FloatingSettingsButtonProps> = ({
   setBusinessContext,
   aiForecastModelOptimizationEnabled,
   setaiForecastModelOptimizationEnabled,
+  aiCsvImportEnabled,
+  setAiCsvImportEnabled,
   settingsOpen,
   setSettingsOpen,
   aiFailureThreshold,
@@ -63,6 +67,8 @@ export const FloatingSettingsButton: React.FC<FloatingSettingsButtonProps> = ({
                 setBusinessContext={setBusinessContext}
                 aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
                 setaiForecastModelOptimizationEnabled={setaiForecastModelOptimizationEnabled}
+                aiCsvImportEnabled={aiCsvImportEnabled}
+                setAiCsvImportEnabled={setAiCsvImportEnabled}
                 aiFailureThreshold={aiFailureThreshold}
                 setAiFailureThreshold={setAiFailureThreshold}
               />

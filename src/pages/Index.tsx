@@ -6,7 +6,7 @@ import { useUnifiedState } from '@/hooks/useUnifiedState';
 import { ForecastPage } from './ForecastPage';
 import { getDefaultModels, hasOptimizableParameters } from '@/utils/modelConfig';
 import { useOptimizationCacheContext } from '@/context/OptimizationCacheContext';
-import { useGlobalForecastSettings } from '@/hooks/useGlobalForecastSettings';
+import { useGlobalSettings } from '@/hooks/useGlobalSettings';
 import type { OptimizationQueueItem } from '@/types/optimization';
 import { useOptimizationQueue } from '@/hooks/useOptimizationQueue';
 import { useAISettings } from '@/hooks/useAISettings';
@@ -71,10 +71,12 @@ const Index = () => {
     setBusinessContext: setGlobalBusinessContext,
     aiForecastModelOptimizationEnabled: globalaiForecastModelOptimizationEnabled,
     setaiForecastModelOptimizationEnabled: setGlobalaiForecastModelOptimizationEnabled,
+    aiCsvImportEnabled,
+    setAiCsvImportEnabled,
     aiFailureThreshold,
     setAiFailureThreshold,
     resetToDefaults
-  } = useGlobalForecastSettings();
+  } = useGlobalSettings();
 
   const {
     queue,
@@ -169,10 +171,21 @@ const Index = () => {
     }
   }, [queue.items, queue.isOptimizing, queue.paused, processQueue, cleanedData, salesData]);
 
-  const handleDataUpload = useCallback((data: NormalizedSalesData[], fileName?: string) => {
-    setSalesData(data);
-    setCleanedData(data);
-    console.log('✅ Data uploaded. salesData and cleanedData set:', data.length);
+  const handleDataUpload = useCallback((data: any, fileName?: string) => {
+    console.log('[Index] handleDataUpload received:', Array.isArray(data) ? data.slice(0, 5) : data);
+    // Convert 2D array to array of objects if needed
+    let objects = data;
+    if (Array.isArray(data) && Array.isArray(data[0])) {
+      const [headers, ...rows] = data;
+      objects = rows.map(row => {
+        const obj: Record<string, any> = {};
+        headers.forEach((h, i) => { obj[h] = row[i]; });
+        return obj;
+      });
+    }
+    setSalesData(objects);
+    setCleanedData(objects);
+    console.log('✅ Data uploaded. salesData and cleanedData set:', objects.length);
     setCurrentStep(1);
     if (fileName) setLastImportFileName(fileName);
     setLastImportTime(new Date().toLocaleString());
@@ -309,6 +322,8 @@ const Index = () => {
         setBusinessContext={setGlobalBusinessContext}
         aiForecastModelOptimizationEnabled={globalaiForecastModelOptimizationEnabled}
         setaiForecastModelOptimizationEnabled={setGlobalaiForecastModelOptimizationEnabled}
+        aiCsvImportEnabled={aiCsvImportEnabled}
+        setAiCsvImportEnabled={setAiCsvImportEnabled}
         aiFailureThreshold={aiFailureThreshold}
         setAiFailureThreshold={setAiFailureThreshold}
         settingsOpen={settingsOpen}
@@ -352,6 +367,8 @@ const Index = () => {
         setBusinessContext={setGlobalBusinessContext}
         aiForecastModelOptimizationEnabled={globalaiForecastModelOptimizationEnabled}
         setaiForecastModelOptimizationEnabled={setGlobalaiForecastModelOptimizationEnabled}
+        aiCsvImportEnabled={aiCsvImportEnabled}
+        setAiCsvImportEnabled={setAiCsvImportEnabled}
         aiFailureThreshold={aiFailureThreshold}
         setAiFailureThreshold={setAiFailureThreshold}
         settingsOpen={settingsOpen}
