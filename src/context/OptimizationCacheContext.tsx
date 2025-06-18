@@ -1,12 +1,23 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 
-const OptimizationCacheContext = createContext<ReturnType<typeof useOptimizationCache> | null>(null);
+interface OptimizationCacheContextType extends ReturnType<typeof useOptimizationCache> {
+  isLoading: boolean;
+}
+
+const OptimizationCacheContext = createContext<OptimizationCacheContextType | null>(null);
 
 export const OptimizationCacheProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isLoading, setIsLoading] = useState(true);
   const cache = useOptimizationCache();
+
+  useEffect(() => {
+    // Set loading to false after the first render
+    setIsLoading(false);
+  }, []);
+
   return (
-    <OptimizationCacheContext.Provider value={cache}>
+    <OptimizationCacheContext.Provider value={{ ...cache, isLoading }}>
       {children}
     </OptimizationCacheContext.Provider>
   );

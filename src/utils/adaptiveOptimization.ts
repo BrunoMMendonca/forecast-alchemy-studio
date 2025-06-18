@@ -48,11 +48,22 @@ const shouldStopEarly = (
   iterations: number,
   maxIterations: number
 ): boolean => {
+  // Don't stop early if results are poor
+  if (currentBest.accuracy < 60 || currentBest.confidence < 50) {
+    return false;
+  }
+  
   // Stop if we have a very good result
-  if (currentBest.accuracy > 85 && currentBest.confidence > 80) return true;
+  if (currentBest.accuracy > 85 && currentBest.confidence > 80) {
+    console.log(`✅ Found excellent parameters: accuracy=${currentBest.accuracy.toFixed(1)}%, confidence=${currentBest.confidence.toFixed(1)}%`);
+    return true;
+  }
   
   // Stop if we've done enough iterations
-  if (iterations >= maxIterations) return true;
+  if (iterations >= maxIterations) {
+    console.log(`ℹ️ Reached maximum iterations (${maxIterations})`);
+    return true;
+  }
   
   return false;
 };
@@ -144,12 +155,13 @@ export const adaptiveGridSearchOptimization = (
   modelId: string,
   data: SalesData[],
   aiParameters?: Record<string, number>,
-  config: ValidationConfig = ENHANCED_VALIDATION_CONFIG
+  config: ValidationConfig = ENHANCED_VALIDATION_CONFIG,
+  sku?: string
 ): OptimizationResult => {
   // console.log(`🔍 Starting smart grid search for ${modelId}`);
   
   if (data.length < config.minValidationSize * 2) {
-    console.log(`⚠️ Insufficient data, using default parameters`);
+    console.log(`⚠️ Insufficient data, using default parameters for SKU=${sku || 'unknown'}, Model=${modelId}`);
     return createDefaultResult(modelId);
   }
 
@@ -167,6 +179,8 @@ export const adaptiveGridSearchOptimization = (
 
   let bestResult: OptimizationResult | null = null;
   let iterations = 0;
+  let failedAttempts = 0;
+  let lastError: string | null = null;
   
   // Generate combinations on-the-fly instead of all at once
   const generateNextCombination = (): number[] | null => {
@@ -202,8 +216,8 @@ export const adaptiveGridSearchOptimization = (
         generateForecastForModel(modelId, trainData, periods, parameters);
       
       const validation = config.useWalkForward ? 
-        walkForwardValidation(data, generateForecast, config) :
-        timeSeriesCrossValidation(data, generateForecast, config);
+        walkForwardValidation(data, generateForecast, { ...config, sku, modelId, method: 'grid' }) :
+        timeSeriesCrossValidation(data, generateForecast, { ...config, sku, modelId, method: 'grid' });
       
       if (validation.accuracy >= 0 && validation.confidence >= 50) {
         const result: OptimizationResult = {
@@ -217,27 +231,36 @@ export const adaptiveGridSearchOptimization = (
         if (!bestResult || 
             (validation.accuracy > bestResult.accuracy && validation.confidence >= bestResult.confidence * 0.9)) {
           bestResult = result;
-          console.log(`✅ New best result found:`, {
+          console.log(`✅ New best result found for SKU=${sku || 'unknown'}, Model=${modelId}:`, {
             parameters,
             accuracy: validation.accuracy.toFixed(2),
             confidence: validation.confidence.toFixed(2)
           });
         }
+      } else {
+        failedAttempts++;
+        if (validation.accuracy === 0) {
+          lastError = `Validation failed with accuracy=0%, MAPE=${validation.mape.toFixed(2)}%`;
+        } else if (validation.confidence < 50) {
+          lastError = `Validation failed with low confidence=${validation.confidence.toFixed(2)}%`;
+        }
       }
     } catch (error) {
-      console.log(`⚠️ Error with parameters:`, parameters, error);
+      failedAttempts++;
+      lastError = error instanceof Error ? error.message : 'Unknown error';
+      console.log(`⚠️ Error with parameters for SKU=${sku || 'unknown'}, Model=${modelId}:`, parameters, error);
       continue;
     }
 
     // Check early stopping criteria
     if (bestResult && shouldStopEarly(bestResult, iterations, maxIterations)) {
-      console.log(`🛑 Early stopping triggered at iteration ${iterations}`);
+      console.log(`🛑 Early stopping triggered at iteration ${iterations}/${maxIterations} for SKU=${sku || 'unknown'}, Model=${modelId} with accuracy=${bestResult.accuracy.toFixed(1)}% and confidence=${bestResult.confidence.toFixed(1)}%`);
       break;
     }
   }
 
   if (!bestResult) {
-    console.log(`⚠️ No valid results found, using default parameters`);
+    console.log(`⚠️ No valid results found for SKU=${sku || 'unknown'}, Model=${modelId} after ${iterations} iterations (${failedAttempts} failed attempts). Last error: ${lastError || 'No specific error recorded'}. Using default parameters.`);
     return createDefaultResult(modelId);
   }
 

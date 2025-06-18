@@ -36,6 +36,7 @@ export const useOptimizationQueue = (cleanedData: SalesData[], salesData: SalesD
   } = useUnifiedState();
   
   const isProcessingRef = useRef(false);
+  const currentBatchRef = useRef<Set<string>>(new Set());
   const {
     setStatus,
     setResult,
@@ -168,8 +169,19 @@ export const useOptimizationQueue = (cleanedData: SalesData[], salesData: SalesD
     if (queue.paused) return;
     if (isProcessingRef.current) return;
     if (queue.items.length === 0) return;
+
+    // Create a unique identifier for this batch of items
+    const batchId = queue.items.map(item => `${item.sku}:${item.modelId}:${item.method}`).join(',');
+    
+    // If we've already processed this batch, skip it
+    if (currentBatchRef.current.has(batchId)) {
+      console.log('[QUEUE] Skipping already processed batch');
+      return;
+    }
+
     console.log(`[QUEUE] Processing started. Jobs in queue: ${queue.items.length}`);
     isProcessingRef.current = true;
+    currentBatchRef.current.add(batchId);
     setIsOptimizing(true);
 
     try {
@@ -373,7 +385,14 @@ export const useOptimizationQueue = (cleanedData: SalesData[], salesData: SalesD
     ) {
       processQueue();
     }
-  }, [queue.items, queue.isOptimizing, queue.paused, processQueue, effectiveCleanedData]);
+  }, [queue.items.length, queue.isOptimizing, queue.paused, processQueue, effectiveCleanedData]);
+
+  // Clear the current batch ref when the queue is empty
+  useEffect(() => {
+    if (queue.items.length === 0) {
+      currentBatchRef.current.clear();
+    }
+  }, [queue.items.length]);
 
   const getSKUsInQueue = useCallback(() => {
     const uniqueSKUs = Array.from(new Set(queue.items.map(item => item.sku)));

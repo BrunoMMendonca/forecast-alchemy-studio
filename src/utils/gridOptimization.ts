@@ -1,7 +1,7 @@
+import { SalesData } from '@/types/forecast';
+import { ModelConfig } from '@/types/forecast';
 import { adaptiveGridSearchOptimization } from '@/utils/adaptiveOptimization';
 import { ENHANCED_VALIDATION_CONFIG } from '@/utils/enhancedValidation';
-import { ModelConfig } from '@/types/forecast';
-import { SalesData } from '@/pages/Index';
 
 export interface GridOptimizationResult {
   parameters: Record<string, number>;
@@ -30,7 +30,8 @@ export const runGridOptimization = async (
     {
       ...ENHANCED_VALIDATION_CONFIG,
       useWalkForward: true
-    }
+    },
+    sku
   );
 
   return {

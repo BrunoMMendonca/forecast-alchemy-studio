@@ -17,6 +17,8 @@ interface ForecastPageProps {
   aiForecastModelOptimizationEnabled: boolean;
 }
 
+type TabValue = 'optimize' | 'tune';
+
 export const ForecastPage: React.FC<ForecastPageProps> = ({
   data,
   businessContext,
@@ -24,8 +26,8 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
 }) => {
   const { toast } = useToast();
   const [selectedSKU, setSelectedSKU] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<string>('optimize');
-  const [optimizedModels, setOptimizedModels] = useState<Record<string, ModelConfig>>({});
+  const [activeTab, setActiveTab] = useState<TabValue>('optimize');
+  const [optimizedModels, setOptimizedModels] = useState<ModelConfig[]>([]);
   const [results, setResults] = useState<ForecastResult[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -35,17 +37,26 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
     updateParameter,
     resetToManual,
     handleMethodSelection,
-    generateForecasts
+    generateForecasts,
+    isLoading
   } = useModelController(
     selectedSKU,
     data,
-    12, // Default forecast periods, not user-editable here
+    12,
     businessContext,
     (newResults, sku) => {
       setResults(newResults);
       setSelectedSKU(sku);
     }
   );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   const handleOptimizationComplete = (modelId: string, parameters: Record<string, number>, method: string) => {
     const model = models.find(m => m.id === modelId);
@@ -55,10 +66,7 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
         optimizedParameters: parameters,
         optimizationMethod: method,
       };
-      setOptimizedModels(prev => ({
-        ...prev,
-        [modelId]: updatedModel
-      }));
+      setOptimizedModels(prev => [...prev, updatedModel]);
       // Update each parameter individually
       Object.entries(parameters).forEach(([parameter, value]) => {
         updateParameter(modelId, parameter, value);
@@ -104,32 +112,38 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
 
   return (
     <div className="container mx-auto py-6 space-y-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="optimize">Optimize</TabsTrigger>
-          <TabsTrigger value="tune">Tune</TabsTrigger>
-        </TabsList>
+      <div className="flex space-x-4 mb-4">
+        <button
+          className={`px-4 py-2 rounded ${activeTab === 'optimize' ? 'bg-primary text-white' : 'bg-gray-200'}`}
+          onClick={() => setActiveTab('optimize')}
+        >
+          Optimize
+        </button>
+        <button
+          className={`px-4 py-2 rounded ${activeTab === 'tune' ? 'bg-primary text-white' : 'bg-gray-200'}`}
+          onClick={() => setActiveTab('tune')}
+        >
+          Tune
+        </button>
+      </div>
 
-        <TabsContent value="optimize">
-          <OptimizeForecast
-            data={data}
-            selectedSKU={selectedSKU}
-            models={models}
-            businessContext={businessContext}
-            aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
-            onSKUChange={setSelectedSKU}
-            onUpdateParameter={updateParameter}
-          />
-        </TabsContent>
-
-        <TabsContent value="tune">
-          <TuneForecast
-            results={results}
-            selectedSKU={selectedSKU}
-            onTuneComplete={handleTuneComplete}
-          />
-        </TabsContent>
-      </Tabs>
+      {activeTab === 'optimize' ? (
+        <OptimizeForecast
+          data={data}
+          selectedSKU={selectedSKU}
+          models={models}
+          businessContext={businessContext}
+          aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
+          onSKUChange={setSelectedSKU}
+          onUpdateParameter={updateParameter}
+        />
+      ) : (
+        <TuneForecast
+          results={results}
+          selectedSKU={selectedSKU}
+          onTuneComplete={handleTuneComplete}
+        />
+      )}
     </div>
   );
 }; 

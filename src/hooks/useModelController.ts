@@ -1,6 +1,6 @@
-
 import { useCallback, useEffect } from 'react';
-import { SalesData, ForecastResult } from '@/pages/Index';
+import { ForecastResult } from '@/pages/Index';
+import { SalesData } from '@/types/forecast';
 import { BusinessContext } from '@/types/businessContext';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { useModelState } from './useModelState';
@@ -8,6 +8,7 @@ import { useForecastGeneration } from './useForecastGeneration';
 import { useModelOptimizationSync } from './useModelOptimizationSync';
 import { useParameterController } from './useParameterController';
 import { useMethodSelection } from './useMethodSelection';
+import { useOptimizationCacheContext } from '@/context/OptimizationCacheContext';
 
 export const useModelController = (
   selectedSKU: string, 
@@ -16,6 +17,7 @@ export const useModelController = (
   businessContext?: BusinessContext,
   onForecastGeneration?: (results: ForecastResult[], selectedSKU: string) => void
 ) => {
+  const { isLoading } = useOptimizationCacheContext();
   const { setSelectedMethod, cacheManualParameters, cache } = useOptimizationCache();
   
   const {
@@ -64,7 +66,7 @@ export const useModelController = (
   );
 
   useEffect(() => {
-    if (!selectedSKU || !models.length) return;
+    if (isLoading || !selectedSKU || !models.length) return;
     
     const enabledModels = models.filter(m => m.enabled);
     if (enabledModels.length === 0) return;
@@ -78,7 +80,7 @@ export const useModelController = (
 
       return () => clearTimeout(timeoutId);
     }
-  }, [modelsHash, selectedSKU, generateForecasts, lastForecastGenerationHashRef]);
+  }, [modelsHash, selectedSKU, generateForecasts, lastForecastGenerationHashRef, isLoading]);
 
   return {
     models,
@@ -86,6 +88,7 @@ export const useModelController = (
     updateParameter,
     resetToManual,
     handleMethodSelection,
-    generateForecasts
+    generateForecasts,
+    isLoading
   };
 };

@@ -14,7 +14,7 @@ interface GlobalForecastSettings {
 const DEFAULT_SETTINGS: GlobalForecastSettings = {
   forecastPeriods: 12,
   businessContext: DEFAULT_BUSINESS_CONTEXT,
-  aiForecastModelOptimizationEnabled: true,
+  aiForecastModelOptimizationEnabled: false,
   aiFailureThreshold: 5
 };
 

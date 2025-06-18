@@ -15,20 +15,33 @@ export interface ValidationConfig {
   useWalkForward: boolean;
   tolerance: number;
   minConfidenceForAcceptance: number;
+  sku?: string;
+  modelId?: string;
+  method?: string;
 }
 
 export const ENHANCED_VALIDATION_CONFIG: ValidationConfig = {
-  minValidationSize: 6,
-  maxSteps: 2,
-  testSize: 3,
+  minValidationSize: 12,
+  maxSteps: 5,
+  testSize: 6,
   useWalkForward: true,
   tolerance: 2.0,
   minConfidenceForAcceptance: 60
 };
 
-const calculateMetrics = (actual: number[], predicted: number[]): ValidationResult => {
+const calculateMetrics = (
+  actual: number[], 
+  predicted: number[],
+  config: ValidationConfig = ENHANCED_VALIDATION_CONFIG
+): ValidationResult => {
   if (actual.length === 0 || predicted.length === 0) {
-    console.log('❌ VALIDATION: Empty actual or predicted arrays');
+    console.log(`❌ VALIDATION: Empty actual or predicted arrays for SKU=${config.sku || 'unknown'}, Model=${config.modelId || 'unknown'}, Method=${config.method || 'unknown'}`);
+    return { accuracy: 0, mape: 100, confidence: 0, rmse: 0, mae: 0 };
+  }
+
+  const hasNonZeroActual = actual.some(v => v !== 0);
+  if (!hasNonZeroActual) {
+    console.log(`❌ VALIDATION: All actual values are zero for SKU=${config.sku || 'unknown'}, Model=${config.modelId || 'unknown'}, Method=${config.method || 'unknown'}`);
     return { accuracy: 0, mape: 100, confidence: 0, rmse: 0, mae: 0 };
   }
 
@@ -38,10 +51,7 @@ const calculateMetrics = (actual: number[], predicted: number[]): ValidationResu
   let validCount = 0;
 
   const length = Math.min(actual.length, predicted.length);
-  // console.log(`📊 VALIDATION: Calculating metrics for ${length} points`);
-  // console.log(`📈 VALIDATION: Actual values:`, actual);
-  // console.log(`📈 VALIDATION: Predicted values:`, predicted);
-
+  
   for (let i = 0; i < length; i++) {
     const actualValue = actual[i];
     const predictedValue = predicted[i];
@@ -50,6 +60,9 @@ const calculateMetrics = (actual: number[], predicted: number[]): ValidationResu
       const error = Math.abs(actualValue - predictedValue);
       const percentError = error / Math.abs(actualValue);
       mapeSum += percentError;
+      validCount++;
+    } else if (predictedValue !== 0) {
+      mapeSum += 1;
       validCount++;
     }
 
@@ -68,10 +81,10 @@ const calculateMetrics = (actual: number[], predicted: number[]): ValidationResu
   const rmse = Math.sqrt(rmseSum / length);
   const mae = maeSum / length;
   
-  // More lenient confidence calculation
-  const confidence = Math.min(95, Math.max(50, accuracy - (mape * 0.2))); // Reduced from 0.3 to 0.2
+  const baseConfidence = accuracy - (mape * 0.2);
+  const confidence = Math.min(95, Math.max(0, baseConfidence));
 
-  console.log(`📊 VALIDATION: Results - Accuracy: ${accuracy.toFixed(2)}%, MAPE: ${mape.toFixed(2)}%, Confidence: ${confidence.toFixed(2)}%`);
+  console.log(`📊 VALIDATION: Results for SKU=${config.sku || 'unknown'}, Model=${config.modelId || 'unknown'}, Method=${config.method || 'unknown'} - Accuracy: ${accuracy.toFixed(2)}%, MAPE: ${mape.toFixed(2)}%, Confidence: ${confidence.toFixed(2)}%`);
 
   return { accuracy, mape, confidence, rmse, mae };
 };
@@ -82,18 +95,15 @@ export const walkForwardValidation = (
   config: ValidationConfig = ENHANCED_VALIDATION_CONFIG
 ): ValidationResult => {
   if (data.length < config.minValidationSize) {
-    console.log(`❌ VALIDATION: Insufficient data length: ${data.length} < ${config.minValidationSize}`);
+    console.log(`❌ VALIDATION: Insufficient data length: ${data.length} < ${config.minValidationSize} for SKU=${config.sku || 'unknown'}, Model=${config.modelId || 'unknown'}, Method=${config.method || 'unknown'}`);
     return { accuracy: 0, mape: 100, confidence: 0, rmse: 0, mae: 0 };
   }
 
-  // More lenient training size calculation
   const minTrainSize = Math.max(
     config.minValidationSize - config.testSize,
-    Math.floor(data.length * 0.3)  // Reduced from 0.4 to 0.3
+    Math.floor(data.length * 0.3)
   );
   const maxSteps = Math.min(config.maxSteps, Math.floor((data.length - minTrainSize) / config.testSize));
-
-  // console.log(`📊 VALIDATION: Data length: ${data.length}, Min train size: ${minTrainSize}, Max steps: ${maxSteps}`);
 
   if (maxSteps <= 0) {
     console.log('❌ VALIDATION: Invalid max steps');
@@ -124,10 +134,6 @@ export const walkForwardValidation = (
         return value;
       });
 
-      // console.log(`📊 VALIDATION: Step ${step} - Train size: ${trainSize}, Test size: ${testData.length}`);
-      // console.log(`📈 VALIDATION: Actual values:`, actual);
-      // console.log(`📈 VALIDATION: Predictions:`, predictions);
-
       if (predictions.length > 0 && actual.length > 0) {
         allActual.push(...actual);
         allPredicted.push(...predictions.slice(0, actual.length));
@@ -138,7 +144,7 @@ export const walkForwardValidation = (
     }
   }
 
-  return calculateMetrics(allActual, allPredicted);
+  return calculateMetrics(allActual, allPredicted, config);
 };
 
 export const timeSeriesCrossValidation = (
@@ -147,6 +153,7 @@ export const timeSeriesCrossValidation = (
   config: ValidationConfig = ENHANCED_VALIDATION_CONFIG
 ): ValidationResult => {
   if (data.length < config.minValidationSize) {
+    console.log(`❌ VALIDATION: Insufficient data length: ${data.length} < ${config.minValidationSize} for SKU=${config.sku || 'unknown'}, Model=${config.modelId || 'unknown'}, Method=${config.method || 'unknown'}`);
     return { accuracy: 0, mape: 100, confidence: 0, rmse: 0, mae: 0 };
   }
 
@@ -183,5 +190,5 @@ export const timeSeriesCrossValidation = (
     }
   }
 
-  return calculateMetrics(allActual, allPredicted);
+  return calculateMetrics(allActual, allPredicted, config);
 };

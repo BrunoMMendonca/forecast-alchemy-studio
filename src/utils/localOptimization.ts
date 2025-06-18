@@ -1,6 +1,7 @@
-import { SalesData } from '@/pages/Index';
+import { SalesData } from '@/types/forecast';
+import { ValidationConfig, ValidationResult } from './enhancedValidation';
 import { adaptiveGridSearchOptimization, enhancedParameterValidation } from '@/utils/adaptiveOptimization';
-import { ENHANCED_VALIDATION_CONFIG, ValidationConfig } from '@/utils/enhancedValidation';
+import { ENHANCED_VALIDATION_CONFIG } from '@/utils/enhancedValidation';
 
 interface OptimizationResult {
   parameters: Record<string, number>;
@@ -13,11 +14,12 @@ interface OptimizationResult {
 export const gridSearchOptimization = (
   modelId: string,
   data: SalesData[],
-  config: ValidationConfig = ENHANCED_VALIDATION_CONFIG
+  config: ValidationConfig = ENHANCED_VALIDATION_CONFIG,
+  sku?: string
 ): OptimizationResult | null => {
   console.log(`🔍 Starting enhanced grid search optimization for ${modelId}`);
   
-  const result = adaptiveGridSearchOptimization(modelId, data, undefined, config);
+  const result = adaptiveGridSearchOptimization(modelId, data, undefined, config, sku);
   
   if (!result) {
     return null;

@@ -7,6 +7,7 @@ import { BusinessContext } from '@/types/businessContext';
 import { Bot, Grid, User } from 'lucide-react';
 import { useOptimizationCache } from '@/hooks/useOptimizationCache';
 import { ParameterSliders } from '@/components/ParameterSliders';
+import { useOptimizationCacheContext } from '@/context/OptimizationCacheContext';
 
 interface OptimizeForecastProps {
   data: SalesData[];
@@ -35,6 +36,7 @@ export const OptimizeForecast: React.FC<OptimizeForecastProps> = ({
   onUpdateParameter,
 }) => {
   const { setSelectedMethod, getCachedParameters, cache, generateDataHash, cacheVersion } = useOptimizationCache();
+  const { isLoading } = useOptimizationCacheContext();
   // Store optimization method per model per SKU
   const [modelMethods, setModelMethods] = React.useState<Record<string, 'manual' | 'grid' | 'ai'>>({});
   // Track the last updated modelId and method
@@ -156,6 +158,14 @@ export const OptimizeForecast: React.FC<OptimizeForecastProps> = ({
       return acc;
     }, {} as Record<string, { ai: any, grid: any, manual: any, currentDataHash: string }>);
   }, [models, selectedSKU, getCachedParameters, data, generateDataHash, cacheVersion]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   // Only render model cards if selectedSKU is set and there is data for that SKU
   const skuData = data.filter(d => d['Material Code'] === selectedSKU);
@@ -299,7 +309,7 @@ export const OptimizeForecast: React.FC<OptimizeForecastProps> = ({
                         <div className="text-sm text-gray-600">
                           Confidence: {model.optimizationConfidence}%
                         </div>
-                    )}
+                      )}
                     </div>
                   )}
                 </div>
