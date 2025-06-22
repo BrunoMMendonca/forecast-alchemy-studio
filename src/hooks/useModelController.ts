@@ -15,7 +15,8 @@ export const useModelController = (
   data: SalesData[], 
   forecastPeriods: number,
   businessContext?: BusinessContext,
-  onForecastGeneration?: (results: ForecastResult[], selectedSKU: string) => void
+  onForecastGeneration?: (results: ForecastResult[], selectedSKU: string) => void,
+  aiForecastModelOptimizationEnabled: boolean = true
 ) => {
   const { isLoading } = useOptimizationCacheContext();
   const { setSelectedMethod, cacheManualParameters, cache } = useOptimizationCache();
@@ -29,13 +30,17 @@ export const useModelController = (
   const {
     modelsHash,
     generateForecasts,
-    lastForecastGenerationHashRef
+    lastForecastGenerationHashRef,
+    isGenerating,
+    generationProgress,
+    generationProgressMessage
   } = useForecastGeneration(
     selectedSKU,
     data,
     models,
     forecastPeriods,
-    onForecastGeneration
+    onForecastGeneration,
+    aiForecastModelOptimizationEnabled
   );
 
   useModelOptimizationSync(
@@ -71,6 +76,9 @@ export const useModelController = (
     const enabledModels = models.filter(m => m.enabled);
     if (enabledModels.length === 0) return;
 
+    // DISABLED: Frontend forecast generation is now handled by the backend
+    // This was causing 6GB+ RAM usage and browser freezing with large files
+    /*
     if (lastForecastGenerationHashRef.current !== modelsHash) {
       const timeoutId = setTimeout(() => {
         if (lastForecastGenerationHashRef.current !== modelsHash) {
@@ -80,7 +88,8 @@ export const useModelController = (
 
       return () => clearTimeout(timeoutId);
     }
-  }, [modelsHash, selectedSKU, generateForecasts, lastForecastGenerationHashRef, isLoading]);
+    */
+  }, [modelsHash, selectedSKU, lastForecastGenerationHashRef, isLoading]);
 
   return {
     models,
@@ -89,6 +98,9 @@ export const useModelController = (
     resetToManual,
     handleMethodSelection,
     generateForecasts,
-    isLoading
+    isLoading,
+    isGenerating,
+    generationProgress,
+    generationProgressMessage
   };
 };

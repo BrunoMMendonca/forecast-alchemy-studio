@@ -10,44 +10,31 @@ import { ForecastFinalization } from '@/components/ForecastFinalization';
 import { BarChart3, TrendingUp, Upload, Zap, Eye } from 'lucide-react';
 import { Icon } from 'lucide-react';
 import { broom } from '@lucide/lab';
-import type { NormalizedSalesData, ForecastResult } from '@/pages/Index';
-import { CsvImportWizard } from '@/components/CsvImportWizard';
+import type { NormalizedSalesData, ForecastResult } from '@/types/forecast';
+import { CsvImportWizard, CsvUploadResult } from '@/components/CsvImportWizard';
 
 interface StepContentProps {
   currentStep: number;
-  salesData: NormalizedSalesData[];
-  cleanedData: NormalizedSalesData[];
+  processedDataInfo: CsvUploadResult | null;
   forecastResults: ForecastResult[];
   selectedSKUForResults: string;
   queueSize: number;
   forecastPeriods: number;
   aiForecastModelOptimizationEnabled: boolean;
-  onDataUpload: (data: NormalizedSalesData[], fileName?: string) => void;
-  onDataCleaning: (cleaned: NormalizedSalesData[], changedSKUs?: string[]) => void;
-  onImportDataCleaning: (importedSKUs: string[]) => void;
-  onForecastGeneration: (results: ForecastResult[], selectedSKU: string) => void;
+  onDataUpload: (result: CsvUploadResult) => void;
+  onDataCleaning: (data: NormalizedSalesData[]) => void;
+  onImportDataCleaning: (skus: string[]) => void;
+  onForecastGeneration: (results: ForecastResult[]) => void;
   onSKUChange: (sku: string) => void;
   onStepChange: (step: number) => void;
-  optimizationQueue: {
-    items: Array<{
-      sku: string;
-      modelId: string;
-      reason: string;
-      timestamp: number;
-    }>;
-    queueSize: number;
-    uniqueSKUCount: number;
-  };
-  shouldStartOptimization: () => boolean;
-  onOptimizationStarted: () => void;
-  lastImportFileName?: string | null;
-  lastImportTime?: string | null;
+  onAIFailure: (errorMessage: string) => void;
+  lastImportFileName: string | null;
+  lastImportTime: string | null;
 }
 
 export const StepContent: React.FC<StepContentProps> = ({
   currentStep,
-  salesData,
-  cleanedData,
+  processedDataInfo,
   forecastResults,
   selectedSKUForResults,
   queueSize,
@@ -59,19 +46,15 @@ export const StepContent: React.FC<StepContentProps> = ({
   onForecastGeneration,
   onSKUChange,
   onStepChange,
-  optimizationQueue,
-  shouldStartOptimization,
-  onOptimizationStarted,
+  onAIFailure,
   lastImportFileName,
   lastImportTime
 }) => {
   const [localFileName, setLocalFileName] = useState<string | null>(null);
 
-  if (currentStep === 0) {
-    const handleCsvDataReady = (data: any[]) => {
-      console.log('[StepContent] Data received from CsvImportWizard:', data);
-      onDataUpload(data, localFileName || undefined);
-    };
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 0:
     const handleFileNameChange = (fileName: string) => {
       setLocalFileName(fileName);
     };
@@ -87,14 +70,17 @@ export const StepContent: React.FC<StepContentProps> = ({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <CsvImportWizard onDataReady={handleCsvDataReady} onFileNameChange={handleFileNameChange} lastImportFileName={lastImportFileName} lastImportTime={lastImportTime} />
+          <CsvImportWizard 
+                onDataReady={onDataUpload} 
+            onFileNameChange={handleFileNameChange} 
+            lastImportFileName={lastImportFileName} 
+            lastImportTime={lastImportTime}
+            onAIFailure={onAIFailure}
+          />
         </CardContent>
       </Card>
     );
-  }
-
-  if (currentStep === 1) {
-    console.log('[StepContent] salesData in Clean & Prepare:', salesData);
+      case 1:
     return (
       <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
         <CardHeader>
@@ -108,13 +94,13 @@ export const StepContent: React.FC<StepContentProps> = ({
         </CardHeader>
         <CardContent>
           <OutlierDetection
-            data={salesData}
-            cleanedData={cleanedData}
+                data={[]}
+                cleanedData={[]}
             onDataCleaning={onDataCleaning}
             onImportDataCleaning={onImportDataCleaning}
             queueSize={queueSize}
           />
-          {cleanedData.length > 0 && (
+              {processedDataInfo && (
             <div className="mt-6 flex justify-end">
               <Button onClick={() => onStepChange(2)}>
                 Proceed to Explore
@@ -124,9 +110,7 @@ export const StepContent: React.FC<StepContentProps> = ({
         </CardContent>
       </Card>
     );
-  }
-
-  if (currentStep === 2) {
+      case 2:
     return (
       <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
         <CardHeader>
@@ -139,8 +123,8 @@ export const StepContent: React.FC<StepContentProps> = ({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <DataVisualization data={cleanedData} />
-          {cleanedData.length > 0 && (
+              <DataVisualization data={[]} />
+              {processedDataInfo && (
             <div className="mt-6 flex justify-end">
               <Button onClick={() => onStepChange(3)}>
                 Proceed to Forecasting
@@ -150,23 +134,17 @@ export const StepContent: React.FC<StepContentProps> = ({
         </CardContent>
       </Card>
     );
-  }
-
-  if (currentStep === 3) {
-    const forecastInputData = cleanedData.length > 0 ? cleanedData : salesData;
+      case 3:
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white/80 backdrop-blur-sm shadow-xl border-0 rounded-lg">
           <ForecastModels
-            data={forecastInputData}
+                data={[]}
             forecastPeriods={forecastPeriods}
             onForecastGeneration={onForecastGeneration}
             selectedSKUForResults={selectedSKUForResults}
             onSKUChange={onSKUChange}
-            shouldStartOptimization={shouldStartOptimization()}
-            onOptimizationStarted={onOptimizationStarted}
             aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
-            optimizationQueue={optimizationQueue}
           />
         </div>
 
@@ -186,9 +164,7 @@ export const StepContent: React.FC<StepContentProps> = ({
         </Card>
       </div>
     );
-  }
-
-  if (currentStep === 4) {
+      case 4:
     return (
       <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
         <CardHeader>
@@ -202,14 +178,17 @@ export const StepContent: React.FC<StepContentProps> = ({
         </CardHeader>
         <CardContent>
           <ForecastFinalization 
-            historicalData={salesData}
-            cleanedData={cleanedData}
+                historicalData={[]}
+                cleanedData={[]}
             forecastResults={forecastResults}
           />
         </CardContent>
       </Card>
     );
+      default:
+        return <div>Invalid step</div>;
   }
+  };
 
-  return null;
+  return <div className="w-full">{renderStepContent()}</div>;
 };

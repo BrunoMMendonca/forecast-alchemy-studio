@@ -1,257 +1,273 @@
-import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import React, { useMemo, useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Clock, X, Zap, Play, CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import { getDefaultModels, hasOptimizableParameters } from '@/utils/modelConfig';
-import { OptimizationProgress } from './OptimizationProgress';
-import { OptimizationQueue } from '@/types/optimization';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  XCircle,
+  CheckCircle,
+  Loader2,
+  Clock,
+  Ban,
+  Trash2,
+  AlertTriangle,
+} from 'lucide-react';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
+import { Job } from '@/types/optimization';
+import { JobSummary } from '@/hooks/useBackendJobStatus';
+import { useToast } from './ui/use-toast';
 
-interface OptimizationQueuePopupProps {
-  queue: OptimizationQueue;
-  models: Array<{
-    id: string;
-    name: string;
-    enabled: boolean;
-  }>;
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  onRemoveFromQueue: (skus: string[]) => void;
-  cleanedData: Array<{ [key: string]: any }>;
-  setPaused: (paused: boolean) => void;
-  onClearCache: () => void;
+// A small helper to format time
+const formatTime = (dateString: string) => {
+  const date = new Date(dateString);
+  return date.toLocaleTimeString();
+};
+
+interface SummaryCardProps {
+  title: string;
+  value: number;
+  color?: 'blue' | 'green' | 'red' | 'yellow';
 }
 
-export function OptimizationQueuePopup({
-  queue,
-  models,
+const SummaryCard = ({ title, value, color }: SummaryCardProps) => {
+  const colorClasses = {
+    blue: 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300',
+    green: 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300',
+    red: 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300',
+    yellow: 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300',
+  };
+  const cardClass = color ? colorClasses[color] : 'bg-gray-100 dark:bg-gray-800';
+  
+  return (
+    <div className={cn('p-4 rounded-lg text-center', cardClass)}>
+      <p className="text-2xl font-bold">{value}</p>
+      <p className="text-sm font-medium">{title}</p>
+    </div>
+  );
+};
+
+const StatusIcon = ({ status }: { status: Job['status'] }) => {
+  switch (status) {
+    case 'completed':
+      return <CheckCircle className="h-5 w-5 text-green-500" />;
+    case 'failed':
+      return <XCircle className="h-5 w-5 text-red-500" />;
+    case 'running':
+      return <Loader2 className="h-5 w-5 animate-spin text-blue-500" />;
+    case 'pending':
+      return <Clock className="h-5 w-5 text-gray-400" />;
+    case 'cancelled':
+      return <Ban className="h-5 w-5 text-yellow-500" />;
+    default:
+      return null;
+  }
+};
+
+const JobRow = ({ job }: { job: Job }) => {
+  const priorityInfo = getPriorityInfo(job.priority);
+  return (
+    <TableRow>
+      <TableCell className="w-[80px] text-center">
+        <StatusIcon status={job.status} />
+      </TableCell>
+      <TableCell className="w-[150px] font-medium truncate" title={job.sku}>{job.sku}</TableCell>
+      <TableCell className="w-[250px] truncate" title={job.modelId}>{job.modelId}</TableCell>
+      <TableCell className="w-[100px]">
+        <Badge
+          variant={job.method === 'ai' ? 'default' : 'secondary'}
+          className="capitalize"
+        >
+          {job.method}
+        </Badge>
+      </TableCell>
+      <TableCell className="w-[150px]">
+        <Badge className={cn('font-semibold', priorityInfo.className)}>
+          {priorityInfo.text}
+        </Badge>
+      </TableCell>
+      <TableCell className="w-[100px]">
+        <Progress value={job.progress} />
+      </TableCell>
+      <TableCell className="w-[120px] text-right">
+        {format(new Date(job.updatedAt), 'p')}
+      </TableCell>
+    </TableRow>
+  );
+};
+
+const getPriorityInfo = (priority: number) => {
+  switch (priority) {
+    case 1:
+      return { text: 'Setup', className: 'bg-blue-100 text-blue-800' };
+    case 2:
+      return { text: 'Data Cleaning', className: 'bg-yellow-100 text-yellow-800' };
+    case 3:
+      return { text: 'Historic Data Import', className: 'bg-green-100 text-green-800' };
+    default:
+      return { text: 'Unknown', className: 'bg-gray-100 text-gray-800' };
+  }
+};
+
+interface OptimizationQueuePopupProps {
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  jobs: Job[];
+  summary: JobSummary;
+  isPaused: boolean;
+  setIsPaused: (isPaused: boolean) => void;
+}
+
+const JobQueueTable = ({ jobs }: { jobs: Job[] }) => (
+  <div className="rounded-lg border">
+    <Table className="w-full table-fixed">
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-[80px]">Status</TableHead>
+          <TableHead className="w-[150px]">SKU</TableHead>
+          <TableHead className="w-[250px]">Model</TableHead>
+          <TableHead className="w-[100px]">Method</TableHead>
+          <TableHead className="w-[150px]">Priority</TableHead>
+          <TableHead className="w-[100px]">Progress</TableHead>
+          <TableHead className="w-[120px] text-right">Last Update</TableHead>
+        </TableRow>
+      </TableHeader>
+    </Table>
+    <div className="relative overflow-y-auto h-[40vh]">
+      <Table className="w-full table-fixed">
+        <TableBody>
+          {jobs.length > 0 ? (
+            jobs.map((job) => <JobRow key={job.id} job={job} />)
+          ) : (
+            <TableRow>
+              <TableCell colSpan={7} className="h-24 text-center">
+                No jobs in this queue.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  </div>
+);
+
+export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
   isOpen,
   onOpenChange,
-  onRemoveFromQueue,
-  cleanedData,
-  setPaused,
-  onClearCache
-}: OptimizationQueuePopupProps) {
-  const queuedSKUs = Array.from(new Set(queue.items.map(item => item.sku)));
-  const queuedCombinations = queue.items.map(item => ({ sku: item.sku, modelId: item.modelId }));
+  jobs,
+  summary,
+  isPaused,
+  setIsPaused,
+}) => {
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState('pending');
   
-  // Get the actual optimizable models from default config
-  const defaultModels = getDefaultModels();
-  const optimizableModels = defaultModels.filter(hasOptimizableParameters);
+  const { pendingJobs, historyJobs } = useMemo(() => {
+    const pendingJobs = jobs.filter(
+      (job) => job.status === 'pending' || job.status === 'running'
+    );
+    const historyJobs = jobs.filter(
+      (job) => job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled'
+    );
+    return { pendingJobs, historyJobs };
+  }, [jobs]);
+
+  const handleClearCompleted = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/jobs/clear-completed', { method: 'POST' });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to clear completed jobs.');
+      }
+      toast({ title: 'Success', description: 'Cleared completed jobs.' });
+    } catch (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleResetAll = async () => {
+    if (window.confirm('Are you sure you want to reset all jobs? This action cannot be undone.')) {
+    try {
+      const response = await fetch('http://localhost:3001/api/jobs/reset', { method: 'POST' });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to reset jobs.');
+        }
+        toast({ title: 'Success', description: 'All jobs have been reset.' });
+    } catch (error) {
+        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      }
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className={`max-w-2xl${queue.paused ? ' bg-red-50 border border-red-200' : ''}`}>
+      <DialogContent className="max-w-6xl w-full">
         <DialogHeader>
-          <div className="flex items-center justify-between w-full">
           <DialogTitle className="flex items-center gap-2">
-            {queue.isOptimizing && queue.items.length > 0 ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                <Zap className="h-4 w-4 text-blue-600" />
-                Optimization in Progress
-              </>
-            ) : (
-              <>
-                <Clock className="h-5 w-5 text-amber-600" />
-                Optimization Queue
-              </>
-            )}
+            <Loader2 className="animate-spin" /> Job Monitor
           </DialogTitle>
-            <div className="flex items-center gap-4 pr-4">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium">Processing</span>
+          <div className="absolute top-4 right-14 flex items-center space-x-2">
                 <Switch
-                  checked={!queue.paused}
-                  onCheckedChange={checked => setPaused(!checked)}
-                  className={queue.paused ? 'bg-red-300' : ''}
-                  aria-label="Toggle queue processing"
+              id="live-polling"
+                  checked={!isPaused}
+              onCheckedChange={() => setIsPaused(!isPaused)}
                 />
-              </div>
-              <button
-                className="text-xs text-red-500 underline cursor-pointer hover:text-red-700"
-                onClick={() => {
-                  if (window.confirm('Are you sure you want to clear all optimization cache? This will force all jobs to reprocess.')) {
-                    onClearCache();
-                  }
-                }}
-                type="button"
-              >
-                Clear cache
-              </button>
-            </div>
+            <Label htmlFor="live-polling">Live Polling</Label>
           </div>
         </DialogHeader>
 
-        {queue.paused && (
-          <div className="bg-red-100 border border-red-300 text-red-700 rounded-lg p-3 mb-2 flex items-center gap-2">
-            <XCircle className="h-4 w-4 text-red-500" />
-            <span className="font-medium">Processing is paused. No jobs will be processed until resumed.</span>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <OptimizationProgress
-            queueSize={queue.items.length}
-            uniqueSKUCount={new Set(queue.items.map(item => item.sku)).size}
-            isOptimizing={queue.isOptimizing}
-            progress={0}
-            hasTriggeredOptimization={false}
-          />
-
-          {/* Show message when not optimizing but should be */}
-          {!queue.isOptimizing && queuedCombinations.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Clock className="h-4 w-4 text-amber-600" />
-                <span className="font-medium text-amber-800">Optimization Not Running</span>
-              </div>
-              <p className="text-sm text-amber-700">
-                {queuedCombinations.length} combinations are queued but optimization hasn't started yet.
-              </p>
-            </div>
-          )}
-
-          {/* Show empty state if queue is empty */}
-          {!queue.isOptimizing && queuedCombinations.length === 0 && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
-              <p className="text-lg font-semibold text-gray-700 mb-2">The queue is currently empty</p>
-              <p className="text-sm text-gray-500">Add SKUs and models to the queue to start optimization.</p>
-            </div>
-          )}
-
-          <div>
-            <h3 className="font-medium mb-2">Models for Optimization</h3>
-            <div className="flex flex-wrap gap-2">
-              {optimizableModels.map(model => (
-                <Badge key={model.id} variant="outline">
-                  {model.name}
-                </Badge>
-              ))}
-            </div>
-            {optimizableModels.length === 0 && (
-              <p className="text-sm text-muted-foreground">No optimizable models found</p>
-            )}
+        <div className="grid grid-cols-5 gap-4 my-4">
+          <SummaryCard title="Total" value={summary.total} />
+          <SummaryCard title="Running" value={summary.running} color="blue" />
+          <SummaryCard title="Completed" value={summary.completed} color="green" />
+          <SummaryCard title="Failed" value={summary.failed} color="red" />
+          <SummaryCard title="Cancelled" value={summary.cancelled} color="yellow" />
           </div>
 
-          <div>
-            <h3 className="font-medium mb-2">
-              Jobs in Queue ({queue.items.length})
-            </h3>
-            <ScrollArea className="h-64 border rounded-lg">
-              <div className="p-4 space-y-3">
-                {queue.items.map((item, index) => {
-                  const { sku, modelId, method, reason } = item;
-                  // Progress info for this SKU/model
-                  const skuProgress = queue.progress[sku] || {};
-                  const modelProgress = skuProgress[modelId] || { status: 'pending' };
-                  const isCurrentlyOptimizing = queue.isOptimizing && modelProgress.status === 'optimizing';
-                  // Look up description for this SKU from cleanedData
-                  const skuDescription = cleanedData.find(d => d['Material Code'] === sku)?.Description || '';
-                  // Look up model name
-                  const model = models.find(m => m.id === modelId);
-                  const modelName = model?.name || modelId;
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="pending">Pending ({pendingJobs.length})</TabsTrigger>
+            <TabsTrigger value="history">History ({historyJobs.length})</TabsTrigger>
+          </TabsList>
+          <TabsContent value="pending">
+             <JobQueueTable jobs={pendingJobs} />
+          </TabsContent>
+          <TabsContent value="history">
+             <JobQueueTable jobs={historyJobs} />
+          </TabsContent>
+        </Tabs>
 
-                  let statusIcon = null;
-                  let statusColor = '';
-                  if (modelProgress.status === 'optimizing') {
-                    statusIcon = <Loader2 className="animate-spin h-3 w-3 text-blue-600 inline-block ml-1" />;
-                    statusColor = 'text-blue-700';
-                  } else if (modelProgress.status === 'complete') {
-                    statusIcon = <CheckCircle className="h-3 w-3 text-green-600 inline-block ml-1" />;
-                    statusColor = 'text-green-700';
-                  } else if (modelProgress.status === 'error') {
-                    statusIcon = <XCircle className="h-3 w-3 text-red-600 inline-block ml-1" />;
-                    statusColor = 'text-red-700';
-                  } else {
-                    statusIcon = null;
-                    statusColor = 'text-gray-600';
-                  }
-
-                  return (
-                    <div
-                      key={`${sku}-${modelId}-${method}-${index}`}
-                      className={`flex flex-col gap-2 p-3 rounded-lg border ${
-                        isCurrentlyOptimizing
-                          ? 'bg-blue-50 border-blue-200'
-                          : 'bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex flex-col">
-                        <div className="font-mono text-sm font-medium">
-                          {sku}
-                          {skuDescription && (
-                            <span className="ml-2 text-xs text-gray-500">- {skuDescription}</span>
-                          )}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Model: {modelName} ({method.toUpperCase()})
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Reason: {reason}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {isCurrentlyOptimizing && (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => onRemoveFromQueue([sku])}
-                          >
-                            <X className="h-3 w-3" />
+        <DialogFooter className="mt-4">
+          <div className="flex items-center space-x-2">
+          <Button variant="outline" onClick={handleClearCompleted}>
+              <Trash2 className="w-4 h-4 mr-2" />
+              Clear Completed
+                   </Button>
+          <Button variant="destructive" onClick={handleResetAll}>
+              <AlertTriangle className="w-4 h-4 mr-2" />
+              Reset All
                           </Button>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                            <Badge
-                              variant="outline"
-                              className={`text-xs flex items-center gap-1 ${statusColor}`}
-                            >
-                          {modelProgress.status} {statusIcon}
-                              {modelProgress.status === 'error' && modelProgress.error && (
-                                <span className="ml-1 text-red-500">{modelProgress.error}</span>
-                              )}
-                              {typeof modelProgress.progress === 'number' && modelProgress.status === 'optimizing' && (
-                                <span className="ml-1">{Math.round(modelProgress.progress * 100)}%</span>
-                              )}
-                            </Badge>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </ScrollArea>
           </div>
-
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm text-muted-foreground">
-                {queue.items.length} jobs in queue ({queuedSKUs.length} unique SKUs)
-              </span>
-            </div>
-            {/* Progress bar: show percent of jobs complete */}
-            <Progress value={queue.items.length === 0 ? 0 : Math.round((Object.values(queue.progress).flat().filter(p => p.status === 'complete').length / queue.items.length) * 100)} />
-          </div>
-
-          <div className="flex justify-between items-center pt-4 border-t">
-            <p className="text-sm text-muted-foreground">
-              Total jobs: {queue.items.length}
-            </p>
-            <Button
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Close
-            </Button>
-          </div>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
-}
+};

@@ -173,9 +173,17 @@ export const adaptiveGridSearchOptimization = (
   
   // Calculate total combinations
   const totalCombinations = paramValues.reduce((acc, values) => acc * values.length, 1);
-  const maxIterations = Math.min(totalCombinations, 50); // Cap at 50 iterations
+  const maxIterations = totalCombinations;
   
-  // console.log(`📊 Testing up to ${maxIterations} combinations out of ${totalCombinations} total`);
+  // Use fewer iterations for large datasets to improve performance
+  /*
+  const isLargeDataset = data.length > 1000;
+  const maxIterations = isLargeDataset 
+    ? Math.min(totalCombinations, 20) // 20 iterations for large datasets
+    : Math.min(totalCombinations, 50); // 50 iterations for smaller datasets
+  */
+  
+  // console.log(`📊 Testing up to ${maxIterations} combinations out of ${totalCombinations} total (${isLargeDataset ? 'large dataset mode' : 'normal mode'})`);
 
   let bestResult: OptimizationResult | null = null;
   let iterations = 0;

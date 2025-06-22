@@ -1,24 +1,8 @@
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
-import { NormalizedSalesData, ForecastResult } from '@/pages/Index';
+import { NormalizedSalesData, ForecastResult } from '@/types/forecast';
 import { useModelController } from '@/hooks/useModelController';
-import { useOptimizationHandler } from '@/hooks/useOptimizationHandler';
-import { useAutoOptimization } from '@/hooks/useAutoOptimization';
-import { useOptimizationTrigger } from '@/hooks/useOptimizationTrigger';
-import { ForecastModelsContent } from './ForecastModelsContent';
 import { OptimizationLogger } from './OptimizationLogger';
-
-interface OptimizationQueueItem {
-  sku: string;
-  modelId: string;
-  reason: string;
-  timestamp: number;
-}
-
-interface OptimizationQueue {
-  items: OptimizationQueueItem[];
-  queueSize: number;
-  uniqueSKUCount: number;
-}
+import { WorkerProgressIndicator } from './WorkerProgressIndicator';
 
 interface ForecastModelsProps {
   data: NormalizedSalesData[];
@@ -29,7 +13,6 @@ interface ForecastModelsProps {
   shouldStartOptimization?: boolean;
   onOptimizationStarted?: () => void;
   aiForecastModelOptimizationEnabled?: boolean;
-  optimizationQueue: OptimizationQueue;
 }
 
 export const ForecastModels = forwardRef<any, ForecastModelsProps>(({ 
@@ -40,8 +23,7 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   onSKUChange,
   shouldStartOptimization = false,
   onOptimizationStarted,
-  aiForecastModelOptimizationEnabled = true,
-  optimizationQueue
+  aiForecastModelOptimizationEnabled = true
 }, ref) => {
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
   const componentMountedRef = useRef(false);
@@ -52,37 +34,18 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
     updateParameter,
     resetToManual,
     handleMethodSelection,
-    generateForecasts
+    generateForecasts,
+    isGenerating,
+    generationProgress,
+    generationProgressMessage
   } = useModelController(
     selectedSKUForResults,
     data,
     forecastPeriods,
     undefined,
-    onForecastGeneration
+    onForecastGeneration,
+    aiForecastModelOptimizationEnabled
   );
-
-  const {
-    isOptimizing,
-    progress,
-    handleQueueOptimization
-  } = useOptimizationHandler(data, selectedSKUForResults, generateForecasts, aiForecastModelOptimizationEnabled);
-
-  useAutoOptimization({
-    optimizationQueue,
-    isOptimizing,
-    handleQueueOptimization,
-    onOptimizationStarted,
-    aiForecastModelOptimizationEnabled,
-    componentMountedRef
-  });
-
-  const { hasTriggeredOptimizationRef } = useOptimizationTrigger({
-    shouldStartOptimization,
-    isOptimizing,
-    handleQueueOptimization,
-    onOptimizationStarted,
-    componentMountedRef
-  });
 
   useEffect(() => {
     componentMountedRef.current = true;
@@ -99,26 +62,20 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   }, [data, selectedSKUForResults, onSKUChange]);
 
   useImperativeHandle(ref, () => ({
-    startOptimization: handleQueueOptimization
+    // No optimization methods needed since backend handles this
   }));
 
   return (
     <div className="space-y-6">
-      <ForecastModelsContent
-        data={data}
-        selectedSKU={selectedSKUForResults}
-        onSKUChange={onSKUChange}
-        optimizationQueue={optimizationQueue}
-        isOptimizing={isOptimizing}
-        progress={progress}
-        hasTriggeredOptimization={hasTriggeredOptimizationRef.current}
-        models={models}
-        onToggleModel={toggleModel}
-        onUpdateParameter={updateParameter}
-        onResetToManual={resetToManual}
-        onMethodSelection={handleMethodSelection}
-        aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
+      {/* Worker Progress Indicators */}
+      <WorkerProgressIndicator
+        isWorking={isGenerating}
+        progress={generationProgress}
+        message={generationProgressMessage}
+        title="Generating Forecasts"
       />
+      
+      {/* Optimization progress is now shown in the queue popup, not here */}
 
       <OptimizationLogger 
         isVisible={showOptimizationLog} 

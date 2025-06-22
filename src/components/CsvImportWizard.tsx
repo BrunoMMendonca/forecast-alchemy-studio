@@ -1,50 +1,63 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Papa from 'papaparse';
 import { Button } from '@/components/ui/button';
-import { Upload, RefreshCw, Info, Sparkles, Bot, User, Settings } from 'lucide-react';
+import { Upload, RefreshCw, Info, Sparkles, Bot, User, Settings, ArrowRight, Zap, FileText, ChevronsRight, AlertTriangle, Brain } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { parseDateWithFormat } from '@/utils/dateUtils';
 import { transformDataWithAI, AITransformResult } from '@/utils/aiDataTransform';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AIQuestionDialog } from './AIQuestionDialog';
 import { aiService, AIQuestion, AIResponse } from '@/services/aiService';
 import { useGlobalSettings } from '@/hooks/useGlobalSettings';
-import aiCsvInstructions from '@/config/ai_csv_instructions.txt?raw';
+import aiCsvInstructionsSmall from '@/config/ai_csv_instructions_small.txt?raw';
+import aiCsvInstructionsLarge from '@/config/ai_csv_instructions_large.txt?raw';
+import { useAISettings } from '@/hooks/useAISettings';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import MarkdownRenderer from './ui/MarkdownRenderer';
+import { NormalizedSalesData } from '@/types/forecast';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+
+export interface CsvUploadResult {
+  success: boolean;
+  filePath: string;
+  summary: {
+    skuCount: number;
+    dateRange: [string, string];
+    totalPeriods: number;
+  };
+  skuList: string[];
+}
 
 interface CsvImportWizardProps {
-  onDataReady: (data: any[][]) => void;
+  onDataReady: (result: CsvUploadResult) => void;
   onFileNameChange?: (fileName: string) => void;
   lastImportFileName?: string | null;
   lastImportTime?: string | null;
+  onAIFailure: (errorMessage: string) => void;
 }
 
 const SEPARATORS = [',', ';', '\t', '|'];
-
-function autoDetectSeparator(sample: string): string {
-  // Try each separator and pick the one with the most columns in the first row
-  let bestSep = ',';
-  let maxCols = 0;
-  for (const sep of SEPARATORS) {
-    const cols = sample.split(sep).length;
-    if (cols > maxCols) {
-      maxCols = cols;
-      bestSep = sep;
-    }
-  }
-  return bestSep;
-}
+const PREVIEW_ROW_LIMIT = 15;
 
 function transpose(matrix: any[][]): any[][] {
   return matrix[0].map((_, colIndex) => matrix.map(row => row[colIndex]));
 }
 
-const COLUMN_ROLES = ['Material Code', 'Description', 'Brand', 'Category', 'Date', 'Ignore'] as const;
-type ColumnRole = typeof COLUMN_ROLES[number];
-
-function isDateString(str: string) {
-  // Simple check for YYYY-MM-DD or MM/DD/YYYY
-  return /\d{4}-\d{2}-\d{2}/.test(str) || /\d{2}\/\d{2}\/\d{4}/.test(str);
-}
+const COLUMN_ROLES = ['Material Code', 'Description', 'Date', 'Ignore'] as const;
+type ColumnRole = string;
 
 const FIXED_ROLES = [
   { value: 'Material Code', label: '🔢 Material Code' },
@@ -52,56 +65,113 @@ const FIXED_ROLES = [
   { value: 'Date', label: '📅 Date' },
 ];
 
-function trimEmptyRowsAndColumns(matrix: any[][]): any[][] {
-  if (!matrix.length) return matrix;
-  let top = 0, bottom = matrix.length - 1;
-  let left = 0, right = matrix[0].length - 1;
-  // Trim empty rows from top
-  while (top <= bottom && matrix[top].every(cell => !cell || String(cell).trim() === '')) top++;
-  // Trim empty rows from bottom
-  while (bottom >= top && matrix[bottom].every(cell => !cell || String(cell).trim() === '')) bottom--;
-  // Trim empty columns from left
-  while (left <= right && matrix.every(row => !row[left] || String(row[left]).trim() === '')) left++;
-  // Trim empty columns from right
-  while (right >= left && matrix.every(row => !row[right] || String(row[right]).trim() === '')) right--;
-  // Slice the matrix
-  return matrix.slice(top, bottom + 1).map(row => row.slice(left, right + 1));
-}
+const TransposeDiagramSVG = () => {
+  return (
+    <div className="flex justify-center my-4">
+      <svg width="1125" height="225" viewBox="0 0 1125 375" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="30" y="45" width="375" height="330" rx="27" fill="#fbe9e7" stroke="#fbbf24"/>
+        <text x="225" y="90" textAnchor="middle" fontSize="33" fontWeight="bold" fill="#b45309">Dates as Rows</text>
+        <text x="75" y="157.5" fontSize="22.5" fontWeight="bold" fill="#b45309">Date</text>
+        <text x="180" y="157.5" fontSize="22.5" fontWeight="bold" fill="#b45309">SKU A</text>
+        <text x="300" y="157.5" fontSize="22.5" fontWeight="bold" fill="#b45309">SKU B</text>
+        <text x="75" y="210" fontSize="22.5" fill="#b45309">01/01</text>
+        <rect x="150" y="187.5" width="75" height="39" fill="#fff" stroke="#fbbf24" rx="7.5"/>
+        <text x="187.5" y="214.5" fontSize="22.5" fill="#b45309" textAnchor="middle">100</text>
+        <rect x="270" y="187.5" width="75" height="39" fill="#fff" stroke="#fbbf24" rx="7.5"/>
+        <text x="307.5" y="214.5" fontSize="22.5" fill="#b45309" textAnchor="middle">200</text>
+        <text x="75" y="262.5" fontSize="22.5" fill="#b45309">01/02</text>
+        <rect x="150" y="240" width="75" height="39" fill="#fff" stroke="#fbbf24" rx="7.5"/>
+        <text x="187.5" y="267" fontSize="22.5" fill="#b45309" textAnchor="middle">120</text>
+        <rect x="270" y="240" width="75" height="39" fill="#fff" stroke="#fbbf24" rx="7.5"/>
+        <text x="307.5" y="267" fontSize="22.5" fill="#b45309" textAnchor="middle">210</text>
+        <text x="75" y="315" fontSize="22.5" fill="#b45309">01/03</text>
+        <rect x="150" y="292.5" width="75" height="39" fill="#fff" stroke="#fbbf24" rx="7.5"/>
+        <text x="187.5" y="319.5" fontSize="22.5" fill="#b45309" textAnchor="middle">130</text>
+        <rect x="270" y="292.5" width="75" height="39" fill="#fff" stroke="#fbbf24" rx="7.5"/>
+        <text x="307.5" y="319.5" fontSize="22.5" fill="#b45309" textAnchor="middle">220</text>
+        <polygon points="450,180 585,180 585,200 450,200" fill="#38bdf8"/>
+        <polygon points="600,188 585,170 585,210" fill="#38bdf8"/>
+        <text x="520" y="172.5" fontSize="27" fill="#38bdf8" textAnchor="middle">Transpose</text>
+        <rect x="630" y="45" width="450" height="270" rx="27" fill="#e0e7ef" stroke="#b6c2d9"/>
+        <text x="855" y="90" textAnchor="middle" fontSize="33" fontWeight="bold" fill="#1e293b">Dates as Columns</text>
+        <text x="675" y="157.5" fontSize="22.5" fontWeight="bold" fill="#475569">SKU</text>
+        <text x="780" y="157.5" fontSize="22.5" fontWeight="bold" fill="#475569">01/01</text>
+        <text x="885" y="157.5" fontSize="22.5" fontWeight="bold" fill="#475569">01/02</text>
+        <text x="990" y="157.5" fontSize="22.5" fontWeight="bold" fill="#475569">01/03</text>
+        <text x="675" y="210" fontSize="22.5" fill="#475569">A</text>
+        <rect x="765" y="187.5" width="75" height="39" fill="#fff" stroke="#b6c2d9" rx="7.5"/>
+        <text x="802.5" y="214.5" fontSize="22.5" fill="#334155" textAnchor="middle">100</text>
+        <rect x="870" y="187.5" width="75" height="39" fill="#fff" stroke="#b6c2d9" rx="7.5"/>
+        <text x="907.5" y="214.5" fontSize="22.5" fill="#334155" textAnchor="middle">120</text>
+        <rect x="975" y="187.5" width="75" height="39" fill="#fff" stroke="#b6c2d9" rx="7.5"/>
+        <text x="1012.5" y="214.5" fontSize="22.5" fill="#334155" textAnchor="middle">130</text>
+        <text x="675" y="262.5" fontSize="22.5" fill="#475569">B</text>
+        <rect x="765" y="240" width="75" height="39" fill="#fff" stroke="#b6c2d9" rx="7.5"/>
+        <text x="802.5" y="267" fontSize="22.5" fill="#334155" textAnchor="middle">200</text>
+        <rect x="870" y="240" width="75" height="39" fill="#fff" stroke="#b6c2d9" rx="7.5"/>
+        <text x="907.5" y="267" fontSize="22.5" fill="#334155" textAnchor="middle">210</text>
+        <rect x="975" y="240" width="75" height="39" fill="#fff" stroke="#b6c2d9" rx="7.5"/>
+        <text x="1012.5" y="267" fontSize="22.5" fill="#334155" textAnchor="middle">220</text>
+      </svg>
+    </div>
+  );
+};
 
-export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, onFileNameChange, lastImportFileName, lastImportTime }) => {
+export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, onFileNameChange, lastImportFileName, lastImportTime, onAIFailure }) => {
   const [file, setFile] = useState<File | null>(null);
   const [separator, setSeparator] = useState<string>(',');
   const [data, setData] = useState<any[][]>([]);
   const [header, setHeader] = useState<string[]>([]);
   const [step, setStep] = useState<'upload' | 'preview' | 'mapping'>('upload');
   const [error, setError] = useState<string | null>(null);
-  const [transposed, setTransposed] = useState<boolean>(false);
+  const [transposed, setTransposed] = useState(false);
   const [columnRoles, setColumnRoles] = useState<ColumnRole[]>([]);
+  const [aiColumnRoles, setAiColumnRoles] = useState<ColumnRole[]>([]);
   const [dateRange, setDateRange] = useState<{ start: number; end: number }>({ start: -1, end: -1 });
   const [isDragging, setIsDragging] = useState(false);
   const [customAggTypes, setCustomAggTypes] = useState<string[]>([]);
   const [dateFormat, setDateFormat] = useState<string>('dd/mm/yyyy');
   const [aiTransformResult, setAiTransformResult] = useState<AITransformResult | null>(null);
   const [showAiSuggestions, setShowAiSuggestions] = useState(true);
-  const [currentQuestion, setCurrentQuestion] = useState<AIQuestion | null>(null);
   const { aiCsvImportEnabled, largeFileProcessingEnabled, largeFileThreshold } = useGlobalSettings();
+  const { enabled: aiFeaturesEnabled } = useAISettings();
 
   // New state for AI-powered flow
   const [aiStep, setAiStep] = useState<'upload' | 'describe' | 'ai-preview' | 'ai-mapping' | 'manual' | 'config'>('upload');
   const [aiResult, setAiResult] = useState<any[][] | null>(null);
+  const [aiResultColumns, setAiResultColumns] = useState<string[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [isErrorDialogOpen, setIsErrorDialogOpen] = useState(false);
   const [originalCsv, setOriginalCsv] = useState<string>('');
-  const [aiColumnRoles, setAiColumnRoles] = useState<ColumnRole[]>([]);
 
   // Add a loading state for manual preview parsing
-  const [manualLoading, setManualLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [manualConfirmLoading, setManualConfirmLoading] = useState(false);
 
   // State for configuration-based large file processing
   const [configLoading, setConfigLoading] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
   const [generatedConfig, setGeneratedConfig] = useState<any>(null);
   const [configApplied, setConfigApplied] = useState(false);
+  const [configProcessingStage, setConfigProcessingStage] = useState<'initializing' | 'generating_config' | 'applying_config' | 'parsing_result'>('initializing');
+  const [uploadResult, setUploadResult] = useState<CsvUploadResult | null>(null);
+
+  // New state for AI reasoning capture
+  const [aiReasoning, setAiReasoning] = useState<string>('');
+  const [configReasoning, setConfigReasoning] = useState<string>('');
+  const [aiInstructions, setAiInstructions] = useState<string>('');
+  const [configInstructions, setConfigInstructions] = useState<string>('');
+  const [showReasoning, setShowReasoning] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
+
+  // New state for large file detection
+  const [largeFileDetected, setLargeFileDetected] = useState(false);
+  const [showLargeFileAlert, setShowLargeFileAlert] = useState(true);
+
+  // Add new state for AI processing stages
+  const [aiProcessingStage, setAiProcessingStage] = useState<'initializing' | 'preparing_request' | 'waiting_for_ai' | 'parsing_response' | 'applying_transform' | 'finalizing'>('initializing');
 
   const DATE_FORMAT_OPTIONS = [
     { value: 'dd/mm/yyyy', label: 'dd/mm/yyyy' },
@@ -110,58 +180,6 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
     { value: 'dd-mm-yyyy', label: 'dd-mm-yyyy' },
     { value: 'yyyy/mm/dd', label: 'yyyy/mm/dd' },
   ];
-
-  useEffect(() => {
-    const handleAIQuestion = (event: CustomEvent) => {
-      setCurrentQuestion(event.detail.question);
-    };
-
-    window.addEventListener('ai-question', handleAIQuestion as EventListener);
-    return () => {
-      window.removeEventListener('ai-question', handleAIQuestion as EventListener);
-    };
-  }, []);
-
-  const handleAIResponse = async (response: AIResponse) => {
-    if (!currentQuestion) return;
-
-    // Handle the response based on the question type
-    switch (currentQuestion.id) {
-      case 'year-month-pattern':
-        if (response.answer === 'yes') {
-          // Apply year-month transformation
-          const yearCol = data[0].findIndex(h => h.toLowerCase().includes('year'));
-          const monthCol = data[0].findIndex(h => h.toLowerCase().includes('month'));
-          
-          if (yearCol !== -1 && monthCol !== -1) {
-            const newData = data.map((row, i) => {
-              if (i === 0) {
-                // Header row
-                return row.filter((_, j) => j !== yearCol && j !== monthCol).concat('Date');
-              }
-              // Data rows
-              const year = row[yearCol];
-              const month = row[monthCol].padStart(2, '0');
-              const date = `${year}-${month}-01`;
-              return row.filter((_, j) => j !== yearCol && j !== monthCol).concat(date);
-            });
-            setData(newData);
-            setHeader(newData[0]);
-          }
-        }
-        break;
-
-      case 'date-format':
-        if (response.answer) {
-          setDateFormat(response.answer.toLowerCase());
-        }
-        break;
-
-      // Add more cases for other question types
-    }
-
-    setCurrentQuestion(null);
-  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -190,182 +208,175 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
         onFileNameChange(f.name);
       }
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         const text = event.target?.result as string;
         setOriginalCsv(text);
         
-        // Check file size
-        const fileSize = text.length;
-        const isLargeFile = fileSize > largeFileThreshold;
-        
-        // If AI CSV import is disabled, always go straight to manual
-        if (!aiCsvImportEnabled) {
-          setAiStep('manual');
-          setStep('preview');
-          // Auto-detect separator and parse CSV for preview
-          const detected = autoDetectSeparator(text.split('\n')[0]);
-          setSeparator(detected);
-          parseCsv(text, detected);
-          return;
+        // --- FIX: Detect large file based on its size and settings ---
+        if (largeFileProcessingEnabled && text.length > largeFileThreshold) {
+          setLargeFileDetected(true);
+        } else {
+          setLargeFileDetected(false);
         }
         
-        // Decide which flow to use
-        if (isLargeFile && largeFileProcessingEnabled) {
-          // Use configuration-based processing for large files
-          setAiStep('config');
-          setStep('preview');
-          // Parse a small chunk for preview
-          const lines = text.split('\n');
-          const chunk = lines.slice(0, 10).join('\n'); // First 10 lines for preview
-          const detected = autoDetectSeparator(lines[0]);
-          setSeparator(detected);
-          parseCsv(chunk, detected);
-        } else if (aiCsvImportEnabled && !isLargeFile) {
-          // Use direct AI processing for small files
+        // --- NEW: Call backend for preview ---
+        setPreviewLoading(true);
+        try {
+          const response = await fetch('/api/generate-preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ csvData: text }),
+          });
+          const result = await response.json();
+          if (!response.ok) {
+            throw new Error(result.error || 'Failed to generate preview from backend.');
+          }
+
+          setHeader(result.headers);
+          setData(result.previewRows);
+          setColumnRoles(result.columnRoles);
+          setSeparator(result.separator);
+          setTransposed(result.transposed);
+          
+          // Now that preview is ready, decide the next step
+          if (aiCsvImportEnabled) {
           setAiStep('describe');
-        } else if (aiCsvImportEnabled && isLargeFile && !largeFileProcessingEnabled) {
-          // Large file but configuration processing is disabled
-          setError(`File too large for direct AI processing (${(fileSize / 1024).toFixed(1)}KB). Enable "Large File Processing" in settings to use configuration-based processing.`);
-          setTimeout(() => {
+          } else {
             setAiStep('manual');
-            setStep('preview');
-            setError(null);
-            const detected = autoDetectSeparator(text.split('\n')[0]);
-            setSeparator(detected);
-            parseCsv(text, detected);
-          }, 3000);
+          }
+          setStep('preview');
+
+        } catch (err: any) {
+          setError(err.message);
+          // Fallback to an error state, do not attempt to process on client
+        } finally {
+          setPreviewLoading(false);
         }
+        // --- END NEW ---
       };
       reader.readAsText(f);
     }
   };
 
-  const parseCsv = (csvText: string, sep: string) => {
-    Papa.parse(csvText, {
-      delimiter: sep === '\t' ? '\t' : sep,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        if (results.errors.length > 0) {
-          setError('CSV parsing error: ' + results.errors[0].message);
-          setData([]);
-          setHeader([]);
-        } else {
-          const rows = results.data as string[][];
-          const trimmed = trimEmptyRowsAndColumns(rows);
-          setHeader(trimmed[0]);
-          setData(trimmed.slice(1, 11)); // Show first 10 rows for preview
-          
-          // Apply AI analysis if enabled
-          if (aiCsvImportEnabled) {
-            try {
-              const questions = await aiService.analyzeData(trimmed);
-              for (const question of questions) {
-                const response = await aiService.askQuestion(question);
-                await handleAIResponse(response);
-              }
-            } catch (err) {
-              console.error('AI analysis error:', err);
-            }
-          }
-          
-          setStep('preview');
-        }
-      },
-      error: (err) => {
-        setError('CSV parsing error: ' + err.message);
-        setData([]);
-        setHeader([]);
+  const handlePreviewRegeneration = async (overrides: { separator?: string; transposed?: boolean }) => {
+    if (!originalCsv) return;
+    setPreviewLoading(true);
+
+    // Preserve existing settings if not being overridden, but prioritize what's in the override.
+    const newSeparator = 'separator' in overrides ? overrides.separator : separator;
+    const newTransposed = 'transposed' in overrides ? overrides.transposed : transposed;
+
+    try {
+      const response = await fetch('/api/generate-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          csvData: originalCsv,
+          separator: newSeparator,
+          transposed: newTransposed
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to regenerate preview.' }));
+        throw new Error(errorData.error || `HTTP Error: ${response.status}`);
       }
-    });
+
+      const result = await response.json();
+
+      setHeader(result.headers);
+      setData(result.previewRows);
+      // The backend now drives these states
+      setSeparator(result.separator);
+      setTransposed(result.transposed);
+      setColumnRoles(result.columnRoles);
+
+    } catch (err: any) {
+      console.error('Preview Regeneration Error:', err);
+      // You might want to show a toast notification to the user here.
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   const handleSeparatorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const sep = e.target.value;
-    setSeparator(sep);
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const text = event.target?.result as string;
-        parseCsv(text, sep);
-      };
-      reader.readAsText(file);
-    }
+    const newSeparator = e.target.value;
+    setSeparator(newSeparator); // Optimistically update the UI for the dropdown itself
+    handlePreviewRegeneration({ separator: newSeparator, transposed });
+  };
+  
+  const handleTransposeChange = (isChecked: boolean) => {
+    setTransposed(isChecked); // Optimistically update the UI for the switch
+    handlePreviewRegeneration({ transposed: isChecked, separator });
   };
 
   // Compute preview header/rows based on transpose
-  const previewHeader = useMemo(() => {
-    if (transposed && data.length > 0 && header.length > 0) {
-      // Transpose the entire CSV (header + data)
-      const fullMatrix = [header, ...data];
-      const transposedMatrix = transpose(fullMatrix);
-      return transposedMatrix[0];
-    }
-    return header;
-  }, [transposed, data, header]);
-  const previewRows = useMemo(() => {
-    if (transposed && data.length > 0 && header.length > 0) {
-      const fullMatrix = [header, ...data];
-      const transposedMatrix = transpose(fullMatrix);
-      return transposedMatrix.slice(1);
-    }
-    return data;
-  }, [transposed, data, header]);
+  // This logic is now greatly simplified as the backend provides the direct preview
+  const previewHeader = header;
+  const previewRows = data;
 
   // Auto-detect column roles and date range on preview
   useEffect(() => {
-    if (step === 'mapping' && previewHeader.length > 0) {
-      // Try to auto-detect roles
-      const roles: ColumnRole[] = previewHeader.map((col, i) => {
-        if (i === 0) return 'Material Code';
-        if (i === 1) return 'Description';
-        if (/brand/i.test(col)) return 'Brand';
-        if (/category/i.test(col)) return 'Category';
-        if (isDateString(col)) return 'Date';
-        return 'Ignore';
-      });
-      setColumnRoles(roles);
-      // Find first and last date columns
-      const dateCols = roles.map((r, i) => r === 'Date' ? i : -1).filter(i => i !== -1);
+    // This effect is now simplified. The backend sends the roles.
+    // We just need to find the date range from the roles provided.
+    if (columnRoles.length > 0) {
+      const dateCols = columnRoles.map((r, i) => r === 'Date' ? i : -1).filter(i => i !== -1);
       if (dateCols.length > 0) {
         setDateRange({ start: dateCols[0], end: dateCols[dateCols.length - 1] });
       } else {
         setDateRange({ start: -1, end: -1 });
       }
     }
-  }, [step, previewHeader]);
+  }, [columnRoles]);
 
-  // Build dynamic aggregatable field options from CSV header (excluding first two and date columns)
-  const manualAggregatableFields = useMemo(() => {
-    return previewHeader
-      .filter((col) =>
-        !FIXED_ROLES.some(r => r.value === col) &&
-        !isDateString(col)
+  // Build dynamic aggregatable field options from CSV header
+  const manualDropdownOptions = useMemo(() => {
+    const dynamicRoles = previewHeader
+      .filter(h => 
+        !FIXED_ROLES.some(f => f.value === h)
       )
-      .map(col => ({ value: col, label: `Σ ${col}` }));
-  }, [previewHeader]);
+      .map(h => ({ value: h, label: `Σ ${h}` })); // Add a generic icon
+
+    const customRoles = customAggTypes.map(t => ({ value: t, label: `Σ ${t}` }));
+
+    return [
+      ...FIXED_ROLES,
+      ...dynamicRoles,
+      ...customRoles,
+      { value: 'Ignore', label: 'Ignore' },
+    ].filter(option => option.value);
+  }, [previewHeader, customAggTypes]);
+
   const aiAggregatableFields = useMemo(() => {
     return aiResult && aiResult[0]
       ? aiResult[0]
-          .filter((col) =>
-            !FIXED_ROLES.some(r => r.value === col) &&
-            !isDateString(col)
+          .filter(
+            (col) =>
+              !FIXED_ROLES.some((r) => r.value === col)
           )
-          .map(col => ({ value: col, label: `Σ ${col}` }))
+          .map((col) => ({ value: col, label: `Σ ${col}` }))
       : [];
   }, [aiResult]);
 
-  const manualDropdownOptions = [
+  const aiDropdownOptions = useMemo(() => {
+    if (!aiResult || !aiResult[0]) return [];
+    const headers = aiResult[0] || [];
+    const dynamicRoles = headers
+      .filter((h: string) => 
+        h && 
+        !FIXED_ROLES.some(f => f.value === h)
+      )
+      .map((h: string) => ({ value: h, label: `Σ ${h}` }));
+    
+    const customRoles = customAggTypes.map(t => ({ value: t, label: `Σ ${t}` }));
+
+    return [
     ...FIXED_ROLES,
-    ...manualAggregatableFields,
-    ...customAggTypes.map(type => ({ value: type, label: `Σ ${type}` })),
+      ...dynamicRoles,
+      ...customRoles,
     { value: 'Ignore', label: 'Ignore' },
-  ];
-  const aiDropdownOptions = [
-    ...FIXED_ROLES,
-    ...aiAggregatableFields,
-    ...customAggTypes.map(type => ({ value: type, label: `Σ ${type}` })),
-    { value: 'Ignore', label: 'Ignore' },
-  ];
+    ].filter(option => option.value);
+  }, [aiResult, customAggTypes]);
 
   // Handler for changing a column's role
   const handleRoleChange = (colIdx: number, role: ColumnRole) => {
@@ -408,8 +419,8 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
   const normalizedData = useMemo(() => {
     if (previewRows.length === 0 || columnRoles.length === 0 || dateRange.start === -1 || dateRange.end === -1) return [];
     // Find indices for Material Code, Description
-    const materialIdx = columnMappings.findIndex(m => m.role === 'Material Code');
-    const descIdx = columnMappings.findIndex(m => m.role === 'Description');
+    const materialIdx = columnRoles.findIndex(role => role === 'Material Code');
+    const descIdx = columnRoles.findIndex(role => role === 'Description');
     // Aggregatable fields: all columns with a unique CSV name and not Material/Description/Date/Ignore
     const aggregatableMappings = columnMappings.filter(m =>
       m.role !== 'Material Code' &&
@@ -460,26 +471,35 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
   const handleAITransform = async () => {
     setAiLoading(true);
     setAiError(null);
+    setAiReasoning('');
+    setAiInstructions(aiCsvInstructionsSmall);
     try {
-      // Check file size before sending to AI
-      const estimatedTokens = Math.ceil(originalCsv.length / 4); // Rough estimate: 1 token ≈ 4 characters
-      const maxTokens = 100000; // Conservative limit below Grok-3's 131072 limit
+      setAiProcessingStage('initializing');
+      const estimatedTokens = Math.ceil(originalCsv.length / 4);
+      const maxTokens = 100000;
       
       if (estimatedTokens > maxTokens) {
         throw new Error(`File too large for AI processing (estimated ${estimatedTokens.toLocaleString()} tokens). Please use manual import for files larger than ~${Math.round(maxTokens * 4 / 1024)}KB.`);
       }
 
+      setAiProcessingStage('preparing_request');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+      setAiProcessingStage('waiting_for_ai');
       const response = await fetch('http://localhost:3001/api/grok-transform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csvData: originalCsv, instructions: aiCsvInstructions }),
+        body: JSON.stringify({ csvData: originalCsv, instructions: aiCsvInstructionsSmall }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData.error || `HTTP ${response.status}: ${response.statusText}`;
         
-        // Handle specific token limit errors
         if (response.status === 400 && errorMessage.includes('maximum prompt length')) {
           throw new Error('File too large for AI processing. Please use manual import for large files.');
         }
@@ -487,98 +507,72 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
         throw new Error(errorMessage);
       }
       
+      setAiProcessingStage('parsing_response');
       const result = await response.json();
-      // Assume result is a CSV string; parse it
-      const parsed = Papa.parse(result.csv || result, { skipEmptyLines: true }).data as any[][];
-      setAiResult(parsed);
       
-      // Initialize AI column roles with auto-detection
-      const aiHeader = parsed[0];
-      const initialRoles: ColumnRole[] = aiHeader.map((col, i) => {
-        if (/sku|code|material/i.test(col)) return 'Material Code';
-        if (/desc/i.test(col)) return 'Description';
-        if (/brand/i.test(col)) return 'Brand';
-        if (/cat/i.test(col)) return 'Category';
-        if (/\d{4}-\d{2}-\d{2}/.test(col)) return 'Date';
-        return 'Ignore';
-      });
-      setAiColumnRoles(initialRoles);
+      console.log('🤖 Full API Response:', result);
+      console.log('🤖 Response keys:', Object.keys(result));
       
-      setAiStep('ai-preview');
-    } catch (err: any) {
-      setAiError(err.message);
-      // Auto-fallback to manual import for large files
-      if (err.message.includes('too large') || err.message.includes('maximum prompt length')) {
-        setTimeout(() => {
-          setAiStep('manual');
-        }, 3000); // Show error for 3 seconds then auto-switch
+      if (result.reasoning) {
+        setAiReasoning(result.reasoning);
+        console.log('🤖 AI Reasoning:', result.reasoning);
+      } else {
+        console.log('🤖 No reasoning found in response');
+        setAiReasoning('No reasoning provided by AI');
       }
+      
+      if (result.columnRoles) {
+        setAiColumnRoles(result.columnRoles);
+      }
+      
+      setAiProcessingStage('applying_transform');
+      const transformedData = result.transformedData || result.csv || result;
+      const columns = result.columns || [];
+      
+      let finalData: string[][];
+
+      if (Array.isArray(transformedData) && transformedData.length > 0 && typeof transformedData[0] === 'object' && transformedData[0] !== null) {
+        // Handle new format: Array of objects
+        const headers = columns.length > 0 ? columns : Object.keys(transformedData[0]);
+        const rows = transformedData.map((obj: { [s: string]: any; }) => headers.map(h => obj[h]));
+        setAiResultColumns(headers);
+        finalData = [headers, ...rows];
+
+      } else if (typeof transformedData === 'string') {
+        // Handle old format: CSV string
+        const parsedAIResult = Papa.parse(transformedData, { header: false });
+        if (parsedAIResult.errors.length > 0) {
+          console.error("Error parsing AI-transformed CSV:", parsedAIResult.errors);
+          throw new Error('Could not parse the AI-transformed data. ' + parsedAIResult.errors[0].message);
+        }
+        finalData = parsedAIResult.data as string[][];
+
+      } else {
+        console.error("AI did not return a CSV string or a valid JSON array.", transformedData);
+        throw new Error('The AI response was not in the expected format. Please try manual import.');
+      }
+      
+      setAiResult(finalData);
+      setAiStep('ai-preview');
+      setStep('preview');
+
+    } catch (err: any) {
+      console.error('AI Transform Error:', err);
+      
+      // Show custom error dialog instead of alert
+      setAiError(err.message);
+      setIsErrorDialogOpen(true);
+      
+      // Fallback to manual import
+      setAiStep('manual');
+      setStep('preview');
+      // No longer need to client-side parse, backend provides initial preview.
+      // If AI fails, the user can still use the manual controls.
+      onAIFailure(err.message || 'An unknown error occurred during AI processing.');
+
     } finally {
       setAiLoading(false);
-    }
-  };
-
-  // Configuration-based processing for large files
-  const handleConfigProcessing = async () => {
-    setConfigLoading(true);
-    setConfigError(null);
-    try {
-      // Parse a sample of the CSV for AI analysis
-      const lines = originalCsv.split('\n');
-      const sampleLines = lines.slice(0, 5); // First 5 lines for AI analysis
-      const sampleCsv = sampleLines.join('\n');
-      
-      // Generate configuration using AI
-      const response = await fetch('http://localhost:3001/api/grok-generate-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          csvChunk: sampleCsv, 
-          instructions: aiCsvInstructions,
-          fileSize: originalCsv.length 
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const result = await response.json();
-      setGeneratedConfig(result.config);
-      
-      // Apply configuration to full CSV
-      const applyResponse = await fetch('http://localhost:3001/api/apply-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          csvData: originalCsv, 
-          config: result.config 
-        }),
-      });
-      
-      if (!applyResponse.ok) {
-        const errorData = await applyResponse.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${applyResponse.status}: ${applyResponse.statusText}`);
-      }
-      
-      const applyResult = await applyResponse.json();
-      setAiResult(applyResult.transformedData);
-      setConfigApplied(true);
-      setAiStep('ai-preview');
-      
-    } catch (err: any) {
-      setConfigError(err.message);
-      // Fallback to manual import
-      setTimeout(() => {
-        setAiStep('manual');
-        setStep('preview');
-        const detected = autoDetectSeparator(originalCsv.split('\n')[0]);
-        setSeparator(detected);
-        parseCsv(originalCsv, detected);
-      }, 3000);
-    } finally {
-      setConfigLoading(false);
+      setAiProcessingStage('initializing');
     }
   };
 
@@ -661,228 +655,604 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
     return Object.keys(aiMappingNormalizedData[0]);
   }, [aiMappingNormalizedData]);
 
-  // Main render logic:
-  if (step === 'preview' && aiCsvImportEnabled && aiStep === 'describe') {
-    // Render the AI/Manual selection menu (reuse the same JSX as in your aiStep === 'describe' block)
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[300px] py-12">
-        <div className="mb-8 text-center">
-          <div className="text-slate-700 text-lg font-semibold mb-2">How would you like to import your data?</div>
-          <div className="text-slate-500 text-base">Choose a method below to continue.</div>
-        </div>
-        <div className="flex flex-col md:flex-row gap-8">
-          <button
-            className="flex flex-col items-center justify-center bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 hover:border-blue-400 rounded-xl shadow-md px-10 py-8 transition-all duration-200 w-72 focus:outline-none"
-            onClick={handleAITransform}
-            disabled={aiLoading}
-          >
-            <Bot className="w-10 h-10 text-blue-600 mb-3" />
-            <span className="text-xl font-bold text-blue-800 mb-1">Use AI</span>
-            <span className="text-slate-700 text-base mb-2 text-center">Let AI automatically clean, map, and transform your data for you.</span>
-            {aiLoading && <span className="text-blue-600 mt-2">Processing...</span>}
-          </button>
-          <button
-            className="flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 border-2 border-slate-200 hover:border-slate-400 rounded-xl shadow-md px-10 py-8 transition-all duration-200 w-72 focus:outline-none"
-            onClick={() => {
-              setAiStep('manual');
-              if (originalCsv) {
-                setManualLoading(true);
-                const detected = autoDetectSeparator(originalCsv.split('\n')[0]);
-                setSeparator(detected);
-                parseCsv(originalCsv, detected);
-                setTimeout(() => setManualLoading(false), 500);
-              }
-            }}
-          >
-            <User className="w-10 h-10 text-slate-600 mb-3" />
-            <span className="text-xl font-bold text-slate-800 mb-1">Manual Import</span>
-            <span className="text-slate-700 text-base mb-2 text-center">Manually review, map, and import your CSV data step by step.</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const allAIEnabled = aiCsvImportEnabled && largeFileProcessingEnabled && aiFeaturesEnabled;
+  const showLargeFileAI = largeFileDetected && allAIEnabled;
+  const showLargeFileAIDisabled = largeFileDetected && aiCsvImportEnabled && !largeFileProcessingEnabled;
 
-  // Configuration-based processing step
-  if (step === 'preview' && aiCsvImportEnabled && aiStep === 'config') {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[300px] py-12">
-        <div className="mb-8 text-center">
-          <div className="text-slate-700 text-lg font-semibold mb-2">Large File Detected</div>
-          <div className="text-slate-500 text-base">
-            Your file is {(originalCsv.length / 1024).toFixed(1)}KB. Using configuration-based processing for optimal performance.
-          </div>
-        </div>
-        
-        {configError && (
-          <Alert className="mb-4 max-w-md">
-            <AlertTitle>Processing Error</AlertTitle>
-            <AlertDescription>{configError}</AlertDescription>
-          </Alert>
-        )}
-        
-        <div className="flex flex-col md:flex-row gap-8">
-          <button
-            className="flex flex-col items-center justify-center bg-green-50 hover:bg-green-100 border-2 border-green-200 hover:border-green-400 rounded-xl shadow-md px-10 py-8 transition-all duration-200 w-72 focus:outline-none"
-            onClick={handleConfigProcessing}
-            disabled={configLoading}
-          >
-            <Bot className="w-10 h-10 text-green-600 mb-3" />
-            <span className="text-xl font-bold text-green-800 mb-1">Process with AI</span>
-            <span className="text-slate-700 text-base mb-2 text-center">AI will analyze your data and generate a transformation configuration.</span>
-            {configLoading && <span className="text-green-600 mt-2">Processing...</span>}
-          </button>
-          
-          <button
-            className="flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 border-2 border-slate-200 hover:border-slate-400 rounded-xl shadow-md px-10 py-8 transition-all duration-200 w-72 focus:outline-none"
-            onClick={() => {
-              setAiStep('manual');
-              setStep('preview');
-              if (originalCsv) {
-                setManualLoading(true);
-                const detected = autoDetectSeparator(originalCsv.split('\n')[0]);
-                setSeparator(detected);
-                parseCsv(originalCsv, detected);
-                setTimeout(() => setManualLoading(false), 500);
-              }
-            }}
-          >
-            <User className="w-10 h-10 text-slate-600 mb-3" />
-            <span className="text-xl font-bold text-slate-800 mb-1">Manual Import</span>
-            <span className="text-slate-700 text-base mb-2 text-center">Manually review, map, and import your CSV data step by step.</span>
-          </button>
-        </div>
-        
-        {generatedConfig && (
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg max-w-md">
-            <h4 className="font-medium text-blue-800 mb-2">Generated Configuration</h4>
-            <pre className="text-xs text-blue-700 overflow-auto">
-              {JSON.stringify(generatedConfig, null, 2)}
-            </pre>
-          </div>
-        )}
-      </div>
-    );
-  }
-  
-  if (aiCsvImportEnabled && aiStep !== 'upload' && aiStep !== 'manual') {
-    if (aiStep === 'describe') {
+  const handleConfigProcessing = async () => {
+    setConfigLoading(true);
+    setConfigError(null);
+    setConfigReasoning('');
+    setConfigInstructions(aiCsvInstructionsLarge);
+    setDebugInfo(null);
+    try {
+      setConfigProcessingStage('initializing');
+      // Parse a sample of the CSV for AI analysis
+      const lines = originalCsv.split('\n');
+      const sampleLines = lines.slice(0, 15); // Use 15 lines for better context
+      const sampleCsv = sampleLines.join('\n');
+
+      // Parse the sample CSV into an array of objects
+      let sampleJson: any[] = [];
+      Papa.parse(sampleCsv, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          sampleJson = results.data;
+        },
+        error: (err) => {
+          throw new Error(`Failed to parse CSV sample: ${err.message}`);
+        }
+      });
+      
+      if (sampleJson.length === 0) {
+        throw new Error("Could not parse any data from the CSV sample. Please check the file format.");
+      }
+
+      // Generate configuration using AI
+      setConfigProcessingStage('generating_config');
+      const response = await fetch('http://localhost:3001/api/grok-generate-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          csvChunk: sampleJson, // Send the parsed JSON array
+          instructions: aiCsvInstructionsLarge,
+          fileSize: originalCsv.length 
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      console.log('🤖 Config API Response:', result);
+      console.log('🤖 Config Response keys:', Object.keys(result));
+
+      // Capture reasoning if available
+      if (result.reasoning) {
+        setConfigReasoning(result.reasoning);
+        console.log('🤖 Config Generation Reasoning:', result.reasoning);
+      } else {
+        console.log('🤖 No reasoning found in config response');
+        setConfigReasoning('No reasoning provided by AI');
+      }
+
+      setGeneratedConfig(result.config);
+
+      // Apply configuration to full CSV
+      setConfigProcessingStage('applying_config');
+      const applyResponse = await fetch('/api/apply-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvData: originalCsv, config: result.config })
+      });
+
+      const applyResult = await applyResponse.json();
+      if (!applyResponse.ok) {
+        throw new Error(applyResult.error || 'Failed to apply configuration on the backend.');
+      }
+      
+      // The backend now returns the same CsvUploadResult object
+      // We need to set the uploadResult state before calling onDataReady
+      const uploadResult = {
+        success: true,
+        filePath: applyResult.filePath,
+        summary: applyResult.summary,
+        skuList: applyResult.skuList || [],
+      };
+      setUploadResult(uploadResult);
+      onDataReady(uploadResult);
+
+      setConfigProcessingStage('parsing_result');
+      // Use the preview data from the backend for the UI
+      const headers = applyResult.columns || [];
+      const rows = applyResult.previewData.map((obj: { [s: string]: any; }) => headers.map((h: string) => obj[h]));
+      
+        setAiResultColumns(headers);
+        setAiResult([headers, ...rows]);
+
+      if (applyResult.columnRoles) {
+        setAiColumnRoles(applyResult.columnRoles);
+      }
+
+      setConfigApplied(true);
+      setAiStep('ai-preview');
+    } catch (err: any) {
+      setConfigError(err.message);
+      // Fallback to manual import
+      setTimeout(() => {
+        setAiStep('manual');
+        setStep('preview');
+        // NO LONGER PARSE ON CLIENT: The preview data should already be loaded.
+        // If an error happened this severe, we might need a better "error state" view.
+      }, 3000);
+      onAIFailure(err.message || 'An unknown error occurred during AI processing.');
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  const handleManualConfirm = async () => {
+    if (!originalCsv || columnRoles.length === 0) {
+      setError("Cannot process manual import without data and column roles.");
+      return;
+    }
+    setManualConfirmLoading(true);
+    setError(null);
+    try {
+      const payload = {
+        csvData: originalCsv,
+        mappings: columnMappings,
+        dateRange,
+        dateFormat,
+        transpose: transposed,
+      };
+
+      const response = await fetch('/api/process-manual-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to process manual import on the backend.');
+      }
+      
+      // The backend now returns the same CsvUploadResult object
+      // We need to set the uploadResult state before calling onDataReady
+      const uploadResult = {
+        success: true,
+        filePath: result.filePath,
+        summary: result.summary,
+        skuList: result.skuList || [],
+      };
+      setUploadResult(uploadResult);
+      onDataReady(uploadResult);
+
+    } catch (err: any) {
+      console.error('Manual Import Confirm Error:', err);
+      setError(err.message);
+    } finally {
+      setManualConfirmLoading(false);
+    }
+  };
+
+  const renderErrorDialog = () => (
+    <AlertDialog open={isErrorDialogOpen} onOpenChange={setIsErrorDialogOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-red-500" />
+            AI Processing Failed
+          </AlertDialogTitle>
+          <AlertDialogDescription className="pt-2">
+            {aiError || "An unexpected error occurred."}
+            <br /><br />
+            We've switched to the manual import flow for you to continue.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogAction onClick={() => setIsErrorDialogOpen(false)}>
+            Continue
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
+  // Main render logic:
+  const renderContent = () => {
+    if (step === 'upload') {
       return (
-        <div className="flex flex-col items-center justify-center min-h-[300px] py-12">
-          <div className="mb-8 text-center">
-            <div className="text-slate-700 text-lg font-semibold mb-2">How would you like to import your data?</div>
-            <div className="text-slate-500 text-base">Choose a method below to continue.</div>
-          </div>
-          <div className="flex flex-col md:flex-row gap-8">
-            <button
-              className="flex flex-col items-center justify-center bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 hover:border-blue-400 rounded-xl shadow-md px-10 py-8 transition-all duration-200 w-72 focus:outline-none"
-              onClick={handleAITransform}
-              disabled={aiLoading}
-            >
-              <Bot className="w-10 h-10 text-blue-600 mb-3" />
-              <span className="text-xl font-bold text-blue-800 mb-1">Use AI</span>
-              <span className="text-slate-700 text-base mb-2 text-center">Let AI automatically clean, map, and transform your data for you.</span>
-              {aiLoading && <span className="text-blue-600 mt-2">Processing...</span>}
-            </button>
-            <button
-              className="flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 border-2 border-slate-200 hover:border-slate-400 rounded-xl shadow-md px-10 py-8 transition-all duration-200 w-72 focus:outline-none"
-              onClick={() => {
-                setAiStep('manual');
-                setStep('preview');
-                if (originalCsv) {
-                  setManualLoading(true);
-                  const detected = autoDetectSeparator(originalCsv.split('\n')[0]);
-                  setSeparator(detected);
-                  parseCsv(originalCsv, detected);
-                  setTimeout(() => setManualLoading(false), 500);
-                }
-              }}
-            >
-              <User className="w-10 h-10 text-slate-600 mb-3" />
-              <span className="text-xl font-bold text-slate-800 mb-1">Manual Import</span>
-              <span className="text-slate-700 text-base mb-2 text-center">Manually review, map, and import your CSV data step by step.</span>
-            </button>
-          </div>
+        <div className="space-y-4">
+          {lastImportFileName && (
+            <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-4 flex flex-col md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="font-semibold text-blue-800 mb-1">A file has already been loaded.</div>
+                <div className="text-sm text-blue-700">File: <span className="font-mono">{lastImportFileName}</span></div>
+                {lastImportTime && <div className="text-xs text-blue-600">Imported on: {lastImportTime}</div>}
+                <div className="text-xs text-blue-600 mt-1">You can continue with your current file or upload a new one below.</div>
+              </div>
+              <Button
+                className="mt-4 md:mt-0 md:ml-8"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    const event = new CustomEvent('goToStep', { detail: { step: 1 } });
+                    window.dispatchEvent(event);
+                  }
+                }}
+                variant="default"
+              >
+                Continue with Current File
+              </Button>
+            </div>
+          )}
+          <div
+            className={`border-2 border-dashed rounded-lg p-8 text-center transition-all duration-300 cursor-pointer ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-slate-50 hover:border-slate-400'}`}
+            onDrop={handleDrop}
+            onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onClick={handleDropAreaClick}
+          >
+                <Upload className={`h-12 w-12 mx-auto transition-colors ${isDragging ? 'text-blue-600' : 'text-slate-400'}`} />
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-700">Drop your CSV file here</h3>
+                  <p className="text-slate-500">or click to browse files</p>
+                </div>
+              </div>
+          <input
+            id="csv-upload-input"
+            type="file"
+            accept=".csv,text/csv"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          {error && <div className="text-red-600">{error}</div>}
         </div>
       );
     }
-    if (aiStep === 'ai-preview' && aiResult) {
+
+    if (step === 'preview') {
+      if (aiCsvImportEnabled && aiStep === 'describe') {
+        return (
+          <div className="space-y-4">
+            <div className="flex flex-col items-center justify-center min-h-[300px] py-12">
+              <div className="mb-8 text-center">
+                <div className="text-slate-700 text-lg font-semibold mb-2">How would you like to import your data?</div>
+                <div className="text-slate-500 text-base">You've already uploaded your file. We can now process it.</div>
+              </div>
+              <div className="flex flex-row gap-8 justify-center mt-8">
+                
+                  <button
+                    className={`relative flex flex-col items-center justify-center border-2 rounded-xl shadow-md px-10 py-8 transition-all duration-200 w-72 focus:outline-none bg-yellow-50 hover:bg-yellow-100 border-yellow-300 hover:border-yellow-400`}
+                    onClick={async () => {
+                      if (largeFileDetected) {
+                        await handleConfigProcessing();
+                      } else {
+                        await handleAITransform();
+                      }
+                    }}
+                    disabled={
+                      (largeFileDetected && !largeFileProcessingEnabled) || 
+                      aiLoading || 
+                      configLoading
+                    }
+                  >
+                    {(aiLoading || configLoading) && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm rounded-xl z-10">
+                        <RefreshCw className="w-8 h-8 text-yellow-600 animate-spin mb-3" />
+                        <span className="text-sm font-medium text-slate-700 mb-2">
+                           {configLoading ? 'Processing Large File...' : 'AI Processing...'}
+                        </span>
+                         <span className="text-xs text-slate-600">
+                           {configLoading ? {
+                             'initializing': 'Initializing...',
+                             'generating_config': 'Generating configuration...',
+                             'applying_config': 'Applying configuration...',
+                             'parsing_result': 'Parsing result...'
+                           }[configProcessingStage] : {
+                             'initializing': 'Initializing...',
+                             'preparing_request': 'Preparing request...',
+                             'waiting_for_ai': 'Waiting for AI...',
+                             'parsing_response': 'Parsing response...',
+                             'applying_transform': 'Applying transform...',
+                             'finalizing': 'Finalizing...'
+                            }[aiProcessingStage]}
+                          </span>
+                      </div>
+                    )}
+                    <div className="relative">
+                      {largeFileDetected && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="absolute -top-2 -right-2 flex h-6 w-6">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-6 w-6 bg-yellow-500 items-center justify-center text-xs text-white">
+                                  <Zap size={15}/>
+                          </span>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="max-w-xs">
+                                <b>Large File Processing</b><br></br>
+                                Because of AI prompt size limitations, for large files, the AI first generates a transformation plan based on a sample that we then apply to the entire file. This approach is faster and more reliable.
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      <Bot className="w-10 h-10 text-yellow-600 mb-3" />
+                    </div>
+                    <span className="text-xl font-bold text-yellow-600 mb-1">AI-Powered Import</span>
+                    <span className="text-yellow-600 text-base mb-2 text-center">Let AI automatically clean, pivot, and prepare your data.</span>
+                  </button>
+
+                <button
+                    className="relative flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 border-2 border-slate-200 hover:border-slate-400 rounded-xl shadow-md px-10 py-8 transition-all duration-200 w-72 focus:outline-none"
+                  onClick={() => {
+                    setAiStep('manual');
+                    setStep('preview');
+                    }}
+                    disabled={aiLoading || configLoading}
+                  >
+                    {previewLoading && (
+                       <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm rounded-xl z-10">
+                         <RefreshCw className="w-8 h-8 text-blue-600 animate-spin mb-3" />
+                         <span className="text-sm font-medium text-slate-700 mb-2">
+                           Preparing Preview...
+                          </span>
+                       </div>
+                    )}
+                  <User className="w-10 h-10 text-slate-600 mb-3" />
+                  <span className="text-xl font-bold text-slate-800 mb-1">Manual Import</span>
+                  <span className="text-slate-700 text-base mb-2 text-center">Manually review, map, and import your CSV data step by step.</span>
+                </button>
+              </div>
+            </div>
+            <div className="flex justify-start mt-4">
+              <Button variant="outline" onClick={() => {
+                setStep('upload');
+                setAiStep('upload');
+              }}>
+                Back to Upload
+              </Button>
+            </div>
+          </div>
+        );
+      }
+
+      if (aiCsvImportEnabled && aiStep === 'ai-preview' && aiResult) {
+        const totalRows = aiResult.length - 1;
+        const previewCols = aiResultColumns.length > 0 ? aiResultColumns : (aiResult[0] || []);
+        return (
+        <div className="space-y-4">
+            <div className="font-semibold">AI-Transformed Preview</div>
+            
+            {/* AI Instructions Display */}
+            {(aiInstructions || configInstructions) && (
+              <div className="mt-4 border border-slate-200 rounded-lg bg-slate-50/50">
+                <Collapsible>
+                  <CollapsibleTrigger asChild>
+                    <button className="flex justify-between items-center w-full p-3">
+                      <div className="flex items-center gap-2">
+                        <Bot className="w-5 h-5 text-slate-600" />
+                        <span className="font-semibold text-slate-700">AI Instructions</span>
+                      </div>
+                      <div className="text-sm text-blue-600 hover:underline">
+                        {/* This will be handled by Collapsible anyway */}
+                        Show Details
+                      </div>
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="p-4 pt-0">
+                    <div className="border-t border-slate-200 pt-3">
+                      <MarkdownRenderer content={aiInstructions || configInstructions} />
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            )}
+            
+            {/* AI Reasoning Display */}
+            {(aiReasoning || configReasoning) && (
+              <div className="mt-4 border border-slate-200 rounded-lg bg-slate-50/50">
+                <Collapsible>
+                  <CollapsibleTrigger asChild>
+                    <button className="flex justify-between items-center w-full p-3">
+                      <div className="flex items-center gap-2">
+                        <Brain className="w-5 h-5 text-slate-600" />
+                        <span className="font-semibold text-slate-700">AI Reasoning</span>
+                      </div>
+                      <div className="text-sm text-blue-600 hover:underline">
+                        {/* This will be handled by Collapsible anyway */}
+                        Show Details
+                      </div>
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="p-4 pt-0">
+                    <div className="border-t border-slate-200 pt-3">
+                      <MarkdownRenderer content={aiReasoning || configReasoning} />
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            )}
+            
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead>
+                  <tr>
+                    {previewCols.map((col, i) => (
+                      <th key={i} className="px-6 py-3 bg-slate-100 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{col}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {(aiResult && Array.isArray(aiResult) ? aiResult.slice(1, PREVIEW_ROW_LIMIT + 1) : []).map((row, i) => (
+                    <tr key={i}>
+                      {(row || []).map((cell, j) => (
+                        <td key={j} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cell}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {totalRows > PREVIEW_ROW_LIMIT && (
+                <div className="text-xs text-slate-500 mt-2">Showing first {PREVIEW_ROW_LIMIT} of {totalRows} rows.</div>
+              )}
+            </div>
+            <div className="flex justify-between mt-4">
+              <Button variant="outline" onClick={() => setAiStep('describe')}>Back</Button>
+              <Button
+                onClick={() => {
+                  setAiStep('ai-mapping');
+                  setStep('mapping');
+                }}
+              >
+                Next: Mapping
+                </Button>
+              </div>
+            </div>
+        );
+      }
+      
+      // Manual preview or AI-generated preview
+      const isAIManagedPreview = aiStep === 'ai-preview';
+      const previewCols = isAIManagedPreview ? (aiResultColumns.length > 0 ? aiResultColumns : []) : previewHeader;
+      const previewData = isAIManagedPreview ? (aiResult && Array.isArray(aiResult) ? aiResult.slice(1, PREVIEW_ROW_LIMIT + 1) : []) : previewRows;
+      const totalRows = isAIManagedPreview ? (aiResult ? aiResult.length - 1 : 0) : data.length;
+
+      if (previewLoading) {
+        return (
+          <div className="text-blue-600 text-center py-8">
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+            Parsing CSV and preparing preview...
+          </div>
+        );
+      }
+
       return (
         <div className="space-y-4">
-          <div className="font-semibold">AI-Transformed Preview</div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
+          <div className="font-medium text-slate-800 mb-1">Import CSV - Step 1: Upload & Preview</div>
+          <div className="text-slate-600 text-sm mb-2 text-center">
+            We expect your CSV to have <a href="#" className="text-blue-600 underline">dates as columns</a> (one row per product/SKU).<br />
+            If the preview below looks wrong, click the button below to switch the orientation.
+          </div>
+          <TransposeDiagramSVG />
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+                      <label htmlFor="separator" className="text-sm">Separator:</label>
+              <select
+                        id="separator"
+                        value={separator}
+                        onChange={handleSeparatorChange}
+                  disabled={previewLoading}
+                  className="border rounded px-2 py-1 text-sm bg-white"
+                      >
+                        <option value=",">,</option>
+                        <option value=";">;</option>
+                        <option value="\t">Tab</option>
+                        <option value="|">|</option>
+              </select>
+            </div>
+                    <div className="flex items-center gap-2">
+                <label className="text-sm">Data appears transposed:</label>
+                      <Switch
+                        checked={transposed}
+                  onCheckedChange={handleTransposeChange}
+                  disabled={previewLoading}
+                      />
+                    </div>
+          </div>
+            {data.length > 0 ? (
+              <>
+          <div className="overflow-x-auto border rounded">
+                    <table className="min-w-full text-xs">
               <thead>
                 <tr>
-                  {aiResult[0].map((col, i) => (
-                    <th key={i} className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{col}</th>
-                  ))}
+                          {previewHeader.map((h, i) => (
+                            <th key={i} className="px-2 py-1 bg-slate-100 border-b whitespace-nowrap">{h}</th>
+                          ))}
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {aiResult.slice(1).map((row, i) => (
+              <tbody>
+                {previewRows.map((row, i) => (
                   <tr key={i}>
-                    {row.map((cell, j) => (
-                      <td key={j} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cell}</td>
-                    ))}
+                            {row.map((cell, j) => (
+                              <td 
+                                key={j} 
+                                className={`px-2 py-1 border-b whitespace-nowrap ${!isNaN(cell) && cell !== '' ? 'text-right' : ''}`}
+                              >
+                                {cell}
+                              </td>
+                            ))}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="flex justify-between mt-4">
-            <Button variant="outline" onClick={() => setAiStep('describe')}>Back</Button>
-            <Button
-              onClick={() => {
-                setAiStep('ai-mapping');
-                setStep('mapping');
-              }}
-            >
-              Next: Mapping
-            </Button>
+                  <div className="flex justify-between mt-4">
+                    <Button variant="outline" onClick={() => {
+                      if (aiCsvImportEnabled) {
+                        setAiStep('describe');
+                      } else {
+                        setStep('upload');
+                        setAiStep('upload');
+                      }
+                    }}>Back</Button>
+                    <Button onClick={() => setStep('mapping')}>Next: Mapping</Button>
+          </div>
+              </>
+            ) : (
+              <div>
+                <div className="text-center py-8 border border-dashed rounded-lg bg-slate-50">
+                  <div className="text-slate-500">No data to preview.</div>
+                  <div className="text-xs text-slate-400 mt-1">Please check your file or adjust the separator/transpose settings above.</div>
+                </div>
+                <div className="flex justify-start mt-4">
+                   <Button variant="outline" onClick={() => {
+                      if (aiCsvImportEnabled) {
+                        setAiStep('describe');
+                      } else {
+                        setStep('upload');
+                        setAiStep('upload');
+                      }
+                   }}>Back</Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       );
     }
-    if (currentQuestion) {
+
+    if (step === 'mapping') {
+      const isAIMapping = aiStep === 'ai-mapping';
+      const mappingHeader = isAIMapping ? (aiResultColumns.length > 0 ? aiResultColumns : aiMappingHeader) : manualMappingHeader;
+      const mappingRows = isAIMapping ? aiMappingRows : manualMappingRows;
+      const mappingRoles = isAIMapping ? aiColumnRoles : columnRoles;
+      const mappingNormalizedHeaders = isAIMapping ? aiMappingNormalizedHeaders : manualMappingNormalizedHeaders;
+      const mappingNormalizedData = isAIMapping ? aiMappingNormalizedData : manualMappingNormalizedData;
+      const mappingHasMaterialCode = isAIMapping ? aiMappingHasMaterialCode : manualMappingHasMaterialCode;
+      const DROPDOWN_OPTIONS = isAIMapping ? aiDropdownOptions : manualDropdownOptions;
+      const mappingRowLimit = PREVIEW_ROW_LIMIT;
+      const totalMappingRows = Array.isArray(mappingRows) ? mappingRows.length : 0;
+    
+      const handleConfirmClick = () => {
+        if (isAIMapping) {
+          if (uploadResult) {
+            onDataReady(uploadResult);
+          } else {
+            console.error("AI import confirmed without a valid upload result.");
+            setError("An error occurred during AI import. Please try again.");
+          }
+        } else {
+          // Manual import path
+          handleManualConfirm();
+        }
+      };
+      
       return (
-        <AIQuestionDialog
-          open={true}
-          onClose={() => setCurrentQuestion(null)}
-          question={currentQuestion}
-          onResponse={handleAIResponse}
-        />
-      );
-    }
-  }
-  
-  // Mapping step - available for both AI and manual flows
-  if (step === 'mapping') {
-    const isAIMapping = aiStep === 'ai-mapping';
-    const mappingHeader = isAIMapping ? aiMappingHeader : manualMappingHeader;
-    const mappingRows = isAIMapping ? aiMappingRows : manualMappingRows;
-    const mappingRoles = isAIMapping ? aiColumnRoles : columnRoles;
-    const mappingNormalizedHeaders = isAIMapping ? aiMappingNormalizedHeaders : manualMappingNormalizedHeaders;
-    const mappingNormalizedData = isAIMapping ? aiMappingNormalizedData : manualMappingNormalizedData;
-    const mappingHasMaterialCode = isAIMapping ? aiMappingHasMaterialCode : manualMappingHasMaterialCode;
-    const DROPDOWN_OPTIONS = isAIMapping ? aiDropdownOptions : manualDropdownOptions;
-  
-    // Now, use these variables in your return JSX below
-    return (
         <div className="space-y-6">
           <h3 className="text-lg font-semibold">Step 2: Map Columns</h3>
-        {aiTransformResult && isAIMapping && (
-          <div className="mb-4">
-            <h4 className="font-medium mb-2">AI-Suggested Mappings</h4>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(aiTransformResult.columnMappings).map(([header, role]) => (
-                <span key={header} className="bg-blue-100 text-blue-800 rounded px-2 py-1 text-xs">
-                  {header} → {role}
-                </span>
-              ))}
+          {aiTransformResult && isAIMapping && (
+            <div className="mb-4">
+              <h4 className="font-medium mb-2">AI-Suggested Mappings</h4>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(aiTransformResult.columnMappings).map(([header, role]) => (
+                  <span key={header} className="bg-blue-100 text-blue-800 rounded px-2 py-1 text-xs">
+                    {header} → {role}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
           <div className="mb-4">
             <h4 className="font-medium mb-2">Custom Aggregatable Fields</h4>
             <div className="flex flex-wrap gap-2 items-center">
@@ -925,7 +1295,7 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
             <table className="min-w-full text-xs">
               <thead>
                 <tr>
-                {mappingHeader.map((h, i) => (
+                {(Array.isArray(mappingHeader) ? mappingHeader : []).map((h, i) => (
                     <th key={i} className="px-2 py-1 bg-slate-100 border-b">
                       <div>{h}</div>
                       <select
@@ -942,35 +1312,12 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
                         className="mt-1 border rounded px-1 py-0.5 text-xs"
                       >
                         {DROPDOWN_OPTIONS.filter(opt => {
-                          if (
-                            opt.label.startsWith('Σ ') &&
-                            !customAggTypes.includes(opt.value) &&
-                          mappingHeader.some((header, idx) =>
-                              idx !== i &&
-                            (mappingRoles[idx] === 'Material Code' || mappingRoles[idx] === 'Description') &&
-                              header === opt.value
-                            )
-                          ) {
-                            return false;
-                          }
-                          if (
-                            opt.value === 'Date' &&
-                            !(
-                            isDateString(mappingHeader[i]) ||
-                            mappingRows.every(row => {
-                                const cell = row[i];
-                                return cell === '' || cell === undefined || !isNaN(Number(cell));
-                              })
-                            )
-                          ) {
-                            return false;
-                          }
-                          return true;
-                        }).map(opt => {
                           const isMultiAllowed = opt.value === 'Ignore' || opt.value === 'Date';
                         const isAssignedElsewhere = mappingRoles.some((role, idx) => idx !== i && role === opt.value);
+                          return !(!isMultiAllowed && isAssignedElsewhere);
+                        }).map(opt => {
                           return (
-                            <option key={opt.value} value={opt.value} disabled={!isMultiAllowed && isAssignedElsewhere}>
+                            <option key={opt.value} value={opt.value}>
                               {opt.label}
                             </option>
                           );
@@ -981,9 +1328,9 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
                 </tr>
               </thead>
               <tbody>
-              {mappingRows.map((row, i) => (
+              {(Array.isArray(mappingRows) ? mappingRows : []).slice(0, mappingRowLimit).map((row, i) => (
                   <tr key={i}>
-                    {row.map((cell, j) => <td key={j} className="px-2 py-1 border-b">{cell}</td>)}
+                    {(Array.isArray(row) ? row : []).map((cell, j) => <td key={j} className="px-2 py-1 border-b">{cell}</td>)}
                   </tr>
                 ))}
               </tbody>
@@ -997,7 +1344,7 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
                 onChange={e => handleDateRangeChange('start', Number(e.target.value))}
                 className="border rounded px-1 py-0.5 text-xs"
               >
-                {columnRoles.map((role, i) => role === 'Date' && <option key={i} value={i}>{previewHeader[i]}</option>)}
+                {(Array.isArray(columnRoles) ? columnRoles : []).map((role, i) => role === 'Date' && <option key={i} value={i}>{(Array.isArray(previewHeader) ? previewHeader : [])[i]}</option>)}
               </select>
               <span className="text-xs">to</span>
               <select
@@ -1005,7 +1352,7 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
                 onChange={e => handleDateRangeChange('end', Number(e.target.value))}
                 className="border rounded px-1 py-0.5 text-xs"
               >
-                {columnRoles.map((role, i) => role === 'Date' && <option key={i} value={i}>{previewHeader[i]}</option>)}
+                {(Array.isArray(columnRoles) ? columnRoles : []).map((role, i) => role === 'Date' && <option key={i} value={i}>{(Array.isArray(previewHeader) ? previewHeader : [])[i]}</option>)}
               </select>
             </div>
           )}
@@ -1015,251 +1362,64 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
               <table className="min-w-full text-xs">
                 <thead>
                   <tr>
-                  {mappingNormalizedHeaders.map(h => <th key={h} className="px-2 py-1 bg-slate-100 border-b">{h}</th>)}
+                  {(Array.isArray(mappingNormalizedHeaders) ? mappingNormalizedHeaders : []).map(h => <th key={h} className="px-2 py-1 bg-slate-100 border-b">{h}</th>)}
                   </tr>
                 </thead>
                 <tbody>
-                {mappingNormalizedData.slice(0, 10).map((row, i) => (
+                {(Array.isArray(mappingNormalizedData) ? mappingNormalizedData : []).slice(0, mappingRowLimit).map((row, i) => (
                     <tr key={i}>
-                    {mappingNormalizedHeaders.map(h => <td key={h} className="px-2 py-1 border-b">{row[h]}</td>)}
+                    {(Array.isArray(mappingNormalizedHeaders) ? mappingNormalizedHeaders : []).map(h => <td key={h} className="px-2 py-1 border-b">{row[h]}</td>)}
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {totalMappingRows > mappingRowLimit && (
+                <div className="text-xs text-slate-500 mt-2">
+                  Showing first {mappingRowLimit} of {totalMappingRows} rows.
+                </div>
+              )}
             </div>
           </div>
           <div className="flex justify-between mt-4">
           {/* From Mapping to Preview */}
           <Button variant="outline" onClick={() => {
-            if (aiCsvImportEnabled) {
+            if (aiStep === 'ai-mapping') {
+              setAiStep('ai-preview'); // Go back to AI preview
+              setStep('preview');
+            } else if (aiCsvImportEnabled) {
+              setAiStep('describe'); // Go back to AI/Manual choice
               setStep('preview');
             } else {
-              setStep('preview');
+              setStep('preview'); // Go back to manual preview
             }
           }}>Back</Button>
             <div className="flex flex-col items-end">
-            <Button onClick={() => {
-              // Always use the normalized (long) data for both AI and manual
-              const headers = mappingNormalizedHeaders;
-              const dataRows = mappingNormalizedData.map(row => headers.map(h => row[h]));
-              const finalData = [headers, ...dataRows];
-              onDataReady(finalData);
-            }} disabled={mappingNormalizedData.length === 0 || !mappingHasMaterialCode}>
-                Confirm Mapping & Import
+            <Button onClick={handleConfirmClick} disabled={manualConfirmLoading || !mappingHasMaterialCode}>
+                {manualConfirmLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  'Confirm Mapping & Import'
+                )}
               </Button>
             {!mappingHasMaterialCode && (
                 <span className="text-xs text-red-600 mt-1">You must map at least one column as <b>Material Code</b> to continue.</span>
               )}
             </div>
           </div>
-      </div>
+    </div>
     );
   }
   
-  if (step === 'upload') {
-    return (
-      <div className="space-y-4">
-        {lastImportFileName && (
-          <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-4 flex flex-col md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="font-semibold text-blue-800 mb-1">A file has already been loaded.</div>
-              <div className="text-sm text-blue-700">File: <span className="font-mono">{lastImportFileName}</span></div>
-              {lastImportTime && <div className="text-xs text-blue-600">Imported on: {lastImportTime}</div>}
-              <div className="text-xs text-blue-600 mt-1">You can continue with your current file or upload a new one below.</div>
-            </div>
-            <Button
-              className="mt-4 md:mt-0 md:ml-8"
-              onClick={() => {
-                // Go to Clean & Prepare step (step 1)
-                if (typeof window !== 'undefined') {
-                  const event = new CustomEvent('goToStep', { detail: { step: 1 } });
-                  window.dispatchEvent(event);
-                }
-              }}
-              variant="default"
-            >
-              Continue with Current File
-            </Button>
-        </div>
-      )}
-        <div
-          className={`border-2 border-dashed rounded-lg p-8 text-center transition-all duration-300 cursor-pointer ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-slate-50 hover:border-slate-400'}`}
-          onDrop={handleDrop}
-          onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-          onDragLeave={() => setIsDragging(false)}
-          onClick={handleDropAreaClick}
-        >
-          <Upload className={`h-12 w-12 mx-auto transition-colors ${isDragging ? 'text-blue-600' : 'text-slate-400'}`} />
-          <div>
-            <h3 className="text-lg font-semibold text-slate-700">Drop your CSV file here</h3>
-            <p className="text-slate-500">or click to browse files</p>
-          </div>
-        </div>
-        <input
-          id="csv-upload-input"
-          type="file"
-          accept=".csv,text/csv"
-          onChange={handleFileChange}
-          className="hidden"
-        />
-        {error && <div className="text-red-600">{error}</div>}
-        <div className="flex justify-end">
-          <Button onClick={() => document.getElementById('csv-upload-input')?.click()}>
-            Browse Files
-          </Button>
-        </div>
-    </div>
+  return null; // Should not be reached if logic is correct
+};
+
+  return (
+    <>
+      {renderErrorDialog()}
+      {renderContent()}
+    </>
   );
-  } else if (step === 'preview') {
-    // show manual preview UI (classic style with separator)
-    return (
-      <div className="space-y-4">
-        <div className="font-medium text-slate-800 mb-1">Import CSV - Step 1: Upload & Preview</div>
-        <div className="text-slate-600 text-sm mb-2">
-          We expect your CSV to have <a href="#" className="text-blue-600 underline">dates as columns</a> (one row per product/SKU).<br />
-          If your file has dates as rows, click the button below to switch the orientation.
-        </div>
-        <div className="flex flex-col md:flex-row items-center gap-4 max-w-7xl w-full mx-auto">
-          <div id="csv-orientation-diagram" className="bg-slate-50 rounded p-2 border w-full md:min-w-[90%] md:max-w-[90%] flex items-center justify-center">
-            <svg width="1125" height="225" viewBox="0 0 1125 375" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="30" y="45" width="375" height="330" rx="27" fill="#fbe9e7" stroke="#fbbf24"/>
-              <text x="225" y="90" textAnchor="middle" fontSize="33" fontWeight="bold" fill="#b45309">Dates as Rows</text>
-              <text x="75" y="157.5" fontSize="22.5" fontWeight="bold" fill="#b45309">Date</text>
-              <text x="180" y="157.5" fontSize="22.5" fontWeight="bold" fill="#b45309">SKU A</text>
-              <text x="300" y="157.5" fontSize="22.5" fontWeight="bold" fill="#b45309">SKU B</text>
-              <text x="75" y="210" fontSize="22.5" fill="#b45309">01/01</text>
-              <rect x="150" y="187.5" width="75" height="39" fill="#fff" stroke="#fbbf24" rx="7.5"/>
-              <text x="187.5" y="214.5" fontSize="22.5" fill="#b45309" textAnchor="middle">100</text>
-              <rect x="270" y="187.5" width="75" height="39" fill="#fff" stroke="#fbbf24" rx="7.5"/>
-              <text x="307.5" y="214.5" fontSize="22.5" fill="#b45309" textAnchor="middle">200</text>
-              <text x="75" y="262.5" fontSize="22.5" fill="#b45309">01/02</text>
-              <rect x="150" y="240" width="75" height="39" fill="#fff" stroke="#fbbf24" rx="7.5"/>
-              <text x="187.5" y="267" fontSize="22.5" fill="#b45309" textAnchor="middle">120</text>
-              <rect x="270" y="240" width="75" height="39" fill="#fff" stroke="#fbbf24" rx="7.5"/>
-              <text x="307.5" y="267" fontSize="22.5" fill="#b45309" textAnchor="middle">210</text>
-              <text x="75" y="315" fontSize="22.5" fill="#b45309">01/03</text>
-              <rect x="150" y="292.5" width="75" height="39" fill="#fff" stroke="#fbbf24" rx="7.5"/>
-              <text x="187.5" y="319.5" fontSize="22.5" fill="#b45309" textAnchor="middle">130</text>
-              <rect x="270" y="292.5" width="75" height="39" fill="#fff" stroke="#fbbf24" rx="7.5"/>
-              <text x="307.5" y="319.5" fontSize="22.5" fill="#b45309" textAnchor="middle">220</text>
-              <polygon points="450,180 585,180 585,200 450,200" fill="#38bdf8"/>
-              <polygon points="600,188 585,170 585,210" fill="#38bdf8"/>
-              <text x="520" y="172.5" fontSize="27" fill="#38bdf8" textAnchor="middle">Transpose</text>
-              <rect x="630" y="45" width="450" height="270" rx="27" fill="#e0e7ef" stroke="#b6c2d9"/>
-              <text x="855" y="90" textAnchor="middle" fontSize="33" fontWeight="bold" fill="#1e293b">Dates as Columns</text>
-              <text x="675" y="157.5" fontSize="22.5" fontWeight="bold" fill="#475569">SKU</text>
-              <text x="780" y="157.5" fontSize="22.5" fontWeight="bold" fill="#475569">01/01</text>
-              <text x="885" y="157.5" fontSize="22.5" fontWeight="bold" fill="#475569">01/02</text>
-              <text x="990" y="157.5" fontSize="22.5" fontWeight="bold" fill="#475569">01/03</text>
-              <text x="675" y="210" fontSize="22.5" fill="#475569">A</text>
-              <rect x="765" y="187.5" width="75" height="39" fill="#fff" stroke="#b6c2d9" rx="7.5"/>
-              <text x="802.5" y="214.5" fontSize="22.5" fill="#334155" textAnchor="middle">100</text>
-              <rect x="870" y="187.5" width="75" height="39" fill="#fff" stroke="#b6c2d9" rx="7.5"/>
-              <text x="907.5" y="214.5" fontSize="22.5" fill="#334155" textAnchor="middle">120</text>
-              <rect x="975" y="187.5" width="75" height="39" fill="#fff" stroke="#b6c2d9" rx="7.5"/>
-              <text x="1012.5" y="214.5" fontSize="22.5" fill="#334155" textAnchor="middle">130</text>
-              <text x="675" y="262.5" fontSize="22.5" fill="#475569">B</text>
-              <rect x="765" y="240" width="75" height="39" fill="#fff" stroke="#b6c2d9" rx="7.5"/>
-              <text x="802.5" y="267" fontSize="22.5" fill="#334155" textAnchor="middle">200</text>
-              <rect x="870" y="240" width="75" height="39" fill="#fff" stroke="#b6c2d9" rx="7.5"/>
-              <text x="907.5" y="267" fontSize="22.5" fill="#334155" textAnchor="middle">210</text>
-              <rect x="975" y="240" width="75" height="39" fill="#fff" stroke="#b6c2d9" rx="7.5"/>
-              <text x="1012.5" y="267" fontSize="22.5" fill="#334155" textAnchor="middle">220</text>
-            </svg>
-          </div>
-        </div>
-        {manualLoading ? (
-          <div className="text-blue-600 text-center py-8">Parsing CSV and preparing preview...</div>
-        ) : (
-          <>
-            {data.length > 0 && (
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center gap-4 mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">Transpose</span>
-                    <Switch
-                      checked={transposed}
-                      onCheckedChange={() => {
-                        setTransposed(!transposed);
-                        const newData = transpose(data);
-                        setData(newData);
-                        setHeader(newData[0] || []);
-                      }}
-                      id="transpose-switch"
-                    />
-                    <span className="text-xs text-slate-500">{transposed ? '' : 'Disabled'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">Separator:</span>
-                    <select
-                      value={separator}
-                      onChange={handleSeparatorChange}
-                      className="border rounded px-2 py-1 text-sm"
-                    >
-                      <option value=",">Comma (,)</option>
-                      <option value=";">Semicolon (;)</option>
-                      <option value="\t">Tab</option>
-                      <option value="|">Pipe (|)</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">Date Format</span>
-                    <select
-                      value={dateFormat}
-                      onChange={e => setDateFormat(e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    >
-                      {DATE_FORMAT_OPTIONS.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="overflow-x-auto border rounded">
-                  <table className="min-w-full text-xs">
-                    <thead>
-                      <tr>
-                        {header.map((h, i) => (
-                          <th key={i} className="px-2 py-1 bg-slate-100 border-b">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.slice(1, 6).map((row, i) => (
-                        <tr key={i}>
-                          {row.map((cell, j) => (
-                            <td key={j} className="px-2 py-1 border-b">{cell}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {/* From Preview to Upload (AI OFF) or Describe (AI ON) */}
-                <div className="flex justify-between mt-4">
-                  <Button variant="outline" onClick={() => {
-                    if (aiCsvImportEnabled) {
-                      setAiStep('describe');
-                    } else {
-                      setStep('upload');
-                    }
-                  }}>Back</Button>
-                  <Button
-                    onClick={() => {
-                      setStep('mapping');
-                      setAiStep('manual');
-                    }}
-                    disabled={data.length === 0}
-                  >
-                    Next: Mapping
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
-      )}
-    </div>
-  );
-  }
-  return null;
 }; 

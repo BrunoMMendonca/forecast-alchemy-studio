@@ -1,87 +1,56 @@
-# Queue Processing & Job Management: Implementation Guide
+# Backend Job Queue & Worker: Implementation Guide
 
 ## 1. Core Principles
 
-- **Single Source of Truth:** The queue state is managed globally (React context/store), ensuring all mutations and reads are consistent and up-to-date.
-- **Job Types:** Supports both AI (Grok API) and Grid Search optimizations, with robust enable/disable logic for AI jobs.
-- **Persistence:** The queue state is persisted to localStorage and restored on app load, ensuring jobs are not lost on refresh.
-- **Defensive Filtering:** AI jobs are filtered out immediately if AI is disabled, both when adding jobs and via a dedicated effect.
-- **Failure Handling:** Consecutive AI failures trigger automatic disabling of AI optimization and removal of all AI jobs from the queue.
-- **Logging:** Logging is concise and focused on key events (job add, remove, process, error, AI job removal), with summary logs for queue state.
+- **Backend as the Single Source of Truth:** The job queue's state is managed entirely by the backend server in a persistent SQLite database. The frontend is a consumer of this state. In the future, this principle will expand to include all user data (datasets, forecasts, etc.).
+- **API-Driven Operations:** All queue mutations (creating jobs, clearing the queue) are handled via API endpoints. The frontend does not manipulate the queue state directly.
+- **Persistent & Asynchronous:** Jobs are stored in a database, allowing a separate worker process to execute them asynchronously. This ensures that UI performance is never blocked by optimizations and that jobs are not lost on browser refresh.
+- **Robust Job Creation:** The job creation endpoint can handle both full dataset uploads and specific SKU lists, with a "reason" for tracking job origins.
 
 ---
 
 ## 2. How It Works
 
-### A. Queue Lifecycle
+### A. The Lifecycle of a Job
 
-- **Adding Jobs:**
-  - Jobs are added to the queue when new data is uploaded, cleaned, or when settings change (see `Optimization reassons.md`).
-  - Defensive checks ensure AI jobs are only added if both global AI features and AI optimization are enabled.
-  - Each job includes SKU, model, method (AI/Grid), and a reason for tracking.
+1.  **Job Creation (Frontend)**:
+    - A user action (like uploading a file or cleaning data) triggers a function in `useDataHandlers.ts`.
+    - This handler makes a `POST` request to the `/api/jobs` endpoint on the backend, sending along the relevant data, models, and a reason for the job.
 
-- **Processing Jobs:**
-  - The queue is processed sequentially, one job at a time, using a local reference to track remaining jobs.
-  - After each job is processed, it is removed from the queue and the global state is updated.
-  - If jobs are added during processing, the local reference ensures the new jobs are picked up in the next processing cycle.
+2.  **Job Ingestion (Backend API)**:
+    - The `backend-server-example.cjs` receives the request.
+    - It parses the request and creates corresponding job entries in the `jobs` table in the SQLite database. Each job is initially marked with a `pending` status.
 
-- **AI Job Removal:**
-  - An effect watches for changes to AI enable/disable settings.
-  - When AI is disabled, all AI jobs are immediately removed from the queue, and a summary log is generated.
+3.  **Job Processing (Backend Worker)**:
+    - A separate worker process, started by running `node backend-server-example.cjs worker`, continuously polls the database for `pending` jobs (`runWorker()` function).
+    - When a job is found, the worker updates its status to `running` and begins executing the optimization logic.
+    - It periodically updates the job's `progress` in the database.
+    - Upon completion, the worker updates the job's status to `completed` and stores the final result as a JSON string in the `result` column. If an error occurs, the status is set to `failed`.
 
-- **AI Failure Threshold:**
-  - If AI jobs fail consecutively (configurable threshold), AI optimization is automatically disabled and all AI jobs are removed.
-  - A toast/notification is shown to the user.
+4.  **Status Polling (Frontend)**:
+    - The `useBackendJobStatus.ts` hook on the frontend periodically sends a `GET` request to the `/api/jobs/status` endpoint.
+    - The backend returns the current list of all jobs from the database.
+    - The hook processes these jobs, updates its internal state (`jobs`, `summary`), and makes the data available to the UI.
 
-- **Persistence:**
-  - The queue is saved to localStorage after every mutation (add, remove, clear, AI job removal).
-  - On app load, the queue is restored from localStorage, with AI jobs filtered out if AI is disabled.
+5.  **UI Updates**:
+    - The `ForecastPage.tsx` component consumes the data from `useBackendJobStatus`.
+    - It passes this data down to child components like `MainLayout` and `OptimizationQueuePopup`.
+    - This "single source of truth" pattern ensures all UI elements are always in sync with the backend's state.
 
 ---
 
 ## 3. Technical Details
 
-### A. Queue Structure
+### A. Key Code Points
 
-- The queue is an array of job objects, each with:
-  - `sku`: The SKU being optimized
-  - `modelId`: The model to optimize
-  - `method`: 'ai' or 'grid'
-  - `reason`: Why the job was added (e.g., 'csv_upload_sales_data')
-
-### B. Key Code Points
-
-- **Adding Jobs:**
-  - All job additions go through a single function that checks AI enablement before adding AI jobs.
-  - Logs the number and type of jobs added, and the queue state after addition.
-
-- **Processing Jobs:**
-  - Uses a local `remainingItems` array to avoid stale state and infinite loops.
-  - After each job, updates both the local array and the global queue state.
-  - Logs each job as it is processed and when it is removed.
-
-- **AI Job Removal Effect:**
-  - Runs whenever AI enablement changes.
-  - If AI is disabled, filters out all AI jobs and updates the queue.
-  - Logs before and after state for transparency.
-
-- **AI Failure Handling:**
-  - Tracks consecutive AI failures.
-  - On threshold, disables AI optimization, removes AI jobs, and notifies the user.
-
-- **Persistence:**
-  - Queue is saved to localStorage after every change.
-  - On load, queue is restored and AI jobs are filtered if needed.
-
-### C. Logging
-
-- Only logs key events:
-  - When jobs are added (summary: total, AI, grid)
-  - When queue processing starts/ends
-  - Each job as it is processed
-  - Errors
-  - When AI jobs are filtered out
-  - Queue state after every mutation
+| Area                     | File / Component                     | Key Function / Hook         | Purpose                                                      |
+| ------------------------ | ------------------------------------ | --------------------------- | ------------------------------------------------------------ |
+| **Job Creation (Client)**| `src/hooks/useDataHandlers.ts`       | `handleDataUpload`          | Submits job requests to the backend API.                     |
+| **Job Ingestion (Server)**| `backend-server-example.cjs`         | `app.post('/api/jobs')`     | Creates job records in the SQLite database.                  |
+| **Job Processing (Server)**| `backend-server-example.cjs`         | `runWorker` / `processJob`  | Fetches and executes pending jobs from the database.         |
+| **Status Polling (Client)**| `src/hooks/useBackendJobStatus.ts`   | `useBackendJobStatus`       | Periodically fetches job status from the backend.            |
+| **UI Display**           | `src/components/OptimizationQueuePopup.tsx` | -                   | Renders the job queue and progress to the user.              |
+| **UI State Management**  | `src/pages/ForecastPage.tsx`         | -                           | Acts as the single source of truth for all job-related UI.   |
 
 ---
 
@@ -89,31 +58,16 @@
 
 If queue processing fails or behaves unexpectedly, check the following:
 
-1. **Is the queue state always updated via the global store/context?**
-2. **Are AI jobs being filtered out immediately when AI is disabled?**
-3. **Is the local `remainingItems` array used for processing, not the global queue reference?**
-4. **Are jobs being removed from the queue after processing?**
-5. **Is the queue persisted to and restored from localStorage?**
-6. **Are logs showing the correct queue state after each mutation?**
-7. **Is the AI failure threshold logic working and disabling AI as expected?**
+1.  **Are the backend API and Worker processes running?** You need two terminals: one for `node backend-server-example.cjs api` and one for `node backend-server-example.cjs worker`.
+2.  **Are jobs being created correctly in the `forecast-jobs.db` file?** Use a SQLite viewer to inspect the `jobs` table.
+3.  **Is the backend worker picking up pending jobs?** Check the terminal output for the worker process for logs like "Worker: Picked up job...".
+4.  **Is the frontend successfully polling the `/api/jobs/status` endpoint?** Check the browser's network tab for successful `200 OK` responses.
+5.  **Is the `ForecastPage` component passing the `jobs` and `summary` props correctly down to its children?** This was the source of a previous bug that caused UI inconsistencies.
 
 ---
 
-## Summary Table
+## 5. Gotchas & Historical Context
 
-| Event                        | Queue Mutation         | AI Jobs Filtered? | Logging         | Persistence |
-|------------------------------|-----------------------|-------------------|-----------------|-------------|
-| Add jobs (data/settings)     | Add, dedupe           | Yes (if disabled) | Summary         | Yes         |
-| Process jobs                 | Remove after process  | N/A               | Per job, summary| Yes         |
-| Disable AI                   | Remove all AI jobs    | Yes               | Summary         | Yes         |
-| AI failure threshold reached | Remove all AI jobs, disable AI | Yes      | Summary, toast   | Yes         |
-| App load                     | Restore from storage  | Yes (if disabled) | N/A             | Yes         |
-
----
-
-**If you ever need to restore or debug this logic, reference this guide and ensure:**
-- All queue mutations use the global state.
-- AI jobs are filtered out immediately when AI is disabled.
-- The local array is used for processing, not the global queue reference.
-- Logging is concise and focused on key events.
-- Persistence is robust and always reflects the latest queue state. 
+- **Initial Architecture**: The application's first version of a queue (`useOptimizationQueue.ts`) ran on the browser's main thread, which caused the UI to freeze during long optimizations. This file and pattern are now obsolete.
+- **The Backend Shift**: The architecture was migrated to a full backend job queue to solve the UI freezing issue and provide a more scalable, persistent solution. The current implementation is robust and the "completed" state of this migration.
+- **UI State Synchronization**: A critical lesson learned was to have a single component (`ForecastPage`) fetch the backend status and pass it down as props. Independent fetching in child components led to race conditions and UI bugs. This is documented further in `UI State Management & Data Flow.md`. 

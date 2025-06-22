@@ -1,153 +1,133 @@
 import { useCallback } from 'react';
-import { NormalizedSalesData, ForecastResult } from '@/pages/Index';
+import { ForecastResult } from '@/types/forecast';
 import { useToast } from '@/hooks/use-toast';
 import { useUnifiedState } from '@/hooks/useUnifiedState';
 import { getDefaultModels, hasOptimizableParameters } from '@/utils/modelConfig';
-import { OptimizationQueueItem } from '@/types/optimization';
+import { useGlobalSettings } from '@/hooks/useGlobalSettings';
+import { CsvUploadResult } from '@/components/CsvImportWizard';
 
-export const useDataHandlers = () => {
+// Performance limit for optimization
+// const MAX_SKUS_FOR_OPTIMIZATION = 50; // Limit optimization to first 50 SKUs
+
+interface DataHandlerSetters {
+  setCurrentStep: (step: number) => void;
+  setProcessedDataInfo: (result: CsvUploadResult | null) => void;
+  setForecastResults: (results: ForecastResult[]) => void;
+}
+
+export const useDataHandlers = ({
+  setCurrentStep,
+  setProcessedDataInfo,
+  setForecastResults
+}: DataHandlerSetters) => {
   const { toast } = useToast();
-  const { 
-    setCleanedData, 
-    setModels, 
-    setForecastResults, 
-    setSelectedSKU,
-    addToQueue,
-    optimizationQueue,
-    aiForecastModelOptimizationEnabled
-  } = useUnifiedState();
+  const { models, setModels } = useUnifiedState();
+  const { aiForecastModelOptimizationEnabled } = useGlobalSettings();
+
+  const createJobs = useCallback(async (jobData: {data?: any[], skus?: string[], reason: string}) => {
+    const modelsToProcess = models.length > 0 ? models.map(m => m.id) : getDefaultModels().map(m => m.id);
+    const methodsToRun = ['grid'];
+    if (aiForecastModelOptimizationEnabled) {
+      methodsToRun.push('ai');
+    }
+
+    let totalJobsCreated = 0;
+    
+    for (const method of methodsToRun) {
+      try {
+        const response = await fetch('http://localhost:3001/api/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...jobData, models: modelsToProcess, method }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(`[${method.toUpperCase()}] ${errorData.error || 'Failed to create jobs'}`);
+        }
+        
+        const result = await response.json();
+        totalJobsCreated += result.jobsCreated || 0;
+        console.log(`[BACKEND] ${method.toUpperCase()} job creation successful:`, result);
+
+      } catch (error) {
+        console.error(`[BACKEND] Error creating ${method} jobs:`, error);
+        toast({
+          title: "Error",
+          description: `Could not start backend optimization: ${error.message}`,
+          variant: "destructive",
+        });
+        return; // Stop if one method fails
+      }
+    }
+
+    if (totalJobsCreated > 0) {
+      toast({
+        title: "Backend Optimization Started",
+        description: `Successfully created ${totalJobsCreated} optimization jobs on the server.`,
+        variant: "default",
+      });
+    }
+  }, [models, aiForecastModelOptimizationEnabled, toast]);
 
   // RAW SALES DATA CSV UPLOAD
-  const handleDataUpload = useCallback((data: NormalizedSalesData[]) => {
-    setCleanedData(data);
-    setForecastResults([]);
-    setModels([]);
-    const skusInOrder: string[] = [];
-    const seenSKUs = new Set<string>();
-    for (const item of data) {
-      const sku = item['Material Code'];
-      if (!seenSKUs.has(sku)) {
-        skusInOrder.push(sku);
-        seenSKUs.add(sku);
-      }
+  const handleDataUpload = useCallback(async (result: CsvUploadResult) => {
+    if (!result || !result.success) {
+      toast({
+        title: "Error",
+        description: "The data upload was not successful.",
+        variant: "destructive",
+      });
+      return;
     }
-    const allModels = getDefaultModels().filter(hasOptimizableParameters);
-    const allJobs: OptimizationQueueItem[] = skusInOrder.flatMap(sku =>
-      allModels.flatMap(model => {
-        const jobs: OptimizationQueueItem[] = [];
-        // Always add Grid job
-        jobs.push({
-          sku,
-          modelId: model.id,
-          reason: 'csv_upload_sales_data',
-          method: 'grid',
-          timestamp: Date.now()
-        });
-        // Add AI job if enabled
-        if (aiForecastModelOptimizationEnabled) {
-          const aiJob: OptimizationQueueItem = {
-            sku,
-            modelId: model.id,
-            reason: 'csv_upload_sales_data',
-            method: 'ai',
-            timestamp: Date.now()
-          };
-          console.log('[QUEUE][useDataHandlers] handleDataUpload: Adding AI job:', aiJob, 'aiForecastModelOptimizationEnabled:', aiForecastModelOptimizationEnabled);
-          jobs.push(aiJob);
-        }
-        return jobs;
-      })
-    );
-    // Filter out jobs already in the queue (by sku, modelId, reason, method)
-    const existingPairs = new Set(optimizationQueue.items.map(item => `${item.sku}__${item.modelId}__${item.reason}__${item.method}`));
-    const newJobs = allJobs.filter(job => !existingPairs.has(`${job.sku}__${job.modelId}__${job.reason}__${job.method}`));
-    console.log(`[QUEUE][useDataHandlers] handleDataUpload: Current queue size before update: ${optimizationQueue.items.length}`);
-    addToQueue(newJobs);
-    console.log(`[QUEUE][useDataHandlers] handleDataUpload: Current queue size after update: ${optimizationQueue.items.length}`);
-  }, [setCleanedData, setForecastResults, setModels, addToQueue, optimizationQueue.items, aiForecastModelOptimizationEnabled]);
+
+    // This function will be responsible for the final state update.
+    const updateStateAndNavigate = () => {
+      console.log('Setting processed data info and resetting state...');
+      setProcessedDataInfo(result);
+      setForecastResults([]);
+      setModels([]);
+      setCurrentStep(1); // DIRECTLY NAVIGATE
+    };
+
+    try {
+      console.log('[BACKEND] Submitting SKUs from processed file to create optimization jobs...');
+      
+      // Use the skuList from the upload result to create jobs
+      if (result.skuList && result.skuList.length > 0) {
+        await createJobs({ skus: result.skuList, reason: 'dataset_upload' });
+      } else {
+        console.warn('[BACKEND] No SKUs found in the upload result to create jobs for.');
+      }
+
+    } catch (error) {
+      console.error('[BACKEND] Error during job creation process:', error);
+      // Even if jobs fail, we still want to navigate. The error is toasted inside createJobs.
+    } finally {
+      // ALWAYS update the frontend state after backend communication.
+      // updateStateAndNavigate(); // <-- This is the problematic call.
+    }
+  }, [createJobs, setProcessedDataInfo, setForecastResults, setModels, toast, setCurrentStep]);
 
   // DATA CLEANING CSV UPLOAD
-  const handleImportDataCleaning = useCallback((importedSKUs: string[]) => {
+  const handleImportDataCleaning = useCallback(async (importedSKUs: string[]) => {
     console.log('handleImportDataCleaning called with:', importedSKUs);
     const validSKUs = importedSKUs.filter(sku => !!sku && typeof sku === 'string');
+    
     if (validSKUs.length > 0) {
-      const optimizableModels = getDefaultModels().filter(hasOptimizableParameters);
-      const allJobs: OptimizationQueueItem[] = validSKUs.flatMap(sku =>
-        optimizableModels.flatMap(model => {
-          const jobs: OptimizationQueueItem[] = [];
-          jobs.push({
-            sku,
-            modelId: model.id,
-            reason: 'csv_upload_data_cleaning',
-            method: 'grid',
-            timestamp: Date.now()
-          });
-          if (aiForecastModelOptimizationEnabled) {
-            const aiJob: OptimizationQueueItem = {
-              sku,
-              modelId: model.id,
-              reason: 'csv_upload_data_cleaning',
-              method: 'ai',
-              timestamp: Date.now()
-            };
-            console.log('[QUEUE][useDataHandlers] handleImportDataCleaning: Adding AI job:', aiJob, 'aiForecastModelOptimizationEnabled:', aiForecastModelOptimizationEnabled);
-            jobs.push(aiJob);
-          }
-          return jobs;
-        })
-      );
-      const existingPairs = new Set(optimizationQueue.items.map(item => `${item.sku}__${item.modelId}__${item.reason}__${item.method}`));
-      const newJobs = allJobs.filter(job => !existingPairs.has(`${job.sku}__${job.modelId}__${job.reason}__${job.method}`));
-      console.log(`[QUEUE][useDataHandlers] handleImportDataCleaning: Current queue size before update: ${optimizationQueue.items.length}`);
-      console.log('Adding jobs to queue:', newJobs);
-      addToQueue(newJobs);
-      console.log(`[QUEUE][useDataHandlers] handleImportDataCleaning: Current queue size after update: ${optimizationQueue.items.length}`);
-      toast({
-        title: "Import Optimization Triggered",
-        description: `${validSKUs.length} SKU${validSKUs.length > 1 ? 's' : ''} queued for optimization after import. Optimization starting automatically...`,
-      });
+      await createJobs({ skus: validSKUs, reason: 'csv_upload_data_cleaning' });
     }
-  }, [addToQueue, optimizationQueue.items, aiForecastModelOptimizationEnabled, toast]);
+  }, [createJobs]);
 
   // MANUAL DATA CLEANING EDIT
-  const handleManualEditDataCleaning = useCallback((sku: string) => {
+  const handleManualEditDataCleaning = useCallback(async (sku: string) => {
     if (!sku) return;
-    const optimizableModels = getDefaultModels().filter(hasOptimizableParameters);
-    const allJobs: OptimizationQueueItem[] = optimizableModels.flatMap(model => {
-      const jobs: OptimizationQueueItem[] = [];
-      jobs.push({
-        sku,
-        modelId: model.id,
-        reason: 'manual_edit_data_cleaning',
-        method: 'grid',
-        timestamp: Date.now()
-      });
-      if (aiForecastModelOptimizationEnabled) {
-        const aiJob: OptimizationQueueItem = {
-          sku,
-          modelId: model.id,
-          reason: 'manual_edit_data_cleaning',
-          method: 'ai',
-          timestamp: Date.now()
-        };
-        console.log('[QUEUE][useDataHandlers] handleManualEditDataCleaning: Adding AI job:', aiJob, 'aiForecastModelOptimizationEnabled:', aiForecastModelOptimizationEnabled);
-        jobs.push(aiJob);
-      }
-      return jobs;
-    });
-    const existingPairs = new Set(optimizationQueue.items.map(item => `${item.sku}__${item.modelId}__${item.reason}__${item.method}`));
-    const newJobs = allJobs.filter(job => !existingPairs.has(`${job.sku}__${job.modelId}__${job.reason}__${job.method}`));
-    console.log(`[QUEUE][useDataHandlers] handleManualEditDataCleaning: Current queue size before update: ${optimizationQueue.items.length}`);
-    addToQueue(newJobs);
-    console.log(`[QUEUE][useDataHandlers] handleManualEditDataCleaning: Current queue size after update: ${optimizationQueue.items.length}`);
-  }, [addToQueue, optimizationQueue.items, aiForecastModelOptimizationEnabled]);
+    await createJobs({ skus: [sku], reason: 'manual_edit_data_cleaning' });
+  }, [createJobs]);
 
-  const handleForecastGeneration = useCallback((results: ForecastResult[], selectedSKU?: string) => {
+  const handleForecastGeneration = useCallback((results: ForecastResult[]) => {
     setForecastResults(results);
-    if (selectedSKU) {
-      setSelectedSKU(selectedSKU);
-    }
-  }, [setForecastResults, setSelectedSKU]);
+  }, [setForecastResults]);
 
   return {
     handleDataUpload,

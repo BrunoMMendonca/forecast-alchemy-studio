@@ -1,8 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
-import { NormalizedSalesData, ForecastResult } from '@/pages/Index';
+import { useState, useCallback } from 'react';
+import { NormalizedSalesData, ForecastResult } from '@/types/forecast';
 import { ModelConfig } from '@/types/forecast';
 import { BusinessContext } from '@/types/businessContext';
-import { OptimizationQueueItem } from '@/types/optimization';
 
 interface UnifiedState {
   // Data state
@@ -21,17 +20,12 @@ interface UnifiedState {
   // Model state
   models: ModelConfig[];
 
-  // Optimization state
-  optimizationQueue: {
-    items: OptimizationQueueItem[];
-    isOptimizing: boolean;
-    progress: Record<string, number>;
-    paused: boolean;
-  };
-
   // Settings state
   forecastPeriods: number;
   businessContext: BusinessContext;
+
+  // Error state
+  aiError: string | null;
 }
 
 const DEFAULT_STATE: UnifiedState = {
@@ -43,41 +37,18 @@ const DEFAULT_STATE: UnifiedState = {
   isQueuePopupOpen: false,
   selectedSKU: '',
   models: [],
-  optimizationQueue: {
-    items: [],
-    isOptimizing: false,
-    progress: {},
-    paused: false
-  },
   forecastPeriods: 12,
   businessContext: {
     costOfError: 'medium',
     planningPurpose: 'tactical',
     updateFrequency: 'weekly',
     interpretabilityNeeds: 'medium'
-  }
+  },
+  aiError: null
 };
 
-const STORAGE_KEY = 'forecast_unified_state';
-
 export const useUnifiedState = () => {
-  const [state, setState] = useState<UnifiedState>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : DEFAULT_STATE;
-    } catch {
-      return DEFAULT_STATE;
-    }
-  });
-
-  // Save state to localStorage when it changes
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (error) {
-      console.error('Failed to save state:', error);
-    }
-  }, [state]);
+  const [state, setState] = useState<UnifiedState>(DEFAULT_STATE);
 
   // State update helpers
   const updateState = useCallback((updates: Partial<UnifiedState>) => {
@@ -129,45 +100,6 @@ export const useUnifiedState = () => {
     }));
   }, []);
 
-  // Optimization queue management
-  const setOptimizationQueue = useCallback((updater: (prev: UnifiedState['optimizationQueue']) => UnifiedState['optimizationQueue']) => {
-    setState(prev => ({
-      ...prev,
-      optimizationQueue: updater(prev.optimizationQueue)
-    }));
-  }, []);
-
-  const addToQueue = useCallback((items: OptimizationQueueItem[]) => {
-    setOptimizationQueue(prev => ({
-      ...prev,
-      items: [
-        ...prev.items,
-        ...items.map(item => ({ ...item, timestamp: Date.now() }))
-      ]
-    }));
-  }, [setOptimizationQueue]);
-
-  const removeFromQueue = useCallback((skus: string[]) => {
-    setOptimizationQueue(prev => ({
-      ...prev,
-      items: prev.items.filter(item => !skus.includes(item.sku))
-    }));
-  }, [setOptimizationQueue]);
-
-  const setOptimizationProgress = useCallback((sku: string, value: number) => {
-    setOptimizationQueue(prev => ({
-      ...prev,
-      progress: { ...prev.progress, [sku]: value }
-    }));
-  }, [setOptimizationQueue]);
-
-  const setIsOptimizing = useCallback((isOptimizing: boolean) => {
-    setOptimizationQueue(prev => ({
-      ...prev,
-      isOptimizing
-    }));
-  }, [setOptimizationQueue]);
-
   // Settings management
   const setForecastPeriods = useCallback((periods: number) => {
     updateState({ forecastPeriods: periods });
@@ -175,6 +107,11 @@ export const useUnifiedState = () => {
 
   const setBusinessContext = useCallback((context: BusinessContext) => {
     updateState({ businessContext: context });
+  }, [updateState]);
+
+  // Error management
+  const setAiError = useCallback((error: string | null) => {
+    updateState({ aiError: error });
   }, [updateState]);
 
   return {
@@ -198,18 +135,15 @@ export const useUnifiedState = () => {
     setModels,
     updateModel,
     
-    // Optimization queue management
-    setOptimizationQueue,
-    addToQueue,
-    removeFromQueue,
-    setOptimizationProgress,
-    setIsOptimizing,
-    
     // Settings management
     setForecastPeriods,
     setBusinessContext,
 
+    // Error management
+    setAiError,
+
     // State update helper
-    updateState
+    updateState,
+    storageAvailable: true // Always true since we're not using persistent storage
   };
 };

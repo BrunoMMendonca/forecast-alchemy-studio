@@ -93,45 +93,44 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
           <p className="text-sm text-slate-500">
             Enable the AI-powered CSV Import Wizard to get interactive suggestions and data transformations during CSV import.
           </p>
-        </div>
-      )}
 
-      {/* Large File Processing (sub-toggle, only visible if AI Features and AI CSV Import are enabled) */}
-      {aiEnabled && aiCsvImportEnabled && (
-        <div className="pl-6 border-l-2 border-slate-200 space-y-2">
-          <Label htmlFor="large-file-processing-enabled" className="flex items-center gap-2 text-base">
-            <Sparkles className="h-4 w-4" />
-            Large File Processing
-          </Label>
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="large-file-processing-enabled"
-              checked={largeFileProcessingEnabled}
-              onCheckedChange={setLargeFileProcessingEnabled}
-            />
-            <span className="text-sm text-slate-600">
-              {largeFileProcessingEnabled ? 'Enabled' : 'Disabled'}
-            </span>
-          </div>
-          <p className="text-sm text-slate-500">
-            Enable configuration-based processing for large CSV files that exceed token limits. Uses AI to generate transformation scripts.
-          </p>
-          
-          {/* Large File Threshold Setting */}
-          <div className="flex items-center space-x-2 mt-2">
-            <Label htmlFor="large-file-threshold" className="text-sm">Large File Threshold</Label>
-            <Input
-              id="large-file-threshold"
-              type="number"
-              min={1024 * 100} // 100KB minimum
-              max={1024 * 1024 * 10} // 10MB maximum
-              step={1024 * 100} // 100KB steps
-              value={Math.round(largeFileThreshold / (1024 * 100)) * 100}
-              onChange={e => setLargeFileThreshold(Number(e.target.value) * 1024)}
-              className="w-24"
-            />
-            <span className="text-xs text-slate-500">KB (Files larger than this will use configuration-based processing)</span>
-          </div>
+          {/* Large File Processing (nested, only visible if AI CSV Import is enabled) */}
+          {aiCsvImportEnabled && (
+            <div className="pl-6 border-l border-slate-100 mt-2 space-y-2">
+              <Label htmlFor="large-file-processing-enabled" className="flex items-center gap-2 text-base">
+                <Sparkles className="h-4 w-4" />
+                Large File Processing
+              </Label>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="large-file-processing-enabled"
+                  checked={largeFileProcessingEnabled}
+                  onCheckedChange={setLargeFileProcessingEnabled}
+                />
+                <span className="text-sm text-slate-600">
+                  {largeFileProcessingEnabled ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+              <p className="text-sm text-slate-500">
+                Enable configuration-based processing for large CSV files that exceed token limits. Uses AI to generate transformation scripts.
+              </p>
+              {/* Large File Threshold Setting */}
+              <div className="flex items-center space-x-2 mt-2">
+                <Label htmlFor="large-file-threshold" className="text-sm">Large File Threshold</Label>
+                <Input
+                  id="large-file-threshold"
+                  type="number"
+                  min={1024 * 100} // 100KB minimum
+                  max={1024 * 1024 * 10} // 10MB maximum
+                  step={1024 * 100} // 100KB steps
+                  value={Math.round(largeFileThreshold / (1024 * 100)) * 100}
+                  onChange={e => setLargeFileThreshold(Number(e.target.value) * 1024)}
+                  className="w-24"
+                />
+                <span className="text-xs text-slate-500">KB (Files larger than this will use configuration-based processing)</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

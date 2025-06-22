@@ -59,3 +59,21 @@ export type SKUModelOptimizationState = {
     [modelId: string]: ModelOptimizationState;
   };
 }; 
+
+export interface Job {
+  id: number;
+  userId: string;
+  sku: string;
+  modelId: string;
+  method: 'grid' | 'ai';
+  payload: string; // JSON string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  progress: number;
+  attempts: number;
+  result: string | null; // JSON string
+  error: string | null;
+  priority: number;
+  reason: string;
+  createdAt: string;
+  updatedAt: string;
+} 

@@ -1,149 +1,91 @@
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ForecastModels } from '@/components/forecast/ForecastModels';
-import { ForecastResults } from '@/components/forecast/ForecastResults';
-import { ForecastSummaryStats } from '@/components/forecast/ForecastSummaryStats';
-import { OptimizeForecast } from '@/components/forecast/OptimizeForecast';
-import { TuneForecast } from '@/components/forecast/TuneForecast';
-import { useModelController } from '@/hooks/useModelController';
-import { useToast } from '@/hooks/use-toast';
-import type { SalesData, ForecastResult, ModelConfig } from '@/types/forecast';
-import { BusinessContext } from '@/types/businessContext';
+import React, { useCallback, useState, useMemo } from 'react';
+import { useOutletContext } from 'react-router-dom';
+import { StepContent } from '@/components/StepContent';
+import { toast } from '@/components/ui/use-toast';
+import { useDataHandlers } from '@/hooks/useDataHandlers';
+import { JobSummary } from '@/hooks/useBackendJobStatus';
+import { GlobalSettings } from '@/hooks/useGlobalSettings';
+import { CsvUploadResult } from '@/components/CsvImportWizard';
+import { ForecastResult } from '@/types/forecast';
 
-interface ForecastPageProps {
-  data: SalesData[];
-  businessContext: BusinessContext;
-  aiForecastModelOptimizationEnabled: boolean;
+interface ForecastPageContext {
+  summary: JobSummary;
+  globalSettings: GlobalSettings & { [key: string]: any };
+  currentStep: number;
+  setCurrentStep: (step: number) => void;
+  processedDataInfo: CsvUploadResult | null;
+  setProcessedDataInfo: (result: CsvUploadResult | null) => void;
+  forecastResults: ForecastResult[];
+  setForecastResults: (results: ForecastResult[]) => void;
+  selectedSKU: string | null;
+  setSelectedSKU: (sku: string | null) => void;
+  aiError: string | null;
+  setAiError: (error: string | null) => void;
 }
 
-type TabValue = 'optimize' | 'tune';
-
-export const ForecastPage: React.FC<ForecastPageProps> = ({
-  data,
-  businessContext,
-  aiForecastModelOptimizationEnabled,
-}) => {
-  const { toast } = useToast();
-  const [selectedSKU, setSelectedSKU] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<TabValue>('optimize');
-  const [optimizedModels, setOptimizedModels] = useState<ModelConfig[]>([]);
-  const [results, setResults] = useState<ForecastResult[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
-
+const ForecastPage = () => {
+  const context = useOutletContext<ForecastPageContext>();
+  
+  // Get ALL page state from parent layout
   const {
-    models,
-    toggleModel,
-    updateParameter,
-    resetToManual,
-    handleMethodSelection,
-    generateForecasts,
-    isLoading
-  } = useModelController(
+    currentStep,
+    setCurrentStep,
+    processedDataInfo,
+    setProcessedDataInfo,
+    forecastResults,
+    setForecastResults,
     selectedSKU,
-    data,
-    12,
-    businessContext,
-    (newResults, sku) => {
-      setResults(newResults);
-      setSelectedSKU(sku);
-    }
-  );
+    setSelectedSKU,
+    aiError,
+    setAiError,
+    summary,
+    globalSettings
+  } = context;
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+  // State hooks
+  const [lastImportFileName, setLastImportFileName] = useState<string | null>(null);
+  const [lastImportTime, setLastImportTime] = useState<string | null>(null);
+  
+  const uniqueSKUCount = useMemo(() => {
+    return processedDataInfo?.summary.skuCount ?? 0;
+  }, [processedDataInfo]);
+  
+  // Data handlers now get all setters from context
+  const { handleDataUpload, handleImportDataCleaning } = useDataHandlers({
+    setCurrentStep,
+    setProcessedDataInfo,
+    setForecastResults,
+  });
 
-  const handleOptimizationComplete = (modelId: string, parameters: Record<string, number>, method: string) => {
-    const model = models.find(m => m.id === modelId);
-    if (model) {
-      const updatedModel = {
-        ...model,
-        optimizedParameters: parameters,
-        optimizationMethod: method,
-      };
-      setOptimizedModels(prev => [...prev, updatedModel]);
-      // Update each parameter individually
-      Object.entries(parameters).forEach(([parameter, value]) => {
-        updateParameter(modelId, parameter, value);
-      });
-    }
-  };
-
-  const handleTuneComplete = (modelId: string, predictions: number[]) => {
-    // Update the results with the manually tuned predictions
-    const updatedResults = results.map(result => {
-      if (result.model === modelId) {
-        return {
-          ...result,
-          predictions: result.predictions.map((pred, index) => ({
-            ...pred,
-            value: predictions[index] || pred.value
-          }))
-        };
-      }
-      return result;
+  const handleAIFailure = useCallback((errorMessage: string) => {
+    toast({
+      variant: "destructive",
+      title: "AI Processing Failed",
+      description: `${errorMessage}. Falling back to manual import.`,
     });
-    setResults(updatedResults);
-  };
-
-  const handleGenerateForecast = async (sku: string) => {
-    try {
-      setIsGenerating(true);
-      await generateForecasts();
-      toast({
-        title: "Forecast Generated",
-        description: `Successfully generated forecast for ${sku}`,
-      });
-    } catch (err) {
-      toast({
-        title: "Error",
-        description: "Failed to generate forecast. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
+    setAiError(errorMessage);
+  }, [setAiError]);
+  
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex space-x-4 mb-4">
-        <button
-          className={`px-4 py-2 rounded ${activeTab === 'optimize' ? 'bg-primary text-white' : 'bg-gray-200'}`}
-          onClick={() => setActiveTab('optimize')}
-        >
-          Optimize
-        </button>
-        <button
-          className={`px-4 py-2 rounded ${activeTab === 'tune' ? 'bg-primary text-white' : 'bg-gray-200'}`}
-          onClick={() => setActiveTab('tune')}
-        >
-          Tune
-        </button>
-      </div>
-
-      {activeTab === 'optimize' ? (
-        <OptimizeForecast
-          data={data}
-          selectedSKU={selectedSKU}
-          models={models}
-          businessContext={businessContext}
-          aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
-          onSKUChange={setSelectedSKU}
-          onUpdateParameter={updateParameter}
-        />
-      ) : (
-        <TuneForecast
-          results={results}
-          selectedSKU={selectedSKU}
-          onTuneComplete={handleTuneComplete}
-        />
-      )}
-    </div>
+      <StepContent
+        currentStep={currentStep}
+        processedDataInfo={processedDataInfo}
+        forecastResults={forecastResults}
+        selectedSKUForResults={selectedSKU}
+        queueSize={summary?.total ?? 0}
+        forecastPeriods={globalSettings?.forecastPeriods ?? 12}
+        aiForecastModelOptimizationEnabled={globalSettings?.aiForecastModelOptimizationEnabled ?? false}
+        onDataUpload={handleDataUpload}
+        onDataCleaning={() => {}} // This needs to be re-wired to a new data cleaning flow
+        onImportDataCleaning={handleImportDataCleaning}
+        onForecastGeneration={setForecastResults}
+        onSKUChange={setSelectedSKU}
+        onStepChange={setCurrentStep}
+        onAIFailure={handleAIFailure}
+        lastImportFileName={lastImportFileName}
+        lastImportTime={lastImportTime}
+      />
   );
-}; 
+};
+
+export default ForecastPage; 

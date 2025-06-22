@@ -2,12 +2,18 @@
 
 ## 1. Main Steps
 
-### Step 1: Upload (Finished/Adjustments allowed)
-- User uploads sales data via CSV.
-- An import wizard allows the user to transpose their CSV, define date formats, and map columns to "aggregatable fields" (used later for grouping/analysis).
+### Step 1: Upload & AI Transform (Finished/Adjustments allowed)
+- User uploads sales data via the `CsvImportWizard.tsx` component.
+- The wizard provides two main paths for data processing:
+  - **AI-Powered Transformation**: The user is prompted to let the AI automatically clean, pivot, and prepare the data. This is the recommended path.
+    - **Small files** are transformed directly via a single API call.
+    - **Large files** trigger a more robust two-step process where the AI first generates a transformation `config` from a sample, which is then applied to the full dataset on the backend. This avoids timeouts and performance issues.
+  - **Manual Import**: The user can opt to manually transpose the data and map columns.
+- The output of this step is a clean, wide-format dataset ready for the subsequent steps.
+- For a deep technical dive, see `Upload Wizard & Data Transformation.md`.
 
 ### Step 2: Clean and Prepare (Finished/Adjustments allowed)
-- User reviews and optionally edits/cleans data (outlier detection, manual edits).
+- User reviews the transformed data and can optionally perform further cleaning (outlier detection, manual edits).
 - Import/export of cleaning data is supported via "Import Cleaning Data" and "Export Cleaning Data" buttons.
 - User can freely navigate between "Clean and Prepare" and other pages for flexibility.
 
@@ -29,7 +35,7 @@
   - User can see which SKUs/models are optimized (and by which method), queued, or in progress.
   - User can manually adjust parameters (Manual mode), but cannot trigger optimization directly.
   - The user can pick the best model for each SKU. Automatic model selection happens, but the user can override it.
-  - **Persistence:** All results, selections, and queue state are persisted to localStorage and restored on reload.
+  - **Persistence:** All results, selections, and queue state are persisted to localStorage and restored on reload. **(Note: This is planned for migration to a full backend database with user accounts for true persistence.)**
 
 - **Tune (In Development):**
   - With a model selected for each SKU, a "final" single forecast per SKU is shown alongside cleaned historical data.
@@ -58,12 +64,12 @@ If the workflow does not behave as expected, check:
 
 | Step         | Trigger/Event                | System Action                        | Persistence | User Control |
 |--------------|------------------------------|--------------------------------------|-------------|--------------|
-| Upload       | CSV upload                   | Queue all optimizations (AI/Grid)    | Yes         | Yes          |
-| Clean/Prepare| Data edit/clean              | Queue optimizations for affected SKU | Yes         | Yes          |
-| Explore      | Navigation                   | No optimization, just view           | Yes         | Yes          |
-| Forecast     | Data/settings change         | Queue optimizations as needed        | Yes         | Yes          |
-| Tune         | Manual forecast adjustment   | No queue, direct user edit           | Yes         | Yes          |
-| Settings     | Change AI/periods            | Queue/clear jobs as needed           | Yes         | Yes          |
+| Upload       | CSV upload                   | Initiate AI/manual import wizard     | Backend DB (Planned) | Yes          |
+| Clean/Prepare| Data edit/clean              | Queue optimizations for affected SKU | Backend DB (Planned) | Yes          |
+| Explore      | Navigation                   | No optimization, just view           | Backend DB (Planned) | Yes          |
+| Forecast     | Data/settings change         | Queue optimizations as needed        | Backend DB (Planned) | Yes          |
+| Tune         | Manual forecast adjustment   | No queue, direct user edit           | Backend DB (Planned) | Yes          |
+| Settings     | Change AI/periods            | Queue/clear jobs as needed           | Backend DB (Planned) | Yes          |
 
 ---
 
@@ -71,6 +77,7 @@ If the workflow does not behave as expected, check:
 - `Optimization reasons.md`
 - `Queue Processing & Job Management.md`
 - `Forecast Methods & Parameter Persisten.md`
+- `Upload Wizard & Data Transformation.md`
 
 
 

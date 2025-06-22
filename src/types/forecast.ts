@@ -20,13 +20,15 @@ export interface ModelConfig {
   isWinner?: boolean;
 }
 
-export interface SalesData {
+export interface NormalizedSalesData {
   'Material Code': string;
   'Description'?: string;
   'Date': string;
   'Sales': number;
   [key: string]: string | number | undefined;
 }
+
+export interface SalesData extends NormalizedSalesData {}
 
 export interface ForecastPrediction {
   date: string;

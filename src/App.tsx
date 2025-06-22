@@ -5,7 +5,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import Index from '@/pages/Index';
+import WorkflowPage from '@/pages/WorkflowPage';
 import NotFound from '@/pages/NotFound';
+import { MainLayout } from '@/components/MainLayout';
 import { OptimizationCacheProvider } from '@/context/OptimizationCacheContext';
 
 const queryClient = new QueryClient();
@@ -19,6 +21,9 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route element={<MainLayout />}>
+              <Route path="forecast" element={<WorkflowPage />} />
+            </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

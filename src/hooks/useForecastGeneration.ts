@@ -1,18 +1,20 @@
-
 import { useCallback, useRef, useMemo } from 'react';
-import { SalesData, ForecastResult } from '@/pages/Index';
+import { ForecastResult } from '@/pages/Index';
+import { SalesData } from '@/types/forecast';
 import { ModelConfig } from '@/types/forecast';
-import { generateForecastsForSKU } from '@/utils/forecastGenerator';
 import { useToast } from '@/hooks/use-toast';
+import { useWorkerManager } from './useWorkerManager';
 
 export const useForecastGeneration = (
   selectedSKU: string,
   data: SalesData[],
   models: ModelConfig[],
   forecastPeriods: number,
-  onForecastGeneration?: (results: ForecastResult[], selectedSKU: string) => void
+  onForecastGeneration?: (results: ForecastResult[], selectedSKU: string) => void,
+  aiForecastModelOptimizationEnabled: boolean = true
 ) => {
   const { toast } = useToast();
+  const { runForecast, isWorking, progress, progressMessage } = useWorkerManager();
   const forecastGenerationInProgressRef = useRef<boolean>(false);
   const lastForecastGenerationHashRef = useRef<string>('');
 
@@ -31,8 +33,14 @@ export const useForecastGeneration = (
   }, [models]);
 
   const generateForecasts = useCallback(async () => {
+    // DISABLED: Frontend forecast generation is now handled by the backend
+    // This was causing 6GB+ RAM usage and browser freezing with large files
+    console.log('Frontend forecast generation disabled - use backend system instead');
+    return;
+    
+    /*
     if (!selectedSKU || models.length === 0) return;
-    if (forecastGenerationInProgressRef.current) {
+    if (forecastGenerationInProgressRef.current || isWorking) {
       return;
     }
 
@@ -48,12 +56,13 @@ export const useForecastGeneration = (
       forecastGenerationInProgressRef.current = true;
       lastForecastGenerationHashRef.current = modelsHash;
       
-      const results = await generateForecastsForSKU(
+      const results = await runForecast({
         selectedSKU,
         data,
         models,
-        forecastPeriods
-      );
+        forecastPeriods,
+        aiForecastModelOptimizationEnabled
+      });
       
       if (onForecastGeneration) {
         onForecastGeneration(results, selectedSKU);
@@ -68,11 +77,15 @@ export const useForecastGeneration = (
     } finally {
       forecastGenerationInProgressRef.current = false;
     }
-  }, [selectedSKU, data, modelsHash, forecastPeriods, onForecastGeneration, toast]);
+    */
+  }, [selectedSKU, data, modelsHash, forecastPeriods, onForecastGeneration, toast, runForecast, isWorking, aiForecastModelOptimizationEnabled]);
 
   return {
     modelsHash,
     generateForecasts,
-    lastForecastGenerationHashRef
+    lastForecastGenerationHashRef,
+    isGenerating: isWorking,
+    generationProgress: progress,
+    generationProgressMessage: progressMessage
   };
 };
