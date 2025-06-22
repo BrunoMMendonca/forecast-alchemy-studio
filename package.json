@@ -9,7 +9,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "start:api": "node server.js api",
-    "start:worker": "node server.js worker"
+    "start:worker": "node src/backend/worker.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

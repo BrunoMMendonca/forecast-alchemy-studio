@@ -29,65 +29,58 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 console.log('Busy timeout set to 30 seconds');
             }
         });
-        
-        db.serialize(() => {
-            // Organizations table
-            db.run(`CREATE TABLE IF NOT EXISTS organizations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-            )`);
-
-            // Users table
-            db.run(`CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                organizationId INTEGER,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'viewer',
-                createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (organizationId) REFERENCES organizations (id)
-            )`);
-
-            // Jobs table
-        db.run(`CREATE TABLE IF NOT EXISTS jobs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                organizationId INTEGER,
-            userId TEXT NOT NULL,
-            sku TEXT,
-            modelId TEXT,
-                method TEXT DEFAULT 'grid',
-            payload TEXT,
-            status TEXT NOT NULL DEFAULT 'pending',
-            progress INTEGER DEFAULT 0,
-            result TEXT,
-            error TEXT,
-            reason TEXT,
-                priority INTEGER DEFAULT 1,
-            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (organizationId) REFERENCES organizations (id)
-            )`);
-
-            // Migration: Add priority column if it doesn't exist
-            db.run(`ALTER TABLE jobs ADD COLUMN priority INTEGER DEFAULT 1`, (err) => {
-                if (err && !err.message.includes('duplicate column name')) {
-                    console.error('Error adding priority column:', err);
-                } else if (!err) {
-                    console.log('Successfully added priority column to jobs table');
-                }
-            });
-
-            // Migration: Add method column if it doesn't exist
-            db.run(`ALTER TABLE jobs ADD COLUMN method TEXT DEFAULT 'grid'`, (err) => {
-                if (err && !err.message.includes('duplicate column name')) {
-                    console.error('Error adding method column:', err);
-                } else if (!err) {
-                    console.log('Successfully added method column to jobs table');
-                }
-            });
-        });
     }
 });
 
-export default db;
+const dbReady = new Promise((resolve, reject) => {
+    db.serialize(() => {
+        // Organizations table
+        db.run(`CREATE TABLE IF NOT EXISTS organizations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`, (err) => { if (err) reject(err); });
+
+        // Users table
+        db.run(`CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organizationId INTEGER,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'viewer',
+            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (organizationId) REFERENCES organizations (id)
+        )`, (err) => { if (err) reject(err); });
+
+        // Jobs table
+        db.run(`CREATE TABLE IF NOT EXISTS jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organizationId INTEGER,
+            userId TEXT,
+            sku TEXT,
+            modelId TEXT,
+            method TEXT DEFAULT 'grid',
+            payload TEXT,
+            reason TEXT,
+            status TEXT NOT NULL DEFAULT 'pending', -- pending, running, completed, failed
+            progress INTEGER DEFAULT 0,
+            result TEXT,
+            error TEXT,
+            priority INTEGER DEFAULT 1,
+            data TEXT, -- Storing the full job data payload
+            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            startedAt DATETIME,
+            completedAt DATETIME,
+            FOREIGN KEY (organizationId) REFERENCES organizations (id)
+        )`, (err) => {
+            if (err) {
+                reject(err);
+            } else {
+                console.log('Database schema is ready.');
+                resolve();
+            }
+        });
+    });
+});
+
+export { db, dbReady };

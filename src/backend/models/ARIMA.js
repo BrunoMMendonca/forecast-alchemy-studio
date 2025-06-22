@@ -1,5 +1,5 @@
 import { BaseModel } from './BaseModel.js';
-import ARIMAPromise from 'arima/async';
+import ARIMAPromise from 'arima/async.js';
 
 // ARIMA model wrapper
 export class ARIMAModel extends BaseModel {

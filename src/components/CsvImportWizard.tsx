@@ -1075,7 +1075,7 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
                 <tbody className="bg-white divide-y divide-gray-200">
                   {(aiResult && Array.isArray(aiResult) ? aiResult.slice(1, PREVIEW_ROW_LIMIT + 1) : []).map((row, i) => (
                     <tr key={i}>
-                      {(row || []).map((cell, j) => (
+                      {(Array.isArray(row) ? row : []).map((cell, j) => (
                         <td key={j} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cell}</td>
                       ))}
                     </tr>
@@ -1164,14 +1164,17 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
               <tbody>
                 {previewRows.map((row, i) => (
                   <tr key={i}>
-                            {row.map((cell, j) => (
-                              <td 
-                                key={j} 
-                                className={`px-2 py-1 border-b whitespace-nowrap ${!isNaN(cell) && cell !== '' ? 'text-right' : ''}`}
-                              >
-                                {cell}
-                              </td>
-                            ))}
+                    {previewHeader.map((header, j) => {
+                      const cell = row[header];
+                      return (
+                        <td
+                          key={j}
+                          className={`px-2 py-1 border-b whitespace-nowrap ${!isNaN(cell) && cell !== '' ? 'text-right' : ''}`}
+                        >
+                          {cell}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
@@ -1330,7 +1333,10 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
               <tbody>
               {(Array.isArray(mappingRows) ? mappingRows : []).slice(0, mappingRowLimit).map((row, i) => (
                   <tr key={i}>
-                    {(Array.isArray(row) ? row : []).map((cell, j) => <td key={j} className="px-2 py-1 border-b">{cell}</td>)}
+                    {mappingHeader.map((header, j) => {
+                       const cell = row[header];
+                       return <td key={j} className="px-2 py-1 border-b">{cell}</td>;
+                    })}
                   </tr>
                 ))}
               </tbody>

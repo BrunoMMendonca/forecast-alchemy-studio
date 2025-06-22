@@ -5,9 +5,9 @@ import path from 'path';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { fileURLToPath } from 'url';
-import db from './db.js';
+import { db } from './db.js';
 import { callGrokAPI } from './grokService.js';
-import { applyTransformations, detectColumnRoles, normalizeAndPivotData, findField } from './utils.js';
+import { applyTransformations, detectColumnRoles, normalizeAndPivotData, findField, autoDetectSeparator, transposeData } from './utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -125,7 +125,10 @@ Your response must be a single JSON object with this exact structure:
       columns = Object.keys(transformedData[0]);
     }
     
-    const columnRoles = detectColumnRoles(columns);
+    // Get column roles as objects first
+    const columnRolesObjects = detectColumnRoles(columns);
+    // Extract just the role strings for the frontend
+    const columnRoles = columnRolesObjects.map(obj => obj.role);
 
     res.json({ 
       transformedData,
@@ -218,7 +221,10 @@ router.post('/apply-config', async (req, res) => {
     const data = parsed.data;
 
     const { data: transformedData, columns } = applyTransformations(data, config);
-    const columnRoles = detectColumnRoles(columns);
+    // Get column roles as objects first
+    const columnRolesObjects = detectColumnRoles(columns);
+    // Extract just the role strings for the frontend
+    const columnRoles = columnRolesObjects.map(obj => obj.role);
 
     const fileName = `processed-data-${Date.now()}.json`;
     const filePath = path.join(UPLOADS_DIR, fileName);
@@ -399,21 +405,80 @@ router.post('/process-manual-import', async (req, res) => {
 router.post('/generate-preview', (req, res) => {
   try {
     const { csvData, separator, transposed } = req.body;
+    console.log('[LOG] /generate-preview called.');
+    console.log(`[LOG] csvData length: ${csvData.length}, separator: ${separator}, transposed: ${transposed}`);
+    
     const detectedSeparator = separator || autoDetectSeparator(csvData.split('\n')[0]);
-    const parsed = Papa.parse(csvData, { 
-      header: true, 
+    console.log(`[LOG] Detected separator: "${detectedSeparator}"`);
+    
+    const firstParse = Papa.parse(csvData, {
       skipEmptyLines: true,
       delimiter: detectedSeparator,
-      transformHeader: header => header.trim()
+      preview: 1
     });
-    let data = parsed.data;
-    let headers = parsed.meta.fields;
+
+    const rawHeaders = firstParse.data[0] || [];
+    console.log('[LOG] Raw headers:', rawHeaders);
+    
+    const headerMapping = [];
+    rawHeaders.forEach((h, i) => {
+      if (h && h.trim() !== '') {
+        headerMapping.push({ originalIndex: i, name: h.trim() });
+      }
+    });
+    console.log('[LOG] Header mapping (non-empty):', headerMapping);
+
+    const counts = {};
+    const finalHeaders = headerMapping.map(h => {
+      let newName = h.name;
+      if (counts[newName]) {
+        counts[newName]++;
+        newName = `${newName}_${counts[newName]}`;
+      } else {
+        counts[newName] = 1;
+      }
+      return newName;
+    });
+    console.log('[LOG] Final unique headers:', finalHeaders);
+    
+    const parsed = Papa.parse(csvData, { 
+      skipEmptyLines: true,
+      delimiter: detectedSeparator,
+      header: false, // Headers are handled manually
+    });
+
+    const dataRows = parsed.data.slice(1);
+    console.log(`[LOG] Found ${dataRows.length} data rows.`);
+
+    let data = dataRows.map(row => {
+      const newRow = {};
+      headerMapping.forEach((h, i) => {
+        if(row && typeof row[h.originalIndex] !== 'undefined') {
+          newRow[finalHeaders[i]] = row[h.originalIndex];
+        }
+      });
+      return newRow;
+    }).filter(row => Object.keys(row).length > 0);
+    console.log(`[LOG] Mapped data to objects. Total objects: ${data.length}. Sample:`, data.slice(0, 2));
+    
+    let headers = finalHeaders;
+
     if (transposed) {
-      const transposedResult = transposeData(data, headers); // You'll need to define transposeData
+      console.log('[LOG] Transposing data...');
+      const transposedResult = transposeData(data, headers);
       data = transposedResult.data;
       headers = transposedResult.headers;
+      console.log(`[LOG] Transposed. New headers:`, headers.slice(0, 5));
+      console.log(`[LOG] Transposed. New data sample:`, data.slice(0, 2));
     }
-    const columnRoles = detectColumnRoles(headers);
+    
+    // Get column roles as objects first
+    const columnRolesObjects = detectColumnRoles(headers);
+    // Extract just the role strings for the frontend
+    const columnRoles = columnRolesObjects.map(obj => obj.role);
+
+    console.log(`[LOG] Sending response with ${headers.length} headers and ${data.slice(0, 100).length} previewRows.`);
+    console.log(`[LOG] Column roles:`, columnRoles);
     res.json({
       headers: headers.slice(0, 50),
       previewRows: data.slice(0, 100),

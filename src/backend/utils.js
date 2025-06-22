@@ -25,15 +25,29 @@ function isLikelyDateColumn(header, allHeaders) {
 
 function detectColumnRole(header, index, allHeaders) {
   const normalizedHeader = header.toLowerCase().trim();
-  if (/material|sku|product.?code|item.?code|part.?number|product.?id|item.?id|part.?id/i.test(normalizedHeader) || /^[a-z]{2,4}\d{3,}$/i.test(normalizedHeader) || /^[a-z]+\d+$/i.test(normalizedHeader)) {
+  
+  // More specific Material Code detection
+  if (/material|sku|product.?code|item.?code|part.?number|product.?id|item.?id|part.?id/i.test(normalizedHeader)) {
       return 'Material Code';
   }
+  
+  // More restrictive pattern for alphanumeric codes that look like SKUs
+  // Only match if it's a short code (2-6 chars) followed by numbers, or specific patterns
+  if (/^[a-z]{2,6}\d{2,}$/i.test(normalizedHeader) && 
+      !/date|year|month|day|week|quarter|period|time/i.test(normalizedHeader)) {
+      return 'Material Code';
+  }
+  
+  // Description detection
   if (/description|name|product.?name|item.?name|title|product.?title/i.test(normalizedHeader) || /^desc/i.test(normalizedHeader)) {
       return 'Description';
   }
+  
+  // Date detection
   if (isDateString(header) || isLikelyDateColumn(header, allHeaders)) {
       return 'Date';
   }
+  
   return header; // Default to header name
 }
 
@@ -389,6 +403,54 @@ function normalizeAndPivotData(data, mappings, dateRange, dateFormat) {
   return { data: finalData, columns: finalColumns };
 }
 
+// Auto-detect CSV separator from the first line
+function autoDetectSeparator(firstLine) {
+  if (!firstLine) return ',';
+  
+  const separators = [',', ';', '\t', '|'];
+  const counts = {};
+  
+  for (const sep of separators) {
+    counts[sep] = (firstLine.match(new RegExp(`\\${sep}`, 'g')) || []).length;
+  }
+  
+  // Return the separator with the highest count, defaulting to comma
+  const maxCount = Math.max(...Object.values(counts));
+  const detectedSep = Object.keys(counts).find(sep => counts[sep] === maxCount);
+  
+  return detectedSep || ',';
+}
+
+// Transpose data (swap rows and columns)
+function transposeData(data, headers) {
+  if (!data || data.length === 0 || !headers || headers.length === 0) {
+    return { data: [], headers: [] };
+  }
+
+  // The first column's values become the new headers.
+  const newHeaders = [headers[0], ...data.map(row => row[headers[0]])];
+
+  const transposedData = [];
+  // Start from the second original header, as the first is the new header column.
+  for (let i = 1; i < headers.length; i++) {
+    const header = headers[i];
+    const newRow = {
+      [newHeaders[0]]: header, // The new first column is the original header
+    };
+    // Map original rows to new columns
+    data.forEach((row, rowIndex) => {
+      const newHeader = newHeaders[rowIndex + 1]; // +1 to skip the header column
+      newRow[newHeader] = row[header];
+    });
+    transposedData.push(newRow);
+  }
+
+  return {
+    data: transposedData,
+    headers: newHeaders
+  };
+}
+
 export {
   isDateString,
   isLikelyDateColumn,
@@ -398,5 +460,7 @@ export {
   findField,
   isDate,
   pivotTable,
-  normalizeAndPivotData
+  normalizeAndPivotData,
+  autoDetectSeparator,
+  transposeData
 };
