@@ -24,6 +24,7 @@
 3.  **Job Processing (Backend Worker)**:
     - A separate worker process, started by running `node server.js worker`, continuously polls the database for `pending` jobs (`runWorker()` function).
     - When a job is found, the worker updates its status to `running` and begins executing the optimization logic.
+    - It uses the `GridOptimizer` and `ModelFactory` to run a comprehensive, real-world analysis using all available forecasting models (including ARIMA, Holt-Winters, etc.). This is not a simulation.
     - It periodically updates the job's `progress` in the database.
     - Upon completion, the worker updates the job's status to `completed` and stores the final result as a JSON string in the `result` column. If an error occurs, the status is set to `failed`.
 
@@ -47,7 +48,7 @@
 | ------------------------ | ------------------------------------ | --------------------------- | ------------------------------------------------------------ |
 | **Job Creation (Client)**| `src/hooks/useDataHandlers.ts`       | `handleDataUpload`          | Submits job requests to the backend API.                     |
 | **Job Ingestion (Server)**| `server.js`         | `app.post('/api/jobs')`     | Creates job records in the SQLite database.                  |
-| **Job Processing (Server)**| `server.js`         | `runWorker` / `processJob`  | Fetches and executes pending jobs from the database.         |
+| **Job Processing (Server)**| `src/backend/worker.js`         | `processJob`  | Fetches and executes pending jobs using the `GridOptimizer` and `ModelFactory`.         |
 | **Status Polling (Client)**| `src/hooks/useBackendJobStatus.ts`   | `useBackendJobStatus`       | Periodically fetches job status from the backend.            |
 | **UI Display**           | `src/components/OptimizationQueuePopup.tsx` | -                   | Renders the job queue and progress to the user.              |
 | **UI State Management**  | `src/pages/ForecastPage.tsx`         | -                           | Acts as the single source of truth for all job-related UI.   |
@@ -69,5 +70,5 @@ If queue processing fails or behaves unexpectedly, check the following:
 ## 5. Gotchas & Historical Context
 
 - **Initial Architecture**: The application's first version of a queue (`useOptimizationQueue.ts`) ran on the browser's main thread, which caused the UI to freeze during long optimizations. This file and pattern are now obsolete.
-- **The Backend Shift**: The architecture was migrated to a full backend job queue to solve the UI freezing issue and provide a more scalable, persistent solution. The current implementation is robust and the "completed" state of this migration.
+- **The Backend Shift**: The architecture was migrated to a full backend job queue to solve the UI freezing issue and provide a more scalable, persistent solution. The current implementation uses the real, modular forecasting engine and is not a simulation.
 - **UI State Synchronization**: A critical lesson learned was to have a single component (`ForecastPage`) fetch the backend status and pass it down as props. Independent fetching in child components led to race conditions and UI bugs. This is documented further in `UI State Management & Data Flow.md`. 

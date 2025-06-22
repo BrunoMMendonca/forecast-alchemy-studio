@@ -28,10 +28,10 @@
     - Relevant settings changes (see `Optimization reasons.md`)
   - Only SKUs that have changed are re-optimized (minimizing unnecessary work and API calls).
   - **Queue System**: All optimizations are managed via a global queue, ensuring jobs are processed sequentially and according to current settings (see `Queue Processing & Job Management.md`).
-  - **Methods:**
-    - **Grid:** Try parameter combinations, pick the best for each model/SKU.
-    - **AI:** Use GROK-3 to review grid results and propose improvements (if enabled).
-    - **Manual:** User can adjust parameters per model/SKU (defaults to grid results). Manual mode does not generate background optimizations.
+  - **Models & Methods:** The backend now runs a full suite of professional-grade forecasting models, including `Simple Exponential Smoothing`, `Holt-Winters`, `SARIMA`, and more.
+    - **Grid Search:** The system runs a comprehensive grid search across all applicable models and their parameter combinations to find the best-fitting forecast for each SKU.
+    - **AI-Enhanced Optimization:** If enabled, the system can use AI to intelligently refine the search for optimal parameters.
+    - **Manual Mode:** Users can always manually override parameters for any model.
   - User can see which SKUs/models are optimized (and by which method), queued, or in progress.
   - User can manually adjust parameters (Manual mode), but cannot trigger optimization directly.
   - The user can pick the best model for each SKU. Automatic model selection happens, but the user can override it.

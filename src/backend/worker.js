@@ -1,242 +1,307 @@
-import db from './db.js';
+import { GridOptimizer } from './optimization/GridOptimizer.js';
+import { modelFactory } from './models/index.js';
 
-let concurrentJobs = 0;
-let processing = false;
-const MAX_CONCURRENT_JOBS = 1;
+class OptimizationWorker {
+  constructor() {
+    this.gridOptimizer = new GridOptimizer();
+    this.isRunning = false;
+    this.currentJob = null;
+  }
 
-// =================================================================================================
-// MAIN QUEUE PROCESSING LOGIC
-// =================================================================================================
-
-async function processQueue() {
-  if (processing || concurrentJobs >= MAX_CONCURRENT_JOBS) {
-        return;
-      }
-  processing = true;
-
-  try {
-    const jobs = await dbAllAsync('SELECT * FROM jobs WHERE status = \'pending\' ORDER BY method DESC, priority ASC, sku ASC, createdAt ASC LIMIT ?', [MAX_CONCURRENT_JOBS - concurrentJobs]);
-    
-    if (jobs.length === 0) {
-      processing = false;
-      return;
+  // Process optimization job
+  async processJob(jobData) {
+    if (this.isRunning) {
+      throw new Error('Worker is already processing a job');
     }
 
-    const jobPromises = jobs.map(job => {
-      return new Promise(async (resolve, reject) => {
-        try {
-          console.log(`[Queue] Starting job ${job.id} for SKU ${job.sku} with model ${job.modelId} (priority: ${job.priority}, method: ${job.method})`);
-          concurrentJobs++;
-
-          await dbRunAsync('UPDATE jobs SET status = \'running\' WHERE id = ?', [job.id]);
-          
-          await runOptimizationWithProgress(job.id, { id: job.modelId }, JSON.parse(job.payload).skuData, job.sku, job.method, {});
-
-          concurrentJobs--;
-          resolve();
-        } catch (error) {
-          console.error(`[Queue] Error processing job ${job.id}:`, error);
-          try {
-            await dbRunAsync('UPDATE jobs SET status = \'failed\', error = ? WHERE id = ?', [error.message, job.id]);
-          } catch (updateError) {
-            console.error(`[Queue] Failed to update job ${job.id} status:`, updateError);
-          }
-          concurrentJobs--;
-          reject(error);
-        }
-      });
-    });
+    this.isRunning = true;
+    this.currentJob = jobData;
 
     try {
-      await Promise.all(jobPromises);
+      console.log('🔄 Starting real grid optimization...');
+      
+      const { data, modelTypes, optimizationType } = jobData;
+      
+      if (!data || data.length === 0) {
+        throw new Error('No data provided for optimization');
+      }
+
+      console.log(`📊 Processing ${data.length} data points`);
+      console.log(`🎯 Model types: ${modelTypes ? modelTypes.join(', ') : 'All available'}`);
+
+      let results;
+
+      if (optimizationType === 'grid') {
+        results = await this.runGridOptimization(data, modelTypes);
+      } else if (optimizationType === 'ai') {
+        results = await this.runAIOptimization(data, modelTypes);
+      } else {
+        throw new Error(`Unknown optimization type: ${optimizationType}`);
+      }
+
+      console.log('✅ Optimization completed successfully');
+      
+      return {
+        success: true,
+        results: results,
+        jobId: jobData.jobId,
+        timestamp: new Date().toISOString()
+      };
+
     } catch (error) {
-      console.error('[Queue] One or more jobs failed to process.', error);
+      console.error('❌ Optimization failed:', error.message);
+      
+      return {
+        success: false,
+        error: error.message,
+        jobId: jobData.jobId,
+        timestamp: new Date().toISOString()
+      };
+    } finally {
+      this.isRunning = false;
+      this.currentJob = null;
     }
-
-    processing = false;
-    // Immediately check for more jobs
-    setTimeout(processQueue, 1000);
-  } catch (error) {
-    console.error('[Queue] Error fetching jobs:', error);
-    processing = false;
   }
-}
 
-// Async database helper functions to prevent SQLite busy errors
-function dbAllAsync(sql, params) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) {
-        console.error('DB Error:', err);
-        reject(err);
-      }
-      resolve(rows || []);
-    });
-  });
-}
-
-function dbRunAsync(sql, params) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function(err) {
-      if (err) {
-        console.error('DB Error:', err);
-        reject(err);
-      }
-      resolve(this);
-    });
-  });
-}
-
-function dbGetAsync(sql, params) {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) {
-        console.error('DB Error:', err);
-        reject(err);
-      }
-      resolve(row);
-    });
-  });
-}
-
-// Real optimization function with progress updates
-async function runOptimizationWithProgress(jobId, modelConfig, skuData, sku, method, businessContext) {
-  console.log(`Starting ${method} optimization for SKU ${sku} with model ${modelConfig.id}`);
-  
-  // Update progress to 10% - starting
-  await dbRunAsync("UPDATE jobs SET progress = 10 WHERE id = ?", [jobId]);
-  
-  try {
-    // Simulate the optimization process with realistic progress updates
-    const optimizationSteps = [
-      { progress: 20, message: 'Preparing data...' },
-      { progress: 40, message: 'Running parameter search...' },
-      { progress: 60, message: 'Evaluating models...' },
-      { progress: 80, message: 'Selecting best parameters...' },
-      { progress: 90, message: 'Finalizing results...' }
-    ];
-
-    for (const step of optimizationSteps) {
-      await new Promise(resolve => setTimeout(resolve, 500)); // Simulate work
-      await dbRunAsync("UPDATE jobs SET progress = ? WHERE id = ?", [step.progress, jobId]);
-      console.log(`Job ${jobId}: ${step.message}`);
-    }
-
-    // Generate realistic optimization results based on the method
-    const baseAccuracy = 75 + Math.random() * 20; // 75-95% accuracy
-    const confidence = 70 + Math.random() * 25; // 70-95% confidence
+  // Run real grid search optimization
+  async runGridOptimization(data, modelTypes = null) {
+    console.log('🔍 Running grid search optimization...');
     
-    let result;
-    if (method === 'ai') {
-      result = {
-        sku: sku,
-        model: modelConfig.id,
-        method: 'ai',
-        parameters: {
-          alpha: 0.3 + Math.random() * 0.4,
-          beta: 0.2 + Math.random() * 0.5,
-          gamma: 0.4 + Math.random() * 0.3
-        },
-        accuracy: baseAccuracy,
-        confidence: confidence,
-        reasoning: 'AI optimization selected parameters based on historical patterns and business context.',
-        factors: {
-          stability: 80 + Math.random() * 15,
-          interpretability: 70 + Math.random() * 20,
-          complexity: 30 + Math.random() * 40,
-          businessImpact: 'High confidence in forecast accuracy with moderate complexity'
-        },
-        expectedAccuracy: baseAccuracy + (Math.random() * 5 - 2.5),
-        isWinner: true
-      };
-    } else {
-      // Grid search method
-      result = {
-        sku: sku,
-        model: modelConfig.id,
-        method: 'grid',
-        parameters: {
-          alpha: 0.4 + Math.random() * 0.3,
-          beta: 0.3 + Math.random() * 0.4,
-          gamma: 0.3 + Math.random() * 0.4
-        },
-        accuracy: baseAccuracy - 2, // Grid typically slightly lower than AI
-        confidence: confidence - 5,
-        reasoning: 'Grid search optimization found optimal parameters through systematic parameter space exploration.',
-        factors: {
-          stability: 85 + Math.random() * 10,
-          interpretability: 85 + Math.random() * 10,
-          complexity: 20 + Math.random() * 30,
-          businessImpact: 'Reliable forecast with high interpretability'
-        },
-        expectedAccuracy: baseAccuracy - 2 + (Math.random() * 5 - 2.5),
-        isWinner: false
-      };
-    }
+    const progressCallback = (progress) => {
+      console.log(`📈 Progress: ${progress.percentage}% (${progress.completed}/${progress.total})`);
+      console.log(`🎯 Current: ${progress.currentModel} with params:`, progress.currentParameters);
+      if (progress.latestResult.success) {
+        console.log(`✅ Accuracy: ${progress.latestResult.accuracy.toFixed(2)}%`);
+      } else {
+        console.log(`❌ Failed: ${progress.latestResult.error}`);
+      }
+    };
 
-    // Add some randomness to make results more realistic
-    result.parameters = Object.fromEntries(
-      Object.entries(result.parameters).map(([key, value]) => [key, Math.round(value * 100) / 100])
+    const results = await this.gridOptimizer.runGridSearch(
+      data, 
+      modelTypes, 
+      progressCallback
     );
-    result.accuracy = Math.round(result.accuracy * 10) / 10;
-    result.confidence = Math.round(result.confidence * 10) / 10;
-    result.expectedAccuracy = Math.round(result.expectedAccuracy * 10) / 10;
 
-    // Save the result to the database
-    await dbRunAsync("UPDATE jobs SET status = 'completed', progress = 100, result = ?, updatedAt = datetime('now') WHERE id = ?", [JSON.stringify(result), jobId]);
+    console.log('📊 Grid search results:');
+    console.log(`- Total models tested: ${results.summary.totalModels}`);
+    console.log(`- Successful models: ${results.summary.successfulModels}`);
+    console.log(`- Best accuracy: ${results.bestResult.accuracy.toFixed(2)}%`);
+    console.log(`- Average accuracy: ${results.summary.averageAccuracy.toFixed(2)}%`);
+
+    return {
+      type: 'grid',
+      results: results.results,
+      bestResult: results.bestResult,
+      summary: results.summary,
+      topResults: this.gridOptimizer.getTopResults(results.results, 5),
+      modelBreakdown: this.getModelBreakdown(results.results)
+    };
+  }
+
+  // Run AI optimization (enhanced grid search with intelligent parameter selection)
+  async runAIOptimization(data, modelTypes = null) {
+    console.log('🤖 Running AI-enhanced optimization...');
     
-    console.log(`Job ${jobId}: Optimization completed successfully`);
-    return result;
-  } catch (error) {
-    console.error(`Optimization failed for job ${jobId}:`, error);
-    // Update job status to failed
-    try {
-      await dbRunAsync("UPDATE jobs SET status = 'failed', error = ?, updatedAt = datetime('now') WHERE id = ?", [error.message, jobId]);
-    } catch (updateError) {
-      console.error(`Failed to update job ${jobId} status:`, updateError);
+    // First run a quick grid search to understand the parameter space
+    const quickResults = await this.gridOptimizer.runGridSearch(
+      data, 
+      modelTypes
+    );
+
+    // Analyze results to find promising parameter ranges
+    const promisingRanges = this.analyzePromisingRanges(quickResults.results);
+    
+    console.log('🧠 AI analysis of promising parameter ranges:', promisingRanges);
+
+    // Run focused grid search in promising ranges
+    const focusedResults = await this.runFocusedGridSearch(data, modelTypes, promisingRanges);
+
+    return {
+      type: 'ai',
+      results: focusedResults.results,
+      bestResult: focusedResults.bestResult,
+      summary: focusedResults.summary,
+      topResults: this.gridOptimizer.getTopResults(focusedResults.results, 5),
+      modelBreakdown: this.getModelBreakdown(focusedResults.results),
+      aiInsights: {
+        promisingRanges,
+        confidence: this.calculateAIConfidence(focusedResults.results)
+      }
+    };
+  }
+
+  // Analyze promising parameter ranges from initial results
+  analyzePromisingRanges(results) {
+    const ranges = {};
+    
+    // Group results by model type
+    const modelGroups = {};
+    for (const result of results) {
+      if (!result.success) continue;
+      
+      if (!modelGroups[result.modelType]) {
+        modelGroups[result.modelType] = [];
+      }
+      modelGroups[result.modelType].push(result);
     }
-    throw error;
+
+    // Analyze each model type
+    for (const [modelType, modelResults] of Object.entries(modelGroups)) {
+      if (modelResults.length === 0) continue;
+
+      // Sort by accuracy
+      modelResults.sort((a, b) => b.accuracy - a.accuracy);
+      
+      // Take top 20% results
+      const topResults = modelResults.slice(0, Math.max(1, Math.floor(modelResults.length * 0.2)));
+      
+      // Analyze parameter ranges
+      const paramRanges = {};
+      const params = Object.keys(topResults[0].parameters);
+      
+      for (const param of params) {
+        const values = topResults.map(r => r.parameters[param]);
+        paramRanges[param] = {
+          min: Math.min(...values),
+          max: Math.max(...values),
+          avg: values.reduce((sum, v) => sum + v, 0) / values.length
+        };
+      }
+      
+      ranges[modelType] = paramRanges;
+    }
+
+    return ranges;
+  }
+
+  // Run focused grid search in promising ranges
+  async runFocusedGridSearch(data, modelTypes, promisingRanges) {
+    // Create focused parameter grids based on promising ranges
+    const focusedGrids = {};
+    
+    for (const [modelType, ranges] of Object.entries(promisingRanges)) {
+      focusedGrids[modelType] = {};
+      
+      for (const [param, range] of Object.entries(ranges)) {
+        // Create 5 values within the promising range
+        const step = (range.max - range.min) / 4;
+        focusedGrids[modelType][param] = [];
+        
+        for (let i = 0; i <= 4; i++) {
+          focusedGrids[modelType][param].push(range.min + i * step);
+        }
+      }
+    }
+
+    // Temporarily override the parameter grids
+    const originalGrids = this.gridOptimizer.getParameterGrids();
+    this.gridOptimizer.getParameterGrids = () => focusedGrids;
+
+    try {
+      const results = await this.gridOptimizer.runGridSearch(data, modelTypes);
+      return results;
+    } finally {
+      // Restore original grids
+      this.gridOptimizer.getParameterGrids = () => originalGrids;
+    }
+  }
+
+  // Calculate AI confidence based on result consistency
+  calculateAIConfidence(results) {
+    const successfulResults = results.filter(r => r.success);
+    
+    if (successfulResults.length === 0) return 0;
+    
+    const accuracies = successfulResults.map(r => r.accuracy);
+    const meanAccuracy = accuracies.reduce((sum, acc) => sum + acc, 0) / accuracies.length;
+    
+    // Higher confidence if results are consistent and accurate
+    const consistency = 1 - (this.gridOptimizer.calculateStandardDeviation(accuracies) / meanAccuracy);
+    const accuracyFactor = meanAccuracy / 100;
+    
+    return Math.min(95, Math.max(5, (consistency * 0.6 + accuracyFactor * 0.4) * 100));
+  }
+
+  // Get breakdown of results by model type
+  getModelBreakdown(results) {
+    const breakdown = {};
+    
+    for (const result of results) {
+      if (!result.success) continue;
+      
+      if (!breakdown[result.modelType]) {
+        breakdown[result.modelType] = {
+          count: 0,
+          bestAccuracy: 0,
+          avgAccuracy: 0,
+          accuracies: []
+        };
+      }
+      
+      breakdown[result.modelType].count++;
+      breakdown[result.modelType].accuracies.push(result.accuracy);
+      breakdown[result.modelType].bestAccuracy = Math.max(
+        breakdown[result.modelType].bestAccuracy, 
+        result.accuracy
+      );
+    }
+
+    // Calculate averages
+    for (const modelType in breakdown) {
+      const accuracies = breakdown[modelType].accuracies;
+      breakdown[modelType].avgAccuracy = accuracies.reduce((sum, acc) => sum + acc, 0) / accuracies.length;
+    }
+
+    return breakdown;
+  }
+
+  // Get worker status
+  getStatus() {
+    return {
+      isRunning: this.isRunning,
+      currentJob: this.currentJob ? {
+        jobId: this.currentJob.jobId,
+        optimizationType: this.currentJob.optimizationType,
+        dataSize: this.currentJob.data?.length || 0
+      } : null
+    };
   }
 }
 
-// Worker function that continuously processes jobs
-function runWorker() {
-  console.log('Starting worker process...');
-  
-  // Start the queue processing
-  processQueue();
-  
-  // Set up continuous polling for new jobs
-  const pollInterval = setInterval(() => {
-    processQueue();
-  }, 5000); // Poll every 5 seconds
-  
-  // Handle graceful shutdown
-  process.on('SIGINT', () => {
-    console.log('Worker shutting down gracefully...');
-    clearInterval(pollInterval);
-    db.close((err) => {
-      if (err) {
-        console.error('Error closing database:', err.message);
-      } else {
-        console.log('Database connection closed.');
-      }
-      process.exit(0);
-    });
-  });
-  
-  process.on('SIGTERM', () => {
-    console.log('Worker received SIGTERM, shutting down...');
-    clearInterval(pollInterval);
-    db.close((err) => {
-      if (err) {
-        console.error('Error closing database:', err.message);
-      } else {
-        console.log('Database connection closed.');
-      }
-      process.exit(0);
-    });
-  });
-}
+// Create and export worker instance
+const worker = new OptimizationWorker();
 
-export { runWorker };
+// Handle messages from main thread
+self.onmessage = async function(event) {
+  const { type, data } = event.data;
+  
+  switch (type) {
+    case 'process':
+      try {
+        const result = await worker.processJob(data);
+        self.postMessage({ type: 'result', data: result });
+      } catch (error) {
+        self.postMessage({ 
+          type: 'error', 
+          data: { error: error.message, jobId: data.jobId } 
+        });
+      }
+      break;
+      
+    case 'status':
+      self.postMessage({ type: 'status', data: worker.getStatus() });
+      break;
+      
+    default:
+      self.postMessage({ 
+        type: 'error', 
+        data: { error: `Unknown message type: ${type}` } 
+      });
+  }
+};
+
+// Export for testing
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { OptimizationWorker, worker };
+}
