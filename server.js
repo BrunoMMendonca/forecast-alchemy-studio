@@ -1,11 +1,16 @@
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-const db = require('./src/backend/db'); // Required to initialize the DB connection
-const apiRoutes = require('./src/backend/routes');
-const { runWorker } = require('./src/backend/worker');
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import db from './src/backend/db.js'; // Required to initialize the DB connection
+import apiRoutes from './src/backend/routes.js';
+import { runWorker } from './src/backend/worker.js';
+import dotenv from 'dotenv';
 
-require('dotenv').config();
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const mode = process.argv[2] || 'api';
 const app = express();
@@ -31,4 +36,4 @@ if (mode === 'api') {
 } else {
   console.error(`Unknown mode: ${mode}. Use 'api' or 'worker'.`);
   process.exit(1);
-}
+} 

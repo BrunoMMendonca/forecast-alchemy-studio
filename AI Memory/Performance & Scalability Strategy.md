@@ -66,7 +66,7 @@ This is the next evolution of the application to become a true multi-user, profe
 
 | Area                     | File / Component                     | Key Function / Hook   | Purpose                                                                |
 | ------------------------ | ------------------------------------ | --------------------- | ---------------------------------------------------------------------- |
-| **Backend Queue Logic**  | `backend-server-example.cjs`         | `runWorker()`         | Orchestrates the processing of optimization jobs in the backend.       |
+| **Backend Queue Logic**  | `server.js`         | `runWorker()`         | Orchestrates the processing of optimization jobs in the backend.       |
 | **Frontend Status**      | `src/hooks/useBackendJobStatus.ts`   | `useBackendJobStatus` | Manages polling and state updates from the backend.                    |
 | **Job Creation**         | `src/hooks/useDataHandlers.ts`       | `handleDataUpload`    | Creates optimization jobs on the backend.                              |
 | **UI Components**        | `src/components/OptimizationQueuePopup.tsx` | - | Displays job queue status and allows user interaction.                 |

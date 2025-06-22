@@ -6,7 +6,7 @@ This document provides a detailed technical breakdown of the CSV import process,
 
 - **Dual-Path Processing:** The system supports two distinct workflows: a direct AI transformation for smaller files and a more robust, two-step "config generation" process for large files to handle performance and memory constraints.
 - **State-Driven UI:** The entire wizard is a single React component (`CsvImportWizard.tsx`) that relies on state variables (`aiStep`, `step`, etc.) to render the correct UI for each stage of the import process.
-- **Backend-Powered Transformation:** All heavy lifting (CSV parsing, AI calls, data pivoting) is delegated to a Node.js/Express backend (`backend-server-example.cjs`) to keep the frontend responsive.
+- **Backend-Powered Transformation:** All heavy lifting (CSV parsing, AI calls, data pivoting) is delegated to a Node.js/Express backend (`server.js`) to keep the frontend responsive.
 - **Data Integrity:** The backend is responsible for ensuring data integrity, especially during pivoting. This includes preserving data sparsity (not filling in missing date gaps) and correctly sorting date-based columns chronologically.
 - **Explicit Column Order:** The backend explicitly sends a sorted `columns` array to the frontend. The frontend **must** use this array to render table headers, as the key order in JavaScript objects is not guaranteed.
 
@@ -57,7 +57,7 @@ This is the main component orchestrating the entire user experience.
 
 ---
 
-## 3. Backend Server: `backend-server-example.cjs`
+## 3. Backend Server: `server.js`
 
 The backend handles all data processing and communication with the Grok AI API.
 
@@ -113,6 +113,6 @@ If the upload or transformation fails, check the following:
 | **File Upload**    | `CsvImportWizard.tsx`          | `handleFileChange`                | Detects file size to choose workflow.               |
 | **Small File AI**  | `CsvImportWizard.tsx`          | `handleAITransform`               | Calls `/api/grok-transform`.                        |
 | **Large File AI**  | `CsvImportWizard.tsx`          | `handleConfigProcessing`          | Calls `/grok-generate-config`, then `/apply-config`.|
-| **Backend Pivot**  | `backend-server-example.cjs`   | `pivotTable`                      | Date normalization, chronological sort, sparsity.   |
+| **Backend Pivot**  | `server.js`   | `pivotTable`                      | Date normalization, chronological sort, sparsity.   |
 | **Frontend Render**| `CsvImportWizard.tsx`          | `renderContent` (JSX)             | Uses `aiResultColumns` to build `<th>` headers.     |
-| **API Response**   | `backend-server-example.cjs`   | `/apply-config` handler           | Returns `{ transformedData, columns }`.             | 
+| **API Response**   | `server.js`   | `/apply-config` handler           | Returns `{ transformedData, columns }`.             | 

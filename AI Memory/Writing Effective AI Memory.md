@@ -66,7 +66,7 @@ Use this template as a starting point for all new documents.
 | ----------------- | ------------------------------ | ----------------------------- | -------------------------------------------- |
 | **User Interface**| `src/components/Component.tsx` | `renderContent`               | Renders the main UI.                         |
 | **State Mgmt**    | `src/hooks/useHook.ts`         | `useState`, `useCallback`     | Manages the feature's state.                 |
-| **API Endpoint**  | `backend-server-example.cjs`   | `app.post('/api/endpoint')`   | Handles the request from the frontend.       |
+| **API Endpoint**  | `server.js`   | `app.post('/api/endpoint')`   | Handles the request from the frontend.       |
 | **Core Algorithm**| `src/utils/algorithm.ts`       | `runAlgorithm()`              | Contains the core business/computation logic.|
 
 ---

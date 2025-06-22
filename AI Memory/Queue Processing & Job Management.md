@@ -18,11 +18,11 @@
     - This handler makes a `POST` request to the `/api/jobs` endpoint on the backend, sending along the relevant data, models, and a reason for the job.
 
 2.  **Job Ingestion (Backend API)**:
-    - The `backend-server-example.cjs` receives the request.
+    - The `server.js` receives the request.
     - It parses the request and creates corresponding job entries in the `jobs` table in the SQLite database. Each job is initially marked with a `pending` status.
 
 3.  **Job Processing (Backend Worker)**:
-    - A separate worker process, started by running `node backend-server-example.cjs worker`, continuously polls the database for `pending` jobs (`runWorker()` function).
+    - A separate worker process, started by running `node server.js worker`, continuously polls the database for `pending` jobs (`runWorker()` function).
     - When a job is found, the worker updates its status to `running` and begins executing the optimization logic.
     - It periodically updates the job's `progress` in the database.
     - Upon completion, the worker updates the job's status to `completed` and stores the final result as a JSON string in the `result` column. If an error occurs, the status is set to `failed`.
@@ -46,8 +46,8 @@
 | Area                     | File / Component                     | Key Function / Hook         | Purpose                                                      |
 | ------------------------ | ------------------------------------ | --------------------------- | ------------------------------------------------------------ |
 | **Job Creation (Client)**| `src/hooks/useDataHandlers.ts`       | `handleDataUpload`          | Submits job requests to the backend API.                     |
-| **Job Ingestion (Server)**| `backend-server-example.cjs`         | `app.post('/api/jobs')`     | Creates job records in the SQLite database.                  |
-| **Job Processing (Server)**| `backend-server-example.cjs`         | `runWorker` / `processJob`  | Fetches and executes pending jobs from the database.         |
+| **Job Ingestion (Server)**| `server.js`         | `app.post('/api/jobs')`     | Creates job records in the SQLite database.                  |
+| **Job Processing (Server)**| `server.js`         | `runWorker` / `processJob`  | Fetches and executes pending jobs from the database.         |
 | **Status Polling (Client)**| `src/hooks/useBackendJobStatus.ts`   | `useBackendJobStatus`       | Periodically fetches job status from the backend.            |
 | **UI Display**           | `src/components/OptimizationQueuePopup.tsx` | -                   | Renders the job queue and progress to the user.              |
 | **UI State Management**  | `src/pages/ForecastPage.tsx`         | -                           | Acts as the single source of truth for all job-related UI.   |
@@ -58,7 +58,7 @@
 
 If queue processing fails or behaves unexpectedly, check the following:
 
-1.  **Are the backend API and Worker processes running?** You need two terminals: one for `node backend-server-example.cjs api` and one for `node backend-server-example.cjs worker`.
+1.  **Are the backend API and Worker processes running?** You need two terminals: one for `node server.js api` and one for `node server.js worker`.
 2.  **Are jobs being created correctly in the `forecast-jobs.db` file?** Use a SQLite viewer to inspect the `jobs` table.
 3.  **Is the backend worker picking up pending jobs?** Check the terminal output for the worker process for logs like "Worker: Picked up job...".
 4.  **Is the frontend successfully polling the `/api/jobs/status` endpoint?** Check the browser's network tab for successful `200 OK` responses.
