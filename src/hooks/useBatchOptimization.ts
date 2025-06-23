@@ -37,7 +37,7 @@ export const useBatchOptimization = () => {
   ) => {
     console.warn('🚫 FRONTEND OPTIMIZATION DISABLED: Use backend optimization system instead');
     console.warn('🚫 This function should not be called - all optimization should go through the backend queue');
-    return;
+      return;
   }, [navigationAware, optimizationLogger]);
 
   const optimizeQueuedSKUs = useCallback(async (
@@ -51,7 +51,7 @@ export const useBatchOptimization = () => {
   ) => {
     console.warn('🚫 FRONTEND OPTIMIZATION DISABLED: Use backend optimization system instead');
     console.warn('🚫 This function should not be called - all optimization should go through the backend queue');
-    return;
+      return;
   }, []);
 
   return {

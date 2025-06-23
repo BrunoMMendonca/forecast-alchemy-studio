@@ -25,7 +25,7 @@ export const useOptimization = (
   } | null> => {
     console.warn('🚫 FRONTEND OPTIMIZATION DISABLED: Use backend optimization system instead');
     console.warn('🚫 This function should not be called - all optimization should go through the backend queue');
-    return null;
+      return null;
   }, [selectedSKU, data, businessContext, aiForecastModelOptimizationEnabled]);
 
   return {

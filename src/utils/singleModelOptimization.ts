@@ -84,8 +84,8 @@ export const optimizeModelForSKU = async (
   error?: string;
 }> => {
   console.warn('🚫 FRONTEND OPTIMIZATION DISABLED: Use backend optimization system instead');
-  return {
-    success: false,
+    return {
+      success: false,
     error: 'Frontend optimization is disabled - use backend system'
-  };
+    };
 };

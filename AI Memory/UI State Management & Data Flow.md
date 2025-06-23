@@ -45,8 +45,8 @@ To solve this, we use a "Single Source of Truth" pattern. This means that for an
 
 ## 4. "Gotchas" & Historical Context
 
-- **The Original Bug**: The initial implementation had the `JobMonitorButton` and `OptimizationQueuePopup` calling `useBackendJobStatus` independently. This caused them to have separate, out-of-sync states, leading to the UI inconsistency bug.
-- **The Refactoring**: The solution was a multi-step refactoring process to move the hook call up to `ForecastPage` and transform the child components to only accept props. This solidified the "Single Source of Truth" as a core architectural pattern for this project.
+- **The Job Queue Sync Bug**: The initial implementation had the `JobMonitorButton` and `OptimizationQueuePopup` calling `useBackendJobStatus` independently. This caused them to have separate, out-of-sync states, leading to the UI inconsistency bug. The solution was to move the hook call up to `ForecastPage` and pass the state down, solidifying the "Single Source of Truth" pattern.
+- **The Settings Toggle Bug**: A similar bug occurred where a settings toggle (`Enable AI Reasoning`) appeared not to save its state. The root cause was the same: a component (`FloatingSettingsButton`) received the necessary props from its parent but failed to pass them down to its child (`ForecastSettings`). This broke the data flow chain, preventing the state update function from reaching the component that needed it.
 - **Prop Drilling**: While this pattern can sometimes lead to "prop drilling" (passing props through many layers), it is the correct choice for our application's current scale to ensure stability and predictability. For more complex state, a more advanced state manager could be considered in the future, but is not currently necessary.
 
 ---
@@ -63,12 +63,4 @@ The "Single Source of Truth" pattern becomes even more critical when moving to a
     3. The response data is stored in the page's state.
     4. The page re-renders, passing the dataset down to components like `DataVisualization` as a prop.
 
-This evolution preserves the predictability of our data flow while migrating the application's source of truth from the client's browser to the central backend.
-
----
-
-## 4. "Gotchas" & Historical Context
-
-- **The Original Bug**: The initial implementation had the `JobMonitorButton` and `OptimizationQueuePopup` calling `useBackendJobStatus` independently. This caused them to have separate, out-of-sync states, leading to the UI inconsistency bug.
-- **The Refactoring**: The solution was a multi-step refactoring process to move the hook call up to `ForecastPage` and transform the child components to only accept props. This solidified the "Single Source of Truth" as a core architectural pattern for this project.
-- **Prop Drilling**: While this pattern can sometimes lead to "prop drilling" (passing props through many layers), it is the correct choice for our application's current scale to ensure stability and predictability. For more complex state, a more advanced state manager could be considered in the future, but is not currently necessary. 
+This evolution preserves the predictability of our data flow while migrating the application's source of truth from the client's browser to the central backend. 

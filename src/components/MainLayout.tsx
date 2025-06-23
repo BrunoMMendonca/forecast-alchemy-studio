@@ -109,7 +109,7 @@ export const MainLayout: React.FC = () => {
 
   const outletContext = {
     summary,
-    globalSettings,
+    ...globalSettings,
     currentStep,
     setCurrentStep,
     processedDataInfo,

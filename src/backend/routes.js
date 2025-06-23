@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken';
 import { fileURLToPath } from 'url';
 import { db } from './db.js';
 import { callGrokAPI } from './grokService.js';
-import { applyTransformations, detectColumnRoles, normalizeAndPivotData, findField, autoDetectSeparator, transposeData } from './utils.js';
+import { applyTransformations, detectColumnRoles, normalizeAndPivotData, findField, autoDetectSeparator, transposeData, parseCsvWithHeaders } from './utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,29 +53,21 @@ function getPriorityFromReason(reason) {
   return JOB_PRIORITIES.INITIAL_IMPORT;
 }
 
+// Read AI instructions from files
+const aiInstructionsSmall = fs.readFileSync(path.join(__dirname, 'config/ai_csv_instructions_small.txt'), 'utf-8');
+const aiInstructionsLarge = fs.readFileSync(path.join(__dirname, 'config/ai_csv_instructions_large.txt'), 'utf-8');
+
 router.post('/grok-transform', async (req, res) => {
   try {
-    const { csvData, instructions } = req.body;
-    if (!csvData || !instructions) {
+    const { csvData, reasoningEnabled } = req.body;
+    console.log(`[LOG] /grok-transform received reasoningEnabled: ${reasoningEnabled}`);
+    if (!csvData) {
       return res.status(400).json({ error: 'Missing csvData or instructions' });
     }
-    console.log('grok-transform received instructions:', instructions.substring(0, 200) + '...');
-    
-    let parsedCsvData = [];
-    if (typeof csvData === 'string') {
-        const parsed = Papa.parse(csvData, { header: true, skipEmptyLines: true });
-        if (parsed.errors.length) {
-            console.error("CSV Parsing Error in grok-transform:", parsed.errors);
-            return res.status(400).json({ error: 'Failed to parse incoming CSV data.' });
-        }
-        parsedCsvData = parsed.data;
-    } else if (Array.isArray(csvData)) {
-        parsedCsvData = csvData;
-    } else {
-        return res.status(400).json({ error: 'Invalid csvData format. Expected string or array.' });
-    }
+    console.log('grok-transform received instructions:', aiInstructionsSmall.substring(0, 200) + '...');
+    const { data, headers } = parseCsvWithHeaders(csvData);
 
-    const sanitizedCsvData = parsedCsvData.map(row => {
+    const sanitizedCsvData = data.map(row => {
       const sanitizedRow = {};
       for (const [key, value] of Object.entries(row)) {
         let sanitizedValue = value;
@@ -89,21 +81,20 @@ router.post('/grok-transform', async (req, res) => {
       return sanitizedRow;
     });
     
-    const prompt = `
-You are a CSV data transformation expert. Your task is to transform the following CSV data according to specific instructions.
-IMPORTANT: You MUST follow these specific instructions exactly:
-${instructions}
-
-CSV Data:
-${JSON.stringify(sanitizedCsvData, null, 2)}
-
-CRITICAL: You must return ONLY valid JSON. Do not include any text before or after the JSON object.
-Your response must be a single JSON object with this exact structure:
-{
-  "reasoning": "Detailed explanation of how you followed the instructions to transform the data, including what patterns you detected and what specific transformations you applied",
-  "data": [transformed CSV data as array of objects]
-}`;
-    const response = await callGrokAPI(prompt, 4000, true);
+    const outputFormat = reasoningEnabled 
+      ? `{
+          "reasoning": "Detailed explanation of how you followed the instructions to transform the data, including what patterns you detected and what specific transformations you applied",
+          "data": "[transformed CSV data as array of objects]"
+        }`
+      : `{
+          "data": "[transformed CSV data as array of objects]"
+        }`;
+      
+    // Send to Grok-3 API
+    const prompt = `CSV Data (first 5 rows):\n${JSON.stringify(sanitizedCsvData.slice(0, 5), null, 2)}\n\nInstructions:\n${aiInstructionsSmall}\n\nOutput Format:\n${outputFormat}`;
+    console.log('Final prompt being sent to AI:', prompt);
+    const response = await callGrokAPI(prompt, 4000, reasoningEnabled);
+    console.log('Raw Grok-3 Response (/grok-transform):', response);
     let parsedResponse;
     try {
       parsedResponse = JSON.parse(response);
@@ -145,39 +136,41 @@ Your response must be a single JSON object with this exact structure:
 
 router.post('/grok-generate-config', async (req, res) => {
   try {
-    const { csvChunk, instructions, fileSize } = req.body;
-    if (!csvChunk || !instructions) {
+    const { csvChunk, fileSize, reasoningEnabled } = req.body;
+    if (!csvChunk) {
       return res.status(400).json({ error: 'Missing csvChunk or instructions' });
     }
-    console.log('grok-generate-config received instructions:', instructions.substring(0, 200) + '...');
-    
-    const sanitizedCsvChunk = csvChunk.map(row => {
-      const sanitizedRow = {};
-      for (const [key, value] of Object.entries(row)) {
-        let sanitizedValue = value;
-        if (value !== null && value !== undefined) {
-          sanitizedValue = String(value)
-            .replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r').replace(/\t/g, '\\t');
-        }
-        sanitizedRow[key] = sanitizedValue;
-      }
-      return sanitizedRow;
-    });
-    
+
+    const outputFormat = reasoningEnabled
+      ? `{
+          "reasoning": "Detailed explanation of how you generated the configuration.",
+          "config": {
+            "operations": [
+              { "operation": "rename", "old_name": "Old Name", "new_name": "New Name" },
+              { "operation": "pivot_longer", "cols": ["Jan", "Feb", "Mar"], "names_to": "Month", "values_to": "Sales" }
+            ]
+          }
+        }`
+      : `{
+          "config": {
+            "operations": [
+              { "operation": "rename", "old_name": "Old Name", "new_name": "New Name" },
+              { "operation": "pivot_longer", "cols": ["Jan", "Feb", "Mar"], "names_to": "Month", "values_to": "Sales" }
+            ]
+          }
+        }`;
+
     const prompt = `
-You are a CSV data transformation expert. Your task is to analyze a sample of a large CSV file and generate a JSON configuration for processing the full file.
-IMPORTANT: You MUST follow these specific instructions exactly:
-${instructions}
+Context: You are processing a large CSV file of ${Math.round(fileSize / 1024)} KB.
+Sample Data (first 15 records): 
+${JSON.stringify(csvChunk, null, 2)}
 
-CSV Sample (first few rows):
-${JSON.stringify(sanitizedCsvChunk, null, 2)}
-File size: ${fileSize} bytes
+Instructions: ${aiInstructionsLarge}
 
-CRITICAL: The operations are executed in sequence. Each operation must use the column names that exist after the previous operations in the array have been applied.
-// ... (rest of the prompt)
+Output Format: ${outputFormat}
 `;
-    const response = await callGrokAPI(prompt, 2000, true);
+    const response = await callGrokAPI(prompt, 2000, reasoningEnabled);
+    console.log('Raw Grok-3 Response (/grok-generate-config):', response);
     let parsedResponse;
     try {
       parsedResponse = JSON.parse(response);
@@ -190,7 +183,14 @@ CRITICAL: The operations are executed in sequence. Each operation must use the c
         }
     }
     const reasoning = parsedResponse.reasoning || 'No reasoning provided';
-    const config = parsedResponse.config || parsedResponse;
+    
+    // Handle potentially nested config object
+    let config = parsedResponse;
+    if (config.config) {
+      config = config.config;
+    } else if (config.data && config.data.config) {
+      config = config.data.config;
+    }
     
     console.log('Generated config:', JSON.stringify(config, null, 2));
     res.json({ 
@@ -213,12 +213,8 @@ router.post('/apply-config', async (req, res) => {
 
     console.log('apply-config received config:', JSON.stringify(config, null, 2));
 
-    const parsed = Papa.parse(csvData, { header: true, skipEmptyLines: true });
-    if (parsed.errors.length) {
-      console.error("CSV Parsing Error in apply-config:", parsed.errors);
-      return res.status(400).json({ error: 'Failed to parse incoming CSV data.' });
-    }
-    const data = parsed.data;
+    // Use the new robust parser
+    const { data } = parseCsvWithHeaders(csvData);
 
     const { data: transformedData, columns } = applyTransformations(data, config);
     // Get column roles as objects first
@@ -332,6 +328,17 @@ router.post('/jobs/clear-completed', (req, res) => {
     });
 });
 
+router.post('/jobs/clear-pending', (req, res) => {
+    const userId = 'default_user';
+    db.run("DELETE FROM jobs WHERE status = 'pending' AND userId = ?", [userId], function(err) {
+        if (err) {
+            console.error('Failed to clear pending jobs:', err);
+            return res.status(500).json({ error: 'Failed to clear pending jobs' });
+        }
+        res.status(200).json({ message: 'Pending jobs have been cleared.', deletedCount: this.changes });
+    });
+});
+
 router.post('/register', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) {
@@ -404,64 +411,12 @@ router.post('/process-manual-import', async (req, res) => {
 
 router.post('/generate-preview', (req, res) => {
   try {
-    const { csvData, separator, transposed } = req.body;
+    const { csvData, transposed } = req.body;
     console.log('[LOG] /generate-preview called.');
-    console.log(`[LOG] csvData length: ${csvData.length}, separator: ${separator}, transposed: ${transposed}`);
+    console.log(`[LOG] csvData length: ${csvData ? csvData.length : 0}, transposed: ${transposed}`);
     
-    const detectedSeparator = separator || autoDetectSeparator(csvData.split('\n')[0]);
-    console.log(`[LOG] Detected separator: "${detectedSeparator}"`);
-    
-    const firstParse = Papa.parse(csvData, {
-      skipEmptyLines: true,
-      delimiter: detectedSeparator,
-      preview: 1
-    });
-
-    const rawHeaders = firstParse.data[0] || [];
-    console.log('[LOG] Raw headers:', rawHeaders);
-    
-    const headerMapping = [];
-    rawHeaders.forEach((h, i) => {
-      if (h && h.trim() !== '') {
-        headerMapping.push({ originalIndex: i, name: h.trim() });
-      }
-    });
-    console.log('[LOG] Header mapping (non-empty):', headerMapping);
-
-    const counts = {};
-    const finalHeaders = headerMapping.map(h => {
-      let newName = h.name;
-      if (counts[newName]) {
-        counts[newName]++;
-        newName = `${newName}_${counts[newName]}`;
-      } else {
-        counts[newName] = 1;
-      }
-      return newName;
-    });
-    console.log('[LOG] Final unique headers:', finalHeaders);
-    
-    const parsed = Papa.parse(csvData, { 
-      skipEmptyLines: true,
-      delimiter: detectedSeparator,
-      header: false, // Headers are handled manually
-    });
-
-    const dataRows = parsed.data.slice(1);
-    console.log(`[LOG] Found ${dataRows.length} data rows.`);
-
-    let data = dataRows.map(row => {
-      const newRow = {};
-      headerMapping.forEach((h, i) => {
-        if(row && typeof row[h.originalIndex] !== 'undefined') {
-          newRow[finalHeaders[i]] = row[h.originalIndex];
-        }
-      });
-      return newRow;
-    }).filter(row => Object.keys(row).length > 0);
-    console.log(`[LOG] Mapped data to objects. Total objects: ${data.length}. Sample:`, data.slice(0, 2));
-    
-    let headers = finalHeaders;
+    // Use the new robust parser
+    let { data, headers } = parseCsvWithHeaders(csvData);
 
     if (transposed) {
       console.log('[LOG] Transposing data...');
@@ -478,12 +433,10 @@ router.post('/generate-preview', (req, res) => {
     const columnRoles = columnRolesObjects.map(obj => obj.role);
 
     console.log(`[LOG] Sending response with ${headers.length} headers and ${data.slice(0, 100).length} previewRows.`);
-    console.log(`[LOG] Column roles:`, columnRoles);
     res.json({
       headers: headers.slice(0, 50),
       previewRows: data.slice(0, 100),
       columnRoles,
-      separator: detectedSeparator,
       transposed: !!transposed
     });
   } catch (error) {

@@ -1,14 +1,20 @@
 # Optimization reasons
 
-1. **CSV Upload:** Whenever a CSV is uploaded ("Upload"), after clicking "Confirm Mapping and Import", optimization runs to detect the best parameters of all models, for all SKUs, using up to 2 different methods (AI, if enabled, and Grid Search).  
+There are 2 optimization methods GRID and AI.
+The AI method is disablable in the setings.
+The AI method uses the GRID method results as a source to prompt AI.
+
+1. **CSV Upload:** Whenever a CSV is uploaded ("Upload"), after clicking "Confirm Mapping and Import", optimization runs to detect the best parameters of all models, for all SKUs, using up to 2 different methods (AI, if enabled, and Grid).
    → **Scope:** ALL_MODELS / ALL_SKU / ALL_METHODS
    
-2. **Data Cleaning:** When a SKU's historic data is cleaned ("Clean and prepare"), either manually or via CSV import, optimization runs to find the best parameters of all models for that single SKU.  
+2. **Data Cleaning:** When a SKU's historic data is cleaned ("Clean and prepare"), either manually or via CSV import, optimization runs to find the best parameters of all models for the cleaned SKU. Multiple single SKU jobs can be added for CSV import.
    → **Scope:** ALL_MODELS / 1_SKU / ALL_METHODS
 
 3. **Enabling AI Optimization:** When AI Optimization is enabled, the system optimizes the parameters of all models for all SKUs using the AI method.  
    → **Scope:** ALL_MODELS / ALL_SKU / 1_METHOD (AI)
 
+4. **Config change:** If a configuration changes the expected result of the forecasts (eg: forecast horizon)
+   → **Scope:** ALL_MODELS / ALL_SKU / ALL_METHODS
 ---
 
 **Note:**

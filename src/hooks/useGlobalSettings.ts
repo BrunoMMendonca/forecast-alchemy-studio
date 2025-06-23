@@ -12,6 +12,7 @@ export interface GlobalSettings {
   aiFailureThreshold: number;
   largeFileProcessingEnabled: boolean;
   largeFileThreshold: number; // in bytes, default 1MB
+  aiReasoningEnabled: boolean;
 }
 
 const DEFAULT_SETTINGS: GlobalSettings = {
@@ -21,7 +22,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   aiCsvImportEnabled: true,
   aiFailureThreshold: 5,
   largeFileProcessingEnabled: true,
-  largeFileThreshold: 1024 * 1024 // 1MB default
+  largeFileThreshold: 1024 * 1024, // 1MB default
+  aiReasoningEnabled: false,
 };
 
 interface UseGlobalSettingsProps {
@@ -36,6 +38,7 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
   const [aiFailureThreshold, setAiFailureThresholdState] = useState<number>(DEFAULT_SETTINGS.aiFailureThreshold);
   const [largeFileProcessingEnabled, setLargeFileProcessingEnabledState] = useState<boolean>(DEFAULT_SETTINGS.largeFileProcessingEnabled);
   const [largeFileThreshold, setLargeFileThresholdState] = useState<number>(DEFAULT_SETTINGS.largeFileThreshold);
+  const [aiReasoningEnabled, setAiReasoningEnabledState] = useState<boolean>(DEFAULT_SETTINGS.aiReasoningEnabled);
 
   // Initialize AI settings
   const { enabled: aiEnabled } = useAISettings();
@@ -53,6 +56,7 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
         setAiFailureThresholdState(settings.aiFailureThreshold ?? DEFAULT_SETTINGS.aiFailureThreshold);
         setLargeFileProcessingEnabledState(settings.largeFileProcessingEnabled ?? DEFAULT_SETTINGS.largeFileProcessingEnabled);
         setLargeFileThresholdState(settings.largeFileThreshold ?? DEFAULT_SETTINGS.largeFileThreshold);
+        setAiReasoningEnabledState(settings.aiReasoningEnabled ?? DEFAULT_SETTINGS.aiReasoningEnabled);
       }
     } catch (error) {
       // Silent error handling
@@ -72,6 +76,7 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
           setAiFailureThresholdState(settings.aiFailureThreshold ?? DEFAULT_SETTINGS.aiFailureThreshold);
           setLargeFileProcessingEnabledState(settings.largeFileProcessingEnabled ?? DEFAULT_SETTINGS.largeFileProcessingEnabled);
           setLargeFileThresholdState(settings.largeFileThreshold ?? DEFAULT_SETTINGS.largeFileThreshold);
+          setAiReasoningEnabledState(settings.aiReasoningEnabled ?? DEFAULT_SETTINGS.aiReasoningEnabled);
         } catch (error) {
           // Silent error handling
         }
@@ -93,6 +98,7 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
           setAiFailureThresholdState(settings.aiFailureThreshold ?? DEFAULT_SETTINGS.aiFailureThreshold);
           setLargeFileProcessingEnabledState(settings.largeFileProcessingEnabled ?? DEFAULT_SETTINGS.largeFileProcessingEnabled);
           setLargeFileThresholdState(settings.largeFileThreshold ?? DEFAULT_SETTINGS.largeFileThreshold);
+          setAiReasoningEnabledState(settings.aiReasoningEnabled ?? DEFAULT_SETTINGS.aiReasoningEnabled);
         } catch (error) {
           // Silent error handling
         }
@@ -108,7 +114,7 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
   }, []);
 
   // Save settings to localStorage whenever they change
-  const saveSettings = useCallback((periods: number, context: BusinessContext, grokEnabled: boolean, csvEnabled: boolean, aiFailureThreshold: number, largeFileEnabled: boolean, largeFileThreshold: number) => {
+  const saveSettings = useCallback((periods: number, context: BusinessContext, grokEnabled: boolean, csvEnabled: boolean, aiFailureThreshold: number, largeFileEnabled: boolean, largeFileThreshold: number, reasoningEnabled: boolean) => {
     try {
       const settings: GlobalSettings = {
         forecastPeriods: periods,
@@ -117,7 +123,8 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
         aiCsvImportEnabled: csvEnabled,
         aiFailureThreshold,
         largeFileProcessingEnabled: largeFileEnabled,
-        largeFileThreshold
+        largeFileThreshold,
+        aiReasoningEnabled: reasoningEnabled,
       };
       localStorage.setItem(GLOBAL_SETTINGS_KEY, JSON.stringify(settings));
       // Dispatch custom event for same-tab synchronization
@@ -139,7 +146,7 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
   const setForecastPeriods = useCallback((periods: number) => {
     const oldPeriods = forecastPeriods;
     setForecastPeriodsState(periods);
-    saveSettings(periods, businessContext, aiForecastModelOptimizationEnabled, aiCsvImportEnabled, aiFailureThreshold, largeFileProcessingEnabled, largeFileThreshold);
+    saveSettings(periods, businessContext, aiForecastModelOptimizationEnabled, aiCsvImportEnabled, aiFailureThreshold, largeFileProcessingEnabled, largeFileThreshold, aiReasoningEnabled);
     if (oldPeriods !== periods && onSettingsChangeRef.current) {
       onSettingsChangeRef.current('forecastPeriods');
     }
@@ -148,7 +155,7 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
   const setBusinessContext = useCallback((context: BusinessContext) => {
     const oldContext = businessContext;
     setBusinessContextState(context);
-    saveSettings(forecastPeriods, context, aiForecastModelOptimizationEnabled, aiCsvImportEnabled, aiFailureThreshold, largeFileProcessingEnabled, largeFileThreshold);
+    saveSettings(forecastPeriods, context, aiForecastModelOptimizationEnabled, aiCsvImportEnabled, aiFailureThreshold, largeFileProcessingEnabled, largeFileThreshold, aiReasoningEnabled);
     if (JSON.stringify(oldContext) !== JSON.stringify(context) && onSettingsChangeRef.current) {
       onSettingsChangeRef.current('businessContext');
     }
@@ -158,7 +165,7 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
     const oldEnabled = aiForecastModelOptimizationEnabled;
     const newEnabled = enabled && aiEnabled;
     setaiForecastModelOptimizationEnabledState(newEnabled);
-    saveSettings(forecastPeriods, businessContext, newEnabled, aiCsvImportEnabled, aiFailureThreshold, largeFileProcessingEnabled, largeFileThreshold);
+    saveSettings(forecastPeriods, businessContext, newEnabled, aiCsvImportEnabled, aiFailureThreshold, largeFileProcessingEnabled, largeFileThreshold, aiReasoningEnabled);
     if (oldEnabled !== newEnabled && onSettingsChangeRef.current) {
       onSettingsChangeRef.current('aiForecastModelOptimizationEnabled');
     }
@@ -166,7 +173,7 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
 
   const setAiCsvImportEnabled = useCallback((enabled: boolean) => {
     setAiCsvImportEnabledState(enabled);
-    saveSettings(forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, enabled, aiFailureThreshold, largeFileProcessingEnabled, largeFileThreshold);
+    saveSettings(forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, enabled, aiFailureThreshold, largeFileProcessingEnabled, largeFileThreshold, aiReasoningEnabled);
     if (onSettingsChangeRef.current) {
       onSettingsChangeRef.current('aiCsvImportEnabled');
     }
@@ -174,7 +181,7 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
 
   const setAiFailureThreshold = useCallback((threshold: number) => {
     setAiFailureThresholdState(threshold);
-    saveSettings(forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, aiCsvImportEnabled, threshold, largeFileProcessingEnabled, largeFileThreshold);
+    saveSettings(forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, aiCsvImportEnabled, threshold, largeFileProcessingEnabled, largeFileThreshold, aiReasoningEnabled);
     if (onSettingsChangeRef.current) {
       onSettingsChangeRef.current('aiFailureThreshold');
     }
@@ -183,7 +190,7 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
   const setLargeFileProcessingEnabled = useCallback((enabled: boolean) => {
     const oldEnabled = largeFileProcessingEnabled;
     setLargeFileProcessingEnabledState(enabled);
-    saveSettings(forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, aiCsvImportEnabled, aiFailureThreshold, enabled, largeFileThreshold);
+    saveSettings(forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, aiCsvImportEnabled, aiFailureThreshold, enabled, largeFileThreshold, aiReasoningEnabled);
     if (oldEnabled !== enabled && onSettingsChangeRef.current) {
       onSettingsChangeRef.current('largeFileProcessingEnabled');
     }
@@ -192,11 +199,20 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
   const setLargeFileThreshold = useCallback((threshold: number) => {
     const oldThreshold = largeFileThreshold;
     setLargeFileThresholdState(threshold);
-    saveSettings(forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, aiCsvImportEnabled, aiFailureThreshold, largeFileProcessingEnabled, threshold);
+    saveSettings(forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, aiCsvImportEnabled, aiFailureThreshold, largeFileProcessingEnabled, threshold, aiReasoningEnabled);
     if (oldThreshold !== threshold && onSettingsChangeRef.current) {
       onSettingsChangeRef.current('largeFileThreshold');
     }
   }, [forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, aiCsvImportEnabled, aiFailureThreshold, largeFileProcessingEnabled, largeFileThreshold, saveSettings]);
+
+  const setAiReasoningEnabled = useCallback((enabled: boolean) => {
+    const oldEnabled = aiReasoningEnabled;
+    setAiReasoningEnabledState(enabled);
+    saveSettings(forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, aiCsvImportEnabled, aiFailureThreshold, largeFileProcessingEnabled, largeFileThreshold, enabled);
+    if (oldEnabled !== enabled && onSettingsChangeRef.current) {
+      onSettingsChangeRef.current('aiReasoningEnabled');
+    }
+  }, [forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, aiCsvImportEnabled, aiFailureThreshold, largeFileProcessingEnabled, largeFileThreshold, saveSettings, aiReasoningEnabled]);
 
   const resetToDefaults = useCallback(() => {
     setForecastPeriodsState(DEFAULT_SETTINGS.forecastPeriods);
@@ -206,7 +222,8 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
     setAiFailureThresholdState(DEFAULT_SETTINGS.aiFailureThreshold);
     setLargeFileProcessingEnabledState(DEFAULT_SETTINGS.largeFileProcessingEnabled);
     setLargeFileThresholdState(DEFAULT_SETTINGS.largeFileThreshold);
-    saveSettings(DEFAULT_SETTINGS.forecastPeriods, DEFAULT_SETTINGS.businessContext, DEFAULT_SETTINGS.aiForecastModelOptimizationEnabled, DEFAULT_SETTINGS.aiCsvImportEnabled, DEFAULT_SETTINGS.aiFailureThreshold, DEFAULT_SETTINGS.largeFileProcessingEnabled, DEFAULT_SETTINGS.largeFileThreshold);
+    setAiReasoningEnabledState(DEFAULT_SETTINGS.aiReasoningEnabled);
+    saveSettings(DEFAULT_SETTINGS.forecastPeriods, DEFAULT_SETTINGS.businessContext, DEFAULT_SETTINGS.aiForecastModelOptimizationEnabled, DEFAULT_SETTINGS.aiCsvImportEnabled, DEFAULT_SETTINGS.aiFailureThreshold, DEFAULT_SETTINGS.largeFileProcessingEnabled, DEFAULT_SETTINGS.largeFileThreshold, DEFAULT_SETTINGS.aiReasoningEnabled);
     if (onSettingsChangeRef.current) {
       onSettingsChangeRef.current('forecastPeriods');
     }
@@ -228,6 +245,8 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
     largeFileThreshold,
     setLargeFileThreshold,
     resetToDefaults,
-    setOnSettingsChange
+    setOnSettingsChange,
+    aiReasoningEnabled,
+    setAiReasoningEnabled,
   };
 };

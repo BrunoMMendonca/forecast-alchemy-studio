@@ -23,6 +23,8 @@ interface ForecastSettingsProps {
   setLargeFileProcessingEnabled: (enabled: boolean) => void;
   largeFileThreshold: number;
   setLargeFileThreshold: (threshold: number) => void;
+  aiReasoningEnabled: boolean;
+  setAiReasoningEnabled: (enabled: boolean) => void;
 }
 
 export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
@@ -39,9 +41,11 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
   largeFileProcessingEnabled,
   setLargeFileProcessingEnabled,
   largeFileThreshold,
-  setLargeFileThreshold
+  setLargeFileThreshold,
+  aiReasoningEnabled,
+  setAiReasoningEnabled,
 }) => {
-  const { enabled: aiEnabled, setEnabled: setAIEnabled } = useAISettings({
+  const { enabled: aiFeaturesEnabled, setEnabled: setAIEnabled } = useAISettings({
     onSettingsChange: (enabled) => {
       // If AI Features is disabled, also disable AI Model Optimization
       if (!enabled) {
@@ -61,11 +65,11 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
         <div className="flex items-center space-x-2">
           <Switch
             id="ai-enabled"
-            checked={aiEnabled}
+            checked={aiFeaturesEnabled}
             onCheckedChange={setAIEnabled}
           />
           <span className="text-sm text-slate-600">
-            {aiEnabled ? 'Enabled' : 'Disabled'}
+            {aiFeaturesEnabled ? 'Enabled' : 'Disabled'}
           </span>
         </div>
         <p className="text-sm text-slate-500">
@@ -74,7 +78,7 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
       </div>
 
       {/* AI CSV Import Wizard (sub-toggle, only visible if AI Features is enabled) */}
-      {aiEnabled && (
+      {aiFeaturesEnabled && (
         <div className="pl-6 border-l-2 border-slate-200 space-y-2">
           <Label htmlFor="ai-csv-import-enabled" className="flex items-center gap-2 text-base">
             <Sparkles className="h-4 w-4" />
@@ -94,40 +98,63 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
             Enable the AI-powered CSV Import Wizard to get interactive suggestions and data transformations during CSV import.
           </p>
 
-          {/* Large File Processing (nested, only visible if AI CSV Import is enabled) */}
           {aiCsvImportEnabled && (
-            <div className="pl-6 border-l border-slate-100 mt-2 space-y-2">
-              <Label htmlFor="large-file-processing-enabled" className="flex items-center gap-2 text-base">
-                <Sparkles className="h-4 w-4" />
-                Large File Processing
-              </Label>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="large-file-processing-enabled"
-                  checked={largeFileProcessingEnabled}
-                  onCheckedChange={setLargeFileProcessingEnabled}
-                />
-                <span className="text-sm text-slate-600">
-                  {largeFileProcessingEnabled ? 'Enabled' : 'Disabled'}
-                </span>
+            <div className="pl-6 border-l-2 border-slate-200 mt-4 space-y-4 pt-4">
+              {/* AI Reasoning (nested) */}
+              <div className="space-y-2">
+                <Label htmlFor="ai-reasoning-switch" className="flex items-center gap-2 font-semibold">
+                  <Sparkles className="h-5 w-5" />
+                  Enable AI Reasoning
+                </Label>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="ai-reasoning-switch"
+                    checked={aiReasoningEnabled}
+                    onCheckedChange={setAiReasoningEnabled}
+                    disabled={!aiCsvImportEnabled || !aiFeaturesEnabled}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {aiReasoningEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  When enabled, the AI will provide a detailed explanation of the transformations it applied. Disabling this can reduce API costs.
+                </p>
               </div>
-              <p className="text-sm text-slate-500">
-                Enable configuration-based processing for large CSV files that exceed token limits. Uses AI to generate transformation scripts.
-              </p>
-              {/* Large File Threshold Setting */}
-              <div className="flex items-center space-x-2 mt-2">
-                <Label htmlFor="large-file-threshold" className="text-sm">Large File Threshold</Label>
-                <Input
-                  id="large-file-threshold"
-                  type="number"
-                  min={1024 * 100} // 100KB minimum
-                  max={1024 * 1024 * 10} // 10MB maximum
-                  step={1024 * 100} // 100KB steps
-                  value={Math.round(largeFileThreshold / (1024 * 100)) * 100}
-                  onChange={e => setLargeFileThreshold(Number(e.target.value) * 1024)}
-                  className="w-24"
-                />
-                <span className="text-xs text-slate-500">KB (Files larger than this will use configuration-based processing)</span>
+
+              {/* Large File Processing (nested) */}
+              <div className="space-y-2">
+                <Label htmlFor="large-file-processing-enabled" className="flex items-center gap-2 font-semibold">
+                  <Sparkles className="h-4 w-4" />
+                  Large File Processing
+                </Label>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="large-file-processing-enabled"
+                    checked={largeFileProcessingEnabled}
+                    onCheckedChange={setLargeFileProcessingEnabled}
+                  />
+                  <span className="text-sm text-slate-600">
+                    {largeFileProcessingEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
+                <p className="text-sm text-slate-500">
+                  Enable configuration-based processing for large CSV files that exceed token limits. Uses AI to generate transformation scripts.
+                </p>
+                <div className="flex items-center space-x-2 mt-2">
+                  <Label htmlFor="large-file-threshold" className="text-sm">Large File Threshold</Label>
+                  <Input
+                    id="large-file-threshold"
+                    type="number"
+                    min={100}
+                    max={10240}
+                    step={100}
+                    value={Math.round(largeFileThreshold / 1024)}
+                    onChange={e => setLargeFileThreshold(Number(e.target.value) * 1024)}
+                    className="w-24"
+                  />
+                  <span className="text-xs text-slate-500">KB</span>
+                </div>
               </div>
             </div>
           )}
@@ -135,7 +162,7 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
       )}
 
       {/* AI Model Optimization (sub-toggle, only visible if AI Features is enabled) */}
-      {aiEnabled && (
+      {aiFeaturesEnabled && (
         <div className="pl-6 border-l-2 border-slate-200 space-y-2">
           <Label htmlFor="grok-api-enabled" className="flex items-center gap-2 text-base">
             <Brain className="h-4 w-4" />
@@ -154,38 +181,44 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
           <p className="text-sm text-slate-500">
             Use the Grok API to optimize model parameters for best forecast accuracy. When disabled, traditional grid search will be used.
           </p>
-          {/* AI Failure Threshold Setting */}
-          <div className="flex items-center space-x-2 mt-2">
-            <Label htmlFor="ai-failure-threshold" className="text-sm">AI Failure Threshold</Label>
-            <Input
-              id="ai-failure-threshold"
-              type="number"
-              min={1}
-              max={20}
-              value={aiFailureThreshold}
-              onChange={e => setAiFailureThreshold(Number(e.target.value))}
-              className="w-20"
-            />
-            <span className="text-xs text-slate-500">(Disable AI after this many consecutive failures. Default: 5)</span>
-          </div>
-
-          {/* AI Model Optimization Context (only visible if AI Model Optimization is enabled) */}
-          {aiForecastModelOptimizationEnabled && (
-            <div className="pl-6 border-l-2 border-slate-100 mt-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Sparkles className="h-4 w-4 text-purple-500" />
-                <span className="font-semibold text-purple-700">AI Model Optimization Context</span>
+          
+          {/* AI Failure Threshold & Business Context */}
+          <div className="pl-6 border-l-2 border-slate-200 mt-4 space-y-4 pt-4">
+            {/* AI Failure Threshold Setting */}
+            <div className="space-y-2">
+              <Label htmlFor="ai-failure-threshold" className="text-sm font-semibold">AI Failure Threshold</Label>
+              <div className="flex items-center space-x-2">
+                <Input
+                  id="ai-failure-threshold"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={aiFailureThreshold}
+                  onChange={e => setAiFailureThreshold(Number(e.target.value))}
+                  className="w-20"
+                />
+                <span className="text-xs text-slate-500">(Disable AI after this many consecutive failures. Default: 5)</span>
               </div>
-              <p className="text-sm text-slate-500 mb-4">
-                These parameters guide the AI Model Optimization process and help tailor results to your business needs.
-              </p>
-              <BusinessContextSettings
-                businessContext={businessContext}
-                setBusinessContext={setBusinessContext}
-                disabled={!aiForecastModelOptimizationEnabled}
-              />
             </div>
-          )}
+
+            {/* AI Model Optimization Context (only visible if AI Model Optimization is enabled) */}
+            {aiForecastModelOptimizationEnabled && (
+              <div className="space-y-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Sparkles className="h-4 w-4 text-purple-500" />
+                    <span className="font-semibold text-purple-700">AI Model Optimization Context</span>
+                  </div>
+                  <p className="text-sm text-slate-500 mb-4">
+                    These parameters guide the AI Model Optimization process and help tailor results to your business needs.
+                  </p>
+                  <BusinessContextSettings
+                    businessContext={businessContext}
+                    setBusinessContext={setBusinessContext}
+                    disabled={!aiForecastModelOptimizationEnabled}
+                  />
+              </div>
+            )}
+          </div>
         </div>
       )}
 

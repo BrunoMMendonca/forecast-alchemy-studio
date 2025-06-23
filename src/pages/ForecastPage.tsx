@@ -51,10 +51,11 @@ const ForecastPage = () => {
   }, [processedDataInfo]);
   
   // Data handlers now get all setters from context
-  const { handleDataUpload, handleImportDataCleaning } = useDataHandlers({
+  const { processNewData, createAllJobs, handleImportDataCleaning } = useDataHandlers({
     setCurrentStep,
     setProcessedDataInfo,
     setForecastResults,
+    aiForecastModelOptimizationEnabled: globalSettings?.aiForecastModelOptimizationEnabled
   });
 
   const handleAIFailure = useCallback((errorMessage: string) => {
@@ -75,7 +76,7 @@ const ForecastPage = () => {
         queueSize={summary?.total ?? 0}
         forecastPeriods={globalSettings?.forecastPeriods ?? 12}
         aiForecastModelOptimizationEnabled={globalSettings?.aiForecastModelOptimizationEnabled ?? false}
-        onDataUpload={handleDataUpload}
+        onConfirm={createAllJobs}
         onDataCleaning={() => {}} // This needs to be re-wired to a new data cleaning flow
         onImportDataCleaning={handleImportDataCleaning}
         onForecastGeneration={setForecastResults}

@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -5,9 +8,6 @@ import { fileURLToPath } from 'url';
 import { db } from './src/backend/db.js'; // Required to initialize the DB connection
 import apiRoutes from './src/backend/routes.js';
 // import { runWorker } from './src/backend/worker.js'; // This is incorrect for the worker model
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

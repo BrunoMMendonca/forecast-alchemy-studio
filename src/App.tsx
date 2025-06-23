@@ -5,7 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import Index from '@/pages/Index';
-import WorkflowPage from '@/pages/WorkflowPage';
+import ForecastPage from '@/pages/ForecastPage';
 import NotFound from '@/pages/NotFound';
 import { MainLayout } from '@/components/MainLayout';
 import { OptimizationCacheProvider } from '@/context/OptimizationCacheContext';
@@ -22,7 +22,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route element={<MainLayout />}>
-              <Route path="forecast" element={<WorkflowPage />} />
+              <Route path="forecast" element={<ForecastPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

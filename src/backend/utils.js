@@ -1,3 +1,5 @@
+import Papa from 'papaparse';
+
 function isDateString(str) {
   if (!str || typeof str !== 'string') return false;
   const normalizedStr = str.trim();
@@ -52,6 +54,10 @@ function detectColumnRole(header, index, allHeaders) {
 }
 
 function detectColumnRoles(headers) {
+  if (!headers || !Array.isArray(headers)) {
+    console.warn('detectColumnRoles called with invalid headers:', headers);
+    return [];
+  }
   return headers.map((header, index) => ({
     originalName: header,
     role: detectColumnRole(header, index, headers)
@@ -61,215 +67,182 @@ function detectColumnRoles(headers) {
 // Helper function to safely apply transformations based on configuration
 function applyTransformations(csvData, config) {
   try {
+    console.log('[applyTransformations] Starting. Received config:', JSON.stringify(config, null, 2));
+    console.log(`[applyTransformations] Received ${csvData?.length ?? 0} rows.`);
+    if (csvData?.length > 0) {
+      console.log('[applyTransformations] Initial data sample (first row):', JSON.stringify(csvData[0], null, 2));
+    }
+
+    if (!csvData || !Array.isArray(csvData) || csvData.length === 0) {
+      console.warn('applyTransformations called with invalid or empty csvData');
+      return { data: [], columns: [] };
+    }
+    
+    if (!config || !config.operations || !Array.isArray(config.operations)) {
+      console.warn('applyTransformations called with invalid config');
+      return { data: csvData, columns: Object.keys(csvData[0] || {}) };
+    }
+
     let result = [...csvData];
     let pivotColumns = null;
     
     console.log('Starting transformation with config:', JSON.stringify(config, null, 2));
-    console.log('Initial data sample:', result[0]);
+    if (result.length > 0) {
+      console.log('Initial data sample:', result[0]);
+    }
     
     for (let i = 0; i < config.operations.length; i++) {
       const operation = config.operations[i];
-      if (!result || result.length === 0) {
-        console.warn(`No data left to process before operation ${i}: ${operation.type}`);
+      if (!result || !Array.isArray(result) || result.length === 0) {
+        console.warn(`No data left to process before operation ${i}: ${operation.operation}`);
         break;
       }
-      console.log(`Applying operation ${i}: ${operation.type}`, operation);
+      console.log(`Applying operation ${i}: ${operation.operation}`, operation);
       
       try {
-      switch (operation.type) {
-        case 'filter_rows': {
-          if (operation.filters && Array.isArray(operation.filters)) {
-            // New explicit filter format
-            result = result.filter(row => {
-              return operation.filters.every(f => {
-                const col = f.column;
-                if (!(col in row)) {
-                  console.warn(`Filter column '${col}' does not exist in row. Skipping this filter for this row.`);
-                  return true; // skip this filter for this row
-                }
-                const val = row[col];
-                switch (f.op) {
-                  case 'IS NOT NULL':
-                    return val !== undefined && val !== null && val !== '';
-                  case '==':
-                    return val == f.value;
-                  case '!=':
-                    return val != f.value;
-                  case '>':
-                    return parseFloat(val) > parseFloat(f.value);
-                  case '>=':
-                    return parseFloat(val) >= parseFloat(f.value);
-                  case '<':
-                    return parseFloat(val) < parseFloat(f.value);
-                  case '<=':
-                    return parseFloat(val) <= parseFloat(f.value);
-                  default:
-                    console.warn(`Unknown filter op: ${f.op}`);
-                    return true;
-                }
-              });
-            });
-          } else if (operation.condition) {
-            // Old string-based logic (for backward compatibility)
-            const subConditions = operation.condition.split('AND').map(s => s.trim());
-            result = result.filter(row => {
-              return subConditions.every(cond => {
-                // IS NOT NULL
-                if (cond.includes('IS NOT NULL')) {
-                  const field = cond.split('IS NOT NULL')[0].trim();
-                  if (!(field in row)) {
-                    console.warn(`Filter field '${field}' does not exist in row. Skipping this condition.`);
-                    return true;
-                  }
-                  return row[field] !== undefined && row[field] !== null && row[field] !== '';
-                } else if (cond.includes('>=')) {
-                  const [field, value] = cond.split('>=').map(s => s.trim());
-                  if (!(field in row)) return true;
-                  return parseFloat(row[field]) >= parseFloat(value);
-                } else if (cond.includes('>')) {
-                  const [field, value] = cond.split('>').map(s => s.trim());
-                  if (!(field in row)) return true;
-                  return parseFloat(row[field]) > parseFloat(value);
-                } else if (cond.includes('<=')) {
-                  const [field, value] = cond.split('<=').map(s => s.trim());
-                  if (!(field in row)) return true;
-                  return parseFloat(row[field]) <= parseFloat(value);
-                } else if (cond.includes('<')) {
-                  const [field, value] = cond.split('<').map(s => s.trim());
-                  if (!(field in row)) return true;
-                  return parseFloat(row[field]) < parseFloat(value);
-                } else if (cond.includes('==')) {
-                  const [field, value] = cond.split('==').map(s => s.trim());
-                  if (!(field in row)) return true;
-                  return row[field] == value;
-                }
-                return true;
-              });
-            });
-          }
-          break;
-        }
-        case 'rename_column':
-          result = result.map(row => {
-            const newRow = { ...row };
-            if (newRow[operation.from] !== undefined) {
-              newRow[operation.to] = newRow[operation.from];
-              delete newRow[operation.from];
-            }
-            return newRow;
-          });
-          break;
-        case 'combine_date_columns':
-          result = result.map(row => {
-            const newRow = { ...row };
-            const year = row[operation.year_col];
-            const month = row[operation.month_col];
-            if (year && month) {
-              const paddedMonth = month.toString().padStart(2, '0');
-              const dateStr = `${year}-${paddedMonth}-01`;
-              newRow[operation.output_col] = dateStr;
-              delete newRow[operation.year_col];
-              delete newRow[operation.month_col];
-            }
-            return newRow;
-          });
-          break;
-        case 'transpose_data':
-          if (operation.if_needed && result.length > 0) {
-            const firstRow = result[0];
-            const hasDateColumns = Object.keys(firstRow).some(key => 
-              key.toLowerCase().includes('date') || 
-              key.toLowerCase().includes('year') || 
-              key.toLowerCase().includes('month')
-            );
-            if (!hasDateColumns) {
-              console.log('Transposing data to align dates as columns');
-              const transposed = [];
-              const headers = Object.keys(firstRow);
-              for (const row of result) {
-                const newRow = {};
-                for (const header of headers) {
-                  newRow[header] = row[header];
-                }
-                transposed.push(newRow);
+        console.log(`[applyTransformations] Before op ${i} (${operation.operation}): ${result.length} rows. Sample:`, JSON.stringify(result[0] || {}, null, 2));
+        switch (operation.operation) {
+          case 'rename':
+            result = result.map(row => {
+              const newRow = { ...row };
+              if (newRow[operation.old_name] !== undefined) {
+                newRow[operation.new_name] = newRow[operation.old_name];
+                delete newRow[operation.old_name];
               }
-              result = transposed;
-            }
-          }
-          break;
-        case 'normalize_format':
-          if (operation.target === 'long' && result.length > 0) {
-            const dateColumns = Object.keys(result[0]).filter(key => 
-              key.toLowerCase().includes('date') || 
-              key.toLowerCase().includes('month') ||
-              key.toLowerCase().includes('year')
-            );
-            const valueColumns = Object.keys(result[0]).filter(key => 
-              key.toLowerCase().includes('sales') || 
-              key.toLowerCase().includes('value') ||
-              key.toLowerCase().includes('amount') ||
-              key.toLowerCase().includes('retail')
-            );
-            const normalized = [];
-            const fieldMap = operation.field_map || {};
-            const skuFieldCandidates = ['ProductCode', 'SKU', 'Material Code', 'ITEM CODE', 'sku', 'product', 'item'];
-            const descFieldCandidates = ['Description', 'Product Description', 'ITEM DESCRIPTION', 'description', 'desc'];
-            const supplierFieldCandidates = ['SUPPLIER', 'supplier'];
-            const typeFieldCandidates = ['ITEM TYPE', 'type'];
-
-            for (const row of result) {
-              for (const dateCol of dateColumns) {
-                for (const valueCol of valueColumns) {
-                  normalized.push({
-                    date: row[dateCol],
-                    value: row[valueCol],
-                    sku: (fieldMap.sku && row[fieldMap.sku]) || findField(row, skuFieldCandidates) || 'Unknown',
-                    description: (fieldMap.description && row[fieldMap.description]) || findField(row, descFieldCandidates) || '',
-                    supplier: (fieldMap.supplier && row[fieldMap.supplier]) || findField(row, supplierFieldCandidates) || '',
-                    type: (fieldMap.type && row[fieldMap.type]) || findField(row, typeFieldCandidates) || ''
-                  });
+              return newRow;
+            });
+            break;
+          case 'combine':
+            result = result.map(row => {
+              const newRow = { ...row };
+              if (operation.cols && operation.cols.every(c => row[c] !== undefined)) {
+                const year = row['YEAR'];
+                const month = row['MONTH'];
+                if (year && month) {
+                  const paddedMonth = month.toString().padStart(2, '0');
+                  newRow[operation.new_col] = `${year}-${paddedMonth}-01`;
                 }
               }
-            }
-            result = normalized;
-          }
-          break;
-        case 'remove_columns':
-          result = result.map(row => {
-            const newRow = { ...row };
-            operation.columns.forEach(col => delete newRow[col]);
-            return newRow;
-          });
-          break;
-        case 'pivot': {
-          const indexFields = operation.index || [];
-          const columnField = operation.columns;
-          const valueField = operation.values;
-          if (!indexFields.length || !columnField || !valueField) {
-            console.warn('Pivot operation missing required fields. Skipping.');
+              return newRow;
+            });
+            break;
+          case 'filter': {
+            if (!operation.condition) break;
+            const evaluate = (row, condition) => {
+                const parts = condition.split(' and ').map(p => p.trim());
+                return parts.every(part => {
+                    if (part.startsWith('is_numeric')) {
+                        const col = part.match(/\(([^)]+)\)/)[1];
+                        return row[col] && !isNaN(parseFloat(row[col])) && isFinite(row[col]);
+                    }
+                    if (part.startsWith('not is_blank')) {
+                        const col = part.match(/\('([^)]+)'\)/)[1].trim();
+                        return row[col] !== null && row[col] !== undefined && row[col].toString().trim() !== '';
+                    }
+                    const operators = ['>=', '<=', '==', '!=', '>', '<'];
+                    const op = operators.find(o => part.includes(o));
+                    if (op) {
+                        const [col, valStr] = part.split(op).map(s => s.trim());
+                        const val = valStr.replace(/'/g, ''); // remove quotes
+                        const rowVal = row[col];
+                        if (rowVal === undefined || rowVal === null) return false;
+                        switch (op) {
+                            case '>=': return parseFloat(rowVal) >= parseFloat(val);
+                            case '<=': return parseFloat(rowVal) <= parseFloat(val);
+                            case '==': return rowVal == val;
+                            case '!=': return rowVal != val;
+                            case '>': return parseFloat(rowVal) > parseFloat(val);
+                            case '<': return parseFloat(rowVal) < parseFloat(val);
+                        }
+                    }
+                    return true;
+                });
+            };
+            result = result.filter(row => evaluate(row, operation.condition));
             break;
           }
-          const pivoted = pivotTable(result, indexFields, columnField, valueField);
-          result = pivoted.data;
-          pivotColumns = pivoted.columns;
-          break;
+          case 'select': {
+            const selectedCols = operation.cols;
+            if (!selectedCols || !Array.isArray(selectedCols)) {
+              console.warn('select operation missing or invalid cols array');
+              break;
+            }
+            result = result.map(row => {
+              const newRow = {};
+              selectedCols.forEach(col => {
+                newRow[col] = row[col];
+              });
+              return newRow;
+            });
+            break;
+          }
+          case 'pivot_wider': {
+              const { names_from, values_from, values_fill } = operation;
+              if (!result[0] || !names_from || !values_from) {
+                console.warn('pivot_wider operation missing required fields or no data');
+                break;
+              }
+              const id_cols = Object.keys(result[0]).filter(c => c !== names_from && c !== values_from);
+
+              const grouped = result.reduce((acc, row) => {
+                  const key = id_cols.map(c => row[c]).join('---');
+                  if (!acc[key]) {
+                      acc[key] = {};
+                      id_cols.forEach(c => acc[key][c] = row[c]);
+                  }
+                  const dateKey = row[names_from];
+                  if(dateKey){
+                    acc[key][dateKey] = row[values_from];
+                  }
+                  return acc;
+              }, {});
+              
+              const allDateKeys = [...new Set(result.map(row => row[names_from]))].filter(Boolean).sort();
+              
+              result = Object.values(grouped).map((group) => {
+                  allDateKeys.forEach(dateKey => {
+                      if (group[dateKey] === undefined) {
+                          group[dateKey] = values_fill || '0';
+                      }
+                  });
+                  return group;
+              });
+              pivotColumns = [...id_cols, ...allDateKeys];
+              break;
+          }
+          default:
+            console.log(`Unknown operation type: ${operation.operation}`);
+            break;
         }
-        default:
-          console.warn(`Unknown operation type: ${operation.type}`);
+      } catch (opError) {
+        console.error(`Error applying operation ${i} (${operation.operation}):`, opError);
+        // Don't break the loop, continue with next operation
       }
-        console.log(`After operation ${i} (${operation.type}):`, result.length, 'rows, sample:', result[0]);
-      } catch (operationError) {
-        console.error(`Error in operation ${i} (${operation.type}):`, operationError);
-        console.error('Operation details:', operation);
-        console.error('Operation error stack:', operationError.stack);
-        throw new Error(`Failed in operation ${i} (${operation.type}): ${operationError.message}`);
+      
+      // Safe check for result after each operation
+      if (result && Array.isArray(result) && result.length > 0) {
+        console.log(`After operation ${i} (${operation.operation}): ${result.length} rows, sample:`, result[0]);
+        console.log(`[applyTransformations] After op ${i} (${operation.operation}): ${result.length} rows. Sample:`, JSON.stringify(result[0] || {}, null, 2));
+      } else {
+        console.log(`After operation ${i} (${operation.operation}): 0 rows or invalid result.`);
+        console.log(`[applyTransformations] After op ${i} (${operation.operation}): 0 rows or invalid result.`);
+        result = []; // Ensure result is always an array
       }
     }
-    return { data: result, columns: pivotColumns };
+
+    if (pivotColumns) {
+        console.log('[applyTransformations] Finished with pivot. Returning columns:', pivotColumns);
+        return { data: result, columns: pivotColumns };
+    }
+
+    // Fallback if no pivot happened
+    const finalColumns = (result && Array.isArray(result) && result.length > 0) ? Object.keys(result[0]) : [];
+    console.log('[applyTransformations] Finished without pivot. Returning columns:', finalColumns);
+    return { data: result || [], columns: finalColumns };
+
   } catch (error) {
-    console.error('Error in applyTransformations:', error);
-    console.error('Transformations error stack:', error.stack);
-    throw error;
+    console.error('Error in applyTransformations:', error.message, error.stack);
+    return { data: [], columns: [] };
   }
 }
 
@@ -451,6 +424,62 @@ function transposeData(data, headers) {
   };
 }
 
+function parseCsvWithHeaders(csvData) {
+  if (!csvData) {
+    return { data: [], headers: [] };
+  }
+
+  const detectedSeparator = autoDetectSeparator(csvData.split('\\n')[0]);
+  
+  const parsed = Papa.parse(csvData, {
+    skipEmptyLines: true,
+    delimiter: detectedSeparator,
+    header: false,
+  });
+
+  if (!parsed.data || parsed.data.length === 0) {
+    return { data: [], headers: [] };
+  }
+
+  const rawHeaders = parsed.data[0];
+  const dataRows = parsed.data.slice(1);
+
+  // Map non-empty headers to their original index
+  const headerMapping = [];
+  rawHeaders.forEach((h, i) => {
+    if (h && h.trim() !== '') {
+      headerMapping.push({ originalIndex: i, name: h.trim() });
+    }
+  });
+
+  // Ensure header names are unique
+  const counts = {};
+  const finalHeaders = headerMapping.map(h => {
+    let newName = h.name;
+    if (counts[newName]) {
+      counts[newName]++;
+      newName = `${newName}_${counts[newName]}`;
+    } else {
+      counts[newName] = 1;
+    }
+    return newName;
+  });
+
+  // Map rows to objects with unique headers as keys
+  const data = dataRows.map(row => {
+    const newRow = {};
+    headerMapping.forEach((h, i) => {
+      // Use finalHeaders[i] as the key
+      if (row && typeof row[h.originalIndex] !== 'undefined') {
+        newRow[finalHeaders[i]] = row[h.originalIndex];
+      }
+    });
+    return newRow;
+  }).filter(row => Object.keys(row).length > 0);
+
+  return { data, headers: finalHeaders };
+}
+
 export {
   isDateString,
   isLikelyDateColumn,
@@ -462,5 +491,6 @@ export {
   pivotTable,
   normalizeAndPivotData,
   autoDetectSeparator,
-  transposeData
+  transposeData,
+  parseCsvWithHeaders
 };

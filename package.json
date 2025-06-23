@@ -8,8 +8,8 @@
     "build": "vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "start:api": "node server.js api",
-    "start:worker": "node src/backend/worker.js"
+    "start:api": "node --import=dotenv/config server.js api",
+    "start:worker": "node --import=dotenv/config src/backend/worker.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
