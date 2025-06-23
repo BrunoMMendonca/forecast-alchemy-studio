@@ -32,6 +32,20 @@ import { ChoiceStep } from './CsvImportWizard/ChoiceStep';
 import { PreviewStep } from './CsvImportWizard/PreviewStep';
 import { MapStep } from './CsvImportWizard/MapStep';
 
+/*
+ * CsvImportWizard Component
+ * -------------------------
+ * This component acts as the main container and orchestrator for the multi-step CSV import process.
+ * It manages all the state and logic, and it renders the appropriate step-based sub-component
+ * based on the current state of the import flow.
+ *
+ * The step-based sub-components are:
+ * - UploadStep: Handles the initial file upload UI. Located at './CsvImportWizard/UploadStep.tsx'.
+ * - ChoiceStep: Allows the user to choose between an AI-powered or manual import. Located at './CsvImportWizard/ChoiceStep.tsx'.
+ * - PreviewStep: Displays a preview of the data, either transformed by AI or adjusted manually. Located at './CsvImportWizard/PreviewStep.tsx'.
+ * - MapStep: Handles the column mapping and final data normalization before import. Located at './CsvImportWizard/MapStep.tsx'.
+ */
+
 export interface CsvUploadResult {
   success: boolean;
   filePath: string;
@@ -149,6 +163,8 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
   const [isErrorDialogOpen, setIsErrorDialogOpen] = useState(false);
   const [originalCsv, setOriginalCsv] = useState<string>('');
 
+  const isAiFlowEnabled = aiCsvImportEnabled && aiFeaturesEnabled;
+
   // Add a loading state for manual preview parsing
   const [previewLoading, setPreviewLoading] = useState(false);
   const [manualConfirmLoading, setManualConfirmLoading] = useState(false);
@@ -241,7 +257,7 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
           setTransposed(result.transposed);
           
           // Now that preview is ready, decide the next step
-          if (aiCsvImportEnabled) {
+          if (isAiFlowEnabled) {
           setAiStep('describe');
           } else {
             setAiStep('manual');
@@ -851,10 +867,10 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
         />
       );
     }
-    if (step === 'preview' && aiCsvImportEnabled && aiStep === 'describe') {
+    if (step === 'preview' && isAiFlowEnabled && aiStep === 'describe') {
         return (
         <ChoiceStep
-          aiCsvImportEnabled={aiCsvImportEnabled}
+          aiCsvImportEnabled={isAiFlowEnabled}
           largeFileDetected={largeFileDetected}
           largeFileProcessingEnabled={largeFileProcessingEnabled}
           aiLoading={aiLoading}
@@ -872,7 +888,7 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
     if (step === 'preview') {
         return (
         <PreviewStep
-          aiCsvImportEnabled={aiCsvImportEnabled}
+          aiCsvImportEnabled={isAiFlowEnabled}
           aiStep={aiStep}
           aiTransformedData={aiTransformedData}
           aiResultColumns={aiResultColumns}
@@ -886,7 +902,7 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
           onSeparatorChange={handleSeparatorChange}
           onTransposeChange={handleTransposeChange}
           onBackToChoice={() => {
-                      if (aiCsvImportEnabled) {
+                      if (isAiFlowEnabled) {
                         setAiStep('describe');
                       } else {
                         setStep('upload');
@@ -950,7 +966,7 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
             if (aiStep === 'ai-mapping') {
               setAiStep('ai-preview');
               setStep('preview');
-            } else if (aiCsvImportEnabled) {
+            } else if (isAiFlowEnabled) {
               setAiStep('describe');
               setStep('preview');
             } else {

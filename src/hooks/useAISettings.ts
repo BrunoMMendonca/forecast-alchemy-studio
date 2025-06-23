@@ -30,11 +30,49 @@ export const useAISettings = (props?: UseAISettingsProps) => {
     }
   }, []);
 
+  // Listen for localStorage changes to sync state across hook instances
+  useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === AI_SETTINGS_KEY && event.newValue) {
+        try {
+          const settings: AISettings = JSON.parse(event.newValue);
+          setEnabledState(settings.enabled ?? DEFAULT_SETTINGS.enabled);
+        } catch (error) {
+          // Silent error handling
+        }
+      }
+    };
+
+    const handleCustomStorageChange = (event: CustomEvent) => {
+      if (event.detail.key === AI_SETTINGS_KEY) {
+        try {
+          const settings: AISettings = JSON.parse(event.detail.newValue);
+          setEnabledState(settings.enabled ?? DEFAULT_SETTINGS.enabled);
+        } catch (error) {
+          // Silent error handling
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('localStorageChange', handleCustomStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('localStorageChange', handleCustomStorageChange);
+    };
+  }, []);
+
   // Save settings to localStorage whenever they change
   const saveSettings = useCallback((enabled: boolean) => {
     try {
       const settings: AISettings = { enabled };
-      localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(settings));
+      const newSettingsValue = JSON.stringify(settings);
+      localStorage.setItem(AI_SETTINGS_KEY, newSettingsValue);
+      // Dispatch custom event for same-tab synchronization
+      window.dispatchEvent(new CustomEvent('localStorageChange', {
+        detail: { key: AI_SETTINGS_KEY, newValue: newSettingsValue }
+      }));
     } catch (error) {
       // Silent error handling
     }
