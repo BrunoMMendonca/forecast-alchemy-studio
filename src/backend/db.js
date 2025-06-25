@@ -62,6 +62,7 @@ const dbReady = new Promise((resolve, reject) => {
             method TEXT DEFAULT 'grid',
             payload TEXT,
             reason TEXT,
+            batchId TEXT,
             status TEXT NOT NULL DEFAULT 'pending', -- pending, running, completed, failed
             progress INTEGER DEFAULT 0,
             result TEXT,
@@ -69,6 +70,7 @@ const dbReady = new Promise((resolve, reject) => {
             priority INTEGER DEFAULT 1,
             data TEXT, -- Storing the full job data payload
             createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
             startedAt DATETIME,
             completedAt DATETIME,
             FOREIGN KEY (organizationId) REFERENCES organizations (id)

@@ -31,6 +31,8 @@ import { UploadStep } from './CsvImportWizard/UploadStep';
 import { ChoiceStep } from './CsvImportWizard/ChoiceStep';
 import { PreviewStep } from './CsvImportWizard/PreviewStep';
 import { MapStep } from './CsvImportWizard/MapStep';
+import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { useExistingDataDetection } from '@/hooks/useExistingDataDetection';
 
 /*
  * CsvImportWizard Component
@@ -64,6 +66,9 @@ interface CsvImportWizardProps {
   lastImportFileName?: string | null;
   lastImportTime?: string | null;
   onAIFailure: (errorMessage: string) => void;
+  onLoadExistingData?: (result: CsvUploadResult) => void;
+  currentLoadedFile?: string;
+  setLastLoadedDataset?: (dataset: any) => void;
 }
 
 const SEPARATORS = [',', ';', '\t', '|'];
@@ -134,7 +139,7 @@ const TransposeDiagramSVG = () => {
   );
 };
 
-export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, onConfirm, onFileNameChange, lastImportFileName, lastImportTime, onAIFailure }) => {
+export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, onConfirm, onFileNameChange, lastImportFileName, lastImportTime, onAIFailure, onLoadExistingData, currentLoadedFile, setLastLoadedDataset }) => {
   const [file, setFile] = useState<File | null>(null);
   const [separator, setSeparator] = useState<string>(',');
   const [data, setData] = useState<any[]>([]);
@@ -191,6 +196,9 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
   // Add new state for AI processing stages
   const [aiProcessingStage, setAiProcessingStage] = useState<'initializing' | 'preparing_request' | 'waiting_for_ai' | 'parsing_response' | 'applying_transform' | 'finalizing'>('initializing');
 
+  const [duplicateCheckResult, setDuplicateCheckResult] = useState<any>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
   const DATE_FORMAT_OPTIONS = [
     { value: 'dd/mm/yyyy', label: 'dd/mm/yyyy' },
     { value: 'mm/dd/yyyy', label: 'mm/dd/yyyy' },
@@ -217,7 +225,17 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
 
   const hasMaterialCode = columnRoles.includes('Material Code');
 
+  const checkCsvDuplicate = async (csvData: string) => {
+    const response = await fetch('/api/check-csv-duplicate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csvData }),
+    });
+    return response.json();
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('[FileInput] handleFileChange called', e);
     if (e.target.files && e.target.files[0]) {
       const f = e.target.files[0];
       setFile(f);
@@ -228,6 +246,15 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
       const reader = new FileReader();
       reader.onload = async (event) => {
         const text = event.target?.result as string;
+        // Duplicate check
+        console.log('[DuplicateCheck] Checking for duplicate...');
+        const dupResult = await checkCsvDuplicate(text);
+        console.log('[DuplicateCheck] Result:', dupResult);
+        if (dupResult.duplicate) {
+          setDuplicateCheckResult(dupResult);
+          setPendingFile(f);
+          return;
+        }
         setOriginalCsv(text);
         
         // --- FIX: Detect large file based on its size and settings ---
@@ -781,19 +808,41 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
   };
 
   const handleManualConfirm = async () => {
-    if (!originalCsv || columnRoles.length === 0) {
-      setError("Cannot process manual import without data and column roles.");
+    if (!header.length || !data.length || columnRoles.length === 0) {
+      setError("Cannot process manual import without cleaned data and column roles.");
       return;
     }
     setManualConfirmLoading(true);
     setError(null);
     try {
+      // Debug log for roles and mappings
+      console.log('Manual Confirm: columnRoles', columnRoles);
+      console.log('Manual Confirm: columnMappings', columnMappings);
+      console.log('Manual Confirm: manualMappingNormalizedHeaders', manualMappingNormalizedHeaders);
+      // Build finalColumnRoles for normalized output columns
+      console.log('Manual Confirm: manualMappingNormalizedHeaders', manualMappingNormalizedHeaders);
+      // Assume normalizedHeaders and columnMappings are in sync with normalizedData
+      const finalColumnRoles = manualMappingNormalizedHeaders.map((header) => {
+        // If it's a known output (Material Code, Description, Date, Sales), map accordingly
+        if (header === 'Material Code') return columnRoles[columnMappings.findIndex(m => m.role === 'Material Code')] ?? 'Material Code';
+        if (header === 'Description') return columnRoles[columnMappings.findIndex(m => m.role === 'Description')] ?? 'Description';
+        if (header === 'Date') return 'Date';
+        if (header === 'Sales') return 'Sales';
+        // For aggregatable fields, use the role from the mapping
+        const mapping = columnMappings.find(m => m.role !== 'Material Code' && m.role !== 'Description' && m.role !== 'Date' && m.role !== 'Sales' && m.role !== 'Ignore');
+        return mapping ? mapping.role : 'Ignore';
+      });
+
       const payload = {
-        csvData: originalCsv,
+        headers: header, // cleaned, non-empty headers
+        data: data,      // cleaned, non-empty rows (wide format)
         mappings: columnMappings,
         dateRange,
         dateFormat,
-        transpose: transposed,
+        transpose,
+        finalColumnRoles,
+        originalCsvData: previewRows, // Send original CSV data for detection logic
+        originalCsvString: originalCsv // Send raw CSV string for consistent hashing
       };
 
       const response = await fetch('/api/process-manual-import', {
@@ -817,6 +866,7 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
       };
       setUploadResult(uploadResult);
       onDataReady(uploadResult);
+      await onConfirm(uploadResult);
       
 
     } catch (err: any) {
@@ -850,6 +900,79 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
     </AlertDialog>
   );
 
+  // Modal actions
+  const handleLoadExisting = async () => {
+    if (duplicateCheckResult?.existingDataset && onLoadExistingData) {
+      // Fetch the dataset JSON from the backend
+      const response = await fetch(`/api/load-processed-data?filePath=uploads/${duplicateCheckResult.existingDataset.filename}`);
+      const fileData = await response.json();
+      const result = {
+        success: true,
+        filePath: `uploads/${duplicateCheckResult.existingDataset.filename}`,
+        summary: duplicateCheckResult.existingDataset.summary,
+        skuList: Array.isArray(fileData.data) ? fileData.data.map((row: any) => String(row['Material Code'])).filter(Boolean) : []
+      };
+      
+      // Track this as the last loaded dataset
+      if (setLastLoadedDataset) {
+        setLastLoadedDataset(duplicateCheckResult.existingDataset);
+      }
+      
+      onLoadExistingData(result);
+    }
+  };
+  const handleUploadAnyway = () => {
+    if (pendingFile) {
+      setDuplicateCheckResult(null); // Close the modal
+      setFile(pendingFile);
+      setError(null);
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const text = event.target?.result as string;
+        setOriginalCsv(text);
+        // --- Detect large file based on its size and settings ---
+        if (largeFileProcessingEnabled && text.length > largeFileThreshold) {
+          setLargeFileDetected(true);
+        } else {
+          setLargeFileDetected(false);
+        }
+        // --- Call backend for preview ---
+        setPreviewLoading(true);
+        try {
+          const response = await fetch('/api/generate-preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ csvData: text }),
+          });
+          const result = await response.json();
+          if (!response.ok) {
+            throw new Error(result.error || 'Failed to generate preview from backend.');
+          }
+          setHeader(result.headers);
+          setData(result.previewRows);
+          setColumnRoles(result.columnRoles);
+          setSeparator(result.separator);
+          setTransposed(result.transposed);
+          if (isAiFlowEnabled) {
+            setAiStep('describe');
+          } else {
+            setAiStep('manual');
+          }
+          setStep('preview');
+        } catch (err: any) {
+          setError(err.message);
+        } finally {
+          setPreviewLoading(false);
+        }
+      };
+      reader.readAsText(pendingFile);
+    }
+  };
+  const handleCancelDuplicate = () => {
+    setDuplicateCheckResult(null);
+    setPendingFile(null);
+  };
+
   // Main render logic:
   const renderContent = () => {
     if (step === 'upload') {
@@ -864,6 +987,23 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
             onDragLeave={() => setIsDragging(false)}
           onDropAreaClick={handleDropAreaClick}
           onFileChange={handleFileChange}
+          onLoadDataset={async (dataset) => {
+            // Fetch the dataset JSON from the backend
+            const response = await fetch(`/api/load-processed-data?filePath=uploads/${dataset.filename}`);
+            const fileData = await response.json();
+            const result = {
+              success: true,
+              filePath: `uploads/${dataset.filename}`,
+              summary: dataset.summary,
+              skuList: Array.isArray(fileData.data) ? fileData.data.map((row: any) => String(row['Material Code'])).filter(Boolean) : []
+            };
+            if (onLoadExistingData) {
+              onLoadExistingData(result);
+            }
+            setUploadResult(result);
+            setStep('preview');
+          }}
+          loadedDatasetFile={currentLoadedFile || uploadResult?.filePath}
         />
       );
     }
@@ -952,11 +1092,56 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
           manualConfirmLoading={manualConfirmLoading}
           handleConfirmClick={async () => {
         if (isAIMapping) {
-          if (uploadResult) {
+          setManualConfirmLoading(true);
+          setError(null);
+          try {
+            // Build finalColumnRoles for normalized output columns (AI flow)
+            const finalColumnRoles = aiMappingNormalizedHeaders.map((header) => {
+              // If it's a known output (Material Code, Description, Date, Sales), map accordingly
+              if (header === 'Material Code') return aiColumnRoles[aiResultColumns.indexOf('Material Code')] ?? 'Material Code';
+              if (header === 'Description') return aiColumnRoles[aiResultColumns.indexOf('Description')] ?? 'Description';
+              if (header === 'Date') return 'Date';
+              if (header === 'Sales') return 'Sales';
+              // For any other columns, try to find the mapping by header name
+              const idx = aiResultColumns.indexOf(header);
+              return idx !== -1 ? aiColumnRoles[idx] : 'Ignore';
+            });
+            console.log('AI Confirm: finalColumnRoles', finalColumnRoles);
+            const payload = {
+              transformedData: aiTransformedData,
+              columns: aiResultColumns,
+              columnRoles: aiColumnRoles,
+              finalColumnRoles, // NEW: pass roles for normalized output columns
+              originalCsvData: previewRows, // Send original CSV data for detection logic
+              originalCsvString: originalCsv // Send raw CSV string for consistent hashing
+            };
+
+            const response = await fetch('/api/process-ai-import', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+            if (!response.ok) {
+              throw new Error(result.error || 'Failed to process AI import on the backend.');
+            }
+            
+            // The backend returns the same CsvUploadResult object
+            const uploadResult = {
+              success: true,
+              filePath: result.filePath,
+              summary: result.summary,
+              skuList: result.skuList || [],
+            };
+            setUploadResult(uploadResult);
             onDataReady(uploadResult);
             await onConfirm(uploadResult);
-          } else {
-            setError("An error occurred during AI import. Please try again.");
+          } catch (err: any) {
+            console.error('AI Import Confirm Error:', err);
+            setError(err.message);
+          } finally {
+            setManualConfirmLoading(false);
           }
         } else {
           await handleManualConfirm();
@@ -979,9 +1164,29 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
     return null;
 };
 
+const renderDuplicateModal = () => duplicateCheckResult && (
+  <Dialog open={true} onOpenChange={handleCancelDuplicate}>
+    <DialogContent>
+      <DialogTitle>Duplicate File Detected</DialogTitle>
+      <div className="mb-4">
+        A dataset with this file already exists.<br/>
+        <b>{duplicateCheckResult.existingDataset?.name}</b><br/>
+        SKUs: {duplicateCheckResult.existingDataset?.summary?.skuCount}<br/>
+        Date Range: {duplicateCheckResult.existingDataset?.summary?.dateRange?.join(' to ')}
+      </div>
+      <DialogFooter>
+        <Button onClick={handleLoadExisting}>Load Existing</Button>
+        <Button onClick={handleUploadAnyway} variant="outline">Upload Anyway</Button>
+        <Button onClick={handleCancelDuplicate} variant="ghost">Cancel</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+);
+
   return (
     <>
       {renderErrorDialog()}
+    {renderDuplicateModal()}
       {renderContent()}
     </>
   );

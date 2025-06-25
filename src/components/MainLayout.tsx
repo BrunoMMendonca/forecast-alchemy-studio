@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { FloatingSettingsButton } from '@/components/FloatingSettingsButton';
@@ -8,6 +8,7 @@ import { useUnifiedState } from '@/hooks/useUnifiedState';
 import { getDefaultModels } from '@/utils/modelConfig';
 import { JobSummary, useBackendJobStatus } from '@/hooks/useBackendJobStatus';
 import { useGlobalSettings } from '@/hooks/useGlobalSettings';
+import { useExistingDataDetection } from '@/hooks/useExistingDataDetection';
 import { cn } from '@/lib/utils';
 import { OptimizationQueuePopup } from '@/components/OptimizationQueuePopup';
 import { useToast } from '@/hooks/use-toast';
@@ -20,12 +21,25 @@ interface JobMonitorButtonProps {
   onOpen: () => void;
 }
 
-const JobMonitorButton = ({ summary = { total: 0, pending: 0, running: 0, completed: 0, failed: 0, cancelled: 0, isOptimizing: false, progress: 0 }, onOpen }: JobMonitorButtonProps) => {
+const defaultSummary: JobSummary = {
+  total: 0,
+  pending: 0,
+  running: 0,
+  completed: 0,
+  failed: 0,
+  cancelled: 0,
+  isOptimizing: false,
+  progress: 0,
+  batchTotal: 0,
+  batchCompleted: 0
+};
+
+const JobMonitorButton = ({ summary = defaultSummary, onOpen }: JobMonitorButtonProps) => {
   const getButtonContent = () => {
     if (summary.isOptimizing) {
       return {
         icon: <Loader2 className="h-4 w-4 mr-2 animate-spin" />,
-        text: `Processing... (${summary.completed}/${summary.total - summary.cancelled})`,
+        text: `Processing jobs: ${summary.batchCompleted}/${summary.batchTotal}`,
         variant: 'default',
         className: 'bg-blue-600 hover:bg-blue-700 text-white',
       };
@@ -88,12 +102,42 @@ export const MainLayout: React.FC = () => {
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
   const [selectedSKU, setSelectedSKU] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [batchId, setBatchId] = useState<string | null>(null);
   // =====================================
 
   const { setModels } = useUnifiedState(); // Keep global model state separate
-  const { jobs, summary, isPaused, setIsPaused } = useBackendJobStatus();
+  const { jobs, summary, isPaused, setIsPaused } = useBackendJobStatus(batchId);
   const globalSettings = useGlobalSettings();
   const { toast } = useToast();
+  const { autoLoadLastDataset } = useExistingDataDetection();
+
+  // Auto-load last dataset on app start
+  useEffect(() => {
+    const loadLastDataset = async () => {
+      // Only auto-load if we're on the forecast page and no data is currently loaded
+      if (location.pathname.startsWith('/forecast') && !processedDataInfo) {
+        try {
+          const result = await autoLoadLastDataset();
+          if (result) {
+            setProcessedDataInfo(result);
+            setCurrentStep(1); // Navigate to step 1 (Clean & Prepare)
+            toast({
+              title: "Dataset Auto-Loaded",
+              description: `Loaded your last dataset: ${result.summary.skuCount} products`,
+              variant: "default",
+            });
+            console.log('[MainLayout] Auto-loaded last dataset:', result.filePath);
+          }
+        } catch (error) {
+          console.error('[MainLayout] Failed to auto-load last dataset:', error);
+        }
+      }
+    };
+
+    // Small delay to ensure the app is fully initialized
+    const timer = setTimeout(loadLastDataset, 500);
+    return () => clearTimeout(timer);
+  }, [location.pathname, processedDataInfo, autoLoadLastDataset, setProcessedDataInfo, setCurrentStep, toast]);
 
   const handleStepClick = (stepIndex: number) => {
     setCurrentStep(stepIndex);
@@ -120,6 +164,8 @@ export const MainLayout: React.FC = () => {
     setSelectedSKU,
     aiError,
     setAiError,
+    batchId,
+    setBatchId,
   };
 
   return (

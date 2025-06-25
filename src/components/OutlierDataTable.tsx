@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Save, X, ChevronDown } from 'lucide-react';
-import { NormalizedSalesData } from '@/pages/Index';
+import { NormalizedSalesData } from '@/types/forecast';
 
 type OutlierDataPoint = NormalizedSalesData & {
   isOutlier: boolean;

@@ -4,9 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Settings } from 'lucide-react';
 import { ForecastSettings } from '@/components/ForecastSettings';
-import { CacheDebugger } from './CacheDebugger';
 import { BusinessContext } from '@/types/businessContext';
-import { useOptimizationCacheContext } from '@/context/OptimizationCacheContext';
 
 interface FloatingSettingsButtonProps {
   forecastPeriods: number;
@@ -68,7 +66,6 @@ export const FloatingSettingsButton: React.FC<FloatingSettingsButtonProps> = ({
           <Tabs defaultValue="settings" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="settings">Settings</TabsTrigger>
-              <TabsTrigger value="cache">Cache Debug</TabsTrigger>
             </TabsList>
             
             <TabsContent value="settings" className="mt-4">
@@ -90,10 +87,6 @@ export const FloatingSettingsButton: React.FC<FloatingSettingsButtonProps> = ({
                 aiReasoningEnabled={aiReasoningEnabled}
                 setAiReasoningEnabled={setAiReasoningEnabled}
               />
-            </TabsContent>
-            
-            <TabsContent value="cache" className="mt-4">
-              <CacheDebugger cacheContext={useOptimizationCacheContext()} />
             </TabsContent>
           </Tabs>
         </DialogContent>

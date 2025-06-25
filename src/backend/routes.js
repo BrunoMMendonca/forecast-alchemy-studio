@@ -8,6 +8,9 @@ import { fileURLToPath } from 'url';
 import { db } from './db.js';
 import { callGrokAPI } from './grokService.js';
 import { applyTransformations, detectColumnRoles, normalizeAndPivotData, findField, autoDetectSeparator, transposeData, parseCsvWithHeaders } from './utils.js';
+import { optimizeParametersWithAI, getModelRecommendation } from './aiOptimizationService.js';
+import crypto from 'crypto';
+import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,6 +20,44 @@ const router = express.Router();
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+// Helper to discard old files with the same hash
+function discardOldFilesWithHash(csvHash) {
+  const files = fs.readdirSync(UPLOADS_DIR);
+  for (const file of files) {
+    if (file.endsWith('.json') || file.endsWith('.csv')) {
+      const filePath = path.join(UPLOADS_DIR, file);
+      try {
+        if (file.endsWith('.json')) {
+          const jsonData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+          if (jsonData.csvHash && jsonData.csvHash === csvHash) {
+            const newPath = filePath.replace(/\.json$/, '_Discarded.json');
+            fs.renameSync(filePath, newPath);
+          }
+        } else if (file.endsWith('.csv')) {
+          // For CSV, try to match by timestamp in filename (Original_CSV_Upload-<timestamp>.csv)
+          const match = file.match(/Original_CSV_Upload-(\d+)\.csv/);
+          if (match) {
+            const timestamp = match[1];
+            // See if any JSON with this hash has this timestamp
+            for (const jsonFile of files) {
+              if (jsonFile.endsWith('.json')) {
+                const jsonPath = path.join(UPLOADS_DIR, jsonFile);
+                try {
+                  const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+                  if (jsonData.csvHash === csvHash && jsonFile.includes(timestamp)) {
+                    const newPath = filePath.replace(/\.csv$/, '_Discarded.csv');
+                    fs.renameSync(filePath, newPath);
+                  }
+                } catch {}
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+  }
 }
 
 const ALL_MODELS = [
@@ -54,17 +95,17 @@ function getPriorityFromReason(reason) {
 }
 
 // Read AI instructions from files
-const aiInstructionsSmall = fs.readFileSync(path.join(__dirname, 'config/ai_csv_instructions_small.txt'), 'utf-8');
-const aiInstructionsLarge = fs.readFileSync(path.join(__dirname, 'config/ai_csv_instructions_large.txt'), 'utf-8');
+const aiInstructionsSmall = fs.readFileSync(path.join(__dirname, 'config/CSVImport/ai_csv_instructions_small.txt'), 'utf-8');
+const aiInstructionsLarge = fs.readFileSync(path.join(__dirname, 'config/CSVImport/ai_csv_instructions_large.txt'), 'utf-8');
 
 router.post('/grok-transform', async (req, res) => {
   try {
     const { csvData, reasoningEnabled } = req.body;
-    console.log(`[LOG] /grok-transform received reasoningEnabled: ${reasoningEnabled}`);
+    //console.Log(`[LOG] /grok-transform received reasoningEnabled: ${reasoningEnabled}`);
     if (!csvData) {
       return res.status(400).json({ error: 'Missing csvData or instructions' });
     }
-    console.log('grok-transform received instructions:', aiInstructionsSmall.substring(0, 200) + '...');
+    //console.Log('grok-transform received instructions:', aiInstructionsSmall.substring(0, 200) + '...');
     const { data, headers } = parseCsvWithHeaders(csvData);
 
     const sanitizedCsvData = data.map(row => {
@@ -92,14 +133,14 @@ router.post('/grok-transform', async (req, res) => {
       
     // Send to Grok-3 API
     const prompt = `CSV Data (first 5 rows):\n${JSON.stringify(sanitizedCsvData.slice(0, 5), null, 2)}\n\nInstructions:\n${aiInstructionsSmall}\n\nOutput Format:\n${outputFormat}`;
-    console.log('Final prompt being sent to AI:', prompt);
+    //console.Log('Final prompt being sent to AI:', prompt);
     const response = await callGrokAPI(prompt, 4000, reasoningEnabled);
-    console.log('Raw Grok-3 Response (/grok-transform):', response);
+    //console.Log('Raw Grok-3 Response (/grok-transform):', response);
     let parsedResponse;
     try {
       parsedResponse = JSON.parse(response);
     } catch (parseError) {
-      console.log('Direct JSON parse failed, trying extraction methods...');
+      //console.Log('Direct JSON parse failed, trying extraction methods...');
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         parsedResponse = JSON.parse(jsonMatch[0]);
@@ -170,7 +211,7 @@ Instructions: ${aiInstructionsLarge}
 Output Format: ${outputFormat}
 `;
     const response = await callGrokAPI(prompt, 2000, reasoningEnabled);
-    console.log('Raw Grok-3 Response (/grok-generate-config):', response);
+    //console.Log('Raw Grok-3 Response (/grok-generate-config):', response);
     let parsedResponse;
     try {
       parsedResponse = JSON.parse(response);
@@ -192,7 +233,7 @@ Output Format: ${outputFormat}
       config = config.data.config;
     }
     
-    console.log('Generated config:', JSON.stringify(config, null, 2));
+    //console.Log('Generated config:', JSON.stringify(config, null, 2));
     res.json({ 
       config, 
       reasoning,
@@ -211,7 +252,7 @@ router.post('/apply-config', async (req, res) => {
       return res.status(400).json({ error: 'Missing csvData or config' });
     }
 
-    console.log('apply-config received config:', JSON.stringify(config, null, 2));
+    //console.Log('apply-config received config:', JSON.stringify(config, null, 2));
 
     // Use the new robust parser
     const { data } = parseCsvWithHeaders(csvData);
@@ -228,7 +269,7 @@ router.post('/apply-config', async (req, res) => {
     
     const skuCount = transformedData.length;
     const materialCodeKey = columns[0];
-    const skuList = transformedData.map(row => row[materialCodeKey]).filter(Boolean);
+    const skuList = Array.from(new Set(transformedData.map(row => row[materialCodeKey]).filter(Boolean)));
     const dateRange = columns && columns.length > 1 ? [columns[1], columns[columns.length - 1]] : ["N/A", "N/A"];
 
     res.status(200).json({
@@ -267,30 +308,38 @@ router.get('/health', (req, res) => {
 
 router.post('/jobs', (req, res) => {
   try {
-    const { data, models, skus, reason, method = 'grid' } = req.body;
+    const { data, models, skus, reason, method = 'grid', filePath, batchId } = req.body;
+    //console.Log('[Job Creation] Request:', { skus, models, filePath, reason, method, batchId });
     const userId = 'default_user';
     const priority = getPriorityFromReason(reason);
     let jobsCreated = 0;
     let jobsSkipped = 0;
     if (skus && Array.isArray(skus) && skus.length > 0) {
-      const insertStmt = db.prepare("INSERT INTO jobs (userId, sku, modelId, method, payload, status, reason, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+      const insertStmt = db.prepare("INSERT INTO jobs (userId, sku, modelId, method, payload, status, reason, batchId, priority, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
       for (const sku of skus) {
         for (const modelId of models) {
           if (method === 'grid' && !isModelOptimizable(modelId, ALL_MODELS)) {
             jobsSkipped++;
+            //console.Log(`[Job Creation] Skipped job for SKU: ${sku}, Model: ${modelId} (not optimizable)`);
             continue;
           }
           const payload = JSON.stringify({ skuData: [], businessContext: null });
-          insertStmt.run(userId, sku, modelId, method, payload, 'pending', reason || 'manual_trigger', priority);
+          const jobData = { filePath, modelTypes: [modelId], optimizationType: method };
+          //console.Log('[Job Creation] Received batchId:', batchId);
+          //console.Log('[Job Creation] Inserting job with batchId:', batchId);
+          insertStmt.run(userId, sku, modelId, method, payload, 'pending', reason || 'manual_trigger', batchId, priority, JSON.stringify(jobData));
+          //console.Log(`[Job Creation] Inserted job with batchId: ${batchId}`);
           jobsCreated++;
+          //console.Log(`[Job Creation] Created job for SKU: ${sku}, Model: ${modelId}, File: ${filePath}, Batch: ${batchId}`);
         }
       }
       insertStmt.finalize();
+      //console.Log(`[Job Creation] Finished: ${jobsCreated} jobs created, ${jobsSkipped} skipped.`);
       res.status(201).json({ message: `Successfully created ${jobsCreated} jobs`, jobsCreated, jobsCancelled: 0, jobsSkipped, skusProcessed: skus.length, modelsPerSku: models.length, priority });
       return;
     }
   } catch (error) {
-    console.error('Error in jobs post:', error);
+    console.error('Error in jobs post:', error.message, error.stack);
     res.status(500).json({ error: error.message });
   }
 });
@@ -302,6 +351,7 @@ router.get('/jobs/status', (req, res) => {
       console.error('Database error:', err);
       return res.status(500).json({ error: 'Failed to get job status' });
     }
+    //console.log('[Job Status] Returning jobs:', rows.map(j => ({ id: j.id, batchId: j.batchId })));
     res.json(rows || []);
   });
 });
@@ -377,54 +427,155 @@ router.post('/login', (req, res) => {
 
 router.post('/process-manual-import', async (req, res) => {
   try {
-    const { csvData, mappings, dateRange, dateFormat, transpose } = req.body;
-    let parsed = Papa.parse(csvData, { skipEmptyLines: true });
-    let data = parsed.data;
-    if (transpose) {
-      data = data[0].map((_, colIndex) => data.map(row => row[colIndex]));
+    const { headers, data, mappings, dateFormat, transpose, finalColumnRoles, originalCsvData, originalCsvString } = req.body;
+
+    // Debug log for received mappings
+    //console.Log('process-manual-import received mappings:', mappings);
+    if (finalColumnRoles) {
+      //console.Log('process-manual-import received finalColumnRoles:', finalColumnRoles);
     }
-    const headers = data[0];
-    const dataRows = data.slice(1);
-    const { data: transformedData, columns } = normalizeAndPivotData(dataRows, mappings, dateRange, dateFormat);
-    const fileName = `processed-data-manual-${Date.now()}.json`;
+
+    // Generate single timestamp for both files
+    const timestamp = Date.now();
+
+    // Save original CSV data first (for detection logic)
+    const csvFileName = `Original_CSV_Upload-${timestamp}.csv`;
+    const csvFilePath = path.join(UPLOADS_DIR, csvFileName);
+    let csvHash = '';
+    
+    // Use raw CSV string if provided, otherwise reconstruct from originalCsvData
+    if (originalCsvString) {
+      // Hash the raw CSV string directly (this matches the frontend hash)
+      csvHash = crypto.createHash('sha256').update(originalCsvString, 'utf8').digest('hex').slice(0, 30);
+      fs.writeFileSync(csvFilePath, originalCsvString);
+      console.log('Saved original CSV from raw string:', csvFileName);
+    } else if (originalCsvData && Array.isArray(originalCsvData) && originalCsvData.length > 0) {
+      // Fallback: Convert array of objects back to CSV format
+      const csvHeaders = Object.keys(originalCsvData[0]);
+      const csvContent = [
+        csvHeaders.join(','),
+        ...originalCsvData.map(row => csvHeaders.map(header => row[header]).join(','))
+      ].join('\n');
+      csvHash = crypto.createHash('sha256').update(csvContent, 'utf8').digest('hex').slice(0, 30);
+      fs.writeFileSync(csvFilePath, csvContent);
+      console.log('Saved original CSV from reconstructed data:', csvFileName);
+    }
+
+    // Use the provided cleaned headers and data directly
+    let processedData = data;
+    let processedHeaders = headers;
+
+    // If transpose is requested, transpose the data and headers
+    if (transpose) {
+      // Transpose logic for data and headers
+      const transposed = processedHeaders.map((_, colIndex) => processedData.map(row => row[processedHeaders[colIndex]]));
+      processedHeaders = transposed[0];
+      processedData = transposed.slice(1).map(rowArr => {
+        const rowObj = {};
+        processedHeaders.forEach((h, i) => {
+          rowObj[h] = rowArr[i];
+        });
+        return rowObj;
+      });
+    }
+
+    // The normalizeAndPivotData is specifically designed for the manual mapping flow.
+    // We assume processedData is an array of objects, each representing a row, with keys matching processedHeaders.
+    // Convert processedData to array of arrays for compatibility with normalizeAndPivotData
+    const dataRows = processedData.map(row => processedHeaders.map(h => row[h]));
+
+    const { data: transformedData, columns } = normalizeAndPivotData(dataRows, mappings, undefined, dateFormat, processedHeaders);
+
+    // Log the output columns for debugging
+    //console.Log('process-manual-import output columns:', columns);
+    //console.Log('process-manual-import received finalColumnRoles:', finalColumnRoles);
+
+    if (!finalColumnRoles || finalColumnRoles.length !== columns.length) {
+      throw new Error('finalColumnRoles length does not match normalized columns length');
+    }
+
+    const columnRoles = finalColumnRoles;
+
+    // Extract summary information
+    const skuList = Array.from(new Set(transformedData.map(row => row['Material Code']).filter(Boolean)));
+    const skuCount = skuList.length;
+    const dateList = transformedData.map(row => row['Date']).filter(Boolean);
+    const uniqueDates = Array.from(new Set(dateList)).sort();
+    let dateRange = ["N/A", "N/A"];
+    if (uniqueDates.length > 0) {
+      dateRange = [uniqueDates[0], uniqueDates[uniqueDates.length - 1]];
+    }
+    const totalPeriods = uniqueDates.length;
+    const datasetName = `Dataset ${new Date().toISOString().slice(0,10)} - From ${dateRange[0]} to ${dateRange[1]} (${skuCount} products)`;
+
+    // Save the processed data to a file
+    const fileName = `Processed_Historical_Data_Manual-${timestamp}.json`;
     const filePath = path.join(UPLOADS_DIR, fileName);
-    fs.writeFileSync(filePath, JSON.stringify({ data: transformedData, columns }, null, 2));
-    const materialCodeKey = columns[0];
-    const skuList = transformedData.map(row => row[materialCodeKey]).filter(Boolean);
-    res.status(200).json({
-      message: 'Manual import processed and data saved successfully',
+    
+    const dataToSave = {
+      data: transformedData,
+      columns: columns,
+      columnRoles: columnRoles,
+      source: 'manual-import',
+      timestamp: new Date().toISOString(),
+      summary: {
+        skuCount,
+        dateRange,
+        totalPeriods,
+      },
+      name: datasetName, // Use correct name
+      csvHash // Save the hash for duplicate detection
+    };
+    
+    if (csvHash) {
+      discardOldFilesWithHash(csvHash);
+    }
+    
+    fs.writeFileSync(filePath, JSON.stringify(dataToSave, null, 2));
+
+    const result = {
+      success: true,
       filePath: `uploads/${fileName}`,
       summary: {
-        skuCount: transformedData.length,
-        dateRange: columns.length > 1 ? [columns[1], columns[columns.length - 1]] : ["N/A", "N/A"],
-        totalPeriods: columns.length > 1 ? columns.length - 1 : 0,
+        skuCount: skuCount,
+        dateRange,
+        totalPeriods: totalPeriods,
       },
       skuList: skuList,
       columns: columns,
       previewData: transformedData.slice(0, 10),
+      columnRoles: columnRoles
+    };
+
+    console.log('Manual import processed successfully:', {
+      filePath: result.filePath,
+      skuCount: result.summary.skuCount,
+      totalPeriods: result.summary.totalPeriods
     });
+
+    res.json(result);
   } catch (error) {
-    console.error('Error processing manual import:', error.message);
-    res.status(500).json({ error: 'An unexpected error occurred during manual processing.', details: error.message });
+    console.error('Error processing manual import:', error.message, error.stack);
+    res.status(500).json({ error: 'An unexpected error occurred during manual processing.', details: error.message, stack: error.stack });
   }
 });
 
 router.post('/generate-preview', (req, res) => {
   try {
     const { csvData, transposed } = req.body;
-    console.log('[LOG] /generate-preview called.');
-    console.log(`[LOG] csvData length: ${csvData ? csvData.length : 0}, transposed: ${transposed}`);
+    //console.Log('[LOG] /generate-preview called.');
+    //console.Log(`[LOG] csvData length: ${csvData ? csvData.length : 0}, transposed: ${transposed}`);
     
     // Use the new robust parser
     let { data, headers } = parseCsvWithHeaders(csvData);
 
     if (transposed) {
-      console.log('[LOG] Transposing data...');
+      //console.Log('[LOG] Transposing data...');
       const transposedResult = transposeData(data, headers);
       data = transposedResult.data;
       headers = transposedResult.headers;
-      console.log(`[LOG] Transposed. New headers:`, headers.slice(0, 5));
-      console.log(`[LOG] Transposed. New data sample:`, data.slice(0, 2));
+      //console.Log(`[LOG] Transposed. New headers:`, headers.slice(0, 5));
+      //console.Log(`[LOG] Transposed. New data sample:`, data.slice(0, 2));
     }
     
     // Get column roles as objects first
@@ -432,7 +583,7 @@ router.post('/generate-preview', (req, res) => {
     // Extract just the role strings for the frontend
     const columnRoles = columnRolesObjects.map(obj => obj.role);
 
-    console.log(`[LOG] Sending response with ${headers.length} headers and ${data.slice(0, 100).length} previewRows.`);
+    //console.Log(`[LOG] Sending response with ${headers.length} headers and ${data.slice(0, 100).length} previewRows.`);
     res.json({
       headers: headers.slice(0, 50),
       previewRows: data.slice(0, 100),
@@ -442,6 +593,395 @@ router.post('/generate-preview', (req, res) => {
   } catch (error) {
     console.error('Error in generate-preview:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/load-processed-data', (req, res) => {
+  try {
+    const { filePath } = req.query;
+    
+    if (!filePath) {
+      return res.status(400).json({ error: 'filePath parameter is required' });
+    }
+
+    // Construct the full path to the file
+    const fullPath = path.join(__dirname, '../../', filePath);
+    
+    // Security check: ensure the path is within the uploads directory
+    const uploadsDir = path.join(__dirname, '../../uploads');
+    if (!fullPath.startsWith(uploadsDir)) {
+      return res.status(403).json({ error: 'Access denied: file path is outside uploads directory' });
+    }
+
+    // Check if file exists
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Read and parse the JSON file
+    const fileContent = fs.readFileSync(fullPath, 'utf-8');
+    const data = JSON.parse(fileContent);
+
+    res.json(data);
+  } catch (error) {
+    console.error('Error loading processed data:', error);
+    res.status(500).json({ error: 'Failed to load processed data' });
+  }
+});
+
+// New: AI Parameter Optimization endpoint
+router.post('/ai-optimize', async (req, res) => {
+  try {
+    const { modelType, historicalData, currentParameters, seasonalPeriod, targetMetric, businessContext, gridBaseline, aiEnabled } = req.body;
+    if (!aiEnabled) {
+      return res.status(200).json({ message: 'AI optimization is disabled. No optimization performed.' });
+    }
+    const result = await optimizeParametersWithAI(
+      modelType,
+      historicalData,
+      currentParameters,
+      seasonalPeriod,
+      targetMetric,
+      businessContext,
+      gridBaseline
+    );
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// New: AI Model Recommendation endpoint
+router.post('/ai-model-recommendation', async (req, res) => {
+  try {
+    const { historicalData, dataFrequency, businessContext, aiEnabled } = req.body;
+    if (!aiEnabled) {
+      return res.status(200).json({ message: 'AI model recommendation is disabled. No recommendation performed.' });
+    }
+    const result = await getModelRecommendation(
+      historicalData,
+      dataFrequency,
+      businessContext
+    );
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint to save cleaned data from manual edits or UI cleaning
+router.post('/save-cleaned-data', (req, res) => {
+  try {
+    const { data, columns } = req.body;
+    const fileName = `processed-data-manual-${Date.now()}.json`;
+    const filePath = path.join(UPLOADS_DIR, fileName);
+    fs.writeFileSync(filePath, JSON.stringify({ data, columns }, null, 2));
+    res.status(200).json({ filePath: `uploads/${fileName}` });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to save cleaned data', details: error.message });
+  }
+});
+
+router.post('/process-ai-import', async (req, res) => {
+  try {
+    const { transformedData, columns, columnRoles, finalColumnRoles, originalCsvData, originalCsvString } = req.body;
+    
+    if (!transformedData || !Array.isArray(transformedData) || transformedData.length === 0) {
+      return res.status(400).json({ error: 'Missing or invalid transformed data' });
+    }
+
+    if (!columns || !Array.isArray(columns) || columns.length === 0) {
+      return res.status(400).json({ error: 'Missing or invalid columns' });
+    }
+
+    //console.Log('process-ai-import received:', {
+    //  dataLength: transformedData.length,
+    //  columns: columns,
+    //  columnRoles: columnRoles
+    //});
+
+    // Generate single timestamp for both files
+    const timestamp = Date.now();
+
+    // Save original CSV data first (for detection logic)
+    const csvFileName = `Original_CSV_Upload-${timestamp}.csv`;
+    const csvFilePath = path.join(UPLOADS_DIR, csvFileName);
+    let csvHash = '';
+    
+    // Use raw CSV string if provided, otherwise reconstruct from originalCsvData
+    if (originalCsvString) {
+      // Hash the raw CSV string directly (this matches the frontend hash)
+      csvHash = crypto.createHash('sha256').update(originalCsvString, 'utf8').digest('hex').slice(0, 30);
+      fs.writeFileSync(csvFilePath, originalCsvString);
+      console.log('Saved original CSV from raw string:', csvFileName);
+    } else if (originalCsvData && Array.isArray(originalCsvData) && originalCsvData.length > 0) {
+      // Fallback: Convert array of objects back to CSV format
+      const csvHeaders = Object.keys(originalCsvData[0]);
+      const csvContent = [
+        csvHeaders.join(','),
+        ...originalCsvData.map(row => csvHeaders.map(header => row[header]).join(','))
+      ].join('\n');
+      csvHash = crypto.createHash('sha256').update(csvContent, 'utf8').digest('hex').slice(0, 30);
+      fs.writeFileSync(csvFilePath, csvContent);
+      console.log('Saved original CSV from reconstructed data:', csvFileName);
+    }
+
+    // Transform AI wide format to long format (matching manual flow)
+    const materialCodeKey = columns[0] || 'Material Code';
+    const descriptionKey = columns.find(col => col === 'Description');
+    
+    // Identify date columns (all columns except Material Code, Description, and categorical columns)
+    const dateColumns = columns.filter(col => {
+      if (col === materialCodeKey || col === 'Description') return false;
+      if (columnRoles && columnRoles[columns.indexOf(col)] === 'Ignore') return false;
+      // Check if it's a date format (YYYY-MM-DD)
+      return /^\d{4}-\d{2}-\d{2}$/.test(col);
+    });
+    
+    // Identify categorical columns (non-date, non-ignored columns)
+    const categoricalColumns = columns.filter(col => {
+      if (col === materialCodeKey || col === 'Description') return false;
+      if (columnRoles && columnRoles[columns.indexOf(col)] === 'Ignore') return false;
+      return !dateColumns.includes(col);
+    });
+    
+    // Transform to long format
+    const longFormatData = [];
+    for (const row of transformedData) {
+      for (const dateCol of dateColumns) {
+        const entry = {
+          'Material Code': row[materialCodeKey],
+          'Date': dateCol,
+          'Sales': Number(row[dateCol]) || 0
+        };
+        
+        // Add Description if present
+        if (descriptionKey && row[descriptionKey]) {
+          entry['Description'] = row[descriptionKey];
+        }
+        
+        // Add categorical columns
+        for (const catCol of categoricalColumns) {
+          entry[catCol] = row[catCol];
+        }
+        
+        if (entry['Material Code'] && entry['Date']) {
+          longFormatData.push(entry);
+        }
+      }
+    }
+    
+    // Build output columns (matching manual flow)
+    const outputColumns = [
+      'Material Code',
+      ...(descriptionKey ? ['Description'] : []),
+      ...categoricalColumns,
+      'Date',
+      'Sales'
+    ];
+    
+    // Use finalColumnRoles from frontend if provided and valid
+    if (!finalColumnRoles || finalColumnRoles.length !== outputColumns.length) {
+      throw new Error('finalColumnRoles length does not match normalized columns length');
+    }
+    const outputColumnRoles = finalColumnRoles;
+
+    // Extract summary information
+    const skuList = Array.from(new Set(longFormatData.map(row => row['Material Code']).filter(Boolean)));
+    
+    // Determine date range from the date columns
+    const dateRange = dateColumns.length > 0 ? [dateColumns[0], dateColumns[dateColumns.length - 1]] : ["N/A", "N/A"];
+
+    // Save the transformed data to a file
+    const fileName = `Processed_Historical_Data_AI-${timestamp}.json`;
+    const filePath = path.join(UPLOADS_DIR, fileName);
+    
+    const dataToSave = {
+      data: longFormatData,
+      columns: outputColumns,
+      columnRoles: outputColumnRoles,
+      source: 'ai-import',
+      timestamp: new Date().toISOString(),
+      summary: {
+        skuCount: skuList.length,
+        dateRange,
+        totalPeriods: dateColumns.length,
+      },
+      name: fileName, // Default name, can be updated later via /save-dataset-name
+      csvHash // Save the hash for duplicate detection
+    };
+    
+    if (csvHash) {
+      discardOldFilesWithHash(csvHash);
+    }
+    
+    fs.writeFileSync(filePath, JSON.stringify(dataToSave, null, 2));
+
+    const result = {
+      success: true,
+      filePath: `uploads/${fileName}`,
+      summary: {
+        skuCount: skuList.length,
+        dateRange,
+        totalPeriods: dateColumns.length,
+      },
+      skuList: skuList,
+      columns: outputColumns,
+      previewData: longFormatData.slice(0, 10),
+      columnRoles: outputColumnRoles
+    };
+
+    //console.Log('AI import processed successfully:', {
+    //  filePath: result.filePath,
+    //  skuCount: result.summary.skuCount,
+    //  totalPeriods: result.summary.totalPeriods
+    //});
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error in process-ai-import:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to calculate file hash
+function calculateFileHash(filePath) {
+  const fileBuffer = fs.readFileSync(filePath);
+  return crypto.createHash('sha256').update(fileBuffer).digest('hex');
+}
+
+// Helper function to extract timestamp from filename
+function extractTimestamp(filename) {
+  const match = filename.match(/(\d{13,})/);
+  return match ? parseInt(match[1]) : 0;
+}
+
+// Endpoint to detect existing data and return the latest cleaned data
+router.get('/detect-existing-data', async (req, res) => {
+  try {
+    const files = fs.readdirSync(UPLOADS_DIR);
+    const datasets = [];
+
+    // Group files by timestamp
+    const fileGroups = {};
+
+    files.forEach(file => {
+      // Match JSON files with our naming pattern
+      const jsonMatch = file.match(/Processed_Historical_Data_(AI|Manual)-(\d+)\.json/);
+      if (jsonMatch) {
+        const [, type, timestamp] = jsonMatch;
+        if (!fileGroups[timestamp]) {
+          fileGroups[timestamp] = { json: null, csv: null, type: null };
+        }
+        fileGroups[timestamp].json = file;
+        fileGroups[timestamp].type = type;
+      }
+
+      // Match CSV files with our naming pattern
+      const csvMatch = file.match(/Original_CSV_Upload-(\d+)\.csv/);
+      if (csvMatch) {
+        const [, timestamp] = csvMatch;
+        if (!fileGroups[timestamp]) {
+          fileGroups[timestamp] = { json: null, csv: null, type: null };
+        }
+        fileGroups[timestamp].csv = file;
+      }
+    });
+
+    // Process each group that has both CSV and JSON
+    for (const [timestamp, group] of Object.entries(fileGroups)) {
+      if (group.json && group.csv) {
+        try {
+          const jsonPath = path.join(UPLOADS_DIR, group.json);
+          const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+          
+          if (jsonData.summary && jsonData.name) {
+            datasets.push({
+              id: timestamp,
+              name: jsonData.name,
+              type: group.type === 'AI' ? 'AI Import' : 'Manual Import',
+              summary: jsonData.summary,
+              filename: group.json,
+              timestamp: parseInt(timestamp)
+            });
+          }
+        } catch (error) {
+          console.error(`Error processing dataset ${timestamp}:`, error);
+        }
+      }
+    }
+
+    // Sort by timestamp (newest first)
+    datasets.sort((a, b) => b.timestamp - a.timestamp);
+
+    //console.Log('Detected datasets:', datasets);
+    res.json({ datasets });
+  } catch (error) {
+    console.error('Error detecting existing data:', error);
+    res.status(500).json({ error: 'Failed to detect existing data' });
+  }
+});
+
+// Endpoint to update the dataset name in a cleaned JSON file
+router.post('/save-dataset-name', (req, res) => {
+  try {
+    const { filePath, name } = req.body;
+    if (!filePath || !name) {
+      return res.status(400).json({ error: 'filePath and name are required' });
+    }
+    const fullPath = path.join(__dirname, '../../', filePath);
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    const fileContent = fs.readFileSync(fullPath, 'utf-8');
+    const fileJson = JSON.parse(fileContent);
+    fileJson.name = name;
+    fs.writeFileSync(fullPath, JSON.stringify(fileJson, null, 2));
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error saving dataset name:', error);
+    res.status(500).json({ error: 'Failed to save dataset name', details: error.message });
+  }
+});
+
+// Endpoint to check for duplicate CSV uploads by hash
+router.post('/check-csv-duplicate', async (req, res) => {
+  try {
+    const { csvData } = req.body;
+    if (!csvData) {
+      return res.status(400).json({ error: 'Missing csvData' });
+    }
+    // Compute SHA-256 hash of the raw CSV data
+    const hash = crypto.createHash('sha256').update(csvData, 'utf8').digest('hex').slice(0, 30);
+    const files = fs.readdirSync(UPLOADS_DIR);
+    let foundDataset = null;
+    // Look for a JSON file with this hash in its metadata
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        const jsonPath = path.join(UPLOADS_DIR, file);
+        try {
+          const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+          if (jsonData.csvHash && jsonData.csvHash === hash) {
+            foundDataset = {
+              name: jsonData.name,
+              summary: jsonData.summary,
+              filename: file,
+              hash,
+            };
+            break;
+          }
+        } catch (e) { /* ignore parse errors */ }
+      }
+    }
+    if (foundDataset) {
+      return res.json({ duplicate: true, existingDataset: foundDataset });
+    }
+    // Optionally, also check for CSV files with the hash in their filename
+    // (if you want to prevent re-upload of the exact same CSV file)
+    res.json({ duplicate: false, hash });
+  } catch (error) {
+    console.error('Error in /check-csv-duplicate:', error);
+    res.status(500).json({ error: 'Failed to check for duplicate CSV' });
   }
 });
 

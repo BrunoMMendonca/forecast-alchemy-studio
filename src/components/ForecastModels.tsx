@@ -1,6 +1,5 @@
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { NormalizedSalesData, ForecastResult } from '@/types/forecast';
-import { useModelController } from '@/hooks/useModelController';
 import { OptimizationLogger } from './OptimizationLogger';
 import { WorkerProgressIndicator } from './WorkerProgressIndicator';
 
@@ -28,25 +27,6 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
   const componentMountedRef = useRef(false);
 
-  const {
-    models,
-    toggleModel,
-    updateParameter,
-    resetToManual,
-    handleMethodSelection,
-    generateForecasts,
-    isGenerating,
-    generationProgress,
-    generationProgressMessage
-  } = useModelController(
-    selectedSKUForResults,
-    data,
-    forecastPeriods,
-    undefined,
-    onForecastGeneration,
-    aiForecastModelOptimizationEnabled
-  );
-
   useEffect(() => {
     componentMountedRef.current = true;
     return () => {
@@ -67,15 +47,11 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
 
   return (
     <div className="space-y-6">
-      {/* Worker Progress Indicators */}
-      <WorkerProgressIndicator
-        isWorking={isGenerating}
-        progress={generationProgress}
-        message={generationProgressMessage}
-        title="Generating Forecasts"
-      />
-      
-      {/* Optimization progress is now shown in the queue popup, not here */}
+      {/* Backend handles all model management and optimization */}
+      <div className="text-center text-gray-500 py-8">
+        <p>Model management and optimization are now handled by the backend.</p>
+        <p>Check the job monitor for optimization progress.</p>
+      </div>
 
       <OptimizationLogger 
         isVisible={showOptimizationLog} 

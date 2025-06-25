@@ -8,29 +8,32 @@ export class GridOptimizer {
   // Define parameter grids for each model type
   getParameterGrids() {
     return {
-      'simple-exponential-smoothing': {
+      'simple_exponential_smoothing': {
         alpha: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
       },
-      'holt-linear-trend': {
+      'double_exponential_smoothing': {
         alpha: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
         beta: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
       },
-      'moving-average': {
+      'moving_average': {
         window: [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20]
       },
-      'holt-winters': {
+      'holt_winters': {
         alpha: [0.1, 0.2, 0.3, 0.4, 0.5],
         beta: [0.1, 0.2, 0.3, 0.4, 0.5],
         gamma: [0.1, 0.2, 0.3, 0.4, 0.5],
-        seasonLength: [4, 12], // Assuming quarterly and monthly data
+        seasonalPeriods: [4, 12], // Assuming quarterly and monthly data
         type: ['additive', 'multiplicative']
       },
-      'seasonal-naive': {
-        seasonLength: [4, 7, 12] // Quarterly, weekly, and monthly seasonality
+      'seasonal_naive': {
+        seasonalPeriods: [4, 7, 12] // Quarterly, weekly, and monthly seasonality
       },
-      'seasonal-moving-average': {
-        seasonLength: [4, 12],
+      'seasonal_moving_average': {
+        seasonalPeriods: [4, 12],
         window: [2, 3, 4]
+      },
+      'linear_trend': {
+        // Linear trend has no parameters to optimize
       },
       'arima': [
         // Configuration for AutoARIMA. 's' is the seasonal period.

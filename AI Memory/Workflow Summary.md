@@ -2,14 +2,20 @@
 
 ## 1. Main Steps
 
-### Step 1: Upload & AI Transform (Finished/Adjustments allowed)
-- User uploads sales data via the `CsvImportWizard.tsx` component.
+### Step 0: Existing Data Detection & Deduplication (New)
+- On app load or CSV upload, the frontend hashes the raw CSV (SHA-256, 30 hex chars) and checks with the backend for duplicates via `/api/check-csv-duplicate`.
+- The backend scans for existing processed datasets (JSONs with `csvHash`) and returns any matches.
+- If a duplicate is found, the user can load the existing dataset directly, skipping the import wizard.
+- The frontend also presents a list of all detected datasets for manual selection ("Continue with Existing Data").
+
+### Step 1: Choose your data (Finished/Adjustments allowed)
+- User uploads sales data via the `CsvImportWizard.tsx` component **if no duplicate is found**.
 - The wizard provides two main paths for data processing:
   - **AI-Powered Transformation**: The user is prompted to let the AI automatically clean, pivot, and prepare the data. This is the recommended path.
     - **Small files** are transformed directly via a single API call.
     - **Large files** trigger a more robust two-step process where the AI first generates a transformation `config` from a sample, which is then applied to the full dataset on the backend. This avoids timeouts and performance issues.
   - **Manual Import**: The user can opt to manually transpose the data and map columns.
-- The output of this step is a clean, wide-format dataset ready for the subsequent steps.
+- The output of this step is a clean, wide-format dataset ready for the subsequent steps, with consistent metadata (`summary`, `columnRoles`, `name`, `csvHash`).
 - For a deep technical dive, see `Upload Wizard & Data Transformation.md`.
 
 ### Step 2: Clean and Prepare (Finished/Adjustments allowed)
@@ -35,7 +41,7 @@
   - User can see which SKUs/models are optimized (and by which method), queued, or in progress.
   - User can manually adjust parameters (Manual mode), but cannot trigger optimization directly.
   - The user can pick the best model for each SKU. Automatic model selection happens, but the user can override it.
-  - **Persistence:** All results, selections, and queue state are persisted to localStorage and restored on reload. **(Note: This is planned for migration to a full backend database with user accounts for true persistence.)**
+  - **Persistence:** All results, selections, and queue state are persisted to the backend database and restored on reload. The backend serves as the single source of truth for all application data.
 
 - **Tune (In Development):**
   - With a model selected for each SKU, a "final" single forecast per SKU is shown alongside cleaned historical data.
@@ -52,32 +58,34 @@
 ## 2. Troubleshooting Checklist
 
 If the workflow does not behave as expected, check:
-1. **Is the queue state being updated and persisted correctly?**
-2. **Are optimizations only triggered by the correct events (see `Optimization reasons.md`)?**
-3. **Is AI job addition/removal respecting the current AI enablement settings?**
-4. **Are user selections and manual parameters persisting across navigation and reloads?**
-5. **Is the UI reflecting the true state of the queue, optimizations, and results?**
+1. **Is deduplication working?** Are both frontend and backend hashing the exact same raw CSV string, and is the hash stored and checked consistently?
+2. **Is the queue state being updated and persisted correctly?**
+3. **Are optimizations only triggered by the correct events (see `Optimization reasons.md`)?**
+4. **Is AI job addition/removal respecting the current AI enablement settings?**
+5. **Are user selections and manual parameters persisting across navigation and reloads?**
+6. **Is the UI reflecting the true state of the queue, optimizations, and results?**
 
 ---
 
 ## 3. Summary Table
 
-| Step         | Trigger/Event                | System Action                        | Persistence | User Control |
-|--------------|------------------------------|--------------------------------------|-------------|--------------|
-| Upload       | CSV upload                   | Initiate AI/manual import wizard     | Backend DB (Planned) | Yes          |
-| Clean/Prepare| Data edit/clean              | Queue optimizations for affected SKU | Backend DB (Planned) | Yes          |
-| Explore      | Navigation                   | No optimization, just view           | Backend DB (Planned) | Yes          |
-| Forecast     | Data/settings change         | Queue optimizations as needed        | Backend DB (Planned) | Yes          |
-| Tune         | Manual forecast adjustment   | No queue, direct user edit           | Backend DB (Planned) | Yes          |
-| Settings     | Change AI/periods            | Queue/clear jobs as needed           | Backend DB (Planned) | Yes          |
+| Step                  | Trigger/Event                | System Action                        | Persistence | User Control |
+|-----------------------|------------------------------|--------------------------------------|-------------|--------------|
+| Existing Data Check   | App load/CSV upload          | Check for duplicates, present options| Backend DB  | Yes          |
+| Choose your data      | CSV upload                   | Initiate AI/manual import wizard     | Backend DB  | Yes          |
+| Clean/Prepare         | Data edit/clean              | Queue optimizations for affected SKU | Backend DB  | Yes          |
+| Explore               | Navigation                   | No optimization, just view           | Backend DB  | Yes          |
+| Forecast              | Data/settings change         | Queue optimizations as needed        | Backend DB  | Yes          |
+| Tune                  | Manual forecast adjustment   | No queue, direct user edit           | Backend DB  | Yes          |
+| Settings              | Change AI/periods            | Queue/clear jobs as needed           | Backend DB  | Yes          |
 
 ---
 
-**For more details on optimization triggers, queue processing, and persistence, see:**
+**For more details on deduplication, optimization triggers, queue processing, and persistence, see:**
+- `Upload Wizard & Data Transformation.md`
 - `Optimization reasons.md`
 - `Queue Processing & Job Management.md`
 - `Forecast Methods & Parameter Persisten.md`
-- `Upload Wizard & Data Transformation.md`
 
 
 

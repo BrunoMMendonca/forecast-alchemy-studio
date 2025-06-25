@@ -72,3 +72,13 @@ If queue processing fails or behaves unexpectedly, check the following:
 - **Initial Architecture**: The application's first version of a queue (`useOptimizationQueue.ts`) ran on the browser's main thread, which caused the UI to freeze during long optimizations. This file and pattern are now obsolete.
 - **The Backend Shift**: The architecture was migrated to a full backend job queue to solve the UI freezing issue and provide a more scalable, persistent solution. The current implementation uses the real, modular forecasting engine and is not a simulation.
 - **UI State Synchronization**: A critical lesson learned was to have a single component (`ForecastPage`) fetch the backend status and pass it down as props. Independent fetching in child components led to race conditions and UI bugs. This is documented further in `UI State Management & Data Flow.md`. 
+
+---
+
+## 6. UI Consistency & Single Source of Truth (Update)
+
+- **All job progress and status in the UI must be derived from the backend's persistent queue.**
+- **Never use frontend-only counters or state for job progress.**
+- The job monitor badge, popup, and all related UI must use the same backend-driven source of truth to avoid inconsistencies.
+- The `ForecastPage` component should fetch job status and pass it down as props to all child components, ensuring a single source of truth for job status and progress.
+- This pattern eliminates race conditions and UI bugs, and ensures the UI always reflects the true backend state. 

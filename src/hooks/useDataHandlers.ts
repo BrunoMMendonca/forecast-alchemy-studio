@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { ForecastResult } from '@/types/forecast';
 import { useToast } from '@/hooks/use-toast';
 import { useUnifiedState } from '@/hooks/useUnifiedState';
@@ -31,8 +31,9 @@ export const useDataHandlers = ({
 }: DataHandlerSetters) => {
   const { toast } = useToast();
   const { models } = useUnifiedState();
+  const [batchId, setBatchId] = useState<string | null>(null);
 
-  const createJobs = useCallback(async (jobData: {data?: any[], skus?: string[], reason: string}) => {
+  const createJobs = useCallback(async (jobData: {data?: any[], skus?: string[], reason: string, filePath?: string, batchId?: string}) => {
     const modelsToProcess = models.length > 0 ? models.map(m => m.id) : getDefaultModels().map(m => m.id);
     
     const methodsToRun = ['grid'];
@@ -47,7 +48,7 @@ export const useDataHandlers = ({
         const response = await fetch('http://localhost:3001/api/jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...jobData, models: modelsToProcess, method }),
+          body: JSON.stringify({ ...jobData, models: modelsToProcess, method, batchId: jobData.batchId }),
         });
 
         if (!response.ok) {
@@ -97,7 +98,7 @@ export const useDataHandlers = ({
     setCurrentStep(1); // Navigate to next step
   }, [setProcessedDataInfo, setForecastResults, setCurrentStep]);
 
-  const createAllJobs = useCallback(async (result: CsvUploadResult) => {
+  const createAllJobs = useCallback(async (result: CsvUploadResult, batchIdOverride?: string) => {
     console.log('[useDataHandlers] createAllJobs called with:', result);
     if (!result || !result.success || !result.skuList || result.skuList.length === 0) {
       toast({
@@ -108,9 +109,11 @@ export const useDataHandlers = ({
       return;
     }
 
+    const useBatchId = batchIdOverride || Date.now().toString();
+    setBatchId(useBatchId);
     try {
       console.log('[BACKEND] Submitting SKUs from processed file to create optimization jobs...');
-      await createJobs({ skus: result.skuList, reason: 'dataset_upload' });
+      await createJobs({ skus: result.skuList, reason: 'dataset_upload', filePath: result.filePath, batchId: useBatchId });
     } catch (error) {
       console.error('[BACKEND] Error during job creation process:', error);
       // The error is toasted inside createJobs
@@ -134,18 +137,18 @@ export const useDataHandlers = ({
   }, [processNewData, toast]);
 
   // DATA CLEANING CSV UPLOAD
-  const handleImportDataCleaning = useCallback(async (importedSKUs: string[]) => {
-    console.log('handleImportDataCleaning called with:', importedSKUs);
+  const handleImportDataCleaning = useCallback(async (importedSKUs: string[], filePath?: string) => {
+    console.log('handleImportDataCleaning called with:', importedSKUs, 'filePath:', filePath);
     const validSKUs = importedSKUs.filter(sku => !!sku && typeof sku === 'string');
     
     if (validSKUs.length > 0) {
-      await createJobs({ skus: validSKUs, reason: 'csv_upload_data_cleaning' });
+      await createJobs({ skus: validSKUs, reason: 'csv_upload_data_cleaning', filePath });
     }
   }, [createJobs]);
 
   // MANUAL DATA CLEANING EDIT
-  const handleManualEditDataCleaning = useCallback(async (sku: string) => {
-    await createJobs({ skus: [sku], reason: 'manual_edit_data_cleaning' });
+  const handleManualEditDataCleaning = useCallback(async (sku: string, filePath?: string) => {
+    await createJobs({ skus: [sku], reason: 'manual_edit_data_cleaning', filePath });
   }, [createJobs]);
 
   const handleDataReady = useCallback((result: CsvUploadResult) => {
@@ -167,5 +170,5 @@ export const useDataHandlers = ({
     // Optionally, you can also show a toast notification here
   }, [setAiError]);
 
-  return { handleDataUpload, processNewData, createAllJobs, handleImportDataCleaning, handleManualEditDataCleaning, handleDataReady, handleConfirm, handleForecastComplete, handleAIFailure };
+  return { handleDataUpload, processNewData, createAllJobs, handleImportDataCleaning, handleManualEditDataCleaning, handleDataReady, handleConfirm, handleForecastComplete, handleAIFailure, batchId };
 };

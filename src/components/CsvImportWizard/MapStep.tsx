@@ -159,7 +159,7 @@ export const MapStep: React.FC<MapStepProps> = ({
             onChange={e => handleDateRangeChange('start', Number(e.target.value))}
             className="border rounded px-1 py-0.5 text-xs"
           >
-            {(Array.isArray(mappingRoles) ? mappingRoles : []).map((role, i) => role === 'Date' && <option key={i} value={i}>{(Array.isArray(previewHeader) ? previewHeader : [])[i]}</option>)}
+            {mappingRoles.map((role, i) => role === 'Date' && <option key={i} value={i}>{mappingHeader[i]}</option>)}
           </select>
           <span className="text-xs">to</span>
           <select
@@ -167,7 +167,7 @@ export const MapStep: React.FC<MapStepProps> = ({
             onChange={e => handleDateRangeChange('end', Number(e.target.value))}
             className="border rounded px-1 py-0.5 text-xs"
           >
-            {(Array.isArray(mappingRoles) ? mappingRoles : []).map((role, i) => role === 'Date' && <option key={i} value={i}>{(Array.isArray(previewHeader) ? previewHeader : [])[i]}</option>)}
+            {mappingRoles.map((role, i) => role === 'Date' && <option key={i} value={i}>{mappingHeader[i]}</option>)}
           </select>
         </div>
       )}

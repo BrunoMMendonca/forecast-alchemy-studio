@@ -1,6 +1,7 @@
 import { GridOptimizer } from './optimization/GridOptimizer.js';
 import { modelFactory } from './models/index.js';
 import { db, dbReady } from './db.js';
+import fs from 'fs';
 
 // Promisify db.get and db.run for use with async/await
 const dbGet = (sql, params = []) => new Promise((resolve, reject) => {
@@ -36,12 +37,25 @@ class OptimizationWorker {
     console.log(`[Worker] Picked up job ${job.id}`);
 
     try {
-      await dbRun('UPDATE jobs SET status = ?, progress = 0, startedAt = ? WHERE id = ?', ['running', new Date().toISOString(), job.id]);
+      await dbRun('UPDATE jobs SET status = ?, progress = 0, startedAt = ?, updatedAt = ? WHERE id = ?', ['running', new Date().toISOString(), new Date().toISOString(), job.id]);
       
       const jobData = JSON.parse(job.data);
-      const { data, modelTypes, optimizationType } = jobData;
+      let { data, modelTypes, optimizationType } = jobData;
 
-      console.log(`[Worker] Starting real grid optimization for job ${job.id}...`);
+      // NEW: If data is missing but filePath is present, load from file
+      if ((!data || data.length === 0) && jobData.filePath) {
+        try {
+          const fileContent = fs.readFileSync(jobData.filePath, 'utf-8');
+          const fileJson = JSON.parse(fileContent);
+          data = fileJson.data;
+          if (!data || data.length === 0) {
+            throw new Error(`Loaded file ${jobData.filePath} but it contains no data.`);
+          }
+          console.log(`[Worker] Loaded data from file: ${jobData.filePath} (${data.length} rows)`);
+        } catch (fileErr) {
+          throw new Error(`Failed to load data from file ${jobData.filePath}: ${fileErr.message}`);
+        }
+      }
 
       if (!data || data.length === 0) {
         throw new Error('No data provided for optimization');
@@ -50,7 +64,7 @@ class OptimizationWorker {
       let results;
       const progressCallback = async (progress) => {
         // Update progress in the database
-        await dbRun('UPDATE jobs SET progress = ? WHERE id = ?', [progress.percentage, job.id]);
+        await dbRun('UPDATE jobs SET progress = ?, updatedAt = ? WHERE id = ?', [progress.percentage, new Date().toISOString(), job.id]);
         console.log(`[Worker] Job ${job.id} progress: ${progress.percentage}%`);
       };
       
@@ -63,11 +77,11 @@ class OptimizationWorker {
       }
 
       console.log(`[Worker] ✅ Optimization completed for job ${job.id}`);
-      await dbRun('UPDATE jobs SET status = ?, progress = 100, completedAt = ?, result = ? WHERE id = ?', ['completed', new Date().toISOString(), JSON.stringify(results), job.id]);
+      await dbRun('UPDATE jobs SET status = ?, progress = 100, completedAt = ?, updatedAt = ?, result = ? WHERE id = ?', ['completed', new Date().toISOString(), new Date().toISOString(), JSON.stringify(results), job.id]);
 
     } catch (error) {
       console.error(`[Worker] ❌ Optimization failed for job ${job.id}:`, error.message);
-      await dbRun('UPDATE jobs SET status = ?, completedAt = ?, error = ? WHERE id = ?', ['failed', new Date().toISOString(), error.message, job.id]);
+      await dbRun('UPDATE jobs SET status = ?, completedAt = ?, updatedAt = ?, error = ? WHERE id = ?', ['failed', new Date().toISOString(), new Date().toISOString(), error.message, job.id]);
     } finally {
       this.isRunning = false;
       this.currentJobId = null;
@@ -140,7 +154,7 @@ class OptimizationWorker {
     }
   }
 
-  startPolling(interval = 5000) { // Poll every 5 seconds
+  startPolling(interval = 1000) { // Poll every 5 seconds
     console.log('[Worker] Starting polling for jobs...');
     // Poll immediately, then set interval
     this.pollForJobs(); 

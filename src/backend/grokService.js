@@ -10,8 +10,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load system messages from config files
-const systemMessageWithReasoning = fs.readFileSync(path.join(__dirname, 'config/system_message_with_reasoning.txt'), 'utf-8');
-const systemMessageWithoutReasoning = fs.readFileSync(path.join(__dirname, 'config/system_message_without_reasoning.txt'), 'utf-8');
+const systemMessageWithReasoning = fs.readFileSync(path.join(__dirname, 'config/CSVImport/ai_csv_system_message_with_reasoning.txt'), 'utf-8');
+const systemMessageWithoutReasoning = fs.readFileSync(path.join(__dirname, 'config/CSVImport/ai_csv_system_message_without_reasoning.txt'), 'utf-8');
 
 // Initialize OpenAI client for Grok-3
 const client = new OpenAI({

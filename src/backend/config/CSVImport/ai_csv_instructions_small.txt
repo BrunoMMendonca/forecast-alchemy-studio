@@ -1,0 +1,9 @@
+Transform the CSV so it will closely match the following:
+Each row represents a unique product with:
+1. Column 1: Product code (identified by column names like "Material," "Code," "SKU," or similar; select the first matching column).
+2. Column 2: Product description (use the column named "Description" or similar; if absent, use "{product code} - name").
+3. Subsequent columns: Non-date categorical columns suitable for pivot table aggregation (e.g., "Brand," "Category," "Supplier"; exclude numerical or irrelevant columns).
+4. Final columns: Sales values with headers as dates in "YYYY-MM-DD" format. If dates are split across year/month columns, combine them into a single date column in this format before pivoting. Assume the first of the month for day if info is not available. Skip rows with invalid year/month values. 
+Ignore blank rows, irrelevant columns (e.g., notes, IDs not related to products), and non-numeric sales values.
+If transposition is needed to align dates as columns, include it in the operations.
+Output as a CSV (valid JSON) without transformed data or markdown formatting. 

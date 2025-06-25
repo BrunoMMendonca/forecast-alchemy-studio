@@ -72,11 +72,13 @@ export function analyzeTrend(sales: number[], dates: Date[]): TrendResult {
   // Calculate simple moving average
   const windowSize = Math.min(6, Math.floor(sales.length / 4));
   const trendLine = sales.map((sale, i) => {
+    const dateObj = dates[i];
+    const dateStr = dateObj && !isNaN(dateObj.getTime()) ? dateObj.toISOString() : '';
     const start = Math.max(0, i - windowSize + 1);
     const window = sales.slice(start, i + 1);
     const trend = window.reduce((a, b) => a + b, 0) / window.length;
     return {
-      date: dates[i]?.toISOString() ?? '',
+      date: dateStr,
       actual: sale,
       trend
     };
@@ -121,8 +123,10 @@ export function calculateVolatility(sales: number[], dates?: Date[]): Volatility
     const mean = window.reduce((a, b) => a + b, 0) / window.length;
     const variance = window.reduce((sum, ret) => 
       sum + Math.pow(ret - mean, 2), 0) / window.length;
+    const dateObj = dates && dates[i + 1];
+    const dateStr = dateObj && !isNaN(dateObj.getTime()) ? dateObj.toISOString() : '';
     return {
-      date: dates && dates[i + 1] ? dates[i + 1].toISOString() : '',
+      date: dateStr,
       volatility: Math.sqrt(variance)
     };
   });

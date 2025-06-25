@@ -1,9 +1,9 @@
 import React from 'react';
-import { Upload, BarChart3, TrendingUp, Eye } from 'lucide-react';
-import { Icon as LucideIcon } from 'lucide-react';
+import { Upload, BarChart3, TrendingUp, Eye, Icon, Database } from 'lucide-react';
 import { broom } from '@lucide/lab';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
+import { Broom } from 'lucide-react';
 
 interface Step {
   name: string;
@@ -19,11 +19,11 @@ interface StepNavigationProps {
 }
 
 const steps: Step[] = [
-  { name: 'Upload', description: 'Upload your data', icon: Upload },
-  { name: 'Clean & Prepare', description: 'Clean and prepare your data', icon: (props) => <LucideIcon iconNode={broom} {...props} /> },
-  { name: 'Explore', description: 'Explore your data', icon: BarChart3 },
-  { name: 'Forecast', description: 'Generate a forecast', icon: TrendingUp },
-  { name: 'Review', description: 'Review your forecast', icon: Eye },
+  { name: 'Choose your data', description: 'Select or upload your data', icon: Database },
+  { name: 'Clean & Prepare', description: 'Remove outliers and validate', icon: (props) => <Icon iconNode={broom} {...props} /> },
+  { name: 'Explore', description: 'Visualize your data', icon: BarChart3 },
+  { name: 'Forecast', description: 'Generate forecasts', icon: TrendingUp },
+  { name: 'Finalize', description: 'Export and review', icon: Eye },
 ];
 
 export const StepNavigation: React.FC<StepNavigationProps> = ({
@@ -39,7 +39,7 @@ export const StepNavigation: React.FC<StepNavigationProps> = ({
   }
 
   const isStepDisabled = (stepIndex: number): boolean => {
-    if (stepIndex === 0) return false; // Always allow going back to Upload
+    if (stepIndex === 0) return false; // Always allow going back to Choose your data
     const hasData = uploadSummary && uploadSummary.skuCount > 0;
     if (stepIndex > 0 && !hasData) return true;
     // Disable forecast/review if no data

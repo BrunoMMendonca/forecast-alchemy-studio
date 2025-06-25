@@ -67,10 +67,10 @@ const WorkflowPage = () => {
   });
 
   // This wrapper function will now handle both updating the data and kicking off the backend job.
-  const handleDataCleaning = (data: NormalizedSalesData[], changedSKUs?: string[]) => {
+  const handleDataCleaning = (data: NormalizedSalesData[], changedSKUs?: string[], filePath?: string) => {
     setCleanedData(data);
     if (changedSKUs && changedSKUs.length > 0) {
-      changedSKUs.forEach(sku => handleManualEditDataCleaning(sku));
+      changedSKUs.forEach(sku => handleManualEditDataCleaning(sku, filePath));
     }
   };
 

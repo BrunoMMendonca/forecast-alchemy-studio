@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Zap, Clock } from 'lucide-react';
-import { NormalizedSalesData } from '@/pages/Index';
+import { NormalizedSalesData } from '@/types/forecast';
 import { exportCleaningData, parseCleaningCSV, applyImportChanges, ImportPreview } from '@/utils/csvUtils';
 import { ImportPreviewDialog } from '@/components/ImportPreviewDialog';
 import { OutlierChart } from '@/components/OutlierChart';
@@ -14,8 +14,8 @@ import { OutlierDataTable } from '@/components/OutlierDataTable';
 interface OutlierDetectionProps {
   data: NormalizedSalesData[];
   cleanedData: NormalizedSalesData[];
-  onDataCleaning: (cleanedData: NormalizedSalesData[], changedSKUs?: string[]) => void;
-  onImportDataCleaning?: (importedSKUs: string[]) => void;
+  onDataCleaning: (cleanedData: NormalizedSalesData[], changedSKUs?: string[], filePath?: string) => void;
+  onImportDataCleaning?: (importedSKUs: string[], filePath?: string) => void;
   queueSize?: number;
   onFileNameChange?: (fileName: string) => void;
 }
@@ -220,7 +220,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
     }
   };
 
-  const handleConfirmImport = () => {
+  const handleConfirmImport = async () => {
     try {
       // Always apply corrections to the original data, not just cleanedData
       let baseData = cleanedData.length > 0 ? cleanedData : data;
@@ -230,16 +230,34 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
         const corrected = updatedData.find(u => u['Material Code'] === orig['Material Code'] && u['Date'] === orig['Date']);
         return corrected ? corrected : orig;
       });
+      
+      // Save cleaned data to backend and get new filePath
+      let filePath = undefined;
+      try {
+        const columns = allRows.length > 0 ? Object.keys(allRows[0]) : [];
+        const response = await fetch('/api/save-cleaned-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: allRows, columns })
+        });
+        if (!response.ok) throw new Error('Failed to save cleaned data');
+        const result = await response.json();
+        filePath = result.filePath;
+      } catch (err) {
+        console.error('Failed to save cleaned data:', err);
+      }
+      
       // Extract SKUs that were modified during import
       const modifiedSKUs = Array.from(new Set(
         importPreviews
           .filter(p => (p.action === 'modify' || p.action === 'add_note') && p.sku)
           .map(p => p.sku)
       ));
+      
       onDataCleaning(allRows);
-      // Notify parent about imported SKUs for optimization
+      // Notify parent about imported SKUs for optimization with filePath
       if (onImportDataCleaning && modifiedSKUs.length > 0) {
-        onImportDataCleaning(modifiedSKUs);
+        onImportDataCleaning(modifiedSKUs, filePath);
       }
       const modifications = importPreviews.filter(p => p.action === 'modify');
       const noteAdditions = importPreviews.filter(p => p.action === 'add_note');
@@ -312,7 +330,7 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
     }
   };
 
-  const handleSaveEdit = (key: string) => {
+  const handleSaveEdit = async (key: string) => {
     const editData = editingOutliers[key];
     if (!editData) return;
 
@@ -338,9 +356,28 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
       return item;
     });
     
-    // Notify parent with the changed SKU
-    console.log('🧹 EDIT: SKU modified during manual editing, triggering optimization:', sku);
+    // Save cleaned data to backend and get new filePath
+    let filePath = undefined;
+    try {
+      const columns = cleanedData.length > 0 ? Object.keys(cleanedData[0]) : [];
+      const response = await fetch('/api/save-cleaned-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: updatedData, columns })
+      });
+      if (!response.ok) throw new Error('Failed to save cleaned data');
+      const result = await response.json();
+      filePath = result.filePath;
+    } catch (err) {
+      console.error('Failed to save cleaned data:', err);
+    }
+
+    // Notify parent with the changed SKU and new filePath
+    if (filePath) {
+      onDataCleaning(updatedData, [sku], filePath);
+    } else {
     onDataCleaning(updatedData, [sku]);
+    }
     
     setEditingOutliers(prev => {
       const updated = { ...prev };

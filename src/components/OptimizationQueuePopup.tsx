@@ -41,6 +41,13 @@ const formatTime = (dateString: string) => {
   return date.toLocaleTimeString();
 };
 
+// Safe date formatter
+const safeFormatTime = (dateString: string) => {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  return isNaN(d.getTime()) ? '' : d.toLocaleString();
+};
+
 interface SummaryCardProps {
   title: string;
   value: number;
@@ -107,7 +114,7 @@ const JobRow = ({ job }: { job: Job }) => {
         <Progress value={job.progress} />
       </TableCell>
       <TableCell className="w-[120px] text-right">
-        {format(new Date(job.updatedAt), 'p')}
+        {safeFormatTime(job.updatedAt)}
       </TableCell>
     </TableRow>
   );

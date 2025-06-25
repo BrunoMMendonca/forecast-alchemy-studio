@@ -21,6 +21,8 @@ interface ForecastPageContext {
   setSelectedSKU: (sku: string | null) => void;
   aiError: string | null;
   setAiError: (error: string | null) => void;
+  batchId: string | null;
+  setBatchId: (batchId: string | null) => void;
 }
 
 const ForecastPage = () => {
@@ -39,7 +41,8 @@ const ForecastPage = () => {
     aiError,
     setAiError,
     summary,
-    globalSettings
+    globalSettings,
+    setBatchId
   } = context;
 
   // State hooks
@@ -51,12 +54,23 @@ const ForecastPage = () => {
   }, [processedDataInfo]);
   
   // Data handlers now get all setters from context
-  const { processNewData, createAllJobs, handleImportDataCleaning } = useDataHandlers({
+  const { processNewData, createAllJobs: originalCreateAllJobs, handleImportDataCleaning } = useDataHandlers({
     setCurrentStep,
     setProcessedDataInfo,
     setForecastResults,
-    aiForecastModelOptimizationEnabled: globalSettings?.aiForecastModelOptimizationEnabled
+    aiForecastModelOptimizationEnabled: globalSettings?.aiForecastModelOptimizationEnabled,
+    setAiError,
+    onFileNameChange: () => {}, // Not used in this context
+    lastImportFileName: null,
+    lastImportTime: null
   });
+
+  // Wrapper for createAllJobs that updates the global batchId and passes it to job creation
+  const createAllJobs = useCallback(async (result: CsvUploadResult) => {
+    const newBatchId = Date.now().toString();
+    setBatchId(newBatchId);
+    await originalCreateAllJobs(result, newBatchId);
+  }, [originalCreateAllJobs, setBatchId]);
 
   const handleAIFailure = useCallback((errorMessage: string) => {
     toast({
@@ -66,6 +80,33 @@ const ForecastPage = () => {
     });
     setAiError(errorMessage);
   }, [setAiError]);
+
+  // Wrapper function that handles both data processing and job creation
+  const handleConfirm = useCallback(async (result: CsvUploadResult, isExistingData: boolean = false) => {
+    // First process the data (sets processedDataInfo and navigates to step 1)
+    processNewData(result);
+    
+    // Only create jobs for new data uploads, not when loading existing data
+    if (!isExistingData) {
+      // Then create the jobs in the background
+      const newBatchId = Date.now().toString();
+      setBatchId(newBatchId);
+      await originalCreateAllJobs(result, newBatchId);
+    }
+  }, [processNewData, originalCreateAllJobs, setBatchId]);
+
+  // Handle data cleaning and update processedDataInfo with new filePath
+  const handleDataCleaning = useCallback((data: any[], changedSKUs?: string[], filePath?: string) => {
+    if (filePath && processedDataInfo) {
+      // Update processedDataInfo with the new filePath from the latest cleaning operation
+      const updatedProcessedDataInfo = {
+        ...processedDataInfo,
+        filePath: filePath
+      };
+      setProcessedDataInfo(updatedProcessedDataInfo);
+      console.log('Updated processedDataInfo with new filePath:', filePath);
+    }
+  }, [processedDataInfo, setProcessedDataInfo]);
   
   return (
       <StepContent
@@ -76,8 +117,8 @@ const ForecastPage = () => {
         queueSize={summary?.total ?? 0}
         forecastPeriods={globalSettings?.forecastPeriods ?? 12}
         aiForecastModelOptimizationEnabled={globalSettings?.aiForecastModelOptimizationEnabled ?? false}
-        onConfirm={createAllJobs}
-        onDataCleaning={() => {}} // This needs to be re-wired to a new data cleaning flow
+        onConfirm={handleConfirm}
+        onDataCleaning={handleDataCleaning}
         onImportDataCleaning={handleImportDataCleaning}
         onForecastGeneration={setForecastResults}
         onSKUChange={setSelectedSKU}
