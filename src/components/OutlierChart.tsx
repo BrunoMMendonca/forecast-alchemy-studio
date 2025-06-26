@@ -29,11 +29,11 @@ export const OutlierChart: React.FC<OutlierChartProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg p-4 border">
+    <div className="bg-white rounded-lg p-4 border h-full min-h-0 flex flex-col">
       <h3 className="text-lg font-semibold text-slate-800 mb-4">
         Outlier Detection - {selectedSKU}
       </h3>
-      <div className="h-80">
+      <div className="flex-grow min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart 
             data={data}
@@ -62,10 +62,13 @@ export const OutlierChart: React.FC<OutlierChartProps> = ({
               tickFormatter={(value) => value.toLocaleString()}
             />
             <Tooltip 
-              formatter={(value: number, name: string) => [
-                value?.toLocaleString() || '0', 
-                name
-              ]}
+              formatter={(value: number, name: string, props) => {
+                if (name === 'Outlier') {
+                  // Show the actual outlier value (dot value)
+                  return [value?.toLocaleString() || '0', 'Outlier'];
+                }
+                return [value?.toLocaleString() || '0', name];
+              }}
               labelFormatter={(label) => {
                 try {
                   const date = new Date(label);

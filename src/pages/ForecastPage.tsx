@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useMemo } from 'react';
+import React, { useCallback, useState, useMemo, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { StepContent } from '@/components/StepContent';
 import { toast } from '@/components/ui/use-toast';
@@ -23,6 +23,7 @@ interface ForecastPageContext {
   setAiError: (error: string | null) => void;
   batchId: string | null;
   setBatchId: (batchId: string | null) => void;
+  isAutoLoading: boolean;
 }
 
 const ForecastPage = () => {
@@ -42,7 +43,8 @@ const ForecastPage = () => {
     setAiError,
     summary,
     globalSettings,
-    setBatchId
+    setBatchId,
+    isAutoLoading
   } = context;
 
   // State hooks
@@ -97,6 +99,7 @@ const ForecastPage = () => {
 
   // Handle data cleaning and update processedDataInfo with new filePath
   const handleDataCleaning = useCallback((data: any[], changedSKUs?: string[], filePath?: string) => {
+    console.log('[ForecastPage] handleDataCleaning called:', { dataLength: data.length, changedSKUs, filePath, processedDataInfo });
     if (filePath && processedDataInfo) {
       // Update processedDataInfo with the new filePath from the latest cleaning operation
       const updatedProcessedDataInfo = {
@@ -104,10 +107,21 @@ const ForecastPage = () => {
         filePath: filePath
       };
       setProcessedDataInfo(updatedProcessedDataInfo);
-      console.log('Updated processedDataInfo with new filePath:', filePath);
+      console.log('[ForecastPage] Updated processedDataInfo with new filePath:', updatedProcessedDataInfo);
+    } else if (processedDataInfo) {
+      // No new filePath, but keep the current dataset loaded
+      setProcessedDataInfo({ ...processedDataInfo });
+      console.log('[ForecastPage] No new filePath, keeping current processedDataInfo loaded:', processedDataInfo);
+    } else {
+      console.warn('[ForecastPage] handleDataCleaning: processedDataInfo is null or undefined!');
     }
   }, [processedDataInfo, setProcessedDataInfo]);
   
+  // Add a useEffect to log when processedDataInfo changes
+  useEffect(() => {
+    console.log('[ForecastPage] processedDataInfo changed:', processedDataInfo);
+  }, [processedDataInfo]);
+
   return (
       <StepContent
         currentStep={currentStep}
@@ -126,6 +140,7 @@ const ForecastPage = () => {
         onAIFailure={handleAIFailure}
         lastImportFileName={lastImportFileName}
         lastImportTime={lastImportTime}
+        isAutoLoading={isAutoLoading}
       />
   );
 };

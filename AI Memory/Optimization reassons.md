@@ -20,6 +20,7 @@ The AI method uses the GRID method results as a source to prompt AI.
 **Note:**
 - AI jobs are only added to the queue if both global AI features and AI model optimization are enabled at the time of job creation. If AI is disabled, only Grid jobs are added.
 - All optimizations are managed through the queue system, which ensures jobs are processed sequentially and according to current settings.
+- **UI/UX Changes**: Recent UI/UX improvements (fullscreen modal, floating elements, chart enhancements) do not affect optimization triggers. These are purely interface improvements that enhance user experience without changing the underlying optimization logic or triggers.
 
 
 

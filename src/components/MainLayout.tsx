@@ -74,17 +74,17 @@ const JobMonitorButton = ({ summary = defaultSummary, onOpen }: JobMonitorButton
   return (
         <div
           className={cn(
-            "fixed bottom-4 right-4 z-50 shadow-lg rounded-full flex items-center transition-all",
+            "shadow-lg rounded-full flex items-center transition-all h-12",
             className
           )}
         >
           <Button
               variant={variant as any}
-              className="rounded-full"
+              className="rounded-full h-12 px-6 flex items-center"
               onClick={onOpen}
           >
               {icon}
-              {text}
+              <span className="font-semibold">{text}</span>
           </Button>
         </div>
   );
@@ -103,6 +103,7 @@ export const MainLayout: React.FC = () => {
   const [selectedSKU, setSelectedSKU] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [batchId, setBatchId] = useState<string | null>(null);
+  const [isAutoLoading, setIsAutoLoading] = useState(true);
   // =====================================
 
   const { setModels } = useUnifiedState(); // Keep global model state separate
@@ -130,7 +131,12 @@ export const MainLayout: React.FC = () => {
           }
         } catch (error) {
           console.error('[MainLayout] Failed to auto-load last dataset:', error);
+        } finally {
+          setIsAutoLoading(false);
         }
+      } else {
+        // If we're not on forecast page or already have data, stop loading immediately
+        setIsAutoLoading(false);
       }
     };
 
@@ -166,6 +172,7 @@ export const MainLayout: React.FC = () => {
     setAiError,
     batchId,
     setBatchId,
+    isAutoLoading,
   };
 
   return (
@@ -173,10 +180,6 @@ export const MainLayout: React.FC = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white dark:bg-gray-800 shadow-sm">
           <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              Forecast Alchemy Studio
-            </h1>
-            <Button variant="outline" onClick={handleResetModels}>Reset Models</Button>
           </div>
           <StepNavigation
             currentStep={currentStep}
@@ -189,15 +192,6 @@ export const MainLayout: React.FC = () => {
           <Outlet context={outletContext} />
         </main>
       </div>
-      
-      {showFloatingButton && (
-        <FloatingSettingsButton
-          {...globalSettings}
-          settingsOpen={settingsOpen}
-          setSettingsOpen={setSettingsOpen}
-        />
-      )}
-      <JobMonitorButton summary={summary} onOpen={() => setIsQueueOpen(true)} />
       <OptimizationQueuePopup
           isOpen={isQueueOpen}
           onOpenChange={setIsQueueOpen}
@@ -206,6 +200,19 @@ export const MainLayout: React.FC = () => {
           isPaused={isPaused}
           setIsPaused={setIsPaused}
       />
+      {/* Floating container for Job Monitor and Setup button */}
+      <div className="fixed top-6 right-6 z-50 flex flex-row items-center gap-4 min-w-[260px]">
+        <JobMonitorButton summary={summary} onOpen={() => setIsQueueOpen(true)} />
+        <FloatingSettingsButton
+          {...globalSettings}
+          settingsOpen={settingsOpen}
+          setSettingsOpen={setSettingsOpen}
+        />
+      </div>
+      {/* Floating logo container, top left */}
+      <div className="fixed top-4 left-6 z-50">
+        <img src="/forecast_alchemy_logo.svg" alt="Forecast Alchemy Logo" className="h-20 w-auto" />
+      </div>
     </div>
   );
 };

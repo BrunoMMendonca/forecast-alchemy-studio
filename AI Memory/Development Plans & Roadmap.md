@@ -30,6 +30,33 @@
 
 **Status**: Planning phase - ready for implementation
 
+### Mobile Responsiveness Implementation (Planned)
+**Goal**: Make the application smartphone-friendly with responsive design.
+
+**Problem**: The current layout is desktop-only, with elements overlapping on small screens. The top part of the app (header, floating buttons, logo) is not optimized for mobile devices.
+
+**Current State**: 
+- Desktop-only layout with no responsive breakpoints
+- Fixed positioning for floating elements
+- No collapsible menu or mobile navigation
+- Elements overlap on small screens
+
+**Solution**: Implement responsive design using Tailwind's breakpoints:
+- Add responsive breakpoints for mobile, tablet, and desktop
+- Implement collapsible menu for mobile navigation
+- Stack floating elements vertically on small screens
+- Adjust chart and table layouts for mobile
+- Ensure touch-friendly interactions
+
+**Implementation Steps**:
+1. Audit current layout for mobile compatibility
+2. Add responsive breakpoints to all components
+3. Implement mobile navigation menu
+4. Test on various screen sizes
+5. Optimize touch interactions
+
+**Status**: Planning phase - ready for implementation
+
 ### Backend Migration Phase (Completed)
 **Goal**: Move all major workflow steps to the backend for better performance, persistence, and multi-tenancy support.
 
@@ -207,4 +234,92 @@
 
 ## 4. Next Steps
 - Continue backend migration for other workflow steps.
-- Maintain explicit data format handling and single-source-of-truth patterns throughout the app. 
+- Maintain explicit data format handling and single-source-of-truth patterns throughout the app.
+
+---
+
+## 8. Recently Completed Fixes
+
+### File Naming Convention Implementation (Completed)
+**Goal**: Implement consistent file naming convention for all dataset-related files.
+
+**Problem**: Files were using inconsistent naming patterns, making it difficult to track relationships between original, processed, and cleaning data.
+
+**Solution**: Implemented the `<BaseName>-<ShortHash>-<Type>.<ext>` naming convention:
+- **BaseName**: `Original_CSV_Upload-<timestamp>`
+- **ShortHash**: First 8 characters of SHA-256 hash
+- **Type**: `original`, `processed`, `cleaning`, or `discarded`
+- **Extension**: `.csv` for original files, `.json` for processed/cleaning files
+
+**Implementation Results**:
+- ✅ All backend endpoints updated to use new naming convention
+- ✅ Frontend components updated to extract baseName and hash from file paths
+- ✅ Existing data detection updated to use new API format
+- ✅ Consistent file organization and hash-based duplicate detection
+
+### Dataset Switching & Cleaning Data Loading (Completed)
+**Goal**: Fix issues with dataset switching and cleaning data persistence.
+
+**Problem**: 
+- After cleaning data, the dataset would be "unloaded" and show "No data available for cleaning"
+- Switching between datasets would show cleaning data from the wrong dataset
+- Backend was returning cleaning file paths instead of processed file paths
+
+**Solution**:
+- Fixed `/save-cleaned-data` endpoint to return processed file path instead of cleaning file path
+- Implemented proper state reset when switching datasets
+- Added cleaning data loading logic that checks for existing cleaning data per dataset hash
+
+**Implementation Results**:
+- ✅ Dataset remains loaded after cleaning operations
+- ✅ Proper cleaning data loading for each dataset
+- ✅ Clean state separation between different datasets
+- ✅ No more "Could not extract baseName and hash from filePath" errors
+
+### Auto-Loading Loading State (Completed)
+**Goal**: Eliminate UI flash during dataset auto-loading.
+
+**Problem**: Brief flash of "Choose your data" step before auto-loaded dataset appeared.
+
+**Solution**: Implemented loading state that shows spinner instead of normal content during auto-loading.
+
+**Implementation Results**:
+- ✅ Smooth UI transitions during app startup
+- ✅ Clear loading feedback for users
+- ✅ Consistent visual structure during auto-loading
+- ✅ Improved perceived performance 
+
+### Major UI/UX Enhancements (Completed)
+**Goal**: Improve the data cleaning experience with a fullscreen modal and enhance overall UI layout.
+
+**Problem**: 
+- Data cleaning was limited to a small chart and separate table
+- Job Monitor button overlapped with toasts and other UI elements
+- Logo and branding were not prominently displayed
+- Chart data logic was inconsistent between modal and main view
+
+**Solution**:
+- **Fullscreen Data Clean Modal**: Created a comprehensive modal that combines chart and table editing in one interface
+- **Floating UI Elements**: Moved Job Monitor and Setup buttons to a dedicated floating container at top right
+- **Logo Branding**: Moved logo to a floating container at top left, removed header title
+- **Globalized Controls**: SKU selector, z-score selector, and navigation buttons are now globalized between modal and main app
+- **Chart Data Logic**: Fixed original/cleaned series display to use consistent fallback logic
+- **Enhanced UX**: Added keyboard shortcuts, auto-selecting largest outlier, improved input styling
+
+**Implementation Results**:
+- ✅ Fullscreen modal with chart filling available space and edit table below
+- ✅ Seamless state synchronization between modal and main app
+- ✅ Improved floating UI layout with no overlapping elements
+- ✅ Professional branding with prominent logo placement
+- ✅ Consistent chart data display across all views
+- ✅ Enhanced user experience with keyboard shortcuts and auto-selection
+- ✅ Responsive chart that fills all available space
+- ✅ Modern input styling with blue borders and proper alignment
+
+**Key Technical Details**:
+- Modal uses Radix Dialog with custom CSS for fullscreen display
+- Chart data builds single array with both `originalSales` and `cleanedSales` fields
+- Fallback logic: `cleanedData.length > 0 ? cleanedData : originalData`
+- Globalized state ensures changes in modal update main app and vice versa
+- Keyboard shortcuts: Enter to save (except Shift+Enter in textarea)
+- Auto-selection targets data point with largest outlier z-score when switching SKUs 

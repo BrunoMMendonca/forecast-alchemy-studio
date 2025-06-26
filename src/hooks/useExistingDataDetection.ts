@@ -75,8 +75,19 @@ export const useExistingDataDetection = (): UseExistingDataDetectionReturn => {
 
   const loadLatestCleanedData = useCallback(async (dataset: Dataset): Promise<CsvUploadResult | null> => {
     try {
-      // Load the cleaned data file
-      const response = await fetch(`/api/load-processed-data?filePath=uploads/${dataset.filename}`);
+      // Extract baseName and hash from the filename using the new naming convention
+      // Format: Original_CSV_Upload-<timestamp>-<hash>-processed.json
+      const match = dataset.filename.match(/^Original_CSV_Upload-(\d+)-([a-f0-9]{8})-processed\.json$/);
+      if (!match) {
+        console.error('[DETECT] Invalid filename format:', dataset.filename);
+        return null;
+      }
+      
+      const [, timestamp, hash] = match;
+      const baseName = `Original_CSV_Upload-${timestamp}`;
+      
+      // Load the processed data using the new API format
+      const response = await fetch(`/api/load-processed-data?baseName=${encodeURIComponent(baseName)}&hash=${encodeURIComponent(hash)}`);
       if (!response.ok) {
         throw new Error('Failed to load cleaned data');
       }

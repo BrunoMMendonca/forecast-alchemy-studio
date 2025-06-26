@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, Zap, Clock } from 'lucide-react';
+import { AlertTriangle, Zap, Clock, Maximize2 } from 'lucide-react';
 import { NormalizedSalesData } from '@/types/forecast';
 import { exportCleaningData, parseCleaningCSV, applyImportChanges, ImportPreview } from '@/utils/csvUtils';
 import { ImportPreviewDialog } from '@/components/ImportPreviewDialog';
@@ -10,6 +10,7 @@ import { OutlierStatistics } from '@/components/OutlierStatistics';
 import { OutlierControls } from '@/components/OutlierControls';
 import { OutlierExportImport } from '@/components/OutlierExportImport';
 import { OutlierDataTable } from '@/components/OutlierDataTable';
+import { DataCleanModal } from './DataCleanModal';
 
 interface OutlierDetectionProps {
   data: NormalizedSalesData[];
@@ -38,21 +39,23 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
   queueSize = 0,
   onFileNameChange
 }) => {
-  const [selectedSKU, setSelectedSKU] = useState<string>('');
-  const [threshold, setThreshold] = useState([2.5]);
-  const [editingOutliers, setEditingOutliers] = useState<{ [key: string]: { value: number; note: string } }>({});
-  const [showImportDialog, setShowImportDialog] = useState(false);
-  const [importPreviews, setImportPreviews] = useState<ImportPreview[]>([]);
-  const [importErrors, setImportErrors] = useState<string[]>([]);
-  const [importMetadata, setImportMetadata] = useState<{ threshold?: number; exportDate?: string; totalRecords?: number }>({});
-  const [importFileName, setImportFileName] = useState('');
-  const [highlightedDate, setHighlightedDate] = useState<string>();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
-  const [treatZeroAsOutlier, setTreatZeroAsOutlier] = useState(true);
+  const [selectedSKU, setSelectedSKU] = useState<string>('');
+  const [threshold, setThreshold] = useState<number[]>([2.5]);
+  const [treatZeroAsOutlier, setTreatZeroAsOutlier] = useState<boolean>(true);
+  const [editingOutliers, setEditingOutliers] = useState<Record<string, { value: number; note: string }>>({});
+  const [showImportDialog, setShowImportDialog] = useState<boolean>(false);
+  const [importPreviews, setImportPreviews] = useState<any[]>([]);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [importMetadata, setImportMetadata] = useState<any>({});
+  const [importFileName, setImportFileName] = useState<string>('');
+  const [highlightedDate, setHighlightedDate] = useState<string | undefined>(undefined);
+  const [showModal, setShowModal] = useState<boolean>(false);
 
+  // Compute SKUs from data
   const skus = useMemo(() => {
-    return Array.from(new Set(data.map(d => d['Material Code']))).sort();
+    const uniqueSKUs = Array.from(new Set(data.map(d => String(d['Material Code'])))).sort() as string[];
+    return uniqueSKUs;
   }, [data]);
 
   const descriptions = useMemo(() => {
@@ -139,24 +142,33 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
   const filteredOutlierData = outlierData;
 
   const chartData = useMemo(() => {
-    if (!selectedSKU || data.length === 0) return [];
+    if (!selectedSKU || data.length === 0) {
+      return [];
+    }
 
+    const effectiveCleanedDataLocal = cleanedData.length > 0 ? cleanedData : data;
     const originalSkuData = data.filter(d => d['Material Code'] === selectedSKU)
       .sort((a, b) => new Date(a['Date']).getTime() - new Date(b['Date']).getTime());
-    const cleanedSkuData = effectiveCleanedData.filter(d => d['Material Code'] === selectedSKU)
+    const cleanedSkuData = effectiveCleanedDataLocal.filter(d => d['Material Code'] === selectedSKU)
       .sort((a, b) => new Date(a['Date']).getTime() - new Date(b['Date']).getTime());
 
-    return originalSkuData.map((originalItem) => {
+    const result = originalSkuData.map((originalItem) => {
       const cleanedItem = cleanedSkuData.find(c => c['Date'] === originalItem['Date']);
       const outlierItem = outlierData.find(o => o['Date'] === originalItem['Date']);
+      let outlierValue = null;
+      if (outlierItem?.isOutlier) {
+        outlierValue = cleanedItem ? cleanedItem.Sales : originalItem.Sales;
+      }
       return {
         date: originalItem['Date'],
         originalSales: originalItem.Sales,
         cleanedSales: cleanedItem?.Sales ?? originalItem.Sales,
-        outlier: outlierItem?.isOutlier ? originalItem.Sales : null
+        outlier: outlierValue
       };
     });
-  }, [data, effectiveCleanedData, selectedSKU, outlierData]);
+
+    return result;
+  }, [data, cleanedData, selectedSKU, outlierData]);
 
   const handleExportCleaning = () => {
     if (data.length === 0 || cleanedData.length === 0) {
@@ -307,8 +319,8 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
     }
     const date = parts[parts.length - 2];
     const sku = parts.slice(0, -2).join('_');
-    // Search in effectiveCleanedData so editing always works
-    const currentItem = effectiveCleanedData.find(item => item['Material Code'] === sku && item['Date'] === date);
+    // Search in cleanedData if available, otherwise fall back to data
+    const currentItem = (cleanedData.length > 0 ? cleanedData : data).find(item => item['Material Code'] === sku && item['Date'] === date);
     if (currentItem) {
       const note = typeof currentItem.note === 'number' ? String(currentItem.note) : (currentItem.note || '');
       // If we're already editing this row, close it
@@ -412,6 +424,42 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
     }
   };
 
+  // Modal save handler
+  const handleModalSave = (date: string, value: number, note: string) => {
+    // Find the SKU for the highlighted date
+    const dataPoint = outlierData.find(d => d['Date'] === date);
+    if (!dataPoint) return;
+    const sku = dataPoint['Material Code'];
+    const updatedData = cleanedData.map(item => {
+      if (item['Material Code'] === sku && item['Date'] === date) {
+        return { ...item, Sales: value, note: note || undefined };
+      }
+      return item;
+    });
+    // Save cleaned data to backend and get new filePath
+    let filePath = undefined;
+    (async () => {
+      try {
+        const columns = cleanedData.length > 0 ? Object.keys(cleanedData[0]) : [];
+        const response = await fetch('/api/save-cleaned-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: updatedData, columns })
+        });
+        if (!response.ok) throw new Error('Failed to save cleaned data');
+        const result = await response.json();
+        filePath = result.filePath;
+      } catch (err) {
+        console.error('Failed to save cleaned data:', err);
+      }
+      if (filePath) {
+        onDataCleaning(updatedData, [sku], filePath);
+      } else {
+        onDataCleaning(updatedData, [sku]);
+      }
+    })();
+  };
+
   if (data.length === 0) {
     return (
       <div className="text-center py-8 text-slate-500">
@@ -459,13 +507,35 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
         outlierRate={outlierData.length > 0 ? ((outliers.length / outlierData.length) * 100) : 0}
       />
 
-      {/* Chart */}
-      <OutlierChart 
-        data={chartData} 
-        selectedSKU={selectedSKU} 
-        onDateClick={handleDateClick}
-        highlightedDate={highlightedDate}
-      />
+      {/* Chart with Expand Button */}
+      <div className="relative h-96">
+        {chartData.length > 0 ? (
+          <OutlierChart 
+            data={chartData} 
+            selectedSKU={selectedSKU} 
+            onDateClick={handleDateClick}
+            highlightedDate={highlightedDate}
+          />
+        ) : (
+          <div className="bg-white rounded-lg p-4 border h-full flex items-center justify-center">
+            <div className="text-center text-gray-500">
+              <p>No chart data available</p>
+              <p className="text-sm mt-2">
+                Selected SKU: {selectedSKU || 'None'}<br/>
+                Data points: {data.length}<br/>
+                Chart data points: {chartData.length}
+              </p>
+            </div>
+          </div>
+        )}
+        <button
+          className="absolute top-4 right-4 bg-white rounded-full shadow p-2 hover:bg-slate-100"
+          title="Expand"
+          onClick={() => setShowModal(true)}
+        >
+          <Maximize2 className="w-5 h-5 text-slate-600" />
+        </button>
+      </div>
 
       {/* Data Editing Table */}
       <OutlierDataTable
@@ -517,6 +587,25 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
         metadata={importMetadata}
         onConfirm={handleConfirmImport}
         fileName={importFileName}
+      />
+
+      {/* Modal for expanded chart and single-row data clean UI */}
+      <DataCleanModal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        selectedSKU={selectedSKU}
+        setSelectedSKU={setSelectedSKU}
+        threshold={threshold}
+        setThreshold={setThreshold}
+        treatZeroAsOutlier={treatZeroAsOutlier}
+        setTreatZeroAsOutlier={setTreatZeroAsOutlier}
+        cleanedData={cleanedData}
+        originalData={data}
+        highlightedDate={highlightedDate}
+        onDateClick={date => {
+          setHighlightedDate(date);
+        }}
+        onSaveEdit={handleModalSave}
       />
     </div>
   );

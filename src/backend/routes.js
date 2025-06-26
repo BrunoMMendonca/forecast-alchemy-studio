@@ -23,39 +23,19 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 
 // Helper to discard old files with the same hash
-function discardOldFilesWithHash(csvHash) {
+function discardOldFilesWithHash(csvHash, skipFileNames = []) {
   const files = fs.readdirSync(UPLOADS_DIR);
   for (const file of files) {
-    if (file.endsWith('.json') || file.endsWith('.csv')) {
+    if ((file.endsWith('.json') || file.endsWith('.csv')) && file.includes(csvHash.slice(0, 8))) {
+      if (skipFileNames.includes(file)) continue;
       const filePath = path.join(UPLOADS_DIR, file);
-      try {
-        if (file.endsWith('.json')) {
-          const jsonData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-          if (jsonData.csvHash && jsonData.csvHash === csvHash) {
-            const newPath = filePath.replace(/\.json$/, '_Discarded.json');
-            fs.renameSync(filePath, newPath);
-          }
-        } else if (file.endsWith('.csv')) {
-          // For CSV, try to match by timestamp in filename (Original_CSV_Upload-<timestamp>.csv)
-          const match = file.match(/Original_CSV_Upload-(\d+)\.csv/);
-          if (match) {
-            const timestamp = match[1];
-            // See if any JSON with this hash has this timestamp
-            for (const jsonFile of files) {
-              if (jsonFile.endsWith('.json')) {
-                const jsonPath = path.join(UPLOADS_DIR, jsonFile);
-                try {
-                  const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-                  if (jsonData.csvHash === csvHash && jsonFile.includes(timestamp)) {
-                    const newPath = filePath.replace(/\.csv$/, '_Discarded.csv');
-                    fs.renameSync(filePath, newPath);
-                  }
-                } catch {}
-              }
-            }
-          }
-        }
-      } catch {}
+      // Only add -discarded if not already present
+      if (!file.includes('-discarded.')) {
+        const newFile = file.replace(/(\.[^.]+)$/, '-discarded$1');
+        const newPath = path.join(UPLOADS_DIR, newFile);
+        fs.renameSync(filePath, newPath);
+        console.log(`Discarded file: ${file} -> ${newFile}`);
+      }
     }
   }
 }
@@ -439,16 +419,12 @@ router.post('/process-manual-import', async (req, res) => {
     const timestamp = Date.now();
 
     // Save original CSV data first (for detection logic)
-    const csvFileName = `Original_CSV_Upload-${timestamp}.csv`;
-    const csvFilePath = path.join(UPLOADS_DIR, csvFileName);
     let csvHash = '';
     
     // Use raw CSV string if provided, otherwise reconstruct from originalCsvData
     if (originalCsvString) {
       // Hash the raw CSV string directly (this matches the frontend hash)
       csvHash = crypto.createHash('sha256').update(originalCsvString, 'utf8').digest('hex').slice(0, 30);
-      fs.writeFileSync(csvFilePath, originalCsvString);
-      console.log('Saved original CSV from raw string:', csvFileName);
     } else if (originalCsvData && Array.isArray(originalCsvData) && originalCsvData.length > 0) {
       // Fallback: Convert array of objects back to CSV format
       const csvHeaders = Object.keys(originalCsvData[0]);
@@ -457,6 +433,24 @@ router.post('/process-manual-import', async (req, res) => {
         ...originalCsvData.map(row => csvHeaders.map(header => row[header]).join(','))
       ].join('\n');
       csvHash = crypto.createHash('sha256').update(csvContent, 'utf8').digest('hex').slice(0, 30);
+    }
+
+    // Generate base name from timestamp
+    const baseName = `Original_CSV_Upload-${timestamp}`;
+    
+    // Save original CSV with new naming convention
+    const csvFileName = `${baseName}-${csvHash.slice(0, 8)}-original.csv`;
+    const csvFilePath = path.join(UPLOADS_DIR, csvFileName);
+    
+    if (originalCsvString) {
+      fs.writeFileSync(csvFilePath, originalCsvString);
+      console.log('Saved original CSV from raw string:', csvFileName);
+    } else if (originalCsvData && Array.isArray(originalCsvData) && originalCsvData.length > 0) {
+      const csvHeaders = Object.keys(originalCsvData[0]);
+      const csvContent = [
+        csvHeaders.join(','),
+        ...originalCsvData.map(row => csvHeaders.map(header => row[header]).join(','))
+      ].join('\n');
       fs.writeFileSync(csvFilePath, csvContent);
       console.log('Saved original CSV from reconstructed data:', csvFileName);
     }
@@ -509,7 +503,7 @@ router.post('/process-manual-import', async (req, res) => {
     const datasetName = `Dataset ${new Date().toISOString().slice(0,10)} - From ${dateRange[0]} to ${dateRange[1]} (${skuCount} products)`;
 
     // Save the processed data to a file
-    const fileName = `Processed_Historical_Data_Manual-${timestamp}.json`;
+    const fileName = `${baseName}-${csvHash.slice(0, 8)}-processed.json`;
     const filePath = path.join(UPLOADS_DIR, fileName);
     
     const dataToSave = {
@@ -528,7 +522,7 @@ router.post('/process-manual-import', async (req, res) => {
     };
     
     if (csvHash) {
-      discardOldFilesWithHash(csvHash);
+      discardOldFilesWithHash(csvHash, [fileName, csvFileName]);
     }
     
     fs.writeFileSync(filePath, JSON.stringify(dataToSave, null, 2));
@@ -673,10 +667,67 @@ router.post('/ai-model-recommendation', async (req, res) => {
 router.post('/save-cleaned-data', (req, res) => {
   try {
     const { data, columns } = req.body;
-    const fileName = `processed-data-manual-${Date.now()}.json`;
+    
+    // Extract hash from the data to generate proper filename
+    // Only consider files matching the new processed file pattern
+    let csvHash = '';
+    let baseName = '';
+    
+    const files = fs.readdirSync(UPLOADS_DIR);
+    // Only match new processed file pattern
+    const processedFiles = files.filter(f => /^Original_CSV_Upload-\d+-[a-f0-9]{8}-processed\.json$/.test(f) && !f.includes('-discarded'));
+    
+    if (processedFiles.length > 0) {
+      // Use the most recent processed file (by timestamp in filename)
+      const latestFile = processedFiles.sort((a, b) => {
+        // Extract timestamp from filename
+        const aMatch = a.match(/^Original_CSV_Upload-(\d+)-[a-f0-9]{8}-processed\.json$/);
+        const bMatch = b.match(/^Original_CSV_Upload-(\d+)-[a-f0-9]{8}-processed\.json$/);
+        const aTime = aMatch ? parseInt(aMatch[1], 10) : 0;
+        const bTime = bMatch ? parseInt(bMatch[1], 10) : 0;
+        return aTime - bTime;
+      }).pop();
+      const filePath = path.join(UPLOADS_DIR, latestFile);
+      try {
+        const fileContent = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        if (fileContent.csvHash) {
+          csvHash = fileContent.csvHash;
+          // Extract baseName from the filename
+          const match = latestFile.match(/^Original_CSV_Upload-(\d+)-([a-f0-9]{8})-processed\.json$/);
+          if (match) {
+            baseName = `Original_CSV_Upload-${match[1]}`;
+          }
+        }
+      } catch (err) {
+        console.error('Error reading existing processed file:', err);
+      }
+    }
+    
+    // If we couldn't find the hash, generate a new one using the new convention
+    if (!csvHash) {
+      const dataString = JSON.stringify(data);
+      csvHash = crypto.createHash('sha256').update(dataString, 'utf8').digest('hex').slice(0, 30);
+      baseName = `Original_CSV_Upload-${Date.now()}`;
+    }
+    
+    // Use the new naming convention
+    const fileName = `${baseName}-${csvHash.slice(0, 8)}-cleaning.json`;
     const filePath = path.join(UPLOADS_DIR, fileName);
-    fs.writeFileSync(filePath, JSON.stringify({ data, columns }, null, 2));
-    res.status(200).json({ filePath: `uploads/${fileName}` });
+    
+    const dataToSave = {
+      data,
+      columns,
+      csvHash,
+      timestamp: new Date().toISOString(),
+      source: 'manual-cleaning'
+    };
+    
+    fs.writeFileSync(filePath, JSON.stringify(dataToSave, null, 2));
+    
+    // Return the processed file path, not the cleaning file path
+    // The processedDataInfo should always point to the processed file
+    const processedFileName = `${baseName}-${csvHash.slice(0, 8)}-processed.json`;
+    res.status(200).json({ filePath: `uploads/${processedFileName}` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to save cleaned data', details: error.message });
   }
@@ -704,16 +755,12 @@ router.post('/process-ai-import', async (req, res) => {
     const timestamp = Date.now();
 
     // Save original CSV data first (for detection logic)
-    const csvFileName = `Original_CSV_Upload-${timestamp}.csv`;
-    const csvFilePath = path.join(UPLOADS_DIR, csvFileName);
     let csvHash = '';
     
     // Use raw CSV string if provided, otherwise reconstruct from originalCsvData
     if (originalCsvString) {
       // Hash the raw CSV string directly (this matches the frontend hash)
       csvHash = crypto.createHash('sha256').update(originalCsvString, 'utf8').digest('hex').slice(0, 30);
-      fs.writeFileSync(csvFilePath, originalCsvString);
-      console.log('Saved original CSV from raw string:', csvFileName);
     } else if (originalCsvData && Array.isArray(originalCsvData) && originalCsvData.length > 0) {
       // Fallback: Convert array of objects back to CSV format
       const csvHeaders = Object.keys(originalCsvData[0]);
@@ -722,6 +769,24 @@ router.post('/process-ai-import', async (req, res) => {
         ...originalCsvData.map(row => csvHeaders.map(header => row[header]).join(','))
       ].join('\n');
       csvHash = crypto.createHash('sha256').update(csvContent, 'utf8').digest('hex').slice(0, 30);
+    }
+
+    // Generate base name from timestamp
+    const baseName = `Original_CSV_Upload-${timestamp}`;
+    
+    // Save original CSV with new naming convention
+    const csvFileName = `${baseName}-${csvHash.slice(0, 8)}-original.csv`;
+    const csvFilePath = path.join(UPLOADS_DIR, csvFileName);
+    
+    if (originalCsvString) {
+      fs.writeFileSync(csvFilePath, originalCsvString);
+      console.log('Saved original CSV from raw string:', csvFileName);
+    } else if (originalCsvData && Array.isArray(originalCsvData) && originalCsvData.length > 0) {
+      const csvHeaders = Object.keys(originalCsvData[0]);
+      const csvContent = [
+        csvHeaders.join(','),
+        ...originalCsvData.map(row => csvHeaders.map(header => row[header]).join(','))
+      ].join('\n');
       fs.writeFileSync(csvFilePath, csvContent);
       console.log('Saved original CSV from reconstructed data:', csvFileName);
     }
@@ -793,7 +858,7 @@ router.post('/process-ai-import', async (req, res) => {
     const dateRange = dateColumns.length > 0 ? [dateColumns[0], dateColumns[dateColumns.length - 1]] : ["N/A", "N/A"];
 
     // Save the transformed data to a file
-    const fileName = `Processed_Historical_Data_AI-${timestamp}.json`;
+    const fileName = `${baseName}-${csvHash.slice(0, 8)}-processed.json`;
     const filePath = path.join(UPLOADS_DIR, fileName);
     
     const dataToSave = {
@@ -812,7 +877,7 @@ router.post('/process-ai-import', async (req, res) => {
     };
     
     if (csvHash) {
-      discardOldFilesWithHash(csvHash);
+      discardOldFilesWithHash(csvHash, [fileName, csvFileName]);
     }
     
     fs.writeFileSync(filePath, JSON.stringify(dataToSave, null, 2));
@@ -862,34 +927,35 @@ router.get('/detect-existing-data', async (req, res) => {
     const files = fs.readdirSync(UPLOADS_DIR);
     const datasets = [];
 
-    // Group files by timestamp
+    // Group files by hash
     const fileGroups = {};
 
     files.forEach(file => {
-      // Match JSON files with our naming pattern
-      const jsonMatch = file.match(/Processed_Historical_Data_(AI|Manual)-(\d+)\.json/);
+      // Match JSON files with our new naming pattern: <BaseName>-<ShortHash>-processed.json
+      const jsonMatch = file.match(/Original_CSV_Upload-(\d+)-([a-f0-9]{8})-processed\.json/);
       if (jsonMatch) {
-        const [, type, timestamp] = jsonMatch;
-        if (!fileGroups[timestamp]) {
-          fileGroups[timestamp] = { json: null, csv: null, type: null };
+        const [, timestamp, shortHash] = jsonMatch;
+        if (!fileGroups[shortHash]) {
+          fileGroups[shortHash] = { json: null, csv: null, timestamp: null };
         }
-        fileGroups[timestamp].json = file;
-        fileGroups[timestamp].type = type;
+        fileGroups[shortHash].json = file;
+        fileGroups[shortHash].timestamp = timestamp;
       }
 
-      // Match CSV files with our naming pattern
-      const csvMatch = file.match(/Original_CSV_Upload-(\d+)\.csv/);
+      // Match CSV files with our new naming pattern: <BaseName>-<ShortHash>-original.csv
+      const csvMatch = file.match(/Original_CSV_Upload-(\d+)-([a-f0-9]{8})-original\.csv/);
       if (csvMatch) {
-        const [, timestamp] = csvMatch;
-        if (!fileGroups[timestamp]) {
-          fileGroups[timestamp] = { json: null, csv: null, type: null };
+        const [, timestamp, shortHash] = csvMatch;
+        if (!fileGroups[shortHash]) {
+          fileGroups[shortHash] = { json: null, csv: null, timestamp: null };
         }
-        fileGroups[timestamp].csv = file;
+        fileGroups[shortHash].csv = file;
+        fileGroups[shortHash].timestamp = timestamp;
       }
     });
 
     // Process each group that has both CSV and JSON
-    for (const [timestamp, group] of Object.entries(fileGroups)) {
+    for (const [shortHash, group] of Object.entries(fileGroups)) {
       if (group.json && group.csv) {
         try {
           const jsonPath = path.join(UPLOADS_DIR, group.json);
@@ -897,16 +963,16 @@ router.get('/detect-existing-data', async (req, res) => {
           
           if (jsonData.summary && jsonData.name) {
             datasets.push({
-              id: timestamp,
+              id: group.timestamp,
               name: jsonData.name,
-              type: group.type === 'AI' ? 'AI Import' : 'Manual Import',
+              type: jsonData.source === 'ai-import' ? 'AI Import' : 'Manual Import',
               summary: jsonData.summary,
               filename: group.json,
-              timestamp: parseInt(timestamp)
+              timestamp: parseInt(group.timestamp)
             });
           }
         } catch (error) {
-          console.error(`Error processing dataset ${timestamp}:`, error);
+          console.error(`Error processing dataset ${shortHash}:`, error);
         }
       }
     }

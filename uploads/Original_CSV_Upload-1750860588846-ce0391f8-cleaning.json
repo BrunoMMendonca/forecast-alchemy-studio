@@ -1,0 +1,1655 @@
+{
+  "data": [
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-01-01",
+      "Sales": 90
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-02-01",
+      "Sales": 500
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-03-01",
+      "Sales": 246
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-04-01",
+      "Sales": 455
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-05-01",
+      "Sales": 477
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-06-01",
+      "Sales": 527
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-07-01",
+      "Sales": 309
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-08-01",
+      "Sales": 882
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-09-01",
+      "Sales": 331
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-10-01",
+      "Sales": 485
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-11-01",
+      "Sales": 137
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-12-01",
+      "Sales": 492
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-01-01",
+      "Sales": 373
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-02-01",
+      "Sales": 24
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-03-01",
+      "Sales": 307
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-04-01",
+      "Sales": 249
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-05-01",
+      "Sales": 38
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-06-01",
+      "Sales": 599
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-07-01",
+      "Sales": 810
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-08-01",
+      "Sales": 582
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-09-01",
+      "Sales": 831
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-10-01",
+      "Sales": 656
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-11-01",
+      "Sales": 501
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-12-01",
+      "Sales": 101
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-01-01",
+      "Sales": 858
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-02-01",
+      "Sales": 395
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-03-01",
+      "Sales": 412
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-04-01",
+      "Sales": 746
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-05-01",
+      "Sales": 231
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-06-01",
+      "Sales": 768
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-07-01",
+      "Sales": 993
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-08-01",
+      "Sales": 253
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-09-01",
+      "Sales": 130
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-10-01",
+      "Sales": 544
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-11-01",
+      "Sales": 495
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-12-01",
+      "Sales": 530
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2025-01-01",
+      "Sales": 58
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2025-02-01",
+      "Sales": 895
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2025-03-01",
+      "Sales": 387
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2025-04-01",
+      "Sales": 985
+    },
+    {
+      "Material Code": "95000000",
+      "Description": "SKU Name 1",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2025-05-01",
+      "Sales": 58
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-01-01",
+      "Sales": 910
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-02-01",
+      "Sales": 359
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-03-01",
+      "Sales": 73
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-04-01",
+      "Sales": 309
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-05-01",
+      "Sales": 345
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-06-01",
+      "Sales": 273
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-07-01",
+      "Sales": 172
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-08-01",
+      "Sales": 140
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-09-01",
+      "Sales": 708
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-10-01",
+      "Sales": 83
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-11-01",
+      "Sales": 238
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2022-12-01",
+      "Sales": 623
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-01-01",
+      "Sales": 211
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-02-01",
+      "Sales": 694
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-03-01",
+      "Sales": 340
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-04-01",
+      "Sales": 655
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-05-01",
+      "Sales": 884
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-06-01",
+      "Sales": 545
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-07-01",
+      "Sales": 992
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-08-01",
+      "Sales": 46
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-09-01",
+      "Sales": 932
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-10-01",
+      "Sales": 416
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-11-01",
+      "Sales": 710
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2023-12-01",
+      "Sales": 457
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-01-01",
+      "Sales": 13
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-02-01",
+      "Sales": 89
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-03-01",
+      "Sales": 462
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-04-01",
+      "Sales": 186
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-05-01",
+      "Sales": 168
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-06-01",
+      "Sales": 225
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-07-01",
+      "Sales": 253
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-08-01",
+      "Sales": 798
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-09-01",
+      "Sales": 501
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-10-01",
+      "Sales": 811
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-11-01",
+      "Sales": 846
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2024-12-01",
+      "Sales": 849
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2025-01-01",
+      "Sales": 876
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2025-02-01",
+      "Sales": 328
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2025-03-01",
+      "Sales": 234
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2025-04-01",
+      "Sales": 225
+    },
+    {
+      "Material Code": "95000001",
+      "Description": "SKU Name 2",
+      "Brand": "Brand 1",
+      "Cat": "Cat 1",
+      "Date": "2025-05-01",
+      "Sales": 398
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2022-01-01",
+      "Sales": 5596
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2022-02-01",
+      "Sales": 2072
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2022-03-01",
+      "Sales": 8475
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2022-04-01",
+      "Sales": 8643
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2022-05-01",
+      "Sales": 9021
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2022-06-01",
+      "Sales": 2929
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2022-07-01",
+      "Sales": 1882
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2022-08-01",
+      "Sales": 1515
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2022-09-01",
+      "Sales": 808
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2022-10-01",
+      "Sales": 2027
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2022-11-01",
+      "Sales": 2779
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2022-12-01",
+      "Sales": 6066
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2023-01-01",
+      "Sales": 2118
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2023-02-01",
+      "Sales": 43
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2023-03-01",
+      "Sales": 1022
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2023-04-01",
+      "Sales": 4487
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2023-05-01",
+      "Sales": 7092
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2023-06-01",
+      "Sales": 1396
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2023-07-01",
+      "Sales": 124
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2023-08-01",
+      "Sales": 162
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2023-09-01",
+      "Sales": 105
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2023-10-01",
+      "Sales": 7631
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2023-11-01",
+      "Sales": 7291
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2023-12-01",
+      "Sales": 565
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2024-01-01",
+      "Sales": 3140
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2024-02-01",
+      "Sales": 4947
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2024-03-01",
+      "Sales": 8596
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2024-04-01",
+      "Sales": 4099
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2024-05-01",
+      "Sales": 1546
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2024-06-01",
+      "Sales": 5139
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2024-07-01",
+      "Sales": 4998
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2024-08-01",
+      "Sales": 2480
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2024-09-01",
+      "Sales": 928
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2024-10-01",
+      "Sales": 7607
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2024-11-01",
+      "Sales": 9627
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2024-12-01",
+      "Sales": 3899
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2025-01-01",
+      "Sales": 6702
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2025-02-01",
+      "Sales": 8343
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2025-03-01",
+      "Sales": 29
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2025-04-01",
+      "Sales": 7266
+    },
+    {
+      "Material Code": "95000002",
+      "Description": "SKU Name 3",
+      "Brand": "Brand 2",
+      "Cat": "Cat 1",
+      "Date": "2025-05-01",
+      "Sales": 875
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2022-01-01",
+      "Sales": 10
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2022-02-01",
+      "Sales": 54
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2022-03-01",
+      "Sales": 66
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2022-04-01",
+      "Sales": 0
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2022-05-01",
+      "Sales": 64
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2022-06-01",
+      "Sales": 17
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2022-07-01",
+      "Sales": 92
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2022-08-01",
+      "Sales": 60
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2022-09-01",
+      "Sales": 23
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2022-10-01",
+      "Sales": 61
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2022-11-01",
+      "Sales": 63
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2022-12-01",
+      "Sales": 82
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2023-01-01",
+      "Sales": 27
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2023-02-01",
+      "Sales": 86
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2023-03-01",
+      "Sales": 42
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2023-04-01",
+      "Sales": 33
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2023-05-01",
+      "Sales": 92
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2023-06-01",
+      "Sales": 23
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2023-07-01",
+      "Sales": 83
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2023-08-01",
+      "Sales": 80
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2023-09-01",
+      "Sales": 75
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2023-10-01",
+      "Sales": 59
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2023-11-01",
+      "Sales": 83
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2023-12-01",
+      "Sales": 54
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2024-01-01",
+      "Sales": 65
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2024-02-01",
+      "Sales": 18
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2024-03-01",
+      "Sales": 98
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2024-04-01",
+      "Sales": 28
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2024-05-01",
+      "Sales": 54
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2024-06-01",
+      "Sales": 67
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2024-07-01",
+      "Sales": 41
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2024-08-01",
+      "Sales": 34
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2024-09-01",
+      "Sales": 88
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2024-10-01",
+      "Sales": 6
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2024-11-01",
+      "Sales": 24
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2024-12-01",
+      "Sales": 47
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2025-01-01",
+      "Sales": 39
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2025-02-01",
+      "Sales": 13
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2025-03-01",
+      "Sales": 53
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2025-04-01",
+      "Sales": 15
+    },
+    {
+      "Material Code": "95000003",
+      "Description": "SKU Name 4",
+      "Brand": "Brand 2",
+      "Cat": "Cat 2",
+      "Date": "2025-05-01",
+      "Sales": 74
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2022-01-01",
+      "Sales": 7
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2022-02-01",
+      "Sales": 2
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2022-03-01",
+      "Sales": 2
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2022-04-01",
+      "Sales": 7
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2022-05-01",
+      "Sales": 6
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2022-06-01",
+      "Sales": 3
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2022-07-01",
+      "Sales": 8
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2022-08-01",
+      "Sales": 4
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2022-09-01",
+      "Sales": 8
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2022-10-01",
+      "Sales": 3
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2022-11-01",
+      "Sales": 9
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2022-12-01",
+      "Sales": 5
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2023-01-01",
+      "Sales": 9
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2023-02-01",
+      "Sales": 5
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2023-03-01",
+      "Sales": 0
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2023-04-01",
+      "Sales": 2
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2023-05-01",
+      "Sales": 8
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2023-06-01",
+      "Sales": 6
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2023-07-01",
+      "Sales": 9
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2023-08-01",
+      "Sales": 5
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2023-09-01",
+      "Sales": 6
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2023-10-01",
+      "Sales": 3
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2023-11-01",
+      "Sales": 0
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2023-12-01",
+      "Sales": 6
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2024-01-01",
+      "Sales": 8
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2024-02-01",
+      "Sales": 2
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2024-03-01",
+      "Sales": 5
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2024-04-01",
+      "Sales": 4
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2024-05-01",
+      "Sales": 7
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2024-06-01",
+      "Sales": 4
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2024-07-01",
+      "Sales": 8
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2024-08-01",
+      "Sales": 4
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2024-09-01",
+      "Sales": 1
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2024-10-01",
+      "Sales": 4
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2024-11-01",
+      "Sales": 4
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2024-12-01",
+      "Sales": 9
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2025-01-01",
+      "Sales": 2
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2025-02-01",
+      "Sales": 0
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2025-03-01",
+      "Sales": 2
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2025-04-01",
+      "Sales": 1
+    },
+    {
+      "Material Code": "95000004",
+      "Description": "SKU Name 5",
+      "Brand": "Brand 3",
+      "Cat": "Cat 2",
+      "Date": "2025-05-01",
+      "Sales": 6
+    }
+  ],
+  "columns": [
+    "Material Code",
+    "Description",
+    "Brand",
+    "Cat",
+    "Date",
+    "Sales"
+  ],
+  "csvHash": "ce0391f8772f7171ca28e11603266b",
+  "timestamp": "2025-06-25T14:10:19.222Z",
+  "source": "manual-cleaning"
+}

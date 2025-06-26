@@ -63,4 +63,113 @@ The "Single Source of Truth" pattern becomes even more critical when moving to a
     3. The response data is stored in the page's state.
     4. The page re-renders, passing the dataset down to components like `DataVisualization` as a prop.
 
-This evolution preserves the predictability of our data flow while migrating the application's source of truth from the client's browser to the central backend. 
+This evolution preserves the predictability of our data flow while migrating the application's source of truth from the client's browser to the central backend.
+
+---
+
+## 6. Auto-Loading Loading State (Recently Implemented)
+
+**Problem**: When the app auto-loads the last dataset on startup, there was a brief flash of the "Choose your data" step before the dataset loaded and the app navigated to step 1.
+
+**Solution**: Implemented a loading state that prevents the flash by showing a loading spinner instead of the normal "Choose your data" content during auto-loading.
+
+**Implementation**:
+- Added `isAutoLoading` state to `MainLayout.tsx` that starts as `true`
+- Modified `StepContent.tsx` to show a loading spinner when `isAutoLoading` is true
+- The loading state is set to `false` only after auto-loading completes (success or failure)
+
+**Key Code Points**:
+- **State Management**: `MainLayout.tsx` → `isAutoLoading` state
+- **Loading UI**: `StepContent.tsx` → case 0 loading condition
+- **State Reset**: Auto-loading useEffect → `setIsAutoLoading(false)` in finally block
+
+**Benefits**:
+- Eliminates jarring UI transitions during app startup
+- Provides clear feedback that auto-loading is in progress
+- Maintains consistent visual structure during loading
+- Improves perceived performance and user experience
+
+---
+
+## 7. Globalized State for Modal Controls (Recently Implemented)
+
+**Problem**: When implementing the fullscreen data clean modal, the controls (SKU selector, z-score selector, navigation buttons) needed to maintain consistency between the modal and the main app. Changes in the modal should immediately update the main app and vice versa.
+
+**Solution**: Implemented a globalized state pattern where modal controls share the same state as the main app, ensuring seamless synchronization.
+
+**Implementation**:
+- **SKU Selector**: The same SKU selection state is used in both modal and main app
+- **Z-Score Selector**: Z-score threshold changes are immediately reflected in both contexts
+- **Navigation Controls**: Previous/Next buttons maintain consistent state
+- **Chart Data**: Both modal and main chart use the same data source and fallback logic
+
+**Key Code Points**:
+- **State Sharing**: Modal components receive the same state and setters as main app
+- **Immediate Updates**: Changes in modal immediately update main app state
+- **Consistent Display**: Both contexts show the same data and selections
+- **Seamless UX**: Users can switch between modal and main app without losing context
+
+**Benefits**:
+- Eliminates state inconsistencies between modal and main app
+- Provides seamless user experience when switching contexts
+- Maintains data integrity across all views
+- Simplifies state management by using single source of truth
+
+---
+
+## 8. Floating UI Elements (Recently Implemented)
+
+**Problem**: The Job Monitor button was positioned at the bottom right, overlapping with toasts and other UI elements. The logo and branding were not prominently displayed, and the overall layout needed improvement.
+
+**Solution**: Implemented dedicated floating containers for key UI elements, improving layout and branding.
+
+**Implementation**:
+- **Job Monitor & Setup Buttons**: Moved to a dedicated floating container at top right
+- **Logo Branding**: Moved logo to a floating container at top left, removed header title
+- **Container Positioning**: Used fixed positioning with proper z-index management
+- **Responsive Layout**: Ensured buttons don't overlap with other elements
+
+**Key Code Points**:
+- **Floating Containers**: Dedicated containers for buttons and logo outside main layout
+- **Fixed Positioning**: Uses CSS fixed positioning for consistent placement
+- **Z-Index Management**: Proper layering to prevent overlaps
+- **Professional Branding**: Prominent logo placement for better brand recognition
+
+**Benefits**:
+- Eliminates UI element overlaps
+- Improves professional appearance with prominent branding
+- Better organization of key controls
+- Consistent positioning across different screen sizes
+
+---
+
+## 9. Chart Data Consistency (Recently Implemented)
+
+**Problem**: The chart in the fullscreen modal was using the same data twice, and there were inconsistencies between how the main chart and modal chart displayed original vs. cleaned series.
+
+**Solution**: Implemented consistent chart data logic across all views using the same fallback pattern.
+
+**Implementation**:
+- **Unified Data Building**: Both modal and main chart build single array with `originalSales` and `cleanedSales` fields
+- **Consistent Fallback**: Both use `cleanedData.length > 0 ? cleanedData : originalData` logic
+- **Same Data Source**: Both contexts use the same data arrays and processing logic
+- **Visual Consistency**: Original series ("Actuals") and cleaned series display consistently
+
+**Key Code Points**:
+- **Data Structure**: Single array with both original and cleaned sales data
+- **Fallback Logic**: Consistent logic for determining which series to display
+- **Series Naming**: "Actuals" for original data, "Cleaned" for processed data
+- **State Synchronization**: Chart data updates immediately when cleaning changes are made
+
+**Benefits**:
+- Eliminates chart display inconsistencies
+- Prevents chart from disappearing when switching contexts
+- Maintains data integrity across all views
+- Provides consistent user experience
+
+---
+
+**For related documentation, see:**
+- `Data Cleaning Methods & Implementation.md` - Fullscreen modal implementation details
+- `Performance & Scalability Strategy.md` - Backend state management
+- `Queue Processing & Job Management.md` - Job status synchronization 

@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileUpload } from '@/components/FileUpload';
 import { DataVisualization } from '@/components/DataVisualization';
 import { OutlierDetection } from '@/components/OutlierDetection';
 import { ForecastModels } from '@/components/ForecastModels';
@@ -25,6 +24,7 @@ interface StepContentProps {
   queueSize: number;
   forecastPeriods: number;
   aiForecastModelOptimizationEnabled: boolean;
+  isAutoLoading?: boolean;
   onDataUpload?: (result: CsvUploadResult) => void;
   onConfirm: (result: CsvUploadResult, isExistingData?: boolean) => Promise<void>;
   onDataCleaning: (data: NormalizedSalesData[], changedSKUs?: string[], filePath?: string) => void;
@@ -51,6 +51,7 @@ export const StepContent: React.FC<StepContentProps> = ({
   queueSize,
   forecastPeriods,
   aiForecastModelOptimizationEnabled,
+  isAutoLoading,
   onDataUpload,
   onConfirm,
   onDataCleaning,
@@ -74,21 +75,74 @@ export const StepContent: React.FC<StepContentProps> = ({
   // Get the setLastLoadedDataset function from the hook
   const { setLastLoadedDataset } = useExistingDataDetection();
 
+  // Reset cleanedData and salesData only when switching to a new dataset
+  const prevFilePathRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      processedDataInfo?.filePath &&
+      processedDataInfo.filePath !== prevFilePathRef.current
+    ) {
+      setCleanedData([]);
+      setSalesData([]);
+      prevFilePathRef.current = processedDataInfo.filePath;
+    }
+  }, [processedDataInfo?.filePath]);
+
   // Load sales data when we reach Clean & Prepare step and have processedDataInfo
   useEffect(() => {
     const loadSalesData = async () => {
-      if (currentStep === 1 && processedDataInfo?.filePath && salesData.length === 0) {
+      if (currentStep === 1 && processedDataInfo?.filePath) {
         setIsLoadingData(true);
         try {
-          const response = await fetch(`/api/load-processed-data?filePath=${encodeURIComponent(processedDataInfo.filePath)}`);
+          // Extract baseName and hash from the filePath
+          const match = processedDataInfo.filePath.match(/Original_CSV_Upload-(\d+)-([a-f0-9]{8})-processed\.json/);
+          let baseName = '';
+          let hash = '';
+          if (match) {
+            baseName = `Original_CSV_Upload-${match[1]}`;
+            hash = match[2];
+          } else {
+            console.error('Could not extract baseName and hash from filePath:', processedDataInfo.filePath);
+            setIsLoadingData(false);
+            return;
+          }
+          
+          // Load processed data
+          const response = await fetch(`/api/load-processed-data?baseName=${encodeURIComponent(baseName)}&hash=${encodeURIComponent(hash)}`);
           if (response.ok) {
             const data = await response.json();
+            console.log('LOADING DATA: Loaded processed data from backend:', data);
+            console.log('LOADING DATA: Columns:', data.columns);
+            console.log('LOADING DATA: ColumnRoles:', data.columnRoles);
             
-            // Transform wide-format data to long-format for outlier detection
-            const transformedData = transformWideToLongFormat(data.data || [], data.columns || [], data.columnRoles || []);
+            // Transform to long format if needed
+            let longFormatData: NormalizedSalesData[];
+            if (data.data && data.data.length > 0 && typeof data.data[0].Date !== 'undefined' && typeof data.data[0].Sales !== 'undefined') {
+              console.log('LOADING DATA: Data is already long-format, using as-is.');
+              longFormatData = data.data;
+            } else {
+              // fallback: transform if needed
+              longFormatData = transformWideToLongFormat(data.data || [], data.columns || [], data.columnRoles || []);
+              console.log('LOADING DATA: Transformed long-format data:', longFormatData);
+            }
             
-            setSalesData(transformedData);
-            setCleanedData(transformedData); // Initially, cleaned data is the same as original
+            setSalesData(longFormatData);
+            
+            // Check if there's existing cleaning data for this dataset
+            try {
+              const cleaningResponse = await fetch(`/api/load-cleaning-data?baseName=${encodeURIComponent(baseName)}&hash=${encodeURIComponent(hash)}`);
+              if (cleaningResponse.ok) {
+                const cleaningData = await cleaningResponse.json();
+                console.log('LOADING DATA: Found existing cleaning data, using it:', cleaningData);
+                setCleanedData(cleaningData.data || longFormatData);
+              } else {
+                console.log('LOADING DATA: No existing cleaning data found, using processed data as initial cleaned data');
+                setCleanedData(longFormatData);
+              }
+            } catch (cleaningError) {
+              console.log('LOADING DATA: Error checking for cleaning data, using processed data as initial cleaned data:', cleaningError);
+              setCleanedData(longFormatData);
+            }
           } else {
             console.error('Failed to load processed data');
           }
@@ -101,7 +155,7 @@ export const StepContent: React.FC<StepContentProps> = ({
     };
 
     loadSalesData();
-  }, [currentStep, processedDataInfo?.filePath, salesData.length]);
+  }, [currentStep, processedDataInfo?.filePath]);
 
   // Transform wide-format data (from backend) to long-format data (for outlier detection)
   const transformWideToLongFormat = (wideData: any[], columns: string[], columnRoles: string[]): NormalizedSalesData[] => {
@@ -186,6 +240,29 @@ export const StepContent: React.FC<StepContentProps> = ({
         const handleFileNameChange = (fileName: string) => {
           setLocalFileName(fileName);
         };
+
+        // Show loading state while auto-loading
+        if (isAutoLoading) {
+          return (
+            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Database className="h-5 w-5 text-blue-600" />
+                  Choose your data
+                </CardTitle>
+                <CardDescription>
+                  Loading your last dataset...
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Auto-loading your last dataset...</p>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        }
 
         return (
           <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
