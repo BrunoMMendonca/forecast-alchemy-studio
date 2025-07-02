@@ -1,4 +1,4 @@
-import { NormalizedSalesData } from '@/pages/Index';
+import { NormalizedSalesData } from '@/types/forecast';
 
 export interface CleaningRecord {
   sku: string;
@@ -14,7 +14,8 @@ export interface CleaningRecord {
 export const exportCleaningData = (
   originalData: NormalizedSalesData[], 
   cleanedData: NormalizedSalesData[], 
-  threshold: number
+  threshold: number,
+  separator: string = ','
 ): void => {
   const cleaningRecords: CleaningRecord[] = [];
 
@@ -69,16 +70,19 @@ export const exportCleaningData = (
     'Material Code,Date,Original_Sales,Cleaned_Sales,Change_Amount,Note,Was_Outlier,Z_Score'
   ].join('\n');
 
-  const csvRows = cleaningRecords.map(record => [
-    String(record.sku),
-    String(record.date),
-    String(record.originalSales),
-    String(record.cleanedSales),
-    String(record.changeAmount),
-    record.note ? `"${record.note.replace(/"/g, '""')}"` : '',
-    record.wasOutlier ? 'Yes' : 'No',
-    String(record.zScore)
-  ].join(','));
+  const csvRows = cleaningRecords.map(record => {
+    const row: string[] = [
+      String(record.sku),
+      String(record.date),
+      String(record.originalSales),
+      String(record.cleanedSales),
+      String(record.changeAmount),
+      record.note ? `"${String(record.note).replace(/"/g, '""')}"` : '',
+      record.wasOutlier ? 'Yes' : 'No',
+      String(record.zScore)
+    ];
+    return row.join(separator);
+  });
 
   const csvContent = headers + '\n' + csvRows.join('\n');
 

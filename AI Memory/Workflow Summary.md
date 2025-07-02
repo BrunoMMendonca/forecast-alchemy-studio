@@ -60,7 +60,36 @@
 ### Settings
 - Forecast periods (future time periods) can be set in general settings.
 - AI optimization (GROK-3) can be enabled/disabled in general settings.
+- Composite score weights (MAPE, RMSE, MAE, Accuracy) can be adjusted in general settings to change how the "best" model is selected.
 - All settings changes are reflected in the queue and optimization logic.
+- **Metric Weight Changes**: When composite score weights are modified, a new optimization round is triggered for all SKUs/models/methods to re-evaluate which parameter sets are optimal under the new criteria.
+
+## Forecast Step Enhancements (2024-06)
+
+### Model Selection & Eligibility
+- **Smart Model Filtering**: Models are automatically filtered based on data requirements and SKU characteristics
+- **Clear Feedback**: Disabled models show specific reasons (e.g., "Requires 24 points, you have 12")
+- **Backend Validation**: Eligibility is checked consistently between frontend and backend
+- **Data Requirements**: Each model defines minimum observations needed for reliable forecasting
+
+### Parameter Management
+- **Modular Controls**: Parameter controls are split into focused components for better maintainability
+- **Friendly Labels**: Parameters display human-readable names and helpful descriptions
+- **Type Support**: Supports number sliders, boolean switches, and select dropdowns
+- **Method Selection**: Users can switch between Manual/Grid/AI parameter sources
+- **Optimization Integration**: Grid and AI results are stored separately and can be applied
+
+### Global Settings Integration
+- **Centralized Configuration**: Forecast periods and CSV separator settings in one place
+- **Persistent Storage**: Settings are saved to both localStorage and backend database
+- **Real-time Sync**: Changes propagate immediately to all relevant components
+- **Default Values**: Consistent behavior across sessions with sensible defaults
+
+### UI/UX Improvements
+- **Enhanced Model Cards**: Better visual hierarchy and information display
+- **Parameter Sliders**: Intuitive controls with optimization indicators
+- **Settings Panel**: Accessible from main forecast interface and dedicated settings
+- **Error Handling**: Clear messages when models are ineligible or optimization fails
 
 ---
 
@@ -111,7 +140,7 @@ If the workflow does not behave as expected, check:
 | Explore               | Navigation                   | No optimization, just view           | Backend DB  | Yes          |
 | Forecast              | Data/settings change         | Queue optimizations as needed        | Backend DB  | Yes          |
 | Tune                  | Manual forecast adjustment   | No queue, direct user edit           | Backend DB  | Yes          |
-| Settings              | Change AI/periods            | Queue/clear jobs as needed           | Backend DB  | Yes          |
+| Settings              | Change AI/periods/weights    | Queue/clear jobs as needed           | Backend DB  | Yes          |
 
 ---
 

@@ -32,6 +32,57 @@ const db = new sqlite3.Database(dbPath, (err) => {
     }
 });
 
+// Function to initialize default settings
+function initializeDefaultSettings() {
+    const defaultSettings = [
+        {
+            key: 'global_frequency',
+            value: JSON.stringify('monthly'),
+            description: 'Data frequency (daily, weekly, monthly, quarterly, yearly)'
+        },
+        {
+            key: 'global_seasonalPeriods',
+            value: JSON.stringify(12),
+            description: 'Number of periods in each season'
+        },
+        {
+            key: 'global_autoDetectFrequency',
+            value: JSON.stringify(true),
+            description: 'Whether to automatically detect frequency from dataset'
+        },
+        {
+            key: 'global_csvSeparator',
+            value: JSON.stringify(','),
+            description: 'Default CSV separator for import/export'
+        }
+    ];
+
+    let completed = 0;
+    let hasError = false;
+
+    defaultSettings.forEach(setting => {
+        db.run(
+            "INSERT OR IGNORE INTO settings (key, value, description, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+            [setting.key, setting.value, setting.description],
+            (err) => {
+                if (err) {
+                    console.error('Error initializing setting:', setting.key, err);
+                    hasError = true;
+                }
+                completed++;
+                
+                if (completed === defaultSettings.length) {
+                    if (hasError) {
+                        console.error('Some default settings failed to initialize');
+                    } else {
+                        console.log('Default settings initialized successfully');
+                    }
+                }
+            }
+        );
+    });
+}
+
 const dbReady = new Promise((resolve, reject) => {
     db.serialize(() => {
         // Organizations table
@@ -79,6 +130,24 @@ const dbReady = new Promise((resolve, reject) => {
                 reject(err);
             } else {
                 console.log('Database schema is ready.');
+                resolve();
+            }
+        });
+
+        // Settings table for global application settings
+        db.run(`CREATE TABLE IF NOT EXISTS settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            value TEXT,
+            description TEXT,
+            updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`, (err) => {
+            if (err) {
+                reject(err);
+            } else {
+                console.log('Settings table is ready.');
+                // Initialize default settings after table creation
+                initializeDefaultSettings();
                 resolve();
             }
         });

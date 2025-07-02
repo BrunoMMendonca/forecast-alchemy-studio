@@ -5,7 +5,7 @@ import { useUnifiedState } from '@/hooks/useUnifiedState';
 import { toast } from '@/components/ui/use-toast';
 import { useDataHandlers } from '@/hooks/useDataHandlers';
 import { JobSummary } from '@/hooks/useBackendJobStatus';
-import { GlobalSettings } from '@/hooks/useGlobalSettings';
+import { GlobalSettings } from '@/types/globalSettings';
 import { NormalizedSalesData, ForecastResult } from '@/types/forecast';
 
 interface WorkflowPageContext {
@@ -97,7 +97,6 @@ const WorkflowPage = () => {
         onDataCleaning={handleDataCleaning}
         onImportDataCleaning={handleImportDataCleaning}
         onForecastGeneration={setForecastResults}
-        onSKUChange={setSelectedSKU}
         onStepChange={setCurrentStep}
         onAIFailure={handleAIFailure}
         lastImportFileName={lastImportFileName}

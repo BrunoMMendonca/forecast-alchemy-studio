@@ -3,18 +3,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { SalesData } from '@/types/forecast';
+import { useSKUStore } from '@/store/skuStore';
 
 interface ProductSelectorProps {
   data: SalesData[];
-  selectedSKU: string;
-  onSKUChange: (sku: string) => void;
 }
 
-export const ProductSelector: React.FC<ProductSelectorProps> = ({
-  data,
-  selectedSKU,
-  onSKUChange
-}) => {
+export const ProductSelector: React.FC<ProductSelectorProps> = ({ data }) => {
+  const selectedSKU = useSKUStore(state => state.selectedSKU);
+  const setSelectedSKU = useSKUStore(state => state.setSelectedSKU);
+
   // Get unique SKUs from data, ensuring we handle both sku and Material Code fields
   const skus = React.useMemo(() => {
     const uniqueSKUs = new Set<string>();
@@ -31,13 +29,13 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
   
   const handlePrevSKU = () => {
     if (currentIndex > 0) {
-      onSKUChange(skus[currentIndex - 1]);
+      setSelectedSKU(skus[currentIndex - 1]);
     }
   };
   
   const handleNextSKU = () => {
     if (currentIndex < skus.length - 1) {
-      onSKUChange(skus[currentIndex + 1]);
+      setSelectedSKU(skus[currentIndex + 1]);
     }
   };
 
@@ -50,9 +48,9 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
   // Auto-select first SKU if none selected and we have SKUs
   React.useEffect(() => {
     if (!selectedSKU && skus.length > 0) {
-      onSKUChange(skus[0]);
+      setSelectedSKU(skus[0]);
     }
-  }, [selectedSKU, skus, onSKUChange]);
+  }, [selectedSKU, skus, setSelectedSKU]);
 
   if (skus.length === 0) {
     return (
@@ -80,7 +78,7 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
         </Button>
         <Select 
           value={selectedSKU} 
-          onValueChange={onSKUChange}
+          onValueChange={setSelectedSKU}
         >
           <SelectTrigger className="flex-1">
             <SelectValue placeholder="Choose a product to forecast">

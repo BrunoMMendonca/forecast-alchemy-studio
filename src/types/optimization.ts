@@ -9,7 +9,8 @@ export interface OptimizationQueueItem {
     | 'ai'
     | 'csv_upload_sales_data'
     | 'csv_upload_data_cleaning'
-    | 'manual_edit_data_cleaning';
+    | 'manual_edit_data_cleaning'
+    | 'metric_weight_change';
   method: 'ai' | 'grid';
   priority?: number;
   timestamp: number;

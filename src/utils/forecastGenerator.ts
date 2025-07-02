@@ -63,7 +63,8 @@ export const generateForecastsForSKU = async (
   const results: ForecastResult[] = [];
 
   for (const model of enabledModels) {
-    const effectiveParameters = model.optimizedParameters || model.parameters;
+    // Always use the active parameters set
+    const effectiveParameters = model.parameters;
 
     let predictions: number[] = [];
 

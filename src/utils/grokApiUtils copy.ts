@@ -21,7 +21,7 @@ export interface GrokOptimizationRequest {
 }
 
 export interface GrokOptimizationResponse {
-  optimizedParameters: Record<string, number>;
+  gridParameters: Record<string, number>;
   expectedAccuracy: number;
   confidence: number;
   reasoning: string;
@@ -208,7 +208,7 @@ CRITICAL: ${gridBaseline ? 'You MUST justify why your parameters are better than
 
 Respond in JSON format only:
 {
-  "optimizedParameters": {"param1": value1, "param2": value2},
+  "gridParameters": {"param1": value1, "param2": value2},
   "expectedAccuracy": percentage_between_60_and_95,
   "confidence": percentage_between_60_and_95,
   "reasoning": "${gridBaseline ? 'detailed explanation of how and why your parameters improve upon the grid baseline, with specific accuracy improvement justification' : 'detailed explanation covering all four decision criteria and the specific trade-offs made'}",
@@ -304,11 +304,11 @@ Respond in JSON format only:
       const result = JSON.parse(jsonMatch[0]);
       
       // Validate the response has required fields
-      if (!result.optimizedParameters || !result.expectedAccuracy || !result.confidence) {
+      if (!result.gridParameters || !result.expectedAccuracy || !result.confidence) {
         throw new Error('Invalid response format from Grok API - missing required fields');
       }
       
-      console.log(`✅ ${gridBaseline ? 'Grid-baseline-aware' : 'Multi-criteria'} optimization result: ${JSON.stringify(result.optimizedParameters)}`);
+      console.log(`✅ ${gridBaseline ? 'Grid-baseline-aware' : 'Multi-criteria'} optimization result: ${JSON.stringify(result.gridParameters)}`);
       console.log(`📊 Expected accuracy: ${result.expectedAccuracy}%, Confidence: ${result.confidence}%`);
       console.log(`🎯 Factors:`, result.factors);
       return result;

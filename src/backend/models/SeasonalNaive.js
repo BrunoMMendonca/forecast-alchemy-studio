@@ -1,10 +1,31 @@
 import { BaseModel } from './BaseModel.js';
 
 export class SeasonalNaive extends BaseModel {
-  constructor(parameters = { seasonLength: 4 }) {
+  static metadata = {
+    id: 'seasonal-naive',
+    displayName: 'Seasonal Naive',
+    parameters: [
+      // No seasonalPeriods parameter
+    ],
+    get defaultParameters() {
+      return Object.fromEntries(this.parameters.map(p => [p.name, p.default]));
+    },
+    optimizationParameters: {},
+    isSeasonal: true,
+    className: 'SeasonalNaive',
+    enabled: true
+  };
+
+  // Override to explicitly define grid search behavior
+  static getGridSearchParameters(seasonalPeriod = null) {
+    // Seasonal Naive has no tunable parameters, so run once with defaults
+    return [this.metadata.defaultParameters];
+  }
+
+  constructor(parameters = SeasonalNaive.metadata.defaultParameters, seasonLength = 12) {
     super(parameters);
     this.name = 'Seasonal Naive';
-    this.seasonLength = parameters.seasonLength || 4;
+    this.seasonLength = seasonLength; // Set from settings/frequency
     this.historicalData = [];
     this.trained = false;
   }
@@ -14,7 +35,12 @@ export class SeasonalNaive extends BaseModel {
       throw new Error(`Training data must have at least one full season (${this.seasonLength} observations)`);
     }
 
-    this.historicalData = data.map(d => typeof d === 'object' ? d.sales || d.value || d.amount : d);
+    this.historicalData = data.map(d => {
+      if (typeof d === 'object') {
+        return d.sales || d.Sales || d.value || d.amount || d;
+      }
+      return d;
+    });
     this.trained = true;
     return this;
   }
@@ -43,7 +69,12 @@ export class SeasonalNaive extends BaseModel {
       throw new Error('Model must be trained before validation');
     }
 
-    const values = testData.map(d => typeof d === 'object' ? d.sales || d.value || d.amount : d);
+    const values = testData.map(d => {
+      if (typeof d === 'object') {
+        return d.sales || d.Sales || d.value || d.amount || d;
+      }
+      return d;
+    });
     const predictions = this.predict(values.length);
 
     const mape = this.calculateMAPE(values, predictions);

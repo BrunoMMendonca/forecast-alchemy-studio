@@ -3,11 +3,16 @@ import OpenAI from 'openai';
 // Grok-3 API configuration
 const GROK_API_KEY = process.env.GROK_API_KEY;
 
-// Initialize OpenAI client for Grok-3
-const client = new OpenAI({
-  apiKey: GROK_API_KEY,
-  baseURL: "https://api.x.ai/v1",
-});
+// Initialize OpenAI client for Grok-3 only if API key is available
+let client = null;
+if (GROK_API_KEY && GROK_API_KEY.startsWith('xai-') && GROK_API_KEY.length >= 20) {
+  client = new OpenAI({
+    apiKey: GROK_API_KEY,
+    baseURL: "https://api.x.ai/v1",
+  });
+} else {
+  console.log('⚠️ GROK_API_KEY not found or invalid. AI optimization features will be disabled.');
+}
 
 // Enhanced data statistics calculation with cycle detection
 const calculateDataStats = (data) => {
@@ -72,6 +77,11 @@ export const optimizeParametersWithAI = async (
   businessContext = {},
   gridBaseline = null
 ) => {
+  // Check if AI client is available
+  if (!client) {
+    throw new Error('AI optimization is not available - GROK_API_KEY is missing or invalid');
+  }
+
   // Validate API key before making request
   if (!GROK_API_KEY || !GROK_API_KEY.startsWith('xai-') || GROK_API_KEY.length < 20) {
     throw new Error('Invalid API key format - must start with "xai-" and be at least 20 characters');
@@ -217,6 +227,11 @@ export const getModelRecommendation = async (
   dataFrequency,
   businessContext = {}
 ) => {
+  // Check if AI client is available
+  if (!client) {
+    throw new Error('AI model recommendation is not available - GROK_API_KEY is missing or invalid');
+  }
+
   // Validate API key before making request
   if (!GROK_API_KEY || !GROK_API_KEY.startsWith('xai-') || GROK_API_KEY.length < 20) {
     throw new Error('Invalid API key format - must start with "xai-" and be at least 20 characters');

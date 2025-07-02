@@ -1,6 +1,6 @@
 import type { ForecastPrediction } from '@/types/forecast';
 import { generateDates } from '@/utils/dateUtils';
-import { NormalizedSalesData } from '@/pages/Index';
+import type { NormalizedSalesData } from '@/types/forecast';
 
 export const generateMovingAverage = (
   data: NormalizedSalesData[] | number[],
@@ -8,7 +8,6 @@ export const generateMovingAverage = (
   forecastPeriods: number
 ): ForecastPrediction[] => {
   if (data.length === 0) {
-    console.log('❌ FORECAST: Empty data array for moving average');
     return [];
   }
   
@@ -18,7 +17,6 @@ export const generateMovingAverage = (
     : data.map(d => Number(d));
     
   if (salesValues.some(isNaN)) {
-    console.log('❌ FORECAST: Invalid sales values in data');
     return [];
   }
   
@@ -48,7 +46,6 @@ export const generateSimpleExponentialSmoothing = (
   forecastPeriods: number
 ): ForecastPrediction[] => {
   if (data.length === 0) {
-    console.log('❌ FORECAST: Empty data array for exponential smoothing');
     return [];
   }
 

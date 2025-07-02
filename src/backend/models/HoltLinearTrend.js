@@ -1,7 +1,23 @@
 import { BaseModel } from './BaseModel.js';
 
 export class HoltLinearTrend extends BaseModel {
-  constructor(parameters = { alpha: 0.3, beta: 0.1 }) {
+  static metadata = {
+    id: 'holt-linear-trend',
+    displayName: "Holt's Linear Trend",
+    parameters: [
+      { name: 'alpha', type: 'number', default: 0.3, visible: true, label: 'Level Smoothing (alpha)', description: 'Controls the smoothing of the level component.' },
+      { name: 'beta', type: 'number', default: 0.1, visible: true, label: 'Trend Smoothing (beta)', description: 'Controls the smoothing of the trend component.' },
+    ],
+    get defaultParameters() {
+      return Object.fromEntries(this.parameters.map(p => [p.name, p.default]));
+    },
+    optimizationParameters: { alpha: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9], beta: [0.01, 0.05, 0.1, 0.15, 0.2] },
+    isSeasonal: false,
+    className: 'HoltLinearTrend',
+    enabled: true
+  };
+
+  constructor(parameters = HoltLinearTrend.metadata.defaultParameters) {
     super(parameters);
     this.name = "Holt's Linear Trend";
     this.alpha = parameters.alpha || 0.3;
@@ -16,8 +32,13 @@ export class HoltLinearTrend extends BaseModel {
       throw new Error('Training data must have at least 2 observations');
     }
 
-    // Extract sales values from data
-    const values = data.map(d => typeof d === 'object' ? d.sales || d.value || d.amount : d);
+    // Extract sales values from data - check for both lowercase and uppercase field names
+    const values = data.map(d => {
+      if (typeof d === 'object') {
+        return d.sales || d.Sales || d.value || d.amount || d;
+      }
+      return d;
+    });
     
     if (values.length < 2) {
       throw new Error('No valid sales data found');
@@ -63,7 +84,12 @@ export class HoltLinearTrend extends BaseModel {
       throw new Error('Model must be trained before validation');
     }
 
-    const values = testData.map(d => typeof d === 'object' ? d.sales || d.value || d.amount : d);
+    const values = testData.map(d => {
+      if (typeof d === 'object') {
+        return d.sales || d.Sales || d.value || d.amount || d;
+      }
+      return d;
+    });
     
     if (values.length === 0) {
       throw new Error('Test data cannot be empty');

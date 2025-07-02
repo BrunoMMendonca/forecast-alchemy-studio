@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Upload, User, Bot, Edit3, RefreshCw, History } from 'lucide-react';
 import { useExistingDataDetection } from '@/hooks/useExistingDataDetection';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface UploadStepProps {
   lastImportFileName?: string | null;
@@ -34,6 +36,16 @@ export const UploadStep: React.FC<UploadStepProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [autoFrequency, setAutoFrequency] = useState<{ [id: string]: boolean }>({});
+  const [manualFrequency, setManualFrequency] = useState<{ [id: string]: string }>({});
+
+  const frequencyOptions = [
+    { value: 'daily', label: 'Daily' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'quarterly', label: 'Quarterly' },
+    { value: 'yearly', label: 'Yearly' },
+  ];
 
   const handleEditClick = (dataset: any) => {
     setEditingId(dataset.id);
@@ -64,6 +76,25 @@ export const UploadStep: React.FC<UploadStepProps> = ({
     if (onLoadDataset) {
       onLoadDataset(dataset);
     }
+  };
+
+  const handleFrequencyChange = async (dataset: any, value: string) => {
+    setManualFrequency(prev => ({ ...prev, [dataset.id]: value }));
+    await fetch('/api/update-dataset-frequency', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filePath: dataset.filename, frequency: value })
+    });
+    refreshDatasets();
+  };
+
+  const handleAutoDetectFrequency = async (dataset: any) => {
+    await fetch('/api/auto-detect-dataset-frequency', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filePath: dataset.filename })
+    });
+    refreshDatasets();
   };
 
   return (
@@ -142,6 +173,36 @@ export const UploadStep: React.FC<UploadStepProps> = ({
                   <div className="text-xs text-slate-600 mb-1">File: {dataset.filename}</div>
                   <div className="text-xs text-slate-600 mb-1">SKUs: {dataset.summary?.skuCount ?? 'N/A'}</div>
                   <div className="text-xs text-slate-600">Data Range: {dataset.summary?.dateRange ? `${dataset.summary.dateRange[0]} to ${dataset.summary.dateRange[1]}` : 'N/A'}</div>
+                  <div className="flex flex-col gap-1 mt-2">
+                    <label className="text-xs font-semibold text-gray-600">Data Frequency</label>
+                    <div className="flex items-center gap-4">
+                      <Switch
+                        checked={autoFrequency[dataset.id] ?? true}
+                        onCheckedChange={checked => {
+                          setAutoFrequency(prev => ({ ...prev, [dataset.id]: checked }));
+                          if (checked) handleAutoDetectFrequency(dataset);
+                        }}
+                        id={`auto-frequency-${dataset.id}`}
+                      />
+                      <label htmlFor={`auto-frequency-${dataset.id}`} className="cursor-pointer text-sm">
+                        Auto
+                      </label>
+                      <Select
+                        value={autoFrequency[dataset.id] ?? true ? dataset.summary?.frequency || '' : manualFrequency[dataset.id] || dataset.summary?.frequency || ''}
+                        onValueChange={value => handleFrequencyChange(dataset, value)}
+                        disabled={autoFrequency[dataset.id] ?? true}
+                      >
+                        <SelectTrigger className="w-36">
+                          <SelectValue placeholder="Select frequency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {frequencyOptions.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
                 <Button
                   className={`w-full md:w-40 h-10 mt-4 md:mt-0 md:ml-8 ${isLoaded ? 'bg-blue-800 text-white border-blue-800' : ''}`}

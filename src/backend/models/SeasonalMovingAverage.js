@@ -1,10 +1,25 @@
 import { BaseModel } from './BaseModel.js';
 
 export class SeasonalMovingAverage extends BaseModel {
-  constructor(parameters = { seasonLength: 4, window: 3 }) {
+  static metadata = {
+    id: 'seasonal-moving-average',
+    displayName: 'Seasonal Moving Average',
+    parameters: [
+      { name: 'window', type: 'number', default: 3, visible: true, label: 'Window Size', description: 'Number of periods to average over.' },
+    ],
+    get defaultParameters() {
+      return Object.fromEntries(this.parameters.map(p => [p.name, p.default]));
+    },
+    optimizationParameters: { window: [2, 3, 4, 5, 6, 7, 8, 9, 10] },
+    isSeasonal: true,
+    className: 'SeasonalMovingAverage',
+    enabled: true
+  };
+
+  constructor(parameters = SeasonalMovingAverage.metadata.defaultParameters, seasonLength = 12) {
     super(parameters);
     this.name = 'Seasonal Moving Average';
-    this.seasonLength = parameters.seasonLength || 4;
+    this.seasonLength = seasonLength;
     this.window = parameters.window || 3;
     this.historicalData = [];
     this.seasonalAverages = [];
@@ -16,7 +31,12 @@ export class SeasonalMovingAverage extends BaseModel {
       throw new Error(`Training data must have at least one full season (${this.seasonLength} observations)`);
     }
 
-    const values = data.map(d => typeof d === 'object' ? d.sales || d.value || d.amount : d);
+    const values = data.map(d => {
+      if (typeof d === 'object') {
+        return d.sales || d.Sales || d.value || d.amount || d;
+      }
+      return d;
+    });
     this.historicalData = values;
     
     // De-seasonalize the data
@@ -84,7 +104,12 @@ export class SeasonalMovingAverage extends BaseModel {
       throw new Error('Model must be trained before validation');
     }
 
-    const values = testData.map(d => typeof d === 'object' ? d.sales || d.value || d.amount : d);
+    const values = testData.map(d => {
+      if (typeof d === 'object') {
+        return d.sales || d.Sales || d.value || d.amount || d;
+      }
+      return d;
+    });
     const predictions = this.predict(values.length);
 
     const mape = this.calculateMAPE(values, predictions);

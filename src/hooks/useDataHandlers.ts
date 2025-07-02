@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { ForecastResult } from '@/types/forecast';
 import { useToast } from '@/hooks/use-toast';
 import { useUnifiedState } from '@/hooks/useUnifiedState';
-import { getDefaultModels } from '@/utils/modelConfig';
+import { fetchAvailableModels } from '@/utils/modelConfig';
 import { CsvUploadResult } from '@/components/CsvImportWizard';
 
 // Performance limit for optimization
@@ -33,35 +33,103 @@ export const useDataHandlers = ({
   const { models } = useUnifiedState();
   const [batchId, setBatchId] = useState<string | null>(null);
 
+  const validationRatio = 0.2; // Match backend default
+
   const createJobs = useCallback(async (jobData: {data?: any[], skus?: string[], reason: string, filePath?: string, batchId?: string}) => {
-    const modelsToProcess = models.length > 0 ? models.map(m => m.id) : getDefaultModels().map(m => m.id);
-    
+    let modelsToProcess;
+    if (models.length > 0) {
+      modelsToProcess = models;
+    } else {
+      // Fallback to fetching models from backend
+      try {
+        const fetchedModels = await fetchAvailableModels();
+        modelsToProcess = fetchedModels;
+      } catch (error) {
+        console.error('Failed to fetch models for job creation:', error);
+        toast({
+          title: "Error",
+          description: "Could not fetch available models from backend",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    // Fetch requirements
+    let requirements: Record<string, any> = {};
+    try {
+      const res = await fetch('/api/models/data-requirements');
+      requirements = await res.json();
+    } catch (err) {
+      requirements = {};
+    }
+    // For each SKU, filter eligible models
+    const eligibleModelsPerSKU: Record<string, string[]> = {};
+    let anyEligible = false;
+    if (jobData.skus && jobData.skus.length > 0) {
+      for (const sku of jobData.skus) {
+        // Try to get data for this SKU if available
+        let skuData = [];
+        if (jobData.data && Array.isArray(jobData.data)) {
+          skuData = jobData.data.filter(d => String(d.sku || d['Material Code']) === sku);
+        }
+        
+        // Only include models that are eligible for this SKU
+        const eligible = modelsToProcess.filter(m => {
+          const req = requirements[m.id];
+          if (!req) {
+           
+            return true;
+          }
+          const minTrain = Number(req.minObservations);
+          const requiredTotal = Math.ceil(minTrain / (1 - validationRatio));
+          const isEligible = skuData.length >= requiredTotal;
+         
+          return isEligible;
+        }).map(m => m.id);
+
+        console.groupEnd();
+        if (eligible.length > 0) {
+          eligibleModelsPerSKU[sku] = eligible;
+          anyEligible = true;
+        }
+      }
+    }
+    if (!anyEligible) {
+      toast({
+        title: "No Eligible Models",
+        description: "No enabled models meet the data requirements for any SKU.",
+        variant: "destructive",
+      });
+      return;
+    }
     const methodsToRun = ['grid'];
     if (aiForecastModelOptimizationEnabled) {
       methodsToRun.push('ai');
     }
-
     let totalJobsCreated = 0;
-
     for (const method of methodsToRun) {
+      for (const sku of Object.keys(eligibleModelsPerSKU)) {
+        const eligibleModels = eligibleModelsPerSKU[sku];
+        if (!eligibleModels.length) continue;
+        
       try {
-        const response = await fetch('http://localhost:3001/api/jobs', {
+        const response = await fetch('/api/jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...jobData, models: modelsToProcess, method, batchId: jobData.batchId }),
+            body: JSON.stringify({ ...jobData, skus: [sku], models: eligibleModels, method, batchId: jobData.batchId }),
         });
-
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(`[${method.toUpperCase()}] ${errorData.error || 'Failed to create jobs'}`);
         }
-
         const result = await response.json();
         totalJobsCreated += result.jobsCreated || 0;
-        console.log(`[BACKEND] ${method.toUpperCase()} job creation successful:`, result);
 
+          // Log backend filtering results
+          if (result.jobsFiltered && result.jobsFiltered > 0) {
+           
+          }
       } catch (error: any) {
-        console.error(`[BACKEND] Error creating ${method} jobs:`, error);
         toast({
           title: "Error",
           description: `Could not start backend optimization: ${error.message}`,
@@ -70,7 +138,7 @@ export const useDataHandlers = ({
         return; // Stop if one method fails
       }
     }
-
+    }
     if (totalJobsCreated > 0) {
       toast({
         title: "Backend Optimization Started",
@@ -113,7 +181,17 @@ export const useDataHandlers = ({
     setBatchId(useBatchId);
     try {
       console.log('[BACKEND] Submitting SKUs from processed file to create optimization jobs...');
-      await createJobs({ skus: result.skuList, reason: 'dataset_upload', filePath: result.filePath, batchId: useBatchId });
+      let data = undefined;
+      if (result.filePath) {
+        try {
+          const response = await fetch(result.filePath);
+          const fileJson = await response.json();
+          data = fileJson.data;
+        } catch (err) {
+          console.warn('[createAllJobs] Could not load data from filePath:', result.filePath, err);
+        }
+      }
+      await createJobs({ skus: result.skuList, data, reason: 'dataset_upload', filePath: result.filePath, batchId: useBatchId });
     } catch (error) {
       console.error('[BACKEND] Error during job creation process:', error);
       // The error is toasted inside createJobs

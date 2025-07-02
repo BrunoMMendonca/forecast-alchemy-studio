@@ -26,7 +26,7 @@ export const useForecastGeneration = (
     const hashData = enabledModels.map(m => ({
       id: m.id,
       enabled: m.enabled,
-      params: m.optimizedParameters || m.parameters
+      params: m.gridParameters || m.parameters
     }));
     
     return JSON.stringify(hashData);

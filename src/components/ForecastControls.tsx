@@ -4,39 +4,30 @@ import { Button } from '@/components/ui/button';
 import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
+import { useSKUStore } from '@/store/skuStore';
 
-interface ForecastControlsProps {
-  skus: string[];
-  selectedSKU: string;
-  onSKUChange: (sku: string) => void;
-  results: ForecastResult[];
-  descriptions?: Record<string, string>;
-}
-
-export const ForecastControls: React.FC<ForecastControlsProps> = ({
-  skus,
-  selectedSKU,
-  onSKUChange,
-  results,
-  descriptions
-}) => {
+export const ForecastControls: React.FC = () => {
   const { toast } = useToast();
   
-  const currentIndex = skus.indexOf(selectedSKU);
+  const selectedSKU = useSKUStore(state => state.selectedSKU);
+  const setSelectedSKU = useSKUStore(state => state.setSelectedSKU);
+  
+  const currentIndex = useSKUStore(state => state.skus.indexOf(state.selectedSKU));
   
   const handlePrevSKU = () => {
     if (currentIndex > 0) {
-      onSKUChange(skus[currentIndex - 1]);
+      setSelectedSKU(useSKUStore(state => state.skus[currentIndex - 1]));
     }
   };
   
   const handleNextSKU = () => {
-    if (currentIndex < skus.length - 1) {
-      onSKUChange(skus[currentIndex + 1]);
+    if (currentIndex < useSKUStore(state => state.skus.length) - 1) {
+      setSelectedSKU(useSKUStore(state => state.skus[currentIndex + 1]));
     }
   };
 
   const exportResults = () => {
+    const results = useSKUStore(state => state.results);
     if (results.length === 0) return;
 
     // Create CSV content
@@ -85,18 +76,18 @@ export const ForecastControls: React.FC<ForecastControlsProps> = ({
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Select value={selectedSKU} onValueChange={onSKUChange}>
+          <Select value={selectedSKU} onValueChange={setSelectedSKU}>
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Select SKU">
                 {selectedSKU ? (() => {
-                  const desc = descriptions?.[selectedSKU];
+                  const desc = useSKUStore(state => state.descriptions?.[selectedSKU]);
                   return desc ? `${selectedSKU} - ${desc}` : selectedSKU;
                 })() : ''}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {skus.map(sku => {
-                const desc = descriptions?.[sku];
+              {useSKUStore(state => state.skus).map(sku => {
+                const desc = useSKUStore(state => state.descriptions?.[sku]);
                 return (
                   <SelectItem key={sku} value={sku}>
                     {desc ? `${sku} - ${desc}` : sku}
@@ -109,7 +100,7 @@ export const ForecastControls: React.FC<ForecastControlsProps> = ({
             variant="outline" 
             size="sm" 
             onClick={handleNextSKU}
-            disabled={currentIndex === skus.length - 1}
+            disabled={currentIndex === useSKUStore(state => state.skus.length) - 1}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>

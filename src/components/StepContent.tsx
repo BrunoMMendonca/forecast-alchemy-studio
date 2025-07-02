@@ -9,32 +9,38 @@ import { ForecastFinalization } from '@/components/ForecastFinalization';
 import { BarChart3, TrendingUp, Upload, Zap, Eye, Database } from 'lucide-react';
 import { Icon } from 'lucide-react';
 import { broom } from '@lucide/lab';
-import type { NormalizedSalesData, ForecastResult } from '@/types/forecast';
+import type { NormalizedSalesData, ForecastResult, ModelConfig } from '@/types/forecast';
 import { CsvImportWizard, CsvUploadResult } from '@/components/CsvImportWizard';
 import { useOutletContext } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useExistingDataDetection } from '@/hooks/useExistingDataDetection';
+import { ForecastEngine } from '@/components/ForecastEngine';
+import { useSKUStore } from '@/store/skuStore';
 
 interface StepContentProps {
   currentStep: number;
   processedDataInfo: CsvUploadResult | null;
   forecastResults: ForecastResult[];
-  selectedSKUForResults: string;
+  selectedSKUForResults: string | null;
   queueSize: number;
   forecastPeriods: number;
   aiForecastModelOptimizationEnabled: boolean;
   isAutoLoading?: boolean;
+  isOptimizing?: boolean;
   onDataUpload?: (result: CsvUploadResult) => void;
   onConfirm: (result: CsvUploadResult, isExistingData?: boolean) => Promise<void>;
   onDataCleaning: (data: NormalizedSalesData[], changedSKUs?: string[], filePath?: string) => void;
   onImportDataCleaning: (skus: string[]) => void;
-  onForecastGeneration: (results: ForecastResult[]) => void;
-  onSKUChange: (sku: string) => void;
+  onForecastGeneration: (results: ForecastResult[], selectedSKU: string) => void;
   onStepChange: (step: number) => void;
   onAIFailure: (errorMessage: string) => void;
   lastImportFileName: string | null;
   lastImportTime: string | null;
+  batchId?: string | null;
+  models: ModelConfig[];
+  updateModel: (modelId: string, updates: Partial<ModelConfig>) => void;
+  setForecastResults: (results: ForecastResult[]) => void;
 }
 
 interface OutletContextType {
@@ -52,17 +58,26 @@ export const StepContent: React.FC<StepContentProps> = ({
   forecastPeriods,
   aiForecastModelOptimizationEnabled,
   isAutoLoading,
+  isOptimizing,
   onDataUpload,
   onConfirm,
   onDataCleaning,
   onImportDataCleaning,
   onForecastGeneration,
-  onSKUChange,
   onStepChange,
   onAIFailure,
   lastImportFileName,
-  lastImportTime
+  lastImportTime,
+  batchId,
+  models,
+  updateModel,
+  setForecastResults
 }) => {
+  // Debug logging for models
+  useEffect(() => {
+    // console.log('[StepContent] Models received:', models);
+  }, [models]);
+  
   const [localFileName, setLocalFileName] = useState<string | null>(null);
   const [salesData, setSalesData] = useState<NormalizedSalesData[]>([]);
   const [cleanedData, setCleanedData] = useState<NormalizedSalesData[]>([]);
@@ -102,7 +117,7 @@ export const StepContent: React.FC<StepContentProps> = ({
             baseName = `Original_CSV_Upload-${match[1]}`;
             hash = match[2];
           } else {
-            console.error('Could not extract baseName and hash from filePath:', processedDataInfo.filePath);
+            // console.error('Could not extract baseName and hash from filePath:', processedDataInfo.filePath);
             setIsLoadingData(false);
             return;
           }
@@ -111,19 +126,19 @@ export const StepContent: React.FC<StepContentProps> = ({
           const response = await fetch(`/api/load-processed-data?baseName=${encodeURIComponent(baseName)}&hash=${encodeURIComponent(hash)}`);
           if (response.ok) {
             const data = await response.json();
-            console.log('LOADING DATA: Loaded processed data from backend:', data);
-            console.log('LOADING DATA: Columns:', data.columns);
-            console.log('LOADING DATA: ColumnRoles:', data.columnRoles);
+            // console.log('LOADING DATA: Loaded processed data from backend:', data);
+            // console.log('LOADING DATA: Columns:', data.columns);
+            // console.log('LOADING DATA: ColumnRoles:', data.columnRoles);
             
             // Transform to long format if needed
             let longFormatData: NormalizedSalesData[];
             if (data.data && data.data.length > 0 && typeof data.data[0].Date !== 'undefined' && typeof data.data[0].Sales !== 'undefined') {
-              console.log('LOADING DATA: Data is already long-format, using as-is.');
+              // console.log('LOADING DATA: Data is already long-format, using as-is.');
               longFormatData = data.data;
             } else {
               // fallback: transform if needed
               longFormatData = transformWideToLongFormat(data.data || [], data.columns || [], data.columnRoles || []);
-              console.log('LOADING DATA: Transformed long-format data:', longFormatData);
+              // console.log('LOADING DATA: Transformed long-format data:', longFormatData);
             }
             
             setSalesData(longFormatData);
@@ -133,21 +148,21 @@ export const StepContent: React.FC<StepContentProps> = ({
               const cleaningResponse = await fetch(`/api/load-cleaning-data?baseName=${encodeURIComponent(baseName)}&hash=${encodeURIComponent(hash)}`);
               if (cleaningResponse.ok) {
                 const cleaningData = await cleaningResponse.json();
-                console.log('LOADING DATA: Found existing cleaning data, using it:', cleaningData);
+                // console.log('LOADING DATA: Found existing cleaning data, using it:', cleaningData);
                 setCleanedData(cleaningData.data || longFormatData);
               } else {
-                console.log('LOADING DATA: No existing cleaning data found, using processed data as initial cleaned data');
+                // console.log('LOADING DATA: No existing cleaning data found, using processed data as initial cleaned data');
                 setCleanedData(longFormatData);
               }
             } catch (cleaningError) {
-              console.log('LOADING DATA: Error checking for cleaning data, using processed data as initial cleaned data:', cleaningError);
+              // console.log('LOADING DATA: Error checking for cleaning data, using processed data as initial cleaned data:', cleaningError);
               setCleanedData(longFormatData);
             }
           } else {
-            console.error('Failed to load processed data');
+            // console.error('Failed to load processed data');
           }
         } catch (error) {
-          console.error('Error loading processed data:', error);
+          // console.error('Error loading processed data:', error);
         } finally {
           setIsLoadingData(false);
         }
@@ -233,6 +248,9 @@ export const StepContent: React.FC<StepContentProps> = ({
     }
     onStepChange(step);
   };
+
+  const selectedSKU = useSKUStore(state => state.selectedSKU);
+  const setSelectedSKU = useSKUStore(state => state.setSelectedSKU);
 
   const renderStepContent = () => {
     switch (currentStep) {
@@ -362,27 +380,32 @@ export const StepContent: React.FC<StepContentProps> = ({
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white/80 backdrop-blur-sm shadow-xl border-0 rounded-lg">
-              <ForecastModels
+              <ForecastEngine
                 data={cleanedData.length > 0 ? cleanedData : salesData}
                 forecastPeriods={forecastPeriods}
                 onForecastGeneration={onForecastGeneration}
-                selectedSKUForResults={selectedSKUForResults}
-                onSKUChange={onSKUChange}
                 aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
+                isOptimizing={isOptimizing}
+                batchId={batchId}
+                models={models}
+                updateModel={updateModel}
+                processedDataInfo={processedDataInfo}
+                filePath={processedDataInfo?.filePath}
+                setForecastResults={setForecastResults}
               />
             </div>
 
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
+            <Card className="bg-white/80 /*backdrop-blur-sm*/ shadow-xl border-0" style={{ overflow: 'visible' }}>
               <CardHeader>
                 <CardTitle>Forecast Results</CardTitle>
                 <CardDescription>
-                  Compare predictions from different models for {selectedSKUForResults || 'selected product'}
+                  Compare predictions from different models for {selectedSKU || 'selected product'}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ForecastResults 
                   results={forecastResults} 
-                  selectedSKU={selectedSKUForResults}
+                  selectedSKU={selectedSKU}
                 />
               </CardContent>
             </Card>
@@ -428,6 +451,11 @@ export const StepContent: React.FC<StepContentProps> = ({
                 onChange={e => setNameInput(e.target.value)}
                 placeholder="Enter a friendly name for this dataset"
                 autoFocus
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && nameInput.trim() && !savingName) {
+                    handleSaveNameAndProceed();
+                  }
+                }}
               />
             </div>
             <DialogFooter>

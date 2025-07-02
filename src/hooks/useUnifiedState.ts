@@ -36,7 +36,7 @@ const DEFAULT_STATE: UnifiedState = {
   settingsOpen: false,
   isQueuePopupOpen: false,
   selectedSKU: '',
-  models: [],
+  models: [], // Start empty, will be set by fetch
   forecastPeriods: 12,
   businessContext: {
     costOfError: 'medium',
@@ -88,16 +88,21 @@ export const useUnifiedState = () => {
 
   // Model management
   const setModels = useCallback((models: ModelConfig[]) => {
+    console.log('[useUnifiedState] setModels called with:', models);
     updateState({ models });
   }, [updateState]);
 
   const updateModel = useCallback((modelId: string, updates: Partial<ModelConfig>) => {
-    setState(prev => ({
-      ...prev,
-      models: prev.models.map(model =>
-        model.id === modelId ? { ...model, ...updates, isWinner: updates.isWinner ?? model.isWinner } : model
-      )
-    }));
+    setState(prev => {
+      const before = prev.models.find(model => model.id === modelId);
+      const after = before ? { ...before, ...updates, isWinner: updates.isWinner ?? before.isWinner } : undefined;
+      return {
+        ...prev,
+        models: prev.models.map(model =>
+          model.id === modelId ? { ...model, ...updates, isWinner: updates.isWinner ?? model.isWinner } : model
+        )
+      };
+    });
   }, []);
 
   // Settings management

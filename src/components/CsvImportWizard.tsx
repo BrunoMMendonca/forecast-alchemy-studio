@@ -55,6 +55,7 @@ export interface CsvUploadResult {
     skuCount: number;
     dateRange: [string, string];
     totalPeriods: number;
+    frequency?: string;
   };
   skuList: string[];
 }
@@ -534,7 +535,7 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
       const timeoutId = setTimeout(() => controller.abort(), 120000);
 
       setAiProcessingStage('waiting_for_ai');
-      const response = await fetch('http://localhost:3001/api/grok-transform', {
+      const response = await fetch('/api/grok-transform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -723,7 +724,7 @@ export const CsvImportWizard: React.FC<CsvImportWizardProps> = ({ onDataReady, o
 
       // Generate configuration using AI
       setConfigProcessingStage('generating_config');
-      const response = await fetch('http://localhost:3001/api/grok-generate-config', {
+      const response = await fetch('/api/grok-generate-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -1182,6 +1183,12 @@ const renderDuplicateModal = () => duplicateCheckResult && (
     </DialogContent>
   </Dialog>
 );
+
+useEffect(() => {
+  if (uploadResult) {
+    console.log('Loaded uploadResult:', uploadResult);
+  }
+}, [uploadResult]);
 
   return (
     <>

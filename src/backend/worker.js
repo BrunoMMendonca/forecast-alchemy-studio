@@ -2,6 +2,12 @@ import { GridOptimizer } from './optimization/GridOptimizer.js';
 import { modelFactory } from './models/index.js';
 import { db, dbReady } from './db.js';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 
 // Promisify db.get and db.run for use with async/await
 const dbGet = (sql, params = []) => new Promise((resolve, reject) => {
@@ -28,30 +34,49 @@ class OptimizationWorker {
   // Process optimization job
   async processJob(job) {
     if (this.isRunning) {
-      console.log('Worker is busy, skipping poll.');
       return;
     }
 
     this.isRunning = true;
     this.currentJobId = job.id;
-    console.log(`[Worker] Picked up job ${job.id}`);
 
     try {
-      await dbRun('UPDATE jobs SET status = ?, progress = 0, startedAt = ?, updatedAt = ? WHERE id = ?', ['running', new Date().toISOString(), new Date().toISOString(), job.id]);
-      
+      await dbRun('UPDATE jobs SET status = ?, startedAt = ?, updatedAt = ? WHERE id = ?', ['running', new Date().toISOString(), new Date().toISOString(), job.id]);
+
       const jobData = JSON.parse(job.data);
-      let { data, modelTypes, optimizationType } = jobData;
+      let { data, modelTypes, optimizationType, sku } = jobData;
+      
+      console.log({
+        hasData: !!data,
+        dataLength: data ? data.length : 0,
+        modelTypes,
+        optimizationType,
+        sku,
+        filePath: jobData.filePath
+      });
 
       // NEW: If data is missing but filePath is present, load from file
+      let frequency = null;
+      let seasonalPeriod = null;
       if ((!data || data.length === 0) && jobData.filePath) {
         try {
-          const fileContent = fs.readFileSync(jobData.filePath, 'utf-8');
+          // Standardize filePath resolution
+          let resolvedFilePath = jobData.filePath;
+          if (!path.isAbsolute(resolvedFilePath)) {
+            resolvedFilePath = path.join(UPLOADS_DIR, path.basename(resolvedFilePath));
+          }
+          const fileContent = fs.readFileSync(resolvedFilePath, 'utf-8');
           const fileJson = JSON.parse(fileContent);
           data = fileJson.data;
           if (!data || data.length === 0) {
-            throw new Error(`Loaded file ${jobData.filePath} but it contains no data.`);
+            throw new Error(`Loaded file ${resolvedFilePath} but it contains no data.`);
           }
-          console.log(`[Worker] Loaded data from file: ${jobData.filePath} (${data.length} rows)`);
+
+          if (fileJson.summary && fileJson.summary.frequency) {
+            frequency = fileJson.summary.frequency;
+            seasonalPeriod = getSeasonalPeriodsFromFrequency(frequency);
+
+          }
         } catch (fileErr) {
           throw new Error(`Failed to load data from file ${jobData.filePath}: ${fileErr.message}`);
         }
@@ -61,26 +86,85 @@ class OptimizationWorker {
         throw new Error('No data provided for optimization');
       }
 
+      // Filter data by SKU if specified
+      if (sku && data.length > 0) {
+
+        
+        const originalLength = data.length;
+        data = data.filter(row => {
+          const rowSku = row['Material Code'] || row.sku || row.SKU;
+          return rowSku === sku;
+        });
+        
+        
+        if (data.length === 0) {
+          throw new Error(`No data found for SKU: ${sku}`);
+        }
+      }
+
+      // Data quality analysis
+      const salesValues = data.map(d => {
+        if (typeof d === 'object') {
+          return d.sales || d.Sales || d.value || d.amount || d;
+        }
+        return d;
+      });
+
+
+      const dataQuality = {
+        totalPoints: salesValues.length,
+        hasNaN: salesValues.some(v => isNaN(v)),
+        hasInfinity: salesValues.some(v => !isFinite(v)),
+        allZero: salesValues.every(v => v === 0),
+        allSame: salesValues.every(v => v === salesValues[0]),
+        minVal: Math.min(...salesValues),
+        maxVal: Math.max(...salesValues),
+        range: Math.max(...salesValues) - Math.min(...salesValues),
+        nonZeroCount: salesValues.filter(v => v !== 0).length,
+        uniqueValues: new Set(salesValues).size
+      };
+
+      // Warn about potential issues
+      if (dataQuality.hasNaN) {
+        console.warn(`⚠️ Job ${job.id}: Data contains NaN values`);
+      }
+      if (dataQuality.hasInfinity) {
+        console.warn(`⚠️ Job ${job.id}: Data contains Infinity values`);
+      }
+      if (dataQuality.allZero) {
+        console.warn(`⚠️ Job ${job.id}: All sales values are zero - this will cause numerical issues`);
+      }
+      if (dataQuality.allSame) {
+        console.warn(`⚠️ Job ${job.id}: All sales values are identical (${salesValues[0]}) - this will cause matrix singularities`);
+      }
+      if (dataQuality.uniqueValues < 3) {
+        console.warn(`⚠️ Job ${job.id}: Only ${dataQuality.uniqueValues} unique values - insufficient variation for forecasting`);
+      }
+
       let results;
       const progressCallback = async (progress) => {
         // Update progress in the database
         await dbRun('UPDATE jobs SET progress = ?, updatedAt = ? WHERE id = ?', [progress.percentage, new Date().toISOString(), job.id]);
-        console.log(`[Worker] Job ${job.id} progress: ${progress.percentage}%`);
       };
       
       if (optimizationType === 'grid') {
-        results = await this.gridOptimizer.runGridSearch(data, modelTypes, progressCallback);
+        results = await this.gridOptimizer.runGridSearch(data, modelTypes, progressCallback, frequency, seasonalPeriod);
       } else if (optimizationType === 'ai') {
         results = await this.runAIOptimization(data, modelTypes, progressCallback);
       } else {
         throw new Error(`Unknown optimization type: ${optimizationType}`);
       }
 
-      console.log(`[Worker] ✅ Optimization completed for job ${job.id}`);
+      // Log optimization results summary
+      const successfulResults = results.results.filter(r => r.success);
+      const failedResults = results.results.filter(r => !r.success);
+
+      console.log(`[Worker] ✅ Optimization completed for SKU ${sku}: ${successfulResults.length} successful, ${failedResults.length} failed`);
+
       await dbRun('UPDATE jobs SET status = ?, progress = 100, completedAt = ?, updatedAt = ?, result = ? WHERE id = ?', ['completed', new Date().toISOString(), new Date().toISOString(), JSON.stringify(results), job.id]);
 
     } catch (error) {
-      console.error(`[Worker] ❌ Optimization failed for job ${job.id}:`, error.message);
+      console.error(`[Worker] ❌ Job ${job.id} failed:`, error.message);
       await dbRun('UPDATE jobs SET status = ?, completedAt = ?, updatedAt = ?, error = ? WHERE id = ?', ['failed', new Date().toISOString(), new Date().toISOString(), error.message, job.id]);
     } finally {
       this.isRunning = false;
@@ -90,17 +174,13 @@ class OptimizationWorker {
 
   // AI Optimization logic remains largely the same, but needs to accept the progress callback
   async runAIOptimization(data, modelTypes, progressCallback) {
-     console.log('🤖 Running AI-enhanced optimization...');
-    
-    // Pass the progress callback to the grid search
-    const quickResults = await this.gridOptimizer.runGridSearch(
+    results = await this.gridOptimizer.runGridSearch(
       data, 
       modelTypes,
-      // We can create a sub-progress indicator for the user here if we want
       (progress) => progressCallback({ ...progress, phase: 'analysis' }) 
     );
 
-    const promisingRanges = this.analyzePromisingRanges(quickResults.results);
+    const promisingRanges = this.analyzePromisingRanges(results.results);
     const focusedResults = await this.runFocusedGridSearch(data, modelTypes, promisingRanges, progressCallback);
 
     return {
@@ -154,8 +234,8 @@ class OptimizationWorker {
     }
   }
 
-  startPolling(interval = 1000) { // Poll every 5 seconds
-    console.log('[Worker] Starting polling for jobs...');
+  startPolling(interval = 5000) { // Poll every 5 seconds
+
     // Poll immediately, then set interval
     this.pollForJobs(); 
     setInterval(() => this.pollForJobs(), interval);
@@ -228,6 +308,18 @@ class OptimizationWorker {
       breakdown[modelType].avgAccuracy = accuracies.reduce((sum, acc) => sum + acc, 0) / accuracies.length;
     }
     return breakdown;
+  }
+}
+
+// Add this helper if not present
+function getSeasonalPeriodsFromFrequency(frequency) {
+  switch (frequency) {
+    case 'daily': return 7;
+    case 'weekly': return 52;
+    case 'monthly': return 12;
+    case 'quarterly': return 4;
+    case 'yearly': return 1;
+    default: return 12;
   }
 }
 

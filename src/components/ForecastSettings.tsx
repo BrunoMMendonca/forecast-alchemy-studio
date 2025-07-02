@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,6 +7,10 @@ import { BarChart3, Brain, Sparkles } from 'lucide-react';
 import { BusinessContext } from '@/types/businessContext';
 import { BusinessContextSettings } from '@/components/BusinessContextSettings';
 import { useAISettings } from '@/hooks/useAISettings';
+import { Slider } from '@/components/ui/slider';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useGlobalSettings } from '@/hooks/useGlobalSettings';
 
 interface ForecastSettingsProps {
   forecastPeriods: number;
@@ -25,6 +29,11 @@ interface ForecastSettingsProps {
   setLargeFileThreshold: (threshold: number) => void;
   aiReasoningEnabled: boolean;
   setAiReasoningEnabled: (enabled: boolean) => void;
+  mapeWeight: number;
+  rmseWeight: number;
+  maeWeight: number;
+  accuracyWeight: number;
+  setWeights: (weights: { mape: number; rmse: number; mae: number; accuracy: number }) => void;
 }
 
 export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
@@ -44,6 +53,11 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
   setLargeFileThreshold,
   aiReasoningEnabled,
   setAiReasoningEnabled,
+  mapeWeight,
+  rmseWeight,
+  maeWeight,
+  accuracyWeight,
+  setWeights,
 }) => {
   const { enabled: aiFeaturesEnabled, setEnabled: setAIEnabled } = useAISettings({
     onSettingsChange: (enabled) => {
@@ -54,8 +68,188 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
     }
   });
 
+  const globalSettings = useGlobalSettings();
+  const fallbackSeparator = globalSettings.csvSeparator || ',';
+  const frequencyOptions = [
+    { value: 'daily', label: 'Daily' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'quarterly', label: 'Quarterly' },
+    { value: 'yearly', label: 'Yearly' },
+  ];
+
+  // New local state for editing weights before saving
+  const [editMape, setEditMape] = useState(mapeWeight);
+  const [editRmse, setEditRmse] = useState(rmseWeight);
+  const [editMae, setEditMae] = useState(maeWeight);
+  const [editAccuracy, setEditAccuracy] = useState(accuracyWeight);
+  
+  // Calculate total
+  const total = editMape + editRmse + editMae + editAccuracy;
+  const isValid = total === 100;
+
+  // Color palette for the bar
+  const colors = ['#2563eb', '#059669', '#f59e42', '#e11d48'];
+  const barSegments = useMemo(() => [
+    { label: 'MAPE', value: editMape, color: colors[0] },
+    { label: 'RMSE', value: editRmse, color: colors[1] },
+    { label: 'MAE', value: editMae, color: colors[2] },
+    { label: 'Accuracy', value: editAccuracy, color: colors[3] },
+  ], [editMape, editRmse, editMae, editAccuracy]);
+
+  // Minimum percent to show label inside bar
+  const MIN_LABEL_PERCENT = 10;
+
+  // Default weights
+  const DEFAULT_WEIGHTS = { mape: 40, rmse: 30, mae: 20, accuracy: 10 };
+
+  // Track if there are unsaved changes
+  const hasChanges =
+    editMape !== mapeWeight ||
+    editRmse !== rmseWeight ||
+    editMae !== maeWeight ||
+    editAccuracy !== accuracyWeight;
+
+  // Track if values are at default
+  const isDefault =
+    editMape === DEFAULT_WEIGHTS.mape &&
+    editRmse === DEFAULT_WEIGHTS.rmse &&
+    editMae === DEFAULT_WEIGHTS.mae &&
+    editAccuracy === DEFAULT_WEIGHTS.accuracy;
+
+  // Save button enabled only if valid and there are changes
+  const canSave = isValid && hasChanges;
+
+  // Sync local edit fields to saved values after saving
+  useEffect(() => {
+    setEditMape(mapeWeight);
+    setEditRmse(rmseWeight);
+    setEditMae(maeWeight);
+    setEditAccuracy(accuracyWeight);
+  }, [mapeWeight, rmseWeight, maeWeight, accuracyWeight]);
+
+  // Save handler
+  const handleSave = () => {
+    if (!isValid) return; // Defensive: do not save if invalid
+    setWeights({ mape: editMape, rmse: editRmse, mae: editMae, accuracy: editAccuracy });
+  };
+
+  // Reset handler
+  const handleReset = () => {
+    setEditMape(DEFAULT_WEIGHTS.mape);
+    setEditRmse(DEFAULT_WEIGHTS.rmse);
+    setEditMae(DEFAULT_WEIGHTS.mae);
+    setEditAccuracy(DEFAULT_WEIGHTS.accuracy);
+  };
+
   return (
     <div className="space-y-8">
+      {/* Composite Score Weights Section */}
+      <div className="space-y-2">
+        <Label className="text-lg">Composite Score Weights for Best Model Selection</Label>
+        <CardDescription>
+          Adjust the importance of each metric in selecting the best model. The weights must sum to 100%.
+        </CardDescription>
+        {/* Weight Distribution Bar (read-only, with tooltip) */}
+        <TooltipProvider>
+          <div className="w-full h-5 rounded overflow-hidden flex mb-2 border border-slate-200">
+            {barSegments.map(seg => (
+              <Tooltip key={seg.label}>
+                <TooltipTrigger asChild>
+                  <div
+                    style={{ width: `${seg.value}%`, background: seg.color, cursor: 'pointer' }}
+                    className="h-full flex items-center justify-center text-xs text-white font-bold relative"
+                  >
+                    {seg.value >= MIN_LABEL_PERCENT ? `${seg.label} ${seg.value}%` : ''}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center">
+                  {seg.label}: {seg.value}%
+                </TooltipContent>
+              </Tooltip>
+            ))}
+          </div>
+        </TooltipProvider>
+        {/* Legend below the bar */}
+        <div className="flex flex-wrap gap-4 mb-4">
+          {barSegments.map(seg => (
+            <div key={seg.label} className="flex items-center gap-1 text-sm">
+              <span style={{ background: seg.color, width: 12, height: 12, borderRadius: '50%', display: 'inline-block' }}></span>
+              <span>{seg.label}: {seg.value}%</span>
+            </div>
+          ))}
+        </div>
+        {/* Numeric Inputs */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+          <div>
+            <Label htmlFor="mape-weight">MAPE Weight</Label>
+            <Input
+              id="mape-weight"
+              type="number"
+              min={0}
+              max={100}
+              value={editMape}
+              onChange={e => setEditMape(Math.max(0, Math.min(100, Number(e.target.value))))}
+              className="w-24"
+            />
+          </div>
+          <div>
+            <Label htmlFor="rmse-weight">RMSE Weight</Label>
+            <Input
+              id="rmse-weight"
+              type="number"
+              min={0}
+              max={100}
+              value={editRmse}
+              onChange={e => setEditRmse(Math.max(0, Math.min(100, Number(e.target.value))))}
+              className="w-24"
+            />
+          </div>
+          <div>
+            <Label htmlFor="mae-weight">MAE Weight</Label>
+            <Input
+              id="mae-weight"
+              type="number"
+              min={0}
+              max={100}
+              value={editMae}
+              onChange={e => setEditMae(Math.max(0, Math.min(100, Number(e.target.value))))}
+              className="w-24"
+            />
+          </div>
+          <div>
+            <Label htmlFor="accuracy-weight">Accuracy Weight</Label>
+            <Input
+              id="accuracy-weight"
+              type="number"
+              min={0}
+              max={100}
+              value={editAccuracy}
+              onChange={e => setEditAccuracy(Math.max(0, Math.min(100, Number(e.target.value))))}
+              className="w-24"
+            />
+          </div>
+        </div>
+        <div className="mt-2 text-sm font-semibold" style={{ color: isValid ? '#059669' : '#e11d48' }}>
+          Total: {total}% {isValid ? '' : ' (Weights must sum to 100%)'}
+        </div>
+        <button
+          className={`mt-2 px-4 py-2 rounded text-white font-bold ${canSave ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'}`}
+          onClick={handleSave}
+          disabled={!canSave}
+        >
+          Save Weights
+        </button>
+        <button
+          className={`mt-2 ml-4 px-4 py-2 rounded text-blue-700 font-bold border border-blue-600 bg-white hover:bg-blue-50 ${isDefault ? 'opacity-50 cursor-not-allowed' : ''}`}
+          onClick={handleReset}
+          type="button"
+          disabled={isDefault}
+        >
+          Reset to Default
+        </button>
+      </div>
+
       {/* AI Features (Grok API) */}
       <div className="space-y-2">
         <Label htmlFor="ai-enabled" className="flex items-center gap-2 text-lg">
@@ -239,6 +433,28 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
         />
         <p className="text-sm text-slate-500">
           Number of future periods to forecast (auto-detects your data frequency)
+        </p>
+      </div>
+
+      {/* CSV Separator (always visible) */}
+      <div className="space-y-2">
+        <Label htmlFor="csv-separator" className="flex items-center gap-2">
+          <BarChart3 className="h-4 w-4" />
+          CSV Separator
+        </Label>
+        <Select value={fallbackSeparator} onValueChange={globalSettings.setCsvSeparator}>
+          <SelectTrigger className="w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value=",">Comma (,)</SelectItem>
+            <SelectItem value=";">Semicolon (;)</SelectItem>
+            <SelectItem value="\t">Tab</SelectItem>
+            <SelectItem value="|">Pipe (|)</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-sm text-slate-500">
+          Default separator for CSV import/export. Auto-detect will override this for import if possible.
         </p>
       </div>
     </div>

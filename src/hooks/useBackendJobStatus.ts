@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useUnifiedState } from './useUnifiedState';
 import { ForecastResult } from '@/types/forecast';
@@ -17,6 +17,8 @@ export interface JobStatus {
   reason?: string;
   priority?: number;
   batchId?: string;
+  filePath?: string;
+  data?: string;
 }
 
 export interface JobSummary {
@@ -32,13 +34,17 @@ export interface JobSummary {
   batchCompleted: number;
 }
 
-const POLLING_INTERVAL = 3000; // 3 seconds
+const POLLING_INTERVAL = 5000; // 5 seconds
+const MAX_CONSECUTIVE_ERRORS = 3; // Stop polling after 3 consecutive errors
+const ERROR_BACKOFF_MULTIPLIER = 2; // Double the interval on each error
 
 export const useBackendJobStatus = (batchId: string | null) => {
   const { toast } = useToast();
   const { forecastResults, setForecastResults } = useUnifiedState();
   const [jobs, setJobs] = useState<JobStatus[]>([]);
   const [isPaused, setIsPaused] = useState(false);
+  const [consecutiveErrors, setConsecutiveErrors] = useState(0);
+  const [currentPollingInterval, setCurrentPollingInterval] = useState(POLLING_INTERVAL);
   const processedJobIds = useRef(new Set<number>());
   const lastBatchTotalRef = useRef(0);
   const lastJobsCountRef = useRef(0);
@@ -48,25 +54,33 @@ export const useBackendJobStatus = (batchId: string | null) => {
 
     const fetchStatus = async () => {
       try {
-        const response = await fetch('http://localhost:3001/api/jobs/status');
+        const response = await fetch('/api/jobs/status');
         if (!response.ok) {
+          console.error('[useBackendJobStatus] Failed to fetch job status from backend. Status:', response.status);
           throw new Error('Failed to fetch job status from backend.');
         }
         const data: JobStatus[] = await response.json();
         
+        // Reset error count on success
+        setConsecutiveErrors(0);
+        setCurrentPollingInterval(POLLING_INTERVAL);
+        
         // Ensure data is an array
         if (!Array.isArray(data)) {
-          console.error('Backend returned non-array data:', data);
+          console.error('[useBackendJobStatus] Backend returned non-array data:', data);
           // Handle the case where the backend sends the summary object directly
           if (data && typeof data === 'object' && 'total' in data && 'jobs' in data) {
             const jobData = (data as any).jobs || [];
             if (!Array.isArray(jobData)) {
                setJobs([]);
+               console.warn('[useBackendJobStatus] jobs field is not an array:', jobData);
                return;
             }
             setJobs(jobData);
+            console.debug(`[useBackendJobStatus] Received jobs array from summary object. Count: ${jobData.length}`);
           } else {
             setJobs([]);
+            console.warn('[useBackendJobStatus] Data is not array or summary object:', data);
             return;
           }
         } else {
@@ -81,7 +95,6 @@ export const useBackendJobStatus = (batchId: string | null) => {
         );
 
         if (newlyCompletedJobs.length > 0) {
-            console.log(`[useBackendJobStatus] Found ${newlyCompletedJobs.length} new completed jobs to process.`);
             const newResults: ForecastResult[] = newlyCompletedJobs.map(job => job.result as ForecastResult);
             
             const prevResults = forecastResults || [];
@@ -96,17 +109,32 @@ export const useBackendJobStatus = (batchId: string | null) => {
         }
 
       } catch (error) {
-        console.error("Error fetching job status:", error);
+        console.error('[useBackendJobStatus] Error fetching job status:', error);
+        
+        // Increment error count and implement exponential backoff
+        const newErrorCount = consecutiveErrors + 1;
+        setConsecutiveErrors(newErrorCount);
+        
+        if (newErrorCount >= MAX_CONSECUTIVE_ERRORS) {
+          console.warn('[useBackendJobStatus] Too many consecutive errors, stopping polling');
+          setIsPaused(true);
+          return;
+        }
+        
+        // Increase polling interval exponentially
+        const newInterval = Math.min(POLLING_INTERVAL * Math.pow(ERROR_BACKOFF_MULTIPLIER, newErrorCount), 30000);
+        setCurrentPollingInterval(newInterval);
+        
         // Set empty state on error
         setJobs([]);
       }
     };
 
     fetchStatus(); // Initial fetch
-    const intervalId = setInterval(fetchStatus, POLLING_INTERVAL);
+    const intervalId = setInterval(fetchStatus, currentPollingInterval);
 
     return () => clearInterval(intervalId);
-  }, [isPaused]);
+  }, [isPaused, consecutiveErrors, currentPollingInterval]);
 
   useEffect(() => {
     const total = jobs.length;
@@ -216,5 +244,12 @@ export const useBackendJobStatus = (batchId: string | null) => {
     };
   }, [filteredJobs]);
 
-  return { jobs: filteredJobs, summary, isPaused, setIsPaused };
+  // Function to resume polling (useful when backend comes back online)
+  const resumePolling = useCallback(() => {
+    setConsecutiveErrors(0);
+    setCurrentPollingInterval(POLLING_INTERVAL);
+    setIsPaused(false);
+  }, []);
+
+  return { jobs: filteredJobs, summary, isPaused, setIsPaused, resumePolling };
 }; 

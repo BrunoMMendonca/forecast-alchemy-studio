@@ -24,6 +24,7 @@
 3.  **Job Processing (Backend Worker)**:
     - A separate worker process, started by running `node server.js worker`, continuously polls the database for `pending` jobs (`runWorker()` function).
     - When a job is found, the worker updates its status to `running` and begins executing the optimization logic.
+    - **Dataset Frequency Extraction**: For optimization jobs, the worker extracts the dataset frequency from the file's summary and computes the seasonal period (weekly → 52, monthly → 12). This is passed through job data to ensure seasonal models use the correct seasonal period.
     - It uses the `GridOptimizer` and `ModelFactory` to run a comprehensive, real-world analysis using all available forecasting models (including ARIMA, Holt-Winters, etc.). This is not a simulation.
     - It periodically updates the job's `progress` in the database.
     - Upon completion, the worker updates the job's status to `completed` and stores the final result as a JSON string in the `result` column. If an error occurs, the status is set to `failed`.

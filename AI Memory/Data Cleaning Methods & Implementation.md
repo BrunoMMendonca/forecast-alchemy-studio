@@ -305,6 +305,15 @@ interface ImportPreview {
 
 ---
 
+## Global CSV Separator Setting (2024-06)
+
+A global CSV separator setting was added to ensure consistent parsing and export of CSV files across the application. Supported options: comma, semicolon, tab, and pipe. This setting is stored in the backend database and is visible/editable in the main settings UI. 
+
+- **Import:** The backend auto-detects the separator for each uploaded file, but the user can override it in the import wizard. The detected/selected separator is used for preview and processing.
+- **Export:** The selected global separator is always used for CSV export.
+- **Sync:** The frontend and backend keep the separator setting in sync, and changes are persisted.
+- **Testing:** Scripts and UI tests verify correct separator handling for all supported types.
+
 **For related documentation, see:**
 - `Upload Wizard & Data Transformation.md` - Data import workflow
 - `Queue Processing & Job Management.md` - Optimization triggering

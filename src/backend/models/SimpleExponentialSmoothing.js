@@ -1,7 +1,22 @@
 import { BaseModel } from './BaseModel.js';
 
 export class SimpleExponentialSmoothing extends BaseModel {
-  constructor(parameters = { alpha: 0.3 }) {
+  static metadata = {
+    id: 'simple-exponential-smoothing',
+    displayName: 'Simple Exponential Smoothing',
+    parameters: [
+      { name: 'alpha', type: 'number', default: 0.3, visible: true, label: 'Smoothing Factor (alpha)', description: 'Controls the rate at which the influence of past observations decreases.' },
+    ],
+    get defaultParameters() {
+      return Object.fromEntries(this.parameters.map(p => [p.name, p.default]));
+    },
+    optimizationParameters: { alpha: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9] },
+    isSeasonal: false,
+    className: 'SimpleExponentialSmoothing',
+    enabled: true
+  };
+
+  constructor(parameters = SimpleExponentialSmoothing.metadata.defaultParameters) {
     super(parameters);
     this.name = 'Simple Exponential Smoothing';
     this.alpha = parameters.alpha || 0.3;
@@ -14,8 +29,13 @@ export class SimpleExponentialSmoothing extends BaseModel {
       throw new Error('Training data cannot be empty');
     }
 
-    // Extract sales values from data
-    const values = data.map(d => typeof d === 'object' ? d.sales || d.value || d.amount : d);
+    // Extract sales values from data - check for both lowercase and uppercase field names
+    const values = data.map(d => {
+      if (typeof d === 'object') {
+        return d.sales || d.Sales || d.value || d.amount || d;
+      }
+      return d;
+    });
     
     if (values.length === 0) {
       throw new Error('No valid sales data found');
@@ -53,7 +73,12 @@ export class SimpleExponentialSmoothing extends BaseModel {
       throw new Error('Model must be trained before validation');
     }
 
-    const values = testData.map(d => typeof d === 'object' ? d.sales || d.value || d.amount : d);
+    const values = testData.map(d => {
+      if (typeof d === 'object') {
+        return d.sales || d.Sales || d.value || d.amount || d;
+      }
+      return d;
+    });
     
     if (values.length === 0) {
       throw new Error('Test data cannot be empty');

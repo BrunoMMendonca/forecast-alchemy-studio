@@ -11,6 +11,8 @@ import { Download, Edit3, Save, Trash2, Eye, TrendingUp, CheckCircle } from 'luc
 import { NormalizedSalesData, ForecastResult } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
 import { exportForecastResults, generateSOPSummary, ExportOptions } from '@/utils/exportUtils';
+import { useGlobalSettings } from '@/hooks/useGlobalSettings';
+import { useSKUStore } from '@/store/skuStore';
 
 interface ForecastFinalizationProps {
   historicalData: NormalizedSalesData[];
@@ -29,7 +31,6 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
   cleanedData,
   forecastResults
 }) => {
-  const [selectedSKU, setSelectedSKU] = useState<string>('');
   const [editMode, setEditMode] = useState(false);
   const [editableForecasts, setEditableForecasts] = useState<Record<string, EditableForecast[]>>({});
   const [finalizedModels, setFinalizedModels] = useState<Record<string, string>>({});
@@ -37,6 +38,7 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
   const [exportMode, setExportMode] = useState<'all_models' | 'single_forecast'>('single_forecast');
   const [selectedModel, setSelectedModel] = useState<string>('auto_select_best');
   const { toast } = useToast();
+  const { csvSeparator } = useGlobalSettings();
 
   const skus = useMemo(() => {
     return Array.from(new Set(forecastResults.map(r => r.sku))).sort();
@@ -55,12 +57,15 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
     return map;
   }, [cleanedData, historicalData]);
 
+  const selectedSKU = useSKUStore(state => state.selectedSKU);
+  const setSelectedSKU = useSKUStore(state => state.setSelectedSKU);
+
   // Auto-select first SKU when results change
   React.useEffect(() => {
     if (skus.length > 0 && !selectedSKU) {
       setSelectedSKU(skus[0]);
     }
-  }, [skus, selectedSKU]);
+  }, [skus, selectedSKU, setSelectedSKU]);
 
   // Initialize editable forecasts and auto-select best models
   React.useEffect(() => {
@@ -229,7 +234,7 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
       includeConfidenceIntervals: false
     };
 
-    exportForecastResults(forecastResults, exportOptions);
+    exportForecastResults(forecastResults, exportOptions, undefined, csvSeparator);
     
     toast({
       title: "Export Complete",
@@ -388,7 +393,7 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
                   <YAxis 
                     stroke="#64748b"
                     fontSize={12}
-                    tickFormatter={(value) => value.toLocaleString()}
+                    tickFormatter={(value) => Math.round(value).toLocaleString()}
                   />
                   <Tooltip 
                     formatter={(value: number, name: string) => [

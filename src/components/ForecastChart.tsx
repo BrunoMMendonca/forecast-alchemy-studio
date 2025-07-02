@@ -59,7 +59,7 @@ const ChartContent: React.FC<{ chartData: any[], selectedSKUResults: ForecastRes
           <YAxis 
             stroke="#64748b"
             fontSize={10}
-            tickFormatter={(value) => value.toLocaleString()}
+            tickFormatter={(value) => Math.round(value).toLocaleString()}
           />
           <Tooltip 
             formatter={(value: number, name: string) => [

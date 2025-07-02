@@ -127,3 +127,11 @@ If the upload or transformation fails, check the following:
 | **Column Mapping UI**     | `CsvImportWizard/MapStep.tsx`            | -                                 | Renders the column mapping interface.               |
 | **Backend Pivot**         | `server.js`                              | `pivotTable`                      | Date normalization, chronological sort, sparsity.   |
 | **API Response**          | `server.js`                              | `/apply-config` handler           | Returns `{ transformedData, columns }`.             | 
+
+## CSV Separator Workflow (2024-06)
+
+- The upload wizard now respects a global CSV separator setting (comma, semicolon, tab, pipe).
+- On import, the backend auto-detects the separator but allows user override in the preview step.
+- The detected/selected separator is returned to the frontend and used for preview and mapping.
+- The global setting is editable in the main settings panel and is stored in the backend database.
+- A test script (`test-csv-import.js`) verifies backend separator detection for all supported types. 

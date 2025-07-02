@@ -487,10 +487,8 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
 
       {/* Controls */}
       <OutlierControls
-        selectedSKU={selectedSKU}
         skus={Array.from(new Set(skus.filter(Boolean)))}
         threshold={threshold}
-        onSKUChange={setSelectedSKU}
         onThresholdChange={setThreshold}
         onPrevSKU={handlePrevSKU}
         onNextSKU={handleNextSKU}
@@ -510,12 +508,12 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
       {/* Chart with Expand Button */}
       <div className="relative h-96">
         {chartData.length > 0 ? (
-          <OutlierChart 
-            data={chartData} 
-            selectedSKU={selectedSKU} 
-            onDateClick={handleDateClick}
-            highlightedDate={highlightedDate}
-          />
+      <OutlierChart 
+        data={chartData} 
+        selectedSKU={selectedSKU} 
+        onDateClick={handleDateClick}
+        highlightedDate={highlightedDate}
+      />
         ) : (
           <div className="bg-white rounded-lg p-4 border h-full flex items-center justify-center">
             <div className="text-center text-gray-500">

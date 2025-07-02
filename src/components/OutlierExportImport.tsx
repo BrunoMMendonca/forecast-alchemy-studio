@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Upload } from 'lucide-react';
-import { getDefaultModels } from '@/utils/modelConfig';
+import { fetchAvailableModels } from '@/utils/modelConfig';
 
 interface OutlierExportImportProps {
   onExport: () => void;
@@ -14,12 +14,11 @@ export const OutlierExportImport: React.FC<OutlierExportImportProps> = ({
   onImportClick,
   isExportDisabled
 }) => {
-  const handleImportDataCleaning = useCallback((importedSKUs: string[]) => {
+  const handleImportDataCleaning = useCallback(async (importedSKUs: string[]) => {
     console.log('handleImportDataCleaning called with:', importedSKUs);
-    const allModels = getDefaultModels();
+    const allModels = await fetchAvailableModels();
     console.log('Models used for queueing:', allModels);
-    // ...rest of the code
-    console.log('Jobs to add:', jobs);
+    // TODO: Add job creation logic here using importedSKUs and allModels
   }, []);
 
   return (

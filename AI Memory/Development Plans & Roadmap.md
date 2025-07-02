@@ -156,6 +156,27 @@
 **Status**: Recently implemented with robust batch tracking
 **Current Logic**: Tracks all batch IDs since last reset, shows completed/total jobs
 
+### 2024-06: Forecast System Improvements
+- **Model Eligibility Logic**: Implemented consistent backend-frontend eligibility checks with clear UI feedback
+- **Modularized Parameter Controls**: Created component architecture with friendly labels, type support, and optimization integration
+- **Global Forecast Parameters**: Added centralized settings component with forecast periods and CSV separator integration
+- **Parameter State Management**: Improved model state handling with separate parameter sets and method selection
+- **UI Consistency**: Enhanced model cards, parameter sliders, and settings panels for better user experience
+
+### 2024-06: CSV Separator Integration
+- Added global CSV separator setting (comma, semicolon, tab, pipe) with backend storage and UI control.
+- Backend import auto-detects separator but allows user override; export always uses the setting.
+- Added test script for backend separator detection.
+- Improved backend/frontend sync for settings.
+- Updated troubleshooting and server restart instructions.
+
+### 2024-06: Dataset-Specific Export Feature
+- **Dataset Filtering**: Added toggle to export optimization results for specific datasets only
+- **Backend Enhancement**: Modified export endpoint to accept filePath parameter for filtering
+- **UI Integration**: Added dataset-specific toggle in both settings dialog and job monitor
+- **Multi-Dataset Support**: Enables clean separation of results when working with multiple datasets
+- **User Experience**: Visual feedback, badges, and clear messaging for dataset-specific exports
+
 ---
 
 ## 4. Bug Fixes & Improvements
@@ -234,7 +255,7 @@
 
 ## 4. Next Steps
 - Continue backend migration for other workflow steps.
-- Maintain explicit data format handling and single-source-of-truth patterns throughout the app.
+- Maintain explicit data format handling and single-source-of-truth patterns throughout the app. 
 
 ---
 

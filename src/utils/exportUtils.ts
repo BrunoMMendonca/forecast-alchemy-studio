@@ -1,5 +1,4 @@
-
-import { ForecastResult } from '@/pages/Index';
+import { ForecastResult } from '@/types/forecast';
 
 export interface ExportOptions {
   format: 'csv' | 'excel' | 'json';
@@ -12,24 +11,25 @@ export interface ExportOptions {
 export const exportForecastResults = (
   results: ForecastResult[],
   options: ExportOptions,
-  filename?: string
+  filename?: string,
+  separator: string = ','
 ) => {
   const timestamp = new Date().toISOString().split('T')[0];
   const baseFilename = filename || `forecast_${options.mode}_${timestamp}`;
 
   switch (options.format) {
     case 'csv':
-      exportAsCSV(results, options, baseFilename);
+      exportAsCSV(results, options, baseFilename, separator);
       break;
     case 'json':
       exportAsJSON(results, options, baseFilename);
       break;
     default:
-      exportAsCSV(results, options, baseFilename);
+      exportAsCSV(results, options, baseFilename, separator);
   }
 };
 
-const exportAsCSV = (results: ForecastResult[], options: ExportOptions, filename: string) => {
+const exportAsCSV = (results: ForecastResult[], options: ExportOptions, filename: string, separator: string = ',') => {
   let csvContent = '';
   
   if (options.mode === 'all_models') {
@@ -37,7 +37,7 @@ const exportAsCSV = (results: ForecastResult[], options: ExportOptions, filename
     const headers = ['SKU', 'Date', 'Model', 'Predicted_Value'];
     if (options.includeAccuracy) headers.push('Model_Accuracy_%');
     
-    csvContent = headers.join(',') + '\n';
+    csvContent = headers.join(separator) + '\n';
     
     results.forEach(result => {
       result.predictions.forEach(prediction => {
@@ -50,7 +50,7 @@ const exportAsCSV = (results: ForecastResult[], options: ExportOptions, filename
         if (options.includeAccuracy && result.accuracy) {
           row.push(result.accuracy.toFixed(2));
         }
-        csvContent += row.join(',') + '\n';
+        csvContent += row.join(separator) + '\n';
       });
     });
   } else {
@@ -71,7 +71,7 @@ const exportAsCSV = (results: ForecastResult[], options: ExportOptions, filename
     const headers = ['SKU', 'Date', 'Forecast_Value', 'Model_Used'];
     if (options.includeAccuracy) headers.push('Accuracy_%');
     
-    csvContent = headers.join(',') + '\n';
+    csvContent = headers.join(separator) + '\n';
     
     Object.entries(skuGroups).forEach(([sku, skuResults]) => {
       // Use the best performing model for this SKU
@@ -89,7 +89,7 @@ const exportAsCSV = (results: ForecastResult[], options: ExportOptions, filename
         if (options.includeAccuracy && bestResult.accuracy) {
           row.push(bestResult.accuracy.toFixed(2));
         }
-        csvContent += row.join(',') + '\n';
+        csvContent += row.join(separator) + '\n';
       });
     });
   }

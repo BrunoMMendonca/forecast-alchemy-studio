@@ -1,9 +1,24 @@
 import { BaseModel } from './BaseModel.js';
 
 export class MovingAverage extends BaseModel {
-  constructor(parameters = { window: 3 }) {
+  static metadata = {
+    id: 'moving-average',
+    displayName: 'Simple Moving Average',
+    parameters: [
+      { name: 'window', type: 'number', default: 3, visible: true, label: 'Window Size', description: 'Number of periods to average over.' },
+    ],
+    get defaultParameters() {
+      return Object.fromEntries(this.parameters.map(p => [p.name, p.default]));
+    },
+    optimizationParameters: { window: [2, 3, 4, 5, 6, 7, 8, 9, 10] },
+    isSeasonal: false,
+    className: 'MovingAverage',
+    enabled: true
+  };
+
+  constructor(parameters = MovingAverage.metadata.defaultParameters) {
     super(parameters);
-    this.name = 'Moving Average';
+    this.name = 'Simple Moving Average';
     this.window = parameters.window || 3;
     this.historicalData = [];
     this.trained = false;
@@ -14,8 +29,13 @@ export class MovingAverage extends BaseModel {
       throw new Error('Training data cannot be empty');
     }
 
-    // Extract sales values from data
-    const values = data.map(d => typeof d === 'object' ? d.sales || d.value || d.amount : d);
+    // Extract sales values from data - check for both lowercase and uppercase field names
+    const values = data.map(d => {
+      if (typeof d === 'object') {
+        return d.sales || d.Sales || d.value || d.amount || d;
+      }
+      return d;
+    });
     
     if (values.length === 0) {
       throw new Error('No valid sales data found');
@@ -56,7 +76,12 @@ export class MovingAverage extends BaseModel {
       throw new Error('Model must be trained before validation');
     }
 
-    const values = testData.map(d => typeof d === 'object' ? d.sales || d.value || d.amount : d);
+    const values = testData.map(d => {
+      if (typeof d === 'object') {
+        return d.sales || d.Sales || d.value || d.amount || d;
+      }
+      return d;
+    });
     
     if (values.length === 0) {
       throw new Error('Test data cannot be empty');

@@ -87,12 +87,10 @@ export const generateHoltWinters = (
 ): ForecastPrediction[] => {
   // Validate input data
   if (values.length === 0) {
-    console.log('❌ FORECAST: Empty data array for Holt-Winters');
     return [];
   }
 
   if (values.some(v => isNaN(v) || !isFinite(v))) {
-    console.log('❌ FORECAST: Invalid values in input data');
     return [];
   }
 
@@ -105,7 +103,6 @@ export const generateHoltWinters = (
   let effectiveSeasonalPeriod = seasonalPeriod;
   if (values.length < seasonalPeriod * 2) {
     effectiveSeasonalPeriod = Math.max(2, Math.floor(values.length / 2));
-    console.log(`⚠️ FORECAST: Adjusted seasonal period to ${effectiveSeasonalPeriod} due to limited data`);
   }
 
   // Initialize components
@@ -174,7 +171,6 @@ export const generateHoltWinters = (
     
     // Ensure forecast is valid
     if (isNaN(forecast) || !isFinite(forecast)) {
-      console.log(`⚠️ FORECAST: Invalid forecast generated, using fallback`);
       predictions.push({
         date: dates[i],
         value: Math.max(0, values[values.length - 1]),
@@ -195,19 +191,16 @@ export const generateHoltWinters = (
     }
   }
 
-  // console.log(`📈 FORECAST: Generated Holt-Winters predictions:`, predictions.map(p => p.value));
   return predictions;
 };
 
 const generateExponentialSmoothing = (values: number[], alpha: number, periods: number): ForecastPrediction[] => {
   // Validate input data
   if (values.length === 0) {
-    console.log('❌ FORECAST: Empty data array for exponential smoothing');
     return [];
   }
 
   if (values.some(v => isNaN(v) || !isFinite(v))) {
-    console.log('❌ FORECAST: Invalid values in input data');
     return [];
   }
 
@@ -228,7 +221,6 @@ const generateExponentialSmoothing = (values: number[], alpha: number, periods: 
     }
   }));
 
-  // console.log(`📈 FORECAST: Generated exponential smoothing predictions:`, predictions.map(p => p.value));
   return predictions;
 };
 

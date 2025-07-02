@@ -59,7 +59,7 @@ export const OutlierChart: React.FC<OutlierChartProps> = ({
             <YAxis 
               stroke="#64748b"
               fontSize={12}
-              tickFormatter={(value) => value.toLocaleString()}
+              tickFormatter={(value) => Math.round(value).toLocaleString()}
             />
             <Tooltip 
               formatter={(value: number, name: string, props) => {

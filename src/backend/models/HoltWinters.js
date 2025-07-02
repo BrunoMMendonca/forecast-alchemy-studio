@@ -1,13 +1,34 @@
 import { BaseModel } from './BaseModel.js';
 
 export class HoltWinters extends BaseModel {
-  constructor(parameters = { alpha: 0.3, beta: 0.1, gamma: 0.1, seasonLength: 4, type: 'additive' }) {
+  static metadata = {
+    id: 'holt-winters',
+    displayName: 'Holt-Winters',
+    parameters: [
+      { name: 'alpha', type: 'number', default: 0.3, visible: true, label: 'Level Smoothing (alpha)', description: 'Controls the smoothing of the level component.' },
+      { name: 'beta', type: 'number', default: 0.1, visible: true, label: 'Trend Smoothing (beta)', description: 'Controls the smoothing of the trend component.' },
+      { name: 'gamma', type: 'number', default: 0.1, visible: true, label: 'Seasonal Smoothing (gamma)', description: 'Controls the smoothing of the seasonal component.' },
+      { name: 'type', type: 'select', default: 'additive', visible: true, label: 'Seasonal Type', description: 'Type of seasonality (additive or multiplicative).', options: [
+        { value: 'additive', label: 'Additive' },
+        { value: 'multiplicative', label: 'Multiplicative' }
+      ] },
+    ],
+    get defaultParameters() {
+      return Object.fromEntries(this.parameters.map(p => [p.name, p.default]));
+    },
+    optimizationParameters: { alpha: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9], beta: [0.01, 0.05, 0.1, 0.15, 0.2], gamma: [0.01, 0.05, 0.1, 0.15, 0.2], type: ['additive', 'multiplicative'] },
+    isSeasonal: true,
+    className: 'HoltWinters',
+    enabled: true
+  };
+
+  constructor(parameters = HoltWinters.metadata.defaultParameters, seasonLength = 12) {
     super(parameters);
     this.name = 'Holt-Winters';
     this.alpha = parameters.alpha || 0.3;
     this.beta = parameters.beta || 0.1;
     this.gamma = parameters.gamma || 0.1;
-    this.seasonLength = parameters.seasonLength || 4; // e.g., 4 for quarterly, 12 for monthly
+    this.seasonLength = seasonLength; // Set from settings/frequency
     this.type = parameters.type || 'additive'; // 'additive' or 'multiplicative'
     
     this.level = null;
@@ -21,7 +42,12 @@ export class HoltWinters extends BaseModel {
       throw new Error(`Training data must have at least 2 seasons (${this.seasonLength * 2} observations)`);
     }
     
-    const values = data.map(d => typeof d === 'object' ? d.sales || d.value || d.amount : d);
+    const values = data.map(d => {
+      if (typeof d === 'object') {
+        return d.sales || d.Sales || d.value || d.amount || d;
+      }
+      return d;
+    });
     
     this._initialize(values);
     
@@ -107,7 +133,12 @@ export class HoltWinters extends BaseModel {
       throw new Error('Model must be trained before validation');
     }
 
-    const values = testData.map(d => typeof d === 'object' ? d.sales || d.value || d.amount : d);
+    const values = testData.map(d => {
+      if (typeof d === 'object') {
+        return d.sales || d.Sales || d.value || d.amount || d;
+      }
+      return d;
+    });
     const predictions = this.predict(values.length);
     
     const mape = this.calculateMAPE(values, predictions);

@@ -13,14 +13,23 @@ const __dirname = path.dirname(__filename);
 const systemMessageWithReasoning = fs.readFileSync(path.join(__dirname, 'config/CSVImport/ai_csv_system_message_with_reasoning.txt'), 'utf-8');
 const systemMessageWithoutReasoning = fs.readFileSync(path.join(__dirname, 'config/CSVImport/ai_csv_system_message_without_reasoning.txt'), 'utf-8');
 
-// Initialize OpenAI client for Grok-3
-const client = new OpenAI({
+// Initialize OpenAI client for Grok-3 only if API key is available
+let client = null;
+if (GROK_API_KEY) {
+  client = new OpenAI({
   apiKey: GROK_API_KEY,
   baseURL: "https://api.x.ai/v1",
 });
+} else {
+  console.log('⚠️ GROK_API_KEY not found. AI features will be disabled.');
+}
 
 // Helper function to call Grok-3 API with reasoning capture
 async function callGrokAPI(prompt, maxTokens = 4000, includeReasoning = false) {
+  if (!client) {
+    throw new Error('Grok API client not initialized. Please set GROK_API_KEY environment variable.');
+  }
+
   try {
     const systemMessage = includeReasoning 
       ? systemMessageWithReasoning

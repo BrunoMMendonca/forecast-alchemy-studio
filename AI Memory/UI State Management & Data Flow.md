@@ -63,7 +63,7 @@ The "Single Source of Truth" pattern becomes even more critical when moving to a
     3. The response data is stored in the page's state.
     4. The page re-renders, passing the dataset down to components like `DataVisualization` as a prop.
 
-This evolution preserves the predictability of our data flow while migrating the application's source of truth from the client's browser to the central backend.
+This evolution preserves the predictability of our data flow while migrating the application's source of truth from the client's browser to the central backend. 
 
 ---
 
@@ -169,7 +169,33 @@ This evolution preserves the predictability of our data flow while migrating the
 
 ---
 
+## Model State Management & Parameter Flow (2024-06)
+
+### Centralized Model State
+- `useModelState` hook manages all model configurations and parameters
+- `useModelParameters` fetches model metadata from backend and transforms to frontend format
+- Model state includes enabled/disabled status, parameter sets, and optimization results
+- State updates trigger appropriate UI re-renders and backend synchronization
+
+### Parameter Control Flow
+- **Active Parameters**: Models maintain separate parameter sets (manual, grid, ai) with active set tracking
+- **Method Selection**: Users can switch between Manual/Grid/AI parameter sources via badges
+- **Optimization Integration**: Grid and AI optimization results are stored separately and can be applied
+- **Copy Best to Manual**: Users can copy optimized parameters to manual for further tuning
+
+### State Synchronization
+- Parameter changes update both local state and parent components
+- Optimization results are cached and displayed with confidence indicators
+- Model eligibility state is recalculated when data or SKU changes
+- Settings changes propagate through the component tree automatically
+
+### Error Handling & Validation
+- Parameter values are validated against min/max constraints
+- Type safety ensures numeric parameters are properly handled
+- Fallback values prevent undefined parameter errors
+- Clear error messages guide users when models are ineligible
+
+---
+
 **For related documentation, see:**
-- `Data Cleaning Methods & Implementation.md` - Fullscreen modal implementation details
-- `Performance & Scalability Strategy.md` - Backend state management
-- `Queue Processing & Job Management.md` - Job status synchronization 
+- `

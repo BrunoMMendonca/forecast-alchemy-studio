@@ -2,13 +2,13 @@ import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } f
 import { NormalizedSalesData, ForecastResult } from '@/types/forecast';
 import { OptimizationLogger } from './OptimizationLogger';
 import { WorkerProgressIndicator } from './WorkerProgressIndicator';
+import { useSKUStore } from '@/store/skuStore';
 
 interface ForecastModelsProps {
   data: NormalizedSalesData[];
   forecastPeriods: number;
   onForecastGeneration: (results: ForecastResult[], selectedSKU: string) => void;
   selectedSKUForResults: string;
-  onSKUChange: (sku: string) => void;
   shouldStartOptimization?: boolean;
   onOptimizationStarted?: () => void;
   aiForecastModelOptimizationEnabled?: boolean;
@@ -19,13 +19,14 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   forecastPeriods,
   onForecastGeneration,
   selectedSKUForResults,
-  onSKUChange,
   shouldStartOptimization = false,
   onOptimizationStarted,
   aiForecastModelOptimizationEnabled = true
 }, ref) => {
   const [showOptimizationLog, setShowOptimizationLog] = useState(false);
   const componentMountedRef = useRef(false);
+  const selectedSKU = useSKUStore(state => state.selectedSKU);
+  const setSelectedSKU = useSKUStore(state => state.setSelectedSKU);
 
   useEffect(() => {
     componentMountedRef.current = true;
@@ -37,9 +38,9 @@ export const ForecastModels = forwardRef<any, ForecastModelsProps>(({
   useEffect(() => {
     const skus = Array.from(new Set(data.map(d => d['Material Code']))).sort();
     if (skus.length > 0 && !selectedSKUForResults) {
-      onSKUChange(skus[0]);
+      setSelectedSKU(skus[0]);
     }
-  }, [data, selectedSKUForResults, onSKUChange]);
+  }, [data, selectedSKUForResults, setSelectedSKU]);
 
   useImperativeHandle(ref, () => ({
     // No optimization methods needed since backend handles this

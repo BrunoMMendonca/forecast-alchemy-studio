@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { Job } from '@/types/optimization';
 import { JobSummary } from '@/hooks/useBackendJobStatus';
 import { useToast } from './ui/use-toast';
+import { OptimizationResultsExporter } from './OptimizationResultsExporter';
 
 // A small helper to format time
 const formatTime = (dateString: string) => {
@@ -140,6 +141,14 @@ interface OptimizationQueuePopupProps {
   summary: JobSummary;
   isPaused: boolean;
   setIsPaused: (isPaused: boolean) => void;
+  currentDataset?: {
+    filePath?: string;
+    filename?: string;
+    name?: string;
+  } | null;
+  selectedSKU?: string | null;
+  skuCount?: number;
+  datasetCount?: number;
 }
 
 const JobQueueTable = ({ jobs }: { jobs: Job[] }) => (
@@ -182,6 +191,10 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
   summary,
   isPaused,
   setIsPaused,
+  currentDataset,
+  selectedSKU,
+  skuCount,
+  datasetCount,
 }) => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('pending');
@@ -198,7 +211,7 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
 
   const handleClearCompleted = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/jobs/clear-completed', { method: 'POST' });
+      const response = await fetch('/api/jobs/clear-completed', { method: 'POST' });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to clear completed jobs.');
@@ -212,7 +225,7 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
   const handleResetAll = async () => {
     if (window.confirm('Are you sure you want to reset all jobs? This action cannot be undone.')) {
     try {
-      const response = await fetch('http://localhost:3001/api/jobs/reset', { method: 'POST' });
+      const response = await fetch('/api/jobs/reset', { method: 'POST' });
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.message || 'Failed to reset jobs.');
@@ -229,7 +242,7 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
       <DialogContent className="max-w-6xl w-full">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Loader2 className="animate-spin" /> Job Monitor
+            {(summary.running > 0 || pendingJobs.length > 0) && <Loader2 className="animate-spin" />} Job Monitor
           </DialogTitle>
           <div className="absolute top-4 right-14 flex items-center space-x-2">
                 <Switch
@@ -250,15 +263,19 @@ export const OptimizationQueuePopup: React.FC<OptimizationQueuePopupProps> = ({
           </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="pending">Pending ({pendingJobs.length})</TabsTrigger>
             <TabsTrigger value="history">History ({historyJobs.length})</TabsTrigger>
+            <TabsTrigger value="export">Export Results</TabsTrigger>
           </TabsList>
           <TabsContent value="pending">
              <JobQueueTable jobs={pendingJobs} />
           </TabsContent>
           <TabsContent value="history">
              <JobQueueTable jobs={historyJobs} />
+          </TabsContent>
+          <TabsContent value="export">
+            <OptimizationResultsExporter currentDataset={currentDataset} selectedSKU={selectedSKU} skuCount={skuCount} datasetCount={datasetCount} />
           </TabsContent>
         </Tabs>
 

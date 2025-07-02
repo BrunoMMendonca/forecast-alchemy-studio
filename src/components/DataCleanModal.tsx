@@ -145,18 +145,6 @@ export function DataCleanModal({
     }
   };
 
-  // Debug logging
-  console.log('DataCleanModal render:', {
-    open,
-    chartDataLength: chartData?.length,
-    selectedSKU,
-    cleanedDataLength: cleanedData?.length,
-    highlightedDate,
-    selectedDate,
-    threshold,
-    treatZeroAsOutlier
-  });
-
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent fullscreen>
@@ -167,19 +155,9 @@ export function DataCleanModal({
           {/* Controls at the top */}
           <div className="mb-6">
             <OutlierControls
-              selectedSKU={selectedSKU}
               skus={skus}
               threshold={threshold}
-              onSKUChange={sku => setSelectedSKU(sku)}
               onThresholdChange={setThreshold}
-              onPrevSKU={() => {
-                const idx = skus.indexOf(selectedSKU);
-                if (idx > 0) setSelectedSKU(skus[idx - 1]);
-              }}
-              onNextSKU={() => {
-                const idx = skus.indexOf(selectedSKU);
-                if (idx < skus.length - 1) setSelectedSKU(skus[idx + 1]);
-              }}
               treatZeroAsOutlier={treatZeroAsOutlier}
               setTreatZeroAsOutlier={setTreatZeroAsOutlier}
               descriptions={descriptions}

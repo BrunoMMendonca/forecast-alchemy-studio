@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Bot, Grid3X3, User } from 'lucide-react';
+import { Bot, Grid3X3, User, Star } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ParameterBadgesProps {
   canOptimize: boolean;
@@ -9,6 +9,10 @@ interface ParameterBadgesProps {
   localSelectedMethod: 'ai' | 'grid' | 'manual' | undefined;
   cacheVersion: number;
   onMethodChange: (method: 'ai' | 'grid' | 'manual') => void;
+  hasGridParameters?: boolean;
+  bestMethod?: string;
+  winnerMethod?: string;
+  isWinner?: boolean;
 }
 
 export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
@@ -17,6 +21,10 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
   localSelectedMethod,
   cacheVersion,
   onMethodChange,
+  hasGridParameters = false,
+  bestMethod,
+  winnerMethod,
+  isWinner
 }) => {
   if (!canOptimize) {
     return (
@@ -30,7 +38,22 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
   const isGrid = localSelectedMethod === 'grid';
   const isManual = localSelectedMethod === 'manual';
 
+  // Helper to render star icon for best method and winner
+  const renderStar = (method: string) => {
+    if (bestMethod === method) {
+      if (isWinner && winnerMethod === method) {
+        // Filled yellow star for overall winner's method
+        return <Star className="h-3 w-3 ml-1 text-yellow-500 fill-yellow-500 inline" />;
+      } else {
+        // Outline blue star for best method of this model
+        return <Star className="h-3 w-3 ml-1 text-blue-400 inline" />;
+      }
+    }
+    return null;
+  };
+
   return (
+    <TooltipProvider>
     <div className="flex items-center gap-2">
       {/* AI Badge - Only show when Grok API is enabled */}
       {aiForecastModelOptimizationEnabled && (
@@ -47,10 +70,13 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
         >
           <Bot className="h-3 w-3 mr-1" />
           AI
+          {renderStar('ai')}
         </Badge>
       )}
 
       {/* Grid Badge - Always show */}
+        <Tooltip>
+          <TooltipTrigger asChild>
       <Badge 
         key={`grid-${localSelectedMethod}-${cacheVersion}`}
         variant={isGrid ? "default" : "outline"} 
@@ -64,7 +90,16 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
       >
         <Grid3X3 className="h-3 w-3 mr-1" />
         Grid
+        {renderStar('grid')}
       </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            {hasGridParameters 
+              ? "Click to apply optimized parameters from grid search" 
+              : "Grid search optimization"
+            }
+          </TooltipContent>
+        </Tooltip>
 
       {/* Manual Badge - Always show */}
       <Badge 
@@ -80,7 +115,9 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
       >
         <User className="h-3 w-3 mr-1" />
         Manual
+        {renderStar('manual')}
       </Badge>
     </div>
+    </TooltipProvider>
   );
 };

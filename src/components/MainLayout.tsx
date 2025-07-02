@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { FloatingSettingsButton } from '@/components/FloatingSettingsButton';
 import { StepNavigation } from '@/components/StepNavigation';
 import { List, Loader2, CheckCircle, XCircle, X } from 'lucide-react';
 import { useUnifiedState } from '@/hooks/useUnifiedState';
-import { getDefaultModels } from '@/utils/modelConfig';
+import { fetchAvailableModels } from '@/utils/modelConfig';
 import { JobSummary, useBackendJobStatus } from '@/hooks/useBackendJobStatus';
 import { useGlobalSettings } from '@/hooks/useGlobalSettings';
 import { useExistingDataDetection } from '@/hooks/useExistingDataDetection';
@@ -14,7 +14,8 @@ import { OptimizationQueuePopup } from '@/components/OptimizationQueuePopup';
 import { useToast } from '@/hooks/use-toast';
 import { Job } from '@/types/optimization';
 import { CsvUploadResult } from '@/components/CsvImportWizard';
-import { ForecastResult } from '@/types/forecast';
+import { ForecastResult, ModelConfig } from '@/types/forecast';
+import { useSKUStore } from '@/store/skuStore';
 
 interface JobMonitorButtonProps {
   summary: JobSummary;
@@ -100,17 +101,79 @@ export const MainLayout: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [processedDataInfo, setProcessedDataInfo] = useState<CsvUploadResult | null>(null);
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
-  const [selectedSKU, setSelectedSKU] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [isAutoLoading, setIsAutoLoading] = useState(true);
+  const [models, setModels] = useState<ModelConfig[]>([]); // Local model state
+  const [datasetCount, setDatasetCount] = useState<number>(1);
   // =====================================
 
-  const { setModels } = useUnifiedState(); // Keep global model state separate
   const { jobs, summary, isPaused, setIsPaused } = useBackendJobStatus(batchId);
-  const globalSettings = useGlobalSettings();
+  const globalSettings = useGlobalSettings({
+    onSettingsChange: async (changedSetting: string) => {
+      // Trigger optimization when metric weights change
+      if (['mapeWeight', 'rmseWeight', 'maeWeight', 'accuracyWeight'].includes(changedSetting)) {
+        if (processedDataInfo && processedDataInfo.skuList && processedDataInfo.skuList.length > 0) {
+          try {
+            // Get available models
+            const models = await fetchAvailableModels();
+            const modelIds = models.map(m => m.id);
+            
+            // Determine which methods to run
+            const methodsToRun = ['grid'];
+            if (globalSettings.aiForecastModelOptimizationEnabled) {
+              methodsToRun.push('ai');
+            }
+            
+            let totalJobsCreated = 0;
+            
+            // Create optimization jobs for all SKUs with metric weight change reason
+            for (const method of methodsToRun) {
+              const response = await fetch('/api/jobs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  skus: processedDataInfo.skuList,
+                  models: modelIds,
+                  method,
+                  reason: 'metric_weight_change',
+                  filePath: processedDataInfo.filePath,
+                  batchId: Date.now().toString()
+                }),
+              });
+
+              if (response.ok) {
+                const result = await response.json();
+                totalJobsCreated += result.jobsCreated || 0;
+              } else {
+                throw new Error(`Failed to create ${method} optimization jobs`);
+              }
+            }
+            
+            if (totalJobsCreated > 0) {
+              toast({
+                title: "Optimization Triggered",
+                description: `Metric weights changed. Started optimization for ${processedDataInfo.skuList.length} SKUs using ${methodsToRun.join(' and ')} methods.`,
+                variant: "default",
+              });
+            }
+          } catch (error) {
+            console.error('Error triggering optimization for metric weight change:', error);
+            toast({
+              title: "Error",
+              description: "Failed to trigger optimization for metric weight change.",
+              variant: "destructive",
+            });
+          }
+        }
+      }
+    }
+  });
   const { toast } = useToast();
   const { autoLoadLastDataset } = useExistingDataDetection();
+
+  const selectedSKU = useSKUStore(state => state.selectedSKU);
+  const setSelectedSKU = useSKUStore(state => state.setSelectedSKU);
 
   // Auto-load last dataset on app start
   useEffect(() => {
@@ -127,7 +190,6 @@ export const MainLayout: React.FC = () => {
               description: `Loaded your last dataset: ${result.summary.skuCount} products`,
               variant: "default",
             });
-            console.log('[MainLayout] Auto-loaded last dataset:', result.filePath);
           }
         } catch (error) {
           console.error('[MainLayout] Failed to auto-load last dataset:', error);
@@ -145,17 +207,92 @@ export const MainLayout: React.FC = () => {
     return () => clearTimeout(timer);
   }, [location.pathname, processedDataInfo, autoLoadLastDataset, setProcessedDataInfo, setCurrentStep, toast]);
 
+  // Auto-select first SKU after data load if none is selected
+  useEffect(() => {
+    if (
+      processedDataInfo &&
+      (!selectedSKU || !processedDataInfo.skuList?.includes(selectedSKU)) &&
+      processedDataInfo.skuList &&
+      processedDataInfo.skuList.length > 0
+    ) {
+      setSelectedSKU(processedDataInfo.skuList[0]);
+    }
+  }, [processedDataInfo, selectedSKU, setSelectedSKU]);
+
+  // Fetch models from backend on app start
+  useEffect(() => {
+    async function loadModels() {
+      try {
+        const backendModels = await fetchAvailableModels();
+        
+        if (!backendModels || backendModels.length === 0) {
+          setModels([]);
+          return;
+        }
+        
+        // Transform backend model metadata to frontend ModelConfig format
+        const transformedModels = backendModels.map((model: any) => {
+          const transformed = {
+            id: model.id,
+            name: model.displayName || model.id,
+            displayName: model.displayName,
+            description: model.description || '',
+            enabled: model.enabled !== false, // Default to enabled unless explicitly disabled
+            // --- Parameter sets ---
+            manualParameters: { ...model.defaultParameters },
+            gridParameters: undefined,
+            aiParameters: undefined,
+            parameters: { ...model.defaultParameters }, // Active set starts as manual
+            bestSource: undefined,
+            // --- Legacy/compatibility fields ---
+            defaultParameters: { ...model.defaultParameters }, // Store original defaults
+            isSeasonal: model.isSeasonal || false,
+            category: model.category || 'Other',
+            icon: undefined, // Backend models don't have icons, will be handled by UI
+            // Deprecated fields for compatibility
+            optimizationConfidence: undefined,
+            optimizationReasoning: undefined,
+            optimizationMethod: undefined,
+            isWinner: false,
+            // --- Add parameter metadata for UI ---
+            parametersMeta: model.parameters || [],
+          };
+          return transformed;
+        });
+        
+        setModels(transformedModels);
+      } catch (err) {
+        setModels([]); // Set empty array on error
+      }
+    }
+    loadModels();
+  }, [setModels]);
+
+  useEffect(() => {
+    async function fetchDatasetCount() {
+      try {
+        const res = await fetch('/api/datasets/count');
+        if (res.ok) {
+          const data = await res.json();
+          setDatasetCount(data.count || 1);
+        }
+      } catch (e) {
+        setDatasetCount(1);
+      }
+    }
+    fetchDatasetCount();
+  }, []);
+
   const handleStepClick = (stepIndex: number) => {
     setCurrentStep(stepIndex);
   };
 
-  const handleResetModels = () => {
-    setModels(getDefaultModels());
-    toast({
-      title: "Models Reset",
-      description: "All model configurations have been reset to their default state.",
-    });
-  };
+  // Model update function
+  const updateModel = useCallback((modelId: string, updates: Partial<ModelConfig>) => {
+    setModels(prev => prev.map(model =>
+      model.id === modelId ? { ...model, ...updates } : model
+    ));
+  }, []);
 
   const outletContext = {
     summary,
@@ -166,13 +303,13 @@ export const MainLayout: React.FC = () => {
     setProcessedDataInfo,
     forecastResults,
     setForecastResults,
-    selectedSKU,
-    setSelectedSKU,
     aiError,
     setAiError,
     batchId,
     setBatchId,
     isAutoLoading,
+    models,
+    updateModel,
   };
 
   return (
@@ -199,6 +336,14 @@ export const MainLayout: React.FC = () => {
           summary={summary}
           isPaused={isPaused}
           setIsPaused={setIsPaused}
+          currentDataset={processedDataInfo ? {
+            filePath: processedDataInfo.filePath,
+            filename: processedDataInfo.filePath?.split('/').pop(),
+            name: processedDataInfo.filePath?.split('/').pop()?.replace(/\.(csv|json)$/, '')
+          } : null}
+          selectedSKU={selectedSKU}
+          skuCount={processedDataInfo?.skuList ? new Set(processedDataInfo.skuList).size : (processedDataInfo?.summary?.skuCount || 1)}
+          datasetCount={datasetCount}
       />
       {/* Floating container for Job Monitor and Setup button */}
       <div className="fixed top-6 right-6 z-50 flex flex-row items-center gap-4 min-w-[260px]">
@@ -207,6 +352,14 @@ export const MainLayout: React.FC = () => {
           {...globalSettings}
           settingsOpen={settingsOpen}
           setSettingsOpen={setSettingsOpen}
+          currentDataset={processedDataInfo ? {
+            filePath: processedDataInfo.filePath,
+            filename: processedDataInfo.filePath?.split('/').pop(),
+            name: processedDataInfo.filePath?.split('/').pop()?.replace(/\.(csv|json)$/, '')
+          } : null}
+          selectedSKU={selectedSKU}
+          skuCount={processedDataInfo?.skuList ? new Set(processedDataInfo.skuList).size : (processedDataInfo?.summary?.skuCount || 1)}
+          datasetCount={datasetCount}
         />
       </div>
       {/* Floating logo container, top left */}

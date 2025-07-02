@@ -9,13 +9,13 @@ import { NormalizedSalesData } from '@/pages/Index';
 import { detectSeasonality, analyzeTrend, calculateVolatility, findCorrelations, findDateGaps, calculateCompleteness, countZeroValues, countMissingValues, countDateGaps } from '@/utils/dataAnalysis';
 import { getBlueTone } from '@/utils/colors';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { useSKUStore } from '@/store/skuStore';
 
 interface DataVisualizationProps {
   data: NormalizedSalesData[];
 }
 
 export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) => {
-  const [selectedSKU, setSelectedSKU] = useState<string>('');
   const [viewMode, setViewMode] = useState<'overview' | 'details'>('overview');
   const [seasonalityMode, setSeasonalityMode] = useState<'average' | 'full'>('average');
 
@@ -32,12 +32,8 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) =>
     return map;
   }, [data]);
 
-  // Auto-select first SKU when data changes
-  React.useEffect(() => {
-    if (skus.length > 0 && !selectedSKU) {
-      setSelectedSKU(skus[0]);
-    }
-  }, [skus, selectedSKU]);
+  const selectedSKU = useSKUStore(state => state.selectedSKU);
+  const setSelectedSKU = useSKUStore(state => state.setSelectedSKU);
 
   const chartData = useMemo(() => {
     if (!selectedSKU) return [];
@@ -544,40 +540,40 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) =>
       {viewMode === 'overview' ? (
         <>
           {/* Statistics */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-            <div className="bg-blue-50 rounded-lg p-2 text-center max-w-[160px] mx-auto">
-              <div className="text-xs text-blue-600 font-medium">SKUs</div>
-              <div className="text-base font-bold text-blue-800">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+            <div className="bg-blue-50 rounded-lg p-3 text-center">
+              <div className="text-sm text-blue-600 font-medium">SKUs</div>
+              <div className="text-lg font-bold text-blue-800">
                 {skus.length.toLocaleString()}
               </div>
             </div>
-            <div className="bg-slate-50 rounded-lg p-2 text-center max-w-[160px] mx-auto">
-              <div className="text-xs text-slate-600 font-medium">Records</div>
-              <div className="text-base font-bold text-slate-800">
+            <div className="bg-slate-50 rounded-lg p-3 text-center">
+              <div className="text-sm text-slate-600 font-medium">Records</div>
+              <div className="text-lg font-bold text-slate-800">
                 {stats.records.toLocaleString()}
               </div>
             </div>
-            <div className="bg-blue-50 rounded-lg p-2 text-center max-w-[160px] mx-auto">
-              <div className="text-xs text-blue-600 font-medium">Total Sales</div>
-              <div className="text-base font-bold text-blue-800">
+            <div className="bg-blue-50 rounded-lg p-3 text-center">
+              <div className="text-sm text-blue-600 font-medium">Total Sales</div>
+              <div className="text-lg font-bold text-blue-800">
                 {stats.total.toLocaleString()}
               </div>
             </div>
-            <div className="bg-green-50 rounded-lg p-2 text-center max-w-[160px] mx-auto">
-              <div className="text-xs text-green-600 font-medium">Average</div>
-              <div className="text-base font-bold text-green-800">
+            <div className="bg-green-50 rounded-lg p-3 text-center">
+              <div className="text-sm text-green-600 font-medium">Average</div>
+              <div className="text-lg font-bold text-green-800">
                 {stats.average.toFixed(1)}
               </div>
             </div>
-            <div className="bg-purple-50 rounded-lg p-2 text-center max-w-[160px] mx-auto">
-              <div className="text-xs text-purple-600 font-medium">Maximum</div>
-              <div className="text-base font-bold text-purple-800">
+            <div className="bg-purple-50 rounded-lg p-3 text-center">
+              <div className="text-sm text-purple-600 font-medium">Maximum</div>
+              <div className="text-lg font-bold text-purple-800">
                 {stats.max.toLocaleString()}
               </div>
             </div>
-            <div className="bg-orange-50 rounded-lg p-2 text-center max-w-[160px] mx-auto">
-              <div className="text-xs text-orange-600 font-medium">Minimum</div>
-              <div className="text-base font-bold text-orange-800">
+            <div className="bg-orange-50 rounded-lg p-3 text-center">
+              <div className="text-sm text-orange-600 font-medium">Minimum</div>
+              <div className="text-lg font-bold text-orange-800">
                 {stats.min.toLocaleString()}
               </div>
             </div>
@@ -620,7 +616,7 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) =>
                         (dataMin: number) => Math.max(0, dataMin * 0.9),
                         (dataMax: number) => dataMax * 1.1
                       ]}
-                      tickFormatter={value => value.toLocaleString()}
+                      tickFormatter={value => Math.round(value).toLocaleString()}
                     />
                     <Tooltip
                       formatter={(value, name) => {

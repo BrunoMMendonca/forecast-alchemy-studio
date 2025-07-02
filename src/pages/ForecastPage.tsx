@@ -4,9 +4,10 @@ import { StepContent } from '@/components/StepContent';
 import { toast } from '@/components/ui/use-toast';
 import { useDataHandlers } from '@/hooks/useDataHandlers';
 import { JobSummary } from '@/hooks/useBackendJobStatus';
-import { GlobalSettings } from '@/hooks/useGlobalSettings';
+import { GlobalSettings } from '@/types/globalSettings';
 import { CsvUploadResult } from '@/components/CsvImportWizard';
 import { ForecastResult } from '@/types/forecast';
+import { useSKUStore } from '@/store/skuStore';
 
 interface ForecastPageContext {
   summary: JobSummary;
@@ -17,13 +18,13 @@ interface ForecastPageContext {
   setProcessedDataInfo: (result: CsvUploadResult | null) => void;
   forecastResults: ForecastResult[];
   setForecastResults: (results: ForecastResult[]) => void;
-  selectedSKU: string | null;
-  setSelectedSKU: (sku: string | null) => void;
   aiError: string | null;
   setAiError: (error: string | null) => void;
   batchId: string | null;
   setBatchId: (batchId: string | null) => void;
   isAutoLoading: boolean;
+  models: any;
+  updateModel: (model: any) => void;
 }
 
 const ForecastPage = () => {
@@ -37,14 +38,15 @@ const ForecastPage = () => {
     setProcessedDataInfo,
     forecastResults,
     setForecastResults,
-    selectedSKU,
-    setSelectedSKU,
     aiError,
     setAiError,
     summary,
     globalSettings,
+    batchId,
     setBatchId,
-    isAutoLoading
+    isAutoLoading,
+    models,
+    updateModel
   } = context;
 
   // State hooks
@@ -99,7 +101,6 @@ const ForecastPage = () => {
 
   // Handle data cleaning and update processedDataInfo with new filePath
   const handleDataCleaning = useCallback((data: any[], changedSKUs?: string[], filePath?: string) => {
-    console.log('[ForecastPage] handleDataCleaning called:', { dataLength: data.length, changedSKUs, filePath, processedDataInfo });
     if (filePath && processedDataInfo) {
       // Update processedDataInfo with the new filePath from the latest cleaning operation
       const updatedProcessedDataInfo = {
@@ -107,26 +108,25 @@ const ForecastPage = () => {
         filePath: filePath
       };
       setProcessedDataInfo(updatedProcessedDataInfo);
-      console.log('[ForecastPage] Updated processedDataInfo with new filePath:', updatedProcessedDataInfo);
     } else if (processedDataInfo) {
       // No new filePath, but keep the current dataset loaded
       setProcessedDataInfo({ ...processedDataInfo });
-      console.log('[ForecastPage] No new filePath, keeping current processedDataInfo loaded:', processedDataInfo);
-    } else {
-      console.warn('[ForecastPage] handleDataCleaning: processedDataInfo is null or undefined!');
     }
   }, [processedDataInfo, setProcessedDataInfo]);
   
   // Add a useEffect to log when processedDataInfo changes
   useEffect(() => {
-    console.log('[ForecastPage] processedDataInfo changed:', processedDataInfo);
   }, [processedDataInfo]);
+
+  const selectedSKU = useSKUStore(state => state.selectedSKU);
+  const setSelectedSKU = useSKUStore(state => state.setSelectedSKU);
 
   return (
       <StepContent
         currentStep={currentStep}
         processedDataInfo={processedDataInfo}
         forecastResults={forecastResults}
+        setForecastResults={setForecastResults}
         selectedSKUForResults={selectedSKU}
         queueSize={summary?.total ?? 0}
         forecastPeriods={globalSettings?.forecastPeriods ?? 12}
@@ -135,12 +135,15 @@ const ForecastPage = () => {
         onDataCleaning={handleDataCleaning}
         onImportDataCleaning={handleImportDataCleaning}
         onForecastGeneration={setForecastResults}
-        onSKUChange={setSelectedSKU}
         onStepChange={setCurrentStep}
         onAIFailure={handleAIFailure}
         lastImportFileName={lastImportFileName}
         lastImportTime={lastImportTime}
         isAutoLoading={isAutoLoading}
+        isOptimizing={summary?.isOptimizing ?? false}
+        batchId={batchId}
+        models={models}
+        updateModel={updateModel}
       />
   );
 };

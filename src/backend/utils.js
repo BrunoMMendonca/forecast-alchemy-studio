@@ -318,23 +318,24 @@ function transposeData(data, headers) {
     return { data: [], headers: [] };
   }
 
-  // The first column's values become the new headers.
-  const newHeaders = [headers[0], ...data.map(row => row[headers[0]])];
-
-  const transposedData = [];
-  // Start from the second original header, as the first is the new header column.
-  for (let i = 1; i < headers.length; i++) {
-    const header = headers[i];
-    const newRow = {
-      [newHeaders[0]]: header, // The new first column is the original header
-    };
-    // Map original rows to new columns
-    data.forEach((row, rowIndex) => {
-      const newHeader = newHeaders[rowIndex + 1]; // +1 to skip the header column
-      newRow[newHeader] = row[header];
+  // Convert data to matrix format for easier transposition
+  const matrix = [headers, ...data.map(row => headers.map(header => row[header]))];
+  
+  // Transpose the matrix
+  const transposedMatrix = matrix[0].map((_, colIndex) => matrix.map(row => row[colIndex]));
+  
+  // The first row becomes the new headers
+  const newHeaders = transposedMatrix[0];
+  const newDataRows = transposedMatrix.slice(1);
+  
+  // Convert back to object format
+  const transposedData = newDataRows.map(row => {
+    const rowObj = {};
+    newHeaders.forEach((header, index) => {
+      rowObj[header] = row[index];
     });
-    transposedData.push(newRow);
-  }
+    return rowObj;
+  });
 
   return {
     data: transposedData,
@@ -344,7 +345,7 @@ function transposeData(data, headers) {
 
 function parseCsvWithHeaders(csvData) {
   if (!csvData) {
-    return { data: [], headers: [] };
+    return { data: [], headers: [], separator: ',' };
   }
 
   const detectedSeparator = autoDetectSeparator(csvData.split('\\n')[0]);
@@ -356,7 +357,7 @@ function parseCsvWithHeaders(csvData) {
   });
 
   if (!parsed.data || parsed.data.length === 0) {
-    return { data: [], headers: [] };
+    return { data: [], headers: [], separator: detectedSeparator };
   }
 
   const rawHeaders = parsed.data[0];
@@ -395,7 +396,7 @@ function parseCsvWithHeaders(csvData) {
     return newRow;
   }).filter(row => Object.keys(row).length > 0);
 
-  return { data, headers: finalHeaders };
+  return { data, headers: finalHeaders, separator: detectedSeparator };
 }
 
 /**
@@ -448,6 +449,41 @@ function parseDateWithFormat(dateStr, format) {
   return new Date(year, month, day);
 }
 
+// Infer frequency from an array of date strings
+function inferDateFrequency(dateStrings) {
+  console.log('[inferDateFrequency] Input dateStrings:', dateStrings);
+  if (!Array.isArray(dateStrings) || dateStrings.length < 2) return 'unknown';
+  // Parse and sort dates
+  const dates = dateStrings
+    .map(d => new Date(d))
+    .filter(d => d instanceof Date && !isNaN(d))
+    .sort((a, b) => a - b);
+  console.log('[inferDateFrequency] Parsed and sorted dates:', dates.map(d => d.toISOString()));
+  if (dates.length < 2) return 'unknown';
+  // Compute intervals in days
+  const intervals = [];
+  for (let i = 1; i < dates.length; i++) {
+    const diff = (dates[i] - dates[i - 1]) / (1000 * 60 * 60 * 24);
+    intervals.push(Math.round(diff));
+  }
+  console.log('[inferDateFrequency] Intervals (days):', intervals);
+  if (intervals.length === 0) return 'unknown';
+  // Find the most common interval
+  const counts = {};
+  for (const int of intervals) counts[int] = (counts[int] || 0) + 1;
+  const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+  const days = parseInt(mostCommon, 10);
+  // Map to frequency
+  let freq = 'unknown';
+  if (days <= 1) freq = 'daily';
+  else if (days >= 6 && days <= 8) freq = 'weekly';
+  else if (days >= 28 && days <= 31) freq = 'monthly';
+  else if (days >= 89 && days <= 92) freq = 'quarterly';
+  else if (days >= 360 && days <= 370) freq = 'yearly';
+  console.log('[inferDateFrequency] Most common interval:', days, '=> Frequency:', freq);
+  return freq;
+}
+
 export {
   isDateString,
   isLikelyDateColumn,
@@ -460,5 +496,6 @@ export {
   normalizeAndPivotData,
   autoDetectSeparator,
   transposeData,
-  parseCsvWithHeaders
+  parseCsvWithHeaders,
+  inferDateFrequency
 };

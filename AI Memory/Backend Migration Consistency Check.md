@@ -159,6 +159,7 @@ Ready for multi-tenancy and user authentication implementation.
 - ✅ Removed localStorage dependencies
 - ✅ Cleaned up old frontend optimization code
 - ✅ Updated all documentation references
+- ✅ Deprecated `useOptimization` hook - replaced with backend-driven optimization state
 
 ### Remaining Tasks
 - **Job Hash Implementation**: Ready for implementation to avoid redundant optimizations

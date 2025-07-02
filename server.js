@@ -25,6 +25,24 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 const upload = multer({ dest: path.join(__dirname, 'uploads') });
 
+// Helper to discard old files with the same hash
+function discardOldFilesWithHash(csvHash, skipFileNames = []) {
+  const files = fs.readdirSync(path.join(__dirname, 'uploads'));
+  for (const file of files) {
+    if ((file.endsWith('.json') || file.endsWith('.csv')) && file.includes(csvHash.slice(0, 8))) {
+      if (skipFileNames.includes(file)) continue;
+      const filePath = path.join(__dirname, 'uploads', file);
+      // Only add -discarded if not already present
+      if (!file.includes('-discarded.')) {
+        const newFile = file.replace(/(\.[^.]+)$/, '-discarded$1');
+        const newPath = path.join(__dirname, 'uploads', newFile);
+        fs.renameSync(filePath, newPath);
+        console.log(`Discarded file: ${file} -> ${newFile}`);
+      }
+    }
+  }
+}
+
 // Utility to generate dataset file names
 function getDatasetFileName(baseName, hash, type, ext, discarded = false) {
   const shortHash = hash.slice(0, 8);
@@ -69,7 +87,8 @@ app.get('/api/load-cleaning-data', (req, res) => {
   if (fs.existsSync(filePath)) {
     res.sendFile(filePath);
   } else {
-    res.status(404).json({ error: 'Cleaning data not found' });
+    // Return 200 with empty data if not found
+    res.status(200).json({ cleanedData: null, message: 'No cleaning data found for this dataset.' });
   }
 });
 

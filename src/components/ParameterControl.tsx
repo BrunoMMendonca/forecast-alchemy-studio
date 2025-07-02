@@ -1,7 +1,5 @@
-
 import React from 'react';
-import { ModelConfig } from '@/types/forecast';
-import { SalesData } from '@/pages/Index';
+import { ModelConfig, SalesData } from '@/types/forecast';
 import { ParameterControlContainer } from './ParameterControlContainer';
 
 interface ParameterControlProps {

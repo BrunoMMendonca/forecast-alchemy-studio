@@ -1,7 +1,20 @@
 import { BaseModel } from './BaseModel.js';
 
 export class LinearTrend extends BaseModel {
-  constructor(parameters = {}) {
+  static metadata = {
+    id: 'linear-trend',
+    displayName: 'Linear Trend',
+    parameters: [],
+    get defaultParameters() {
+      return {};
+    },
+    optimizationParameters: {},
+    isSeasonal: false,
+    className: 'LinearTrend',
+    enabled: true
+  };
+
+  constructor(parameters = LinearTrend.metadata.defaultParameters) {
     super(parameters);
     this.name = 'Linear Trend';
     this.slope = null;
@@ -14,7 +27,12 @@ export class LinearTrend extends BaseModel {
       throw new Error('Training data must have at least 2 observations');
     }
 
-    const values = data.map(d => typeof d === 'object' ? d.sales || d.value || d.amount : d);
+    const values = data.map(d => {
+      if (typeof d === 'object') {
+        return d.sales || d.Sales || d.value || d.amount || d;
+      }
+      return d;
+    });
     const n = values.length;
 
     let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
@@ -54,7 +72,12 @@ export class LinearTrend extends BaseModel {
       throw new Error('Model must be trained before validation');
     }
     
-    const values = testData.map(d => typeof d === 'object' ? d.sales || d.value || d.amount : d);
+    const values = testData.map(d => {
+      if (typeof d === 'object') {
+        return d.sales || d.Sales || d.value || d.amount || d;
+      }
+      return d;
+    });
     const predictions = this.predict(values.length);
 
     const mape = this.calculateMAPE(values, predictions);
@@ -95,5 +118,11 @@ export class LinearTrend extends BaseModel {
       sum += Math.abs(actual[i] - predicted[i]);
     }
     return sum / actual.length;
+  }
+
+  // Override to explicitly define grid search behavior
+  static getGridSearchParameters(seasonalPeriod = null) {
+    // Linear Trend has no tunable parameters, so run once with defaults
+    return [this.metadata.defaultParameters];
   }
 }

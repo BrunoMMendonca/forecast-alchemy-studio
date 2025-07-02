@@ -6,7 +6,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2022-01-01",
-      "Sales": 500
+      "Sales": 90
     },
     {
       "Material Code": "95000000",
@@ -14,7 +14,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2022-02-01",
-      "Sales": 501
+      "Sales": 963
     },
     {
       "Material Code": "95000000",
@@ -62,7 +62,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2022-08-01",
-      "Sales": 500
+      "Sales": 882
     },
     {
       "Material Code": "95000000",
@@ -70,7 +70,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2022-09-01",
-      "Sales": 666
+      "Sales": 331
     },
     {
       "Material Code": "95000000",
@@ -86,7 +86,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2022-11-01",
-      "Sales": 500
+      "Sales": 137
     },
     {
       "Material Code": "95000000",
@@ -110,7 +110,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2023-02-01",
-      "Sales": 500
+      "Sales": 24
     },
     {
       "Material Code": "95000000",
@@ -134,7 +134,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2023-05-01",
-      "Sales": 300
+      "Sales": 38
     },
     {
       "Material Code": "95000000",
@@ -150,7 +150,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2023-07-01",
-      "Sales": 650
+      "Sales": 810
     },
     {
       "Material Code": "95000000",
@@ -190,7 +190,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2023-12-01",
-      "Sales": 400
+      "Sales": 101
     },
     {
       "Material Code": "95000000",
@@ -262,7 +262,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2024-09-01",
-      "Sales": 120
+      "Sales": 130
     },
     {
       "Material Code": "95000000",
@@ -294,7 +294,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2025-01-01",
-      "Sales": 500
+      "Sales": 58
     },
     {
       "Material Code": "95000000",
@@ -326,14 +326,6 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2025-05-01",
-      "Sales": 500
-    },
-    {
-      "Material Code": "95000000",
-      "Description": "SKU Name 1",
-      "Brand": "Brand 1",
-      "Category": "Cat 1",
-      "Date": "2025-06-01",
       "Sales": 58
     },
     {
@@ -342,7 +334,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2022-01-01",
-      "Sales": 500
+      "Sales": 910
     },
     {
       "Material Code": "95000001",
@@ -358,7 +350,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2022-03-01",
-      "Sales": 350
+      "Sales": 73
     },
     {
       "Material Code": "95000001",
@@ -398,7 +390,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2022-08-01",
-      "Sales": 290
+      "Sales": 140
     },
     {
       "Material Code": "95000001",
@@ -406,7 +398,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2022-09-01",
-      "Sales": 508
+      "Sales": 708
     },
     {
       "Material Code": "95000001",
@@ -414,7 +406,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2022-10-01",
-      "Sales": 250
+      "Sales": 83
     },
     {
       "Material Code": "95000001",
@@ -494,7 +486,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2023-08-01",
-      "Sales": 545
+      "Sales": 46
     },
     {
       "Material Code": "95000001",
@@ -534,7 +526,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2024-01-01",
-      "Sales": 250
+      "Sales": 13
     },
     {
       "Material Code": "95000001",
@@ -542,7 +534,7 @@
       "Brand": "Brand 1",
       "Cat": "Cat 1",
       "Date": "2024-02-01",
-      "Sales": 250
+      "Sales": 89
     },
     {
       "Material Code": "95000001",
@@ -665,14 +657,6 @@
       "Sales": 398
     },
     {
-      "Material Code": "95000001",
-      "Description": "SKU Name 2",
-      "Brand": "Brand 1",
-      "Category": "Cat 1",
-      "Date": "2025-06-01",
-      "Sales": 398
-    },
-    {
       "Material Code": "95000002",
       "Description": "SKU Name 3",
       "Brand": "Brand 2",
@@ -782,7 +766,7 @@
       "Brand": "Brand 2",
       "Cat": "Cat 1",
       "Date": "2023-02-01",
-      "Sales": 5000
+      "Sales": 43
     },
     {
       "Material Code": "95000002",
@@ -790,7 +774,7 @@
       "Brand": "Brand 2",
       "Cat": "Cat 1",
       "Date": "2023-03-01",
-      "Sales": 2500
+      "Sales": 1022
     },
     {
       "Material Code": "95000002",
@@ -822,7 +806,7 @@
       "Brand": "Brand 2",
       "Cat": "Cat 1",
       "Date": "2023-07-01",
-      "Sales": 5000
+      "Sales": 124
     },
     {
       "Material Code": "95000002",
@@ -830,7 +814,7 @@
       "Brand": "Brand 2",
       "Cat": "Cat 1",
       "Date": "2023-08-01",
-      "Sales": 5000
+      "Sales": 162
     },
     {
       "Material Code": "95000002",
@@ -838,7 +822,7 @@
       "Brand": "Brand 2",
       "Cat": "Cat 1",
       "Date": "2023-09-01",
-      "Sales": 5000
+      "Sales": 105
     },
     {
       "Material Code": "95000002",
@@ -862,7 +846,7 @@
       "Brand": "Brand 2",
       "Cat": "Cat 1",
       "Date": "2023-12-01",
-      "Sales": 5000
+      "Sales": 565
     },
     {
       "Material Code": "95000002",
@@ -934,7 +918,7 @@
       "Brand": "Brand 2",
       "Cat": "Cat 1",
       "Date": "2024-09-01",
-      "Sales": 5000
+      "Sales": 928
     },
     {
       "Material Code": "95000002",
@@ -982,7 +966,7 @@
       "Brand": "Brand 2",
       "Cat": "Cat 1",
       "Date": "2025-03-01",
-      "Sales": 5000
+      "Sales": 29
     },
     {
       "Material Code": "95000002",
@@ -998,14 +982,6 @@
       "Brand": "Brand 2",
       "Cat": "Cat 1",
       "Date": "2025-05-01",
-      "Sales": 5000
-    },
-    {
-      "Material Code": "95000002",
-      "Description": "SKU Name 3",
-      "Brand": "Brand 2",
-      "Category": "Cat 1",
-      "Date": "2025-06-01",
       "Sales": 875
     },
     {
@@ -1014,7 +990,7 @@
       "Brand": "Brand 2",
       "Cat": "Cat 2",
       "Date": "2022-01-01",
-      "Sales": 50
+      "Sales": 10
     },
     {
       "Material Code": "95000003",
@@ -1038,7 +1014,7 @@
       "Brand": "Brand 2",
       "Cat": "Cat 2",
       "Date": "2022-04-01",
-      "Sales": 50
+      "Sales": 0
     },
     {
       "Material Code": "95000003",
@@ -1214,7 +1190,7 @@
       "Brand": "Brand 2",
       "Cat": "Cat 2",
       "Date": "2024-02-01",
-      "Sales": 60
+      "Sales": 18
     },
     {
       "Material Code": "95000003",
@@ -1222,7 +1198,7 @@
       "Brand": "Brand 2",
       "Cat": "Cat 2",
       "Date": "2024-03-01",
-      "Sales": 60
+      "Sales": 98
     },
     {
       "Material Code": "95000003",
@@ -1334,14 +1310,6 @@
       "Brand": "Brand 2",
       "Cat": "Cat 2",
       "Date": "2025-05-01",
-      "Sales": 74
-    },
-    {
-      "Material Code": "95000003",
-      "Description": "SKU Name 4",
-      "Brand": "Brand 2",
-      "Category": "Cat 2",
-      "Date": "2025-06-01",
       "Sales": 74
     },
     {
@@ -1671,14 +1639,6 @@
       "Cat": "Cat 2",
       "Date": "2025-05-01",
       "Sales": 6
-    },
-    {
-      "Material Code": "95000004",
-      "Description": "SKU Name 5",
-      "Brand": "Brand 3",
-      "Category": "Cat 2",
-      "Date": "2025-06-01",
-      "Sales": 6
     }
   ],
   "columns": [
@@ -1687,10 +1647,27 @@
     "Brand",
     "Cat",
     "Date",
-    "Sales",
-    "note"
+    "Sales"
   ],
-  "csvHash": "4283d086642e63bfaf68afe5845e1d",
-  "timestamp": "2025-06-26T00:14:38.631Z",
-  "source": "manual-cleaning"
+  "columnRoles": [
+    "Material Code",
+    "Description",
+    "Brand",
+    "Brand",
+    "Date",
+    "Sales"
+  ],
+  "source": "manual-import",
+  "timestamp": "2025-07-02T19:53:44.761Z",
+  "summary": {
+    "skuCount": 5,
+    "dateRange": [
+      "2022-01-01",
+      "2025-05-01"
+    ],
+    "totalPeriods": 41,
+    "frequency": "monthly"
+  },
+  "name": "Dataset 2025-07-02 - From 2022-01-01 to 2025-05-01 (5 products)",
+  "csvHash": "e6e71ef3a79a66812a4f60e6c6ccc4"
 }

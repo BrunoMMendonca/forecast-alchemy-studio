@@ -1,10 +1,8 @@
-
 import React, { useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown, ChevronRight, Settings } from 'lucide-react';
-import { ModelConfig } from '@/types/forecast';
-import { SalesData } from '@/pages/Index';
+import { ModelConfig, SalesData } from '@/types/forecast';
 import { useParameterControlLogic } from '@/hooks/useParameterControlLogic';
 import { ParameterBadges } from './ParameterBadges';
 import { ParameterSliders } from './ParameterSliders';
@@ -43,7 +41,7 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
     hasParameters,
     hasOptimizationResults,
     cacheVersion
-  } = useParameterControlLogic(model, selectedSKU, data);
+  } = useParameterControlLogic(model, selectedSKU, data, onParameterUpdate);
 
   const handleParameterChange = useCallback((parameter: string, values: number[]) => {
     const newValue = values[0];
@@ -69,6 +67,26 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
     }
   }, [localSelectedMethod, onMethodSelection, onResetToManual, setLocalSelectedMethod]);
 
+  // Helper to determine if best parameters differ from manualParameters
+  const bestParams = model.bestSource === 'ai' ? model.aiParameters : model.gridParameters;
+  const canCopyBestToManual = !!model.bestSource && bestParams && JSON.stringify(bestParams) !== JSON.stringify(model.manualParameters);
+
+  // Handler for copying best to manual
+  const handleCopyBestToManual = useCallback(() => {
+    if (!bestParams) return;
+    // Update each parameter in manualParameters and parameters
+    Object.entries(bestParams).forEach(([param, value]) => {
+      onParameterUpdate(param, value as number);
+    });
+    // Switch to manual mode
+    setLocalSelectedMethod('manual');
+    if (onMethodSelection) {
+      onMethodSelection('manual');
+    } else {
+      onResetToManual();
+    }
+  }, [bestParams, onParameterUpdate, setLocalSelectedMethod, onMethodSelection, onResetToManual]);
+
   // If model has no parameters, don't render anything
   if (!hasParameters) {
     return null;
@@ -84,14 +102,30 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
               <Settings className="h-4 w-4" />
               <span className="font-medium">Parameters</span>
             </div>
-            
-            <ParameterBadges
-              canOptimize={canOptimize}
-              aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
-              localSelectedMethod={localSelectedMethod}
-              cacheVersion={cacheVersion}
-              onMethodChange={handlePreferenceChange}
-            />
+            <div className="flex items-center gap-2">
+              <ParameterBadges
+                canOptimize={canOptimize}
+                aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
+                localSelectedMethod={localSelectedMethod}
+                cacheVersion={cacheVersion}
+                onMethodChange={handlePreferenceChange}
+                hasGridParameters={!!model.gridParameters}
+                bestMethod={model.bestMethod}
+                winnerMethod={model.winnerMethod}
+                isWinner={model.isWinner}
+              />
+              {/* Copy Best to Manual Button */}
+              {canCopyBestToManual && (
+                <button
+                  className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded border border-blue-300 hover:bg-blue-200"
+                  onClick={handleCopyBestToManual}
+                  disabled={!canCopyBestToManual}
+                  title="Copy the best (Grid/AI) parameters to Manual for further tuning"
+                >
+                  Copy Best to Manual
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Parameter sliders - always visible */}

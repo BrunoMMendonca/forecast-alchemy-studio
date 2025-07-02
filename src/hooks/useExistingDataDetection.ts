@@ -64,7 +64,6 @@ export const useExistingDataDetection = (): UseExistingDataDetectionReturn => {
       const data = await response.json();
       setDatasets(data.datasets || []);
       
-      console.log(`[DETECT] Found ${data.datasets?.length || 0} existing datasets`);
     } catch (err) {
       console.error('Error detecting existing data:', err);
       setError(err instanceof Error ? err.message : 'Failed to detect existing data');
@@ -121,7 +120,6 @@ export const useExistingDataDetection = (): UseExistingDataDetectionReturn => {
       if (stored) {
         const parsed = JSON.parse(stored);
         setLastLoadedDatasetState(parsed);
-        console.log('[DETECT] Loaded last dataset info from localStorage:', parsed);
       }
     } catch (error) {
       console.error('[DETECT] Failed to load last dataset info:', error);
@@ -142,7 +140,6 @@ export const useExistingDataDetection = (): UseExistingDataDetectionReturn => {
     
     try {
       localStorage.setItem(LAST_LOADED_DATASET_KEY, JSON.stringify(lastLoaded));
-      console.log('[DETECT] Saved last dataset info to localStorage:', lastLoaded);
     } catch (error) {
       console.error('[DETECT] Failed to save last dataset info:', error);
     }
@@ -158,7 +155,6 @@ export const useExistingDataDetection = (): UseExistingDataDetectionReturn => {
     // Check if the dataset still exists in the current datasets list
     const datasetExists = datasets.find(d => d.filename === lastLoadedDataset.filename);
     if (!datasetExists) {
-      console.log('[DETECT] Last loaded dataset no longer exists:', lastLoadedDataset.filename);
       // Clear the stored info since the dataset is gone
       setLastLoadedDatasetState(null);
       localStorage.removeItem(LAST_LOADED_DATASET_KEY);

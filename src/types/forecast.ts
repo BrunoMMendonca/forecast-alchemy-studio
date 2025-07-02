@@ -1,10 +1,28 @@
+export interface ParameterMeta {
+  name: string;
+  type: string;
+  default: any;
+  visible: boolean;
+  label: string;
+  description: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: any[];
+}
+
 export interface ModelConfig {
   id: string;
   name: string;
+  displayName?: string;
   description: string;
   enabled: boolean;
-  parameters?: Record<string, number>;
-  optimizedParameters?: Record<string, number>;
+  parameters: Record<string, number>;
+  manualParameters: Record<string, number>;
+  gridParameters?: Record<string, number>;
+  aiParameters?: Record<string, number>;
+  bestSource?: 'grid' | 'ai';
+  defaultParameters?: Record<string, number>;
   optimizationConfidence?: number;
   optimizationReasoning?: string;
   optimizationFactors?: {
@@ -14,10 +32,20 @@ export interface ModelConfig {
     businessImpact: string;
   };
   expectedAccuracy?: number;
-  optimizationMethod?: string; // 'ai_optimal', 'ai_tolerance', 'ai_confidence', 'grid', 'fallback'
-  icon: React.ReactNode;
+  optimizationMethod?: string;
+  icon?: React.ReactNode;
   isSeasonal?: boolean;
   isWinner?: boolean;
+  category?: string;
+  parametersMeta?: ParameterMeta[];
+  bestMethod?: string;
+  bestMethodScore?: number;
+  winnerMethod?: string;
+  compositeScore?: number;
+  accuracy?: number;
+  gridCompositeScore?: number;
+  aiCompositeScore?: number;
+  bestCompositeScore?: number;
 }
 
 export interface NormalizedSalesData {
@@ -45,6 +73,8 @@ export interface ForecastResult {
   predictions: ForecastPrediction[];
   accuracy?: number;
   parameters?: Record<string, number>;
+  isValid?: boolean;
+  method?: string;
 }
 
 export interface SeasonalConfig {

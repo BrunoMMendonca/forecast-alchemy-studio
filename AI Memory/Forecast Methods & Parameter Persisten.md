@@ -110,3 +110,62 @@ If persistence fails in the future, check the following:
 - Auto-selection only happens after new optimizations.
 - User choices are never overwritten except after new optimizations.
 - All API calls include proper authentication and error handling.
+
+## Model Eligibility Logic & UI Consistency (2024-06)
+
+### Backend-Frontend Consistency
+- Model eligibility is now checked consistently between backend and frontend using the same logic
+- Backend validates data requirements before creating optimization jobs
+- Frontend shows disabled models with clear reasons when data is insufficient
+- Eligibility checks account for validation split (20% by default) when calculating required data points
+
+### Eligibility Implementation
+- `ModelParameterPanel.tsx` handles eligibility checks for the main forecast interface
+- `useDataHandlers.ts` filters eligible models before creating backend jobs
+- Backend routes validate eligibility before processing optimization requests
+- Clear error messages when no models are eligible for selected SKU
+
+## Modularized Parameter Controls (2024-06)
+
+### Component Architecture
+- `ParameterControl.tsx` - Main wrapper component with safety checks
+- `ParameterControlContainer.tsx` - Core logic and layout container
+- `ParameterSliders.tsx` - Dynamic parameter rendering with type support
+- `ParameterBadges.tsx` - Method selection (Manual/Grid/AI) badges
+- `ParameterStatusDisplay.tsx` - Optimization results and reasoning display
+
+### Friendly Labels & Metadata
+- `ParameterMeta` interface supports rich parameter definitions:
+  - `label`: Human-readable parameter names
+  - `description`: Helpful tooltips and explanations
+  - `type`: number, boolean, select with options
+  - `min/max/step`: Validation and UI constraints
+  - `visible`: Control parameter visibility
+- Backend models define `parametersMeta` arrays for consistent UI rendering
+- Auto-generated labels fallback to parameter name capitalization
+
+### Parameter Type Support
+- **Number sliders**: Standard range inputs with step controls
+- **Boolean switches**: Toggle controls with custom true/false labels
+- **Select dropdowns**: Choice-based parameters with option arrays
+- **Optimization indicators**: Visual badges showing optimized vs manual values
+
+## Global Forecast Parameters Integration (2024-06)
+
+### Global Settings Component
+- `GlobalForecastParameters.tsx` provides centralized forecast configuration
+- Integrates with `useGlobalSettings` hook for persistent storage
+- Includes forecast periods and CSV separator settings
+- Consistent UI pattern with other settings components
+
+### Settings Synchronization
+- Global settings are stored in localStorage and backend database
+- Frontend and backend stay in sync for all forecast-related settings
+- Settings changes trigger appropriate UI updates and validation
+- Default values ensure consistent behavior across sessions
+
+### Integration Points
+- Forecast periods affect all model predictions and export formats
+- CSV separator setting used consistently in import/export workflows
+- Settings are accessible from main forecast interface and dedicated settings panel
+- Changes propagate to all relevant components automatically

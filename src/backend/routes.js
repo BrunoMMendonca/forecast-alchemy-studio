@@ -11,6 +11,9 @@ import { applyTransformations, detectColumnRoles, normalizeAndPivotData, findFie
 import { optimizeParametersWithAI, getModelRecommendation } from './aiOptimizationService.js';
 import crypto from 'crypto';
 import { dirname } from 'path';
+import { MODEL_METADATA } from './models/ModelMetadata.js';
+import { inferDateFrequency } from './utils.js';
+import { modelFactory } from './models/ModelFactory.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,22 +36,12 @@ function discardOldFilesWithHash(csvHash, skipFileNames = []) {
       if (!file.includes('-discarded.')) {
         const newFile = file.replace(/(\.[^.]+)$/, '-discarded$1');
         const newPath = path.join(UPLOADS_DIR, newFile);
-        fs.renameSync(filePath, newPath);
+            fs.renameSync(filePath, newPath);
         console.log(`Discarded file: ${file} -> ${newFile}`);
-      }
+                  }
     }
   }
 }
-
-const ALL_MODELS = [
-  { id: 'moving_average', parameters: { window: 3 } },
-  { id: 'simple_exponential_smoothing', parameters: { alpha: 0.3 } },
-  { id: 'double_exponential_smoothing', parameters: { alpha: 0.3, beta: 0.1 } },
-  { id: 'linear_trend', parameters: {} },
-  { id: 'seasonal_moving_average', parameters: { window: 3, seasonalPeriods: 12 }, isSeasonal: true },
-  { id: 'holt_winters', parameters: { alpha: 0.3, beta: 0.1, gamma: 0.1, seasonalPeriods: 12 }, isSeasonal: true },
-  { id: 'seasonal_naive', parameters: {}, isSeasonal: true }
-];
 
 const JOB_PRIORITIES = {
   SETUP: 1,
@@ -56,13 +49,10 @@ const JOB_PRIORITIES = {
   INITIAL_IMPORT: 3
 };
 
-const isModelOptimizable = (modelName, modelsConfig) => {
-    const model = modelsConfig.find(m => m.id === modelName);
-    return model && model.parameters && Object.keys(model.parameters).length > 0;
-};
+
 
 function getPriorityFromReason(reason) {
-  if (reason === 'settings_change' || reason === 'config') {
+  if (reason === 'settings_change' || reason === 'config' || reason === 'metric_weight_change') {
     return JOB_PRIORITIES.DATA_CLEANING;
   }
   if (reason === 'csv_upload_data_cleaning' || reason === 'manual_edit_data_cleaning') {
@@ -288,23 +278,126 @@ router.get('/health', (req, res) => {
 
 router.post('/jobs', (req, res) => {
   try {
-    const { data, models, skus, reason, method = 'grid', filePath, batchId } = req.body;
+    let { data, models, skus, reason, method = 'grid', filePath, batchId } = req.body;
+    // Standardize filePath to always be 'uploads/filename'
+    if (filePath && !filePath.startsWith('uploads/')) {
+      filePath = `uploads/${path.basename(filePath)}`;
+    }
+    console.log(`[Job Creation] Creating jobs for ${skus?.length || 0} SKUs, ${models?.length || 0} models, method: ${method}, filePath: ${filePath}`);
+    // Remove or comment out detailed logs
+    // console.log(`[Job Creation] 🔍 Creating jobs with filePath: ${filePath}`);
+    // console.log(`[Job Creation] 📊 Request details:`, { ... });
+    // ...
+    // Only keep error logs
+    // ... rest of the function unchanged ...
+    
+    // Check if filePath points to a processed JSON file
+    if (filePath) {
+      const resolvedPath = filePath.startsWith(UPLOADS_DIR) ? filePath : path.join(UPLOADS_DIR, path.basename(filePath));
+      console.log(`[Job Creation] 📁 Resolved file path: ${resolvedPath}`);
+      
+      if (fs.existsSync(resolvedPath)) {
+        try {
+          const fileContent = fs.readFileSync(resolvedPath, 'utf-8');
+          const fileData = JSON.parse(fileContent);
+          console.log(`[Job Creation] ✅ File exists and is valid JSON`);
+          console.log(`[Job Creation] 📊 File structure:`, {
+            hasData: !!fileData.data,
+            dataLength: fileData.data?.length || 0,
+            columns: fileData.columns?.length || 0,
+            source: fileData.source,
+            name: fileData.name
+          });
+        } catch (e) {
+          console.error(`[Job Creation] ❌ File exists but is not valid JSON:`, e.message);
+        }
+      } else {
+        console.error(`[Job Creation] ❌ File does not exist: ${resolvedPath}`);
+      }
+    }
+    
     //console.Log('[Job Creation] Request:', { skus, models, filePath, reason, method, batchId });
     const userId = 'default_user';
     const priority = getPriorityFromReason(reason);
     let jobsCreated = 0;
     let jobsSkipped = 0;
+    let jobsFiltered = 0;
+    
     if (skus && Array.isArray(skus) && skus.length > 0) {
       const insertStmt = db.prepare("INSERT INTO jobs (userId, sku, modelId, method, payload, status, reason, batchId, priority, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      
+      // Get model data requirements for eligibility filtering
+      const requirements = modelFactory.getModelDataRequirements();
+      const validationRatio = 0.2; // Match frontend default
+      
       for (const sku of skus) {
-        for (const modelId of models) {
-          if (method === 'grid' && !isModelOptimizable(modelId, ALL_MODELS)) {
+        // Get data for this specific SKU
+        let skuData = [];
+        if (data && Array.isArray(data)) {
+          skuData = data.filter(d => String(d.sku || d['Material Code']) === sku);
+        }
+
+        
+        // Filter models based on eligibility for this SKU
+        const eligibleModels = models.filter(modelId => {
+          const req = requirements[modelId];
+          if (!req) {
+            console.log(`[Job Creation] ${modelId}: No requirements found, including`);
+            return true;
+          }
+          
+          const minTrain = Number(req.minObservations);
+          const requiredTotal = Math.ceil(minTrain / (1 - validationRatio));
+          const isEligible = skuData.length >= requiredTotal;
+
+          console.log(`[Job Creation] ${modelId}: ${skuData.length} data points, requires ${requiredTotal} (${minTrain} training), eligible: ${isEligible}`);
+          
+          if (!isEligible) {
+            jobsFiltered++;
+            console.log(`[Job Creation] Filtered out ${modelId} for SKU ${sku}: insufficient data`);
+          }
+          
+          return isEligible;
+        });
+        
+
+        
+        // Create jobs for all eligible models (including non-optimizable ones)
+        for (const modelId of eligibleModels) {
+          // Check if model should be included in grid search using the model's own method
+          const modelClass = modelFactory.getModelClass(modelId);
+          if (method === 'grid' && modelClass && !modelClass.shouldIncludeInGridSearch()) {
             jobsSkipped++;
-            //console.Log(`[Job Creation] Skipped job for SKU: ${sku}, Model: ${modelId} (not optimizable)`);
+            console.log(`[Job Creation] Skipped job for SKU: ${sku}, Model: ${modelId} (model opted out of grid search)`);
             continue;
           }
+          if (method === 'grid' && modelClass) {
+            console.log(`[Job Creation] Model ${modelId} shouldIncludeInGridSearch(): ${modelClass.shouldIncludeInGridSearch()}`);
+          }
           const payload = JSON.stringify({ skuData: [], businessContext: null });
-          const jobData = { filePath, modelTypes: [modelId], optimizationType: method };
+
+          // Read friendly dataset name from processed file if available
+          let friendlyName = '';
+          let resolvedPath = filePath;
+          if (filePath && !filePath.startsWith(UPLOADS_DIR)) {
+            resolvedPath = path.join(UPLOADS_DIR, path.basename(filePath));
+          }
+          try {
+            if (resolvedPath && fs.existsSync(resolvedPath)) {
+              const fileContent = fs.readFileSync(resolvedPath, 'utf-8');
+              const data = JSON.parse(fileContent);
+              if (data && data.name) {
+                friendlyName = data.name;
+              }
+            }
+          } catch (e) {
+            // Ignore errors, fallback below
+          }
+          if (!friendlyName && filePath) {
+            friendlyName = (filePath.split('/').pop() || '').replace(/\.(csv|json)$/i, '');
+          }
+
+          const jobData = { filePath, modelTypes: [modelId], optimizationType: method, name: friendlyName, sku };
           //console.Log('[Job Creation] Received batchId:', batchId);
           //console.Log('[Job Creation] Inserting job with batchId:', batchId);
           insertStmt.run(userId, sku, modelId, method, payload, 'pending', reason || 'manual_trigger', batchId, priority, JSON.stringify(jobData));
@@ -314,8 +407,17 @@ router.post('/jobs', (req, res) => {
         }
       }
       insertStmt.finalize();
-      //console.Log(`[Job Creation] Finished: ${jobsCreated} jobs created, ${jobsSkipped} skipped.`);
-      res.status(201).json({ message: `Successfully created ${jobsCreated} jobs`, jobsCreated, jobsCancelled: 0, jobsSkipped, skusProcessed: skus.length, modelsPerSku: models.length, priority });
+      
+      res.status(201).json({ 
+        message: `Successfully created ${jobsCreated} jobs`, 
+        jobsCreated, 
+        jobsCancelled: 0, 
+        jobsSkipped, 
+        jobsFiltered,
+        skusProcessed: skus.length, 
+        modelsPerSku: models.length, 
+        priority 
+      });
       return;
     }
   } catch (error) {
@@ -500,7 +602,39 @@ router.post('/process-manual-import', async (req, res) => {
       dateRange = [uniqueDates[0], uniqueDates[uniqueDates.length - 1]];
     }
     const totalPeriods = uniqueDates.length;
+    const frequency = inferDateFrequency(uniqueDates);
+    console.log('[process-manual-import] Inferred frequency:', frequency, 'from dates:', uniqueDates);
     const datasetName = `Dataset ${new Date().toISOString().slice(0,10)} - From ${dateRange[0]} to ${dateRange[1]} (${skuCount} products)`;
+
+    // Auto-update global frequency setting if enabled
+    db.get("SELECT value FROM settings WHERE key = 'global_autoDetectFrequency'", [], (err, row) => {
+      if (!err && row) {
+        try {
+          const autoDetectEnabled = JSON.parse(row.value);
+          if (autoDetectEnabled) {
+            const seasonalPeriods = getSeasonalPeriodsFromFrequency(frequency);
+            db.run(
+              "INSERT OR REPLACE INTO settings (key, value, description, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+              ['global_frequency', JSON.stringify(frequency), 'Data frequency (auto-detected from dataset)'],
+              (err) => {
+                if (err) console.error('Failed to update frequency setting:', err);
+                else console.log('Auto-updated frequency setting to:', frequency);
+              }
+            );
+            db.run(
+              "INSERT OR REPLACE INTO settings (key, value, description, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+              ['global_seasonalPeriods', JSON.stringify(seasonalPeriods), 'Seasonal periods (auto-calculated from frequency)'],
+              (err) => {
+                if (err) console.error('Failed to update seasonal periods setting:', err);
+                else console.log('Auto-updated seasonal periods setting to:', seasonalPeriods);
+              }
+            );
+          }
+        } catch (e) {
+          console.error('Error parsing autoDetectFrequency setting:', e);
+        }
+      }
+    });
 
     // Save the processed data to a file
     const fileName = `${baseName}-${csvHash.slice(0, 8)}-processed.json`;
@@ -516,6 +650,7 @@ router.post('/process-manual-import', async (req, res) => {
         skuCount,
         dateRange,
         totalPeriods,
+        frequency,
       },
       name: datasetName, // Use correct name
       csvHash // Save the hash for duplicate detection
@@ -534,6 +669,7 @@ router.post('/process-manual-import', async (req, res) => {
         skuCount: skuCount,
         dateRange,
         totalPeriods: totalPeriods,
+        frequency,
       },
       skuList: skuList,
       columns: columns,
@@ -561,7 +697,7 @@ router.post('/generate-preview', (req, res) => {
     //console.Log(`[LOG] csvData length: ${csvData ? csvData.length : 0}, transposed: ${transposed}`);
     
     // Use the new robust parser
-    let { data, headers } = parseCsvWithHeaders(csvData);
+    let { data, headers, separator } = parseCsvWithHeaders(csvData);
 
     if (transposed) {
       //console.Log('[LOG] Transposing data...');
@@ -582,6 +718,7 @@ router.post('/generate-preview', (req, res) => {
       headers: headers.slice(0, 50),
       previewRows: data.slice(0, 100),
       columnRoles,
+      separator,
       transposed: !!transposed
     });
   } catch (error) {
@@ -856,6 +993,40 @@ router.post('/process-ai-import', async (req, res) => {
     
     // Determine date range from the date columns
     const dateRange = dateColumns.length > 0 ? [dateColumns[0], dateColumns[dateColumns.length - 1]] : ["N/A", "N/A"];
+    
+    // Infer frequency from date columns
+    const frequency = inferDateFrequency(dateColumns);
+    console.log('[process-ai-import] Inferred frequency:', frequency, 'from dates:', dateColumns);
+
+    // Auto-update global frequency setting if enabled
+    db.get("SELECT value FROM settings WHERE key = 'global_autoDetectFrequency'", [], (err, row) => {
+      if (!err && row) {
+        try {
+          const autoDetectEnabled = JSON.parse(row.value);
+          if (autoDetectEnabled) {
+            const seasonalPeriods = getSeasonalPeriodsFromFrequency(frequency);
+            db.run(
+              "INSERT OR REPLACE INTO settings (key, value, description, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+              ['global_frequency', JSON.stringify(frequency), 'Data frequency (auto-detected from dataset)'],
+              (err) => {
+                if (err) console.error('Failed to update frequency setting:', err);
+                else console.log('Auto-updated frequency setting to:', frequency);
+              }
+            );
+            db.run(
+              "INSERT OR REPLACE INTO settings (key, value, description, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+              ['global_seasonalPeriods', JSON.stringify(seasonalPeriods), 'Seasonal periods (auto-calculated from frequency)'],
+              (err) => {
+                if (err) console.error('Failed to update seasonal periods setting:', err);
+                else console.log('Auto-updated seasonal periods setting to:', seasonalPeriods);
+              }
+            );
+          }
+        } catch (e) {
+          console.error('Error parsing autoDetectFrequency setting:', e);
+        }
+      }
+    });
 
     // Save the transformed data to a file
     const fileName = `${baseName}-${csvHash.slice(0, 8)}-processed.json`;
@@ -871,6 +1042,7 @@ router.post('/process-ai-import', async (req, res) => {
         skuCount: skuList.length,
         dateRange,
         totalPeriods: dateColumns.length,
+        frequency,
       },
       name: fileName, // Default name, can be updated later via /save-dataset-name
       csvHash // Save the hash for duplicate detection
@@ -889,6 +1061,7 @@ router.post('/process-ai-import', async (req, res) => {
         skuCount: skuList.length,
         dateRange,
         totalPeriods: dateColumns.length,
+        frequency,
       },
       skuList: skuList,
       columns: outputColumns,
@@ -1048,6 +1221,979 @@ router.post('/check-csv-duplicate', async (req, res) => {
   } catch (error) {
     console.error('Error in /check-csv-duplicate:', error);
     res.status(500).json({ error: 'Failed to check for duplicate CSV' });
+  }
+});
+
+// Helper to get default/baseline result for non-optimizable models
+function getDefaultResultForModel(model, sku, batchId, filePath) {
+  return {
+    modelType: model.id,
+    displayName: model.displayName || model.id,
+    category: model.category || 'Other',
+    description: model.description || '',
+    isSeasonal: model.isSeasonal || false,
+    sku,
+    batchId,
+    filePath,
+    methods: [
+      {
+        method: 'grid',
+        bestResult: {
+          accuracy: null,
+          parameters: model.defaultParameters || {},
+          mape: null,
+          rmse: null,
+          mae: null,
+          jobId: null,
+          sku,
+          batchId,
+          filePath,
+          createdAt: null,
+          completedAt: null,
+          compositeScore: null,
+          isDefault: true, // Mark as default/baseline
+          note: 'This model uses default parameters optimized for general use.'
+        }
+      }
+    ]
+  };
+}
+
+// Add this helper at the top of the file or near extractBestResultsPerModelMethod
+function safeMetric(val, max) {
+  if (val === null || val === undefined || val === "" || isNaN(Number(val))) return max;
+  return Number(val);
+}
+
+// In extractBestResultsPerModelMethod, after collecting bestResultsMap, add all non-optimizable models as baselines if not already present
+function extractBestResultsPerModelMethod(jobs, modelMetadataMap, weights = { mape: 0.4, rmse: 0.3, mae: 0.2, accuracy: 0.1 }) {
+  console.log(`[API] extractBestResultsPerModelMethod called with ${jobs.length} jobs`);
+  const bestResultsMap = {};
+  
+  for (const job of jobs) {
+    const resultData = JSON.parse(job.result || '{}');
+    const method = job.method;
+    const batchId = job.batchId;
+    const filePath = (() => {
+      try {
+        const dataObj = JSON.parse(job.data || '{}');
+        return dataObj.filePath || '';
+      } catch {
+        return '';
+      }
+    })();
+
+    if (resultData.results && Array.isArray(resultData.results)) {
+      for (const modelResult of resultData.results) {
+        if (!modelResult.success) continue;
+        
+        const modelType = modelResult.modelType;
+        const sku = job.sku;
+        const modelInfo = modelMetadataMap.get(modelType) || {};
+        
+        // --- GROUP BY modelType, method, sku, batchId (or filePath) ---
+        const groupKey = `${modelType}__${method}__${sku}__${batchId || filePath}`;
+
+        if (!bestResultsMap[groupKey]) {
+          bestResultsMap[groupKey] = {
+            modelType,
+            displayName: modelInfo.displayName || modelType,
+            category: modelInfo.category || 'Unknown',
+            description: modelInfo.description || '',
+            isSeasonal: modelInfo.isSeasonal || false,
+            method,
+            sku,
+            batchId,
+            filePath,
+            allResults: []
+          };
+        }
+        
+        bestResultsMap[groupKey].allResults.push({
+          accuracy: modelResult.accuracy,
+          parameters: modelResult.parameters,
+          mape: modelResult.mape,
+          rmse: modelResult.rmse,
+          mae: modelResult.mae,
+          jobId: job.id,
+          sku,
+          batchId,
+          filePath,
+          createdAt: job.createdAt,
+          completedAt: job.completedAt
+        });
+      }
+    }
+  }
+  
+  // For each group, compute composite score and select best
+  Object.values(bestResultsMap).forEach(group => {
+    const results = group.allResults;
+      if (!results.length) return;
+    const maxMAPE = Math.max(...results.map(r => r.mape || 0), 1);
+      const maxRMSE = Math.max(...results.map(r => r.rmse || 0), 1);
+      const maxMAE = Math.max(...results.map(r => r.mae || 0), 1);
+      results.forEach(r => {
+        // Use safeMetric for all metrics
+        const mape = safeMetric(r.mape, maxMAPE);
+        const rmse = safeMetric(r.rmse, maxRMSE);
+        const mae  = safeMetric(r.mae, maxMAE);
+        const accuracy = safeMetric(r.accuracy, 0); // for accuracy, missing = 0 (worst)
+
+        const normAccuracy = Math.max(0, Math.min(1, accuracy / 100));
+        const normMAPE = Math.max(0, Math.min(1, 1 - (mape / maxMAPE)));
+        const normRMSE = Math.max(0, Math.min(1, 1 - (rmse / maxRMSE)));
+        const normMAE = Math.max(0, Math.min(1, 1 - (mae / maxMAE)));
+        r.compositeScore =
+          (weights.mape * normMAPE) +
+          (weights.rmse * normRMSE) +
+          (weights.mae * normMAE) +
+          (weights.accuracy * normAccuracy);
+      });
+      // Pick the result with the highest composite score
+      const best = results.reduce((best, curr) =>
+        (curr.compositeScore > (best.compositeScore || -Infinity)) ? curr : best, results[0]);
+    group.bestResult = best;
+  });
+
+  // Convert to array format
+  const results = Object.values(bestResultsMap).map(group => ({
+    modelType: group.modelType,
+    displayName: group.displayName,
+    category: group.category,
+    description: group.description,
+    isSeasonal: group.isSeasonal,
+    sku: group.sku,
+    batchId: group.batchId,
+    filePath: group.filePath,
+    methods: [
+      {
+        method: group.method,
+        bestResult: group.bestResult
+      }
+    ]
+  }));
+
+  console.log(`[API] extractBestResultsPerModelMethod returning ${results.length} results:`, results.map(r => ({
+    modelType: r.modelType,
+    sku: r.sku,
+    filePath: r.filePath,
+    method: r.methods[0]?.method
+  })));
+
+  // Add models that should be included in grid search but are missing from results
+  const allModelIds = Array.from(modelMetadataMap.keys());
+   for (const modelId of allModelIds) {
+    const model = modelMetadataMap.get(modelId);
+    // Check if model should be included in grid search using the model's own method
+    const modelClass = modelFactory.getModelClass(modelId);
+    if (!modelClass || !modelClass.shouldIncludeInGridSearch()) {
+      continue; // Skip models that opt out of grid search
+    }
+    const seenCombos = new Set(results.map(r => `${r.modelType}|${r.sku}|${r.batchId}|${r.filePath}`));
+      for (const job of jobs) {
+        const comboKey = `${modelId}|${job.sku}|${job.batchId}|${job.data ? JSON.parse(job.data).filePath || '' : ''}`;
+        if (!seenCombos.has(comboKey)) {
+        results.push(getDefaultResultForModel(model, job.sku, job.batchId, job.data ? JSON.parse(job.data).filePath : ''));
+      }
+    }
+  }
+
+  // After building results array, ensure every model is represented for each (sku, filePath, batchId) combo
+  // Use MODEL_METADATA to get the full list of models
+  // Collect all unique (sku, filePath, batchId) combos from jobs
+  const combos = [];
+  for (const job of jobs) {
+    const sku = job.sku;
+    const batchId = job.batchId;
+    const filePath = (() => {
+      try {
+        const dataObj = JSON.parse(job.data || '{}');
+        return dataObj.filePath || '';
+      } catch {
+        return '';
+      }
+    })();
+    combos.push({ sku, batchId, filePath });
+  }
+  // For each combo, ensure every model/method is present
+  const seenCombos = new Set(results.map(r => `${r.modelType}|${r.sku}|${r.batchId}|${r.filePath}|${r.methods[0]?.method}`));
+  for (const { sku, batchId, filePath } of combos) {
+    for (const modelId of allModelIds) {
+      const model = modelMetadataMap.get(modelId);
+      for (const method of ['grid', 'ai']) {
+        const comboKey = `${modelId}|${sku}|${batchId}|${filePath}|${method}`;
+        if (!seenCombos.has(comboKey)) {
+          results.push({
+            modelType: model.id,
+            displayName: model.displayName || model.id,
+            category: model.category || 'Other',
+            description: model.description || '',
+            isSeasonal: model.isSeasonal || false,
+            sku,
+            batchId,
+            filePath,
+            methods: [
+              {
+                method,
+                bestResult: {
+                  accuracy: null,
+                  parameters: [],
+                  mape: null,
+                  rmse: null,
+                  mae: null,
+                  jobId: null,
+                  sku,
+                  batchId,
+                  filePath,
+                  createdAt: null,
+                  completedAt: null,
+                  compositeScore: null,
+                  status: 'ineligible',
+                  reason: 'No result available for this model/method (ineligible, failed, or not run)'
+                }
+              }
+            ]
+          });
+          seenCombos.add(comboKey); // Prevent duplicates
+        }
+      }
+    }
+  }
+  return results;
+}
+
+// Get optimization results summary with model metadata
+router.get('/jobs/results-summary', (req, res) => {
+    const userId = 'default_user';
+    const { method } = req.query;
+    
+    // Validate method parameter
+    if (method && !['grid', 'ai', 'all'].includes(method)) {
+        return res.status(400).json({ error: 'Method must be "grid", "ai", or "all"' });
+    }
+    
+    // Build query based on method filter
+    let query = "SELECT * FROM jobs WHERE status = 'completed' AND userId = ? AND result IS NOT NULL";
+    let params = [userId];
+    
+    if (method && method !== 'all') {
+        query += " AND method = ?";
+        params.push(method);
+    }
+    
+    query += " ORDER BY createdAt DESC";
+    
+    db.all(query, params, (err, jobs) => {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).json({ error: 'Failed to fetch optimization results' });
+        }
+        
+        if (jobs.length === 0) {
+            return res.status(404).json({ error: 'No completed optimization jobs found' });
+        }
+        
+        try {
+            // Create a lookup map for model metadata
+            const modelMetadataMap = new Map();
+            MODEL_METADATA.forEach(model => {
+                modelMetadataMap.set(model.id, model);
+            });
+            
+            const summary = {
+                totalJobs: jobs.length,
+                totalResults: 0,
+                modelBreakdown: {},
+                categoryBreakdown: {},
+                seasonalVsNonSeasonal: { seasonal: 0, nonSeasonal: 0 },
+                methodBreakdown: { grid: 0, ai: 0 },
+                averageMetrics: { accuracy: 0, mape: 0, rmse: 0, mae: 0 },
+                bestResults: [],
+                bestResultsPerModelMethod: extractBestResultsPerModelMethod(jobs, modelMetadataMap, weights)
+            };
+            
+            let totalAccuracy = 0;
+            let totalMape = 0;
+            let totalRmse = 0;
+            let totalMae = 0;
+            let successfulResults = 0;
+            
+            for (const job of jobs) {
+                const resultData = JSON.parse(job.result || '{}');
+                summary.methodBreakdown[job.method] = (summary.methodBreakdown[job.method] || 0) + 1;
+                
+                // Extract individual model results from the optimization result
+                if (resultData.results && Array.isArray(resultData.results)) {
+                    for (const modelResult of resultData.results) {
+                        summary.totalResults++;
+                        
+                        // Get model metadata for enhanced information
+                        const modelInfo = modelMetadataMap.get(modelResult.modelType) || {};
+                        
+                        // Model breakdown
+                        if (!summary.modelBreakdown[modelResult.modelType]) {
+                            summary.modelBreakdown[modelResult.modelType] = {
+                                displayName: modelInfo.displayName || modelResult.modelType,
+                                category: modelInfo.category || 'Unknown',
+                                description: modelInfo.description || '',
+                                isSeasonal: modelInfo.isSeasonal || false,
+                                count: 0,
+                                successfulCount: 0,
+                                averageAccuracy: 0,
+                                bestAccuracy: 0,
+                                totalAccuracy: 0
+                            };
+                        }
+                        
+                        const modelStats = summary.modelBreakdown[modelResult.modelType];
+                        modelStats.count++;
+                        
+                        if (modelResult.success) {
+                            modelStats.successfulCount++;
+                            modelStats.totalAccuracy += modelResult.accuracy;
+                            modelStats.averageAccuracy = modelStats.totalAccuracy / modelStats.successfulCount;
+                            modelStats.bestAccuracy = Math.max(modelStats.bestAccuracy, modelResult.accuracy);
+                            
+                            // Global averages
+                            totalAccuracy += modelResult.accuracy;
+                            totalMape += modelResult.mape;
+                            totalRmse += modelResult.rmse;
+                            totalMae += modelResult.mae;
+                            successfulResults++;
+                        }
+                        
+                        // Category breakdown
+                        const category = modelInfo.category || 'Unknown';
+                        if (!summary.categoryBreakdown[category]) {
+                            summary.categoryBreakdown[category] = {
+                                count: 0,
+                                successfulCount: 0,
+                                averageAccuracy: 0,
+                                totalAccuracy: 0
+                            };
+                        }
+                        
+                        const categoryStats = summary.categoryBreakdown[category];
+                        categoryStats.count++;
+                        if (modelResult.success) {
+                            categoryStats.successfulCount++;
+                            categoryStats.totalAccuracy += modelResult.accuracy;
+                            categoryStats.averageAccuracy = categoryStats.totalAccuracy / categoryStats.successfulCount;
+                        }
+                        
+                        // Seasonal vs Non-seasonal
+                        if (modelInfo.isSeasonal) {
+                            summary.seasonalVsNonSeasonal.seasonal++;
+                        } else {
+                            summary.seasonalVsNonSeasonal.nonSeasonal++;
+                        }
+                        
+                        // Track best results
+                        if (modelResult.success && modelResult.accuracy > 0) {
+                            summary.bestResults.push({
+                                modelType: modelResult.modelType,
+                                modelDisplayName: modelInfo.displayName || modelResult.modelType,
+                                modelCategory: modelInfo.category || 'Unknown',
+                                accuracy: modelResult.accuracy,
+                                parameters: modelResult.parameters,
+                                jobId: job.id,
+                                sku: job.sku,
+                                method: job.method
+                            });
+                        }
+                    }
+                }
+            }
+            
+            // Calculate global averages
+            if (successfulResults > 0) {
+                summary.averageMetrics.accuracy = totalAccuracy / successfulResults;
+                summary.averageMetrics.mape = totalMape / successfulResults;
+                summary.averageMetrics.rmse = totalRmse / successfulResults;
+                summary.averageMetrics.mae = totalMae / successfulResults;
+            }
+            
+            // Sort best results by accuracy
+            summary.bestResults.sort((a, b) => b.accuracy - a.accuracy);
+            summary.bestResults = summary.bestResults.slice(0, 10); // Top 10
+            
+            res.json(summary);
+            
+        } catch (error) {
+            console.error('Error processing optimization results summary:', error);
+            res.status(500).json({ error: 'Failed to process optimization results summary', details: error.message });
+        }
+    });
+});
+
+// Add endpoint to get available models
+router.get('/models', (req, res) => {
+  try {
+    const seasonalPeriod = req.query.seasonalPeriod ? parseInt(req.query.seasonalPeriod) : 12;
+    const models = modelFactory.getAllModelInfo();
+    
+    // Add data requirements to each model
+    const requirements = modelFactory.getModelDataRequirements(seasonalPeriod);
+    const enhancedModels = models.map(model => ({
+      ...model,
+      dataRequirements: requirements[model.id] || {
+        minObservations: 5,
+        description: 'Requires at least 5 observations',
+        isSeasonal: false
+      }
+    }));
+    
+    res.json(enhancedModels);
+  } catch (error) {
+    console.error('[API] Error fetching models:', error);
+    res.status(500).json({ error: 'Failed to fetch models' });
+  }
+});
+
+// New endpoint: Get best results per model and method
+router.get('/jobs/best-results-per-model', (req, res) => {
+    const userId = 'default_user';
+    const { method, filePath, sku } = req.query;
+    // Accept metric weights from query params, fallback to defaults
+    const mapeWeight = parseFloat(req.query.mapeWeight) || 0.4;
+    const rmseWeight = parseFloat(req.query.rmseWeight) || 0.3;
+    const maeWeight = parseFloat(req.query.maeWeight) || 0.2;
+    const accuracyWeight = parseFloat(req.query.accuracyWeight) || 0.1;
+    const weights = { mape: mapeWeight, rmse: rmseWeight, mae: maeWeight, accuracy: accuracyWeight };
+    // Validate method parameter
+    if (method && !['grid', 'ai', 'all'].includes(method)) {
+        return res.status(400).json({ error: 'Method must be "grid", "ai", or "all"' });
+    }
+    // Build query based on method filter and filePath filter
+    let query = "SELECT * FROM jobs WHERE status = 'completed' AND userId = ? AND result IS NOT NULL";
+    let params = [userId];
+    if (method && method !== 'all') {
+        query += " AND method = ?";
+        params.push(method);
+    }
+    if (filePath) {
+        query += " AND data LIKE ?";
+        params.push(`%${filePath}%`);
+    }
+    if (sku) {
+        query += " AND sku = ?";
+        params.push(sku);
+    }
+    query += " ORDER BY createdAt DESC";
+    db.all(query, params, (err, jobs) => {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).json({ error: 'Failed to fetch optimization results' });
+        }
+        
+        console.log(`[API] best-results-per-model query:`, { method, filePath, sku, query, params });
+        console.log(`[API] Found ${jobs.length} jobs for best-results-per-model`);
+        if (jobs.length > 0) {
+            console.log(`[API] Sample jobs:`, jobs.slice(0, 3).map(j => ({
+                id: j.id,
+                sku: j.sku,
+                method: j.method,
+                status: j.status,
+                modelId: j.modelId,
+                data: j.data ? JSON.parse(j.data).filePath : 'no data'
+            })));
+        }
+        
+        if (jobs.length === 0) {
+            return res.status(404).json({ error: 'No completed optimization jobs found' });
+        }
+        try {
+            // Create a lookup map for model metadata
+            const modelMetadataMap = new Map();
+            MODEL_METADATA.forEach(model => {
+                modelMetadataMap.set(model.id, model);
+            });
+            const bestResultsPerModelMethod = extractBestResultsPerModelMethod(jobs, modelMetadataMap, weights);
+            res.json({
+                totalJobs: jobs.length,
+                bestResultsPerModelMethod,
+                timestamp: new Date().toISOString()
+            });
+        } catch (error) {
+            console.error('Error processing best results per model:', error);
+            res.status(500).json({ error: 'Failed to process best results per model', details: error.message });
+        }
+    });
+});
+
+// Get model data requirements
+router.get('/models/data-requirements', (req, res) => {
+  try {
+    const seasonalPeriod = req.query.seasonalPeriod ? parseInt(req.query.seasonalPeriod) : 12;
+    const requirements = modelFactory.getModelDataRequirements(seasonalPeriod);
+    res.json(requirements);
+  } catch (error) {
+    console.error('[API] Error fetching model data requirements:', error);
+    res.status(500).json({ error: 'Failed to fetch model data requirements' });
+  }
+});
+
+// Check model compatibility with data
+router.post('/models/check-compatibility', (req, res) => {
+  try {
+    const { modelTypes, dataLength, seasonalPeriod = 12 } = req.body;
+    
+    if (!modelTypes || !Array.isArray(modelTypes)) {
+      return res.status(400).json({ error: 'modelTypes must be an array' });
+    }
+    
+    if (typeof dataLength !== 'number' || dataLength < 0) {
+      return res.status(400).json({ error: 'dataLength must be a non-negative number' });
+    }
+    
+    const compatibility = {
+      dataLength,
+      seasonalPeriod,
+      compatibleModels: [],
+      incompatibleModels: [],
+      totalModels: modelTypes.length
+    };
+    
+    for (const modelType of modelTypes) {
+      const isCompatible = modelFactory.isModelCompatible(modelType, dataLength, seasonalPeriod);
+      const requirements = modelFactory.getModelDataRequirements(seasonalPeriod)[modelType];
+      
+      if (isCompatible) {
+        compatibility.compatibleModels.push({
+          modelType,
+          requirements
+        });
+      } else {
+        compatibility.incompatibleModels.push({
+          modelType,
+          requirements,
+          reason: requirements ? 
+            `Requires at least ${requirements.minObservations} observations (you have ${dataLength})` :
+            `Requires at least 5 observations (you have ${dataLength})`
+        });
+      }
+    }
+    
+    compatibility.compatibleCount = compatibility.compatibleModels.length;
+    compatibility.incompatibleCount = compatibility.incompatibleModels.length;
+    
+    res.json(compatibility);
+  } catch (error) {
+    console.error('[API] Error checking model compatibility:', error);
+    res.status(500).json({ error: 'Failed to check model compatibility' });
+  }
+});
+
+// Export optimization results as CSV
+router.get('/jobs/export-results', (req, res) => {
+    const userId = 'default_user';
+    const { method, format = 'csv', filePath, sku } = req.query;
+    
+    // Get metric weights from query parameters (same as used in best result calculation)
+    const mapeWeight = parseFloat(req.query.mapeWeight) || 0.4;
+    const rmseWeight = parseFloat(req.query.rmseWeight) || 0.3;
+    const maeWeight = parseFloat(req.query.maeWeight) || 0.2;
+    const accuracyWeight = parseFloat(req.query.accuracyWeight) || 0.1;
+    const weights = { mape: mapeWeight, rmse: rmseWeight, mae: maeWeight, accuracy: accuracyWeight };
+
+    
+    // Validate method parameter
+    if (method && !['grid', 'ai', 'all'].includes(method)) {
+        return res.status(400).json({ error: 'Method must be "grid", "ai", or "all"' });
+    }
+    
+    // Build query based on method filter and filePath filter
+    let query = "SELECT * FROM jobs WHERE status = 'completed' AND userId = ? AND result IS NOT NULL";
+    let params = [userId];
+    
+    if (method && method !== 'all') {
+        query += " AND method = ?";
+        params.push(method);
+    }
+    
+    // Add filePath filter if specified
+    if (filePath) {
+        query += " AND data LIKE ?";
+        params.push(`%${filePath}%`);
+    }
+    
+    // Add SKU filter if specified
+    if (sku) {
+        query += " AND sku = ?";
+        params.push(sku);
+    }
+    
+    query += " ORDER BY createdAt DESC";
+    
+    db.all(query, params, (err, jobs) => {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).json({ error: 'Failed to fetch optimization results' });
+        }
+        
+        if (jobs.length === 0) {
+            const filterMessage = filePath ? ` for dataset: ${filePath}` : '';
+            return res.status(404).json({ error: `No completed optimization jobs found${filterMessage}` });
+        }
+        
+        try {
+            const results = [];
+            
+            // Create a lookup map for model metadata
+            const modelMetadataMap = new Map();
+            MODEL_METADATA.forEach(model => {
+                modelMetadataMap.set(model.id, model);
+            });
+            
+            // Group results by job to calculate normalization factors per job
+            const jobResultsMap = new Map();
+            
+            for (const job of jobs) {
+                const jobData = JSON.parse(job.data || '{}');
+                const resultData = JSON.parse(job.result || '{}');
+                
+                // Extract individual model results from the optimization result
+                if (resultData.results && Array.isArray(resultData.results)) {
+                    const jobResults = [];
+                    
+                    for (const modelResult of resultData.results) {
+                        // Get model metadata for enhanced information
+                        const modelInfo = modelMetadataMap.get(modelResult.modelType) || {};
+                        
+                        jobResults.push({
+                            // Job metadata
+                            jobId: job.id,
+                            sku: job.sku,
+                            modelId: job.modelId,
+                            method: job.method,
+                            reason: job.reason,
+                            batchId: job.batchId,
+                            createdAt: job.createdAt,
+                            completedAt: job.completedAt,
+                            duration: job.completedAt ? 
+                                Math.round((new Date(job.completedAt) - new Date(job.createdAt)) / 1000) : null,
+                            
+                            // Model result data
+                            modelType: modelResult.modelType,
+                            modelDisplayName: modelInfo.displayName || modelResult.modelType,
+                            modelCategory: modelInfo.category || 'Unknown',
+                            modelDescription: modelInfo.description || '',
+                            isSeasonal: modelInfo.isSeasonal || false,
+                            parameters: JSON.stringify(modelResult.parameters),
+                            accuracy: modelResult.accuracy,
+                            mape: modelResult.mape,
+                            rmse: modelResult.rmse,
+                            mae: modelResult.mae,
+                            success: modelResult.success,
+                            error: modelResult.error,
+                            
+                            // Training data info
+                            trainingDataSize: resultData.trainingDataSize,
+                            validationDataSize: resultData.validationDataSize,
+                            
+                            // Best result info (will be calculated later with current weights)
+                            isBestResult: false,
+                                // Dataset info
+                                filePath: jobData.filePath || job.filePath || '',
+                                datasetName: jobData.name || ''
+                        });
+                  }
+                    
+                    jobResultsMap.set(job.id, jobResults);
+                }
+            }
+            
+            // Calculate normalization factors and composite scores for each job
+            for (const [jobId, jobResults] of jobResultsMap) {
+                if (jobResults.length === 0) continue;
+                
+                // Find max values for normalization (avoid division by zero)
+                const maxMAPE = Math.max(...jobResults.map(r => r.mape || 0), 1);
+                const maxRMSE = Math.max(...jobResults.map(r => r.rmse || 0), 1);
+                const maxMAE = Math.max(...jobResults.map(r => r.mae || 0), 1);
+                
+                // Calculate normalized metrics and composite scores
+                jobResults.forEach(result => {
+                    // Use safeMetric for all metrics
+                    const mape = safeMetric(result.mape, maxMAPE);
+                    const rmse = safeMetric(result.rmse, maxRMSE);
+                    const mae  = safeMetric(result.mae, maxMAE);
+                    const accuracy = safeMetric(result.accuracy, 0); // for accuracy, missing = 0 (worst)
+
+                    result.normAccuracy = Math.max(0, Math.min(1, accuracy / 100));
+                    result.normMAPE = Math.max(0, Math.min(1, 1 - (mape / maxMAPE)));
+                    result.normRMSE = Math.max(0, Math.min(1, 1 - (rmse / maxRMSE)));
+                    result.normMAE = Math.max(0, Math.min(1, 1 - (mae / maxMAE)));
+                    // Composite score using the weights
+                    result.compositeScore = 
+                        (weights.mape * result.normMAPE) +
+                        (weights.rmse * result.normRMSE) +
+                        (weights.mae * result.normMAE) +
+                        (weights.accuracy * result.normAccuracy);
+                });
+                
+                // Find the best result for this job using current weights
+                const bestResult = jobResults.reduce((best, curr) =>
+                    (curr.compositeScore > (best.compositeScore || -Infinity)) ? curr : best, jobResults[0]);
+                
+                // Mark the best result
+                jobResults.forEach(result => {
+                    result.isBestResult = result === bestResult;
+                });
+                
+                
+                // Add all results from this job to the main results array
+                results.push(...jobResults);
+            }
+            
+            if (results.length === 0) {
+                return res.status(404).json({ error: 'No optimization results found in completed jobs' });
+            }
+
+            // Filter to only best results if requested
+            const bestOnly = req.query.bestOnly === 'true';
+            const filteredResults = bestOnly ? results.filter(r => r.isBestResult) : results;
+
+            // Generate CSV content with enhanced model information and normalized metrics
+            const csvHeaders = [
+                'Dataset Name',
+                'Job ID', 'SKU', 'Model ID', 'Model Display Name', 'Model Category', 'Model Description', 
+                'Is Seasonal', 'Method', 'Reason', 'Batch ID',
+                'Created At', 'Completed At', 'Duration (seconds)',
+                'Parameters', 'Accuracy (%)', 'MAPE', 'RMSE', 'MAE',
+                'Normalized Accuracy', 'Normalized MAPE', 'Normalized RMSE', 'Normalized MAE',
+                'Composite Score', 'MAPE Weight', 'RMSE Weight', 'MAE Weight', 'Accuracy Weight',
+                'Success', 'Error', 'Training Data Size', 'Validation Data Size', 'Is Best Result'
+            ];
+            
+            const csvRows = filteredResults.map(result => {
+                // For ARIMA/SARIMA, if parameters include 'auto: true' and also fitted p/d/q (and for SARIMA: P/D/Q/s), export those instead of just 'auto'
+                let paramObj;
+                try {
+                  paramObj = typeof result.parameters === 'string' ? JSON.parse(result.parameters) : result.parameters;
+                } catch (e) {
+                  paramObj = result.parameters;
+                }
+                if ((result.modelId === 'arima' || result.modelId === 'sarima') && paramObj && paramObj.auto === true) {
+                  // Remove 'auto' and 'verbose', keep only numeric params
+                  const filtered = {};
+                  for (const key of Object.keys(paramObj)) {
+                    if (['p','d','q','P','D','Q','s'].includes(key) && typeof paramObj[key] === 'number') {
+                      filtered[key] = paramObj[key];
+                    }
+                  }
+                  // If we found any numeric params, use them; else fallback to original
+                  result.parameters = Object.keys(filtered).length > 0 ? JSON.stringify(filtered) : result.parameters;
+                }
+                return [
+                  // ... existing code ...
+                result.datasetName || (result.filePath ? (result.filePath.split('/').pop() || '').replace(/\.(csv|json)$/i, '') : ''),
+                result.jobId,
+                result.sku,
+                result.modelId,
+                result.modelDisplayName,
+                result.modelCategory,
+                result.modelDescription,
+                result.isSeasonal ? 'Yes' : 'No',
+                result.method,
+                result.reason,
+                result.batchId,
+                result.createdAt,
+                result.completedAt,
+                result.duration,
+                result.parameters,
+                result.accuracy,
+                result.mape,
+                result.rmse,
+                result.mae,
+                result.normAccuracy?.toFixed(4) || '',
+                result.normMAPE?.toFixed(4) || '',
+                result.normRMSE?.toFixed(4) || '',
+                result.normMAE?.toFixed(4) || '',
+                result.compositeScore?.toFixed(4) || '',
+                weights.mape,
+                weights.rmse,
+                weights.mae,
+                weights.accuracy,
+                result.success,
+                result.error,
+                result.trainingDataSize,
+                result.validationDataSize,
+                result.isBestResult
+                ];
+            });
+            
+            getCsvSeparator((separator) => {
+              const csvContent = [
+                    csvHeaders.join(separator),
+                    ...csvRows.map(row => row.map(cell => {
+                        // Escape separators and quotes in CSV
+                        if (typeof cell === 'string' && (cell.includes(separator) || cell.includes('"') || cell.includes('\n'))) {
+                        return `"${cell.replace(/"/g, '""')}"`;
+                    }
+                    return cell;
+                    }).join(separator))
+                ].join('\n');
+            
+            // Set response headers for CSV download
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const methodSuffix = method && method !== 'all' ? `-${method}` : '';
+            const filename = `optimization-results${methodSuffix}-${timestamp}.csv`;
+            
+            res.setHeader('Content-Type', 'text/csv');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            res.send(csvContent);
+            });
+            
+        } catch (error) {
+            console.error('Error processing optimization results:', error);
+            res.status(500).json({ error: 'Failed to process optimization results', details: error.message });
+        }
+    });
+});
+
+// Settings endpoints
+router.get('/settings', (req, res) => {
+  const userId = 'default_user';
+  db.all("SELECT key, value, description FROM settings WHERE key LIKE 'global_%'", [], (err, rows) => {
+    if (err) {
+      console.error('Database error:', err);
+      return res.status(500).json({ error: 'Failed to get settings' });
+    }
+    
+    // Convert rows to settings object
+    const settings = {};
+    rows.forEach(row => {
+      try {
+        settings[row.key] = JSON.parse(row.value);
+      } catch (e) {
+        settings[row.key] = row.value;
+      }
+    });
+    
+    // Provide defaults for missing settings
+    const defaultSettings = {
+      global_frequency: settings.global_frequency || 'monthly',
+      global_seasonalPeriods: settings.global_seasonalPeriods || 12,
+      global_autoDetectFrequency: settings.global_autoDetectFrequency !== false, // default to true
+      global_csvSeparator: settings.global_csvSeparator || ','
+    };
+    
+    res.json(defaultSettings);
+  });
+});
+
+router.post('/settings', (req, res) => {
+  const userId = 'default_user';
+  const { frequency, seasonalPeriods, autoDetectFrequency, csvSeparator } = req.body;
+  
+  const settingsToUpdate = [
+    { key: 'global_frequency', value: JSON.stringify(frequency), description: 'Data frequency (daily, weekly, monthly, quarterly, yearly)' },
+    { key: 'global_seasonalPeriods', value: JSON.stringify(seasonalPeriods), description: 'Number of periods in each season' },
+    { key: 'global_autoDetectFrequency', value: JSON.stringify(autoDetectFrequency), description: 'Whether to automatically detect frequency from dataset' },
+    { key: 'global_csvSeparator', value: JSON.stringify(csvSeparator), description: 'Default CSV separator for import/export' }
+  ];
+  
+  let completed = 0;
+  let hasError = false;
+  
+  settingsToUpdate.forEach(setting => {
+    db.run(
+      "INSERT OR REPLACE INTO settings (key, value, description, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+      [setting.key, setting.value, setting.description],
+      (err) => {
+        if (err) {
+          console.error('Database error:', err);
+          hasError = true;
+        }
+        completed++;
+        
+        if (completed === settingsToUpdate.length) {
+          if (hasError) {
+            res.status(500).json({ error: 'Failed to update settings' });
+          } else {
+            res.json({ success: true, message: 'Settings updated successfully' });
+          }
+        }
+      }
+    );
+  });
+});
+
+// Helper function to get seasonal periods from frequency
+function getSeasonalPeriodsFromFrequency(frequency) {
+  switch (frequency) {
+    case 'daily': return 7; // weekly seasonality
+    case 'weekly': return 52; // yearly seasonality
+    case 'monthly': return 12; // yearly seasonality
+    case 'quarterly': return 4; // yearly seasonality
+    case 'yearly': return 1; // no seasonality
+    default: return 12; // default to monthly
+  }
+}
+
+// Helper function to get CSV separator from settings
+function getCsvSeparator(callback) {
+  db.get("SELECT value FROM settings WHERE key = 'global_csvSeparator'", [], (err, row) => {
+    if (err || !row) {
+      callback(','); // default to comma
+    } else {
+      try {
+        const separator = JSON.parse(row.value);
+        callback(separator);
+      } catch (e) {
+        callback(','); // fallback to comma
+      }
+    }
+  });
+}
+
+// Endpoint to update frequency in dataset summary
+router.post('/update-dataset-frequency', async (req, res) => {
+  const { filePath, frequency } = req.body;
+  if (!filePath || !frequency) return res.status(400).json({ error: 'Missing filePath or frequency' });
+  try {
+    const fullPath = path.join(UPLOADS_DIR, path.basename(filePath));
+    const data = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
+    data.summary = data.summary || {};
+    data.summary.frequency = frequency;
+    fs.writeFileSync(fullPath, JSON.stringify(data, null, 2));
+    res.json({ success: true, frequency });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update frequency' });
+  }
+});
+
+// Endpoint to re-run auto frequency inference and update summary
+router.post('/auto-detect-dataset-frequency', async (req, res) => {
+  const { filePath } = req.body;
+  if (!filePath) return res.status(400).json({ error: 'Missing filePath' });
+  try {
+    const fullPath = path.join(UPLOADS_DIR, path.basename(filePath));
+    const data = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
+    // Try to infer frequency from dates in the data
+    const dateList = data.data.map(row => row['Date']).filter(Boolean);
+    const uniqueDates = Array.from(new Set(dateList)).sort();
+    const frequency = inferDateFrequency(uniqueDates);
+    data.summary = data.summary || {};
+    data.summary.frequency = frequency;
+    fs.writeFileSync(fullPath, JSON.stringify(data, null, 2));
+    res.json({ success: true, frequency });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to auto-detect frequency' });
+  }
+});
+
+// Endpoint to get the count of processed datasets
+router.get('/datasets/count', (req, res) => {
+  try {
+    const files = fs.readdirSync(UPLOADS_DIR);
+    // Only count processed dataset files (ending with -processed.json)
+    const processedFiles = files.filter(f => /-processed\.json$/i.test(f));
+    res.json({ count: processedFiles.length });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to count datasets', details: error.message });
   }
 });
 
