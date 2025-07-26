@@ -82,16 +82,16 @@ export interface RefactoredSetupWizardActions {
   processCsvData: (data: any) => void;
   
   // Division Management Actions
-  addPendingDivision: (division: any) => void;
-  updatePendingDivision: (id: number, updates: any) => void;
-  deletePendingDivision: (id: number) => void;
-  restorePendingDivision: (id: number) => void;
+  addDivision: (division: any) => void;
+  updateDivision: (id: number, updates: any) => void;
+  deleteDivision: (id: number) => void;
+  restoreDivision: (division: any) => void;
   
   // Cluster Management Actions
-  addPendingCluster: (cluster: any) => void;
-  updatePendingCluster: (id: number, updates: any) => void;
-  deletePendingCluster: (id: number) => void;
-  restorePendingCluster: (id: number, clusterName?: string, divisionName?: string) => void;
+  addCluster: (cluster: any) => void;
+  updateCluster: (id: number, updates: any) => void;
+  deleteCluster: (id: number) => void;
+  restoreCluster: (cluster: any) => void;
   
   // Lifecycle Management Actions
   setLifecycleMappings: (mappings: any[]) => void;
@@ -384,197 +384,9 @@ export const useSetupWizardStoreRefactored = create<RefactoredSetupWizardStore>(
     });
   },
 
-  // Division Management Actions
-  addPendingDivision: (division) => {
-    const command = new AddDivisionCommand(division);
-    const result = commandManager.executeCommand(command);
-    
-    if (result.success) {
-      set((state) => {
-        const newState = {
-          ...state,
-          pendingDivisions: [...state.pendingDivisions, division]
-        };
-        syncStateMachine(newState);
-        return syncZustandState(newState);
-      });
-    }
-  },
 
-  updatePendingDivision: (id, updates) => {
-    const command = new UpdateDivisionCommand(id, updates);
-    const result = commandManager.executeCommand(command);
-    
-    if (result.success) {
-      set((state) => {
-        const newState = {
-          ...state,
-          pendingDivisions: state.pendingDivisions.map(d => 
-            d.id === id ? { ...d, ...updates } : d
-          )
-        };
-        syncStateMachine(newState);
-        return syncZustandState(newState);
-      });
-    }
-  },
 
-  deletePendingDivision: (id) => {
-    const command = new DeleteDivisionCommand(id);
-    const result = commandManager.executeCommand(command);
-    
-    if (result.success) {
-      set((state) => {
-        const division = state.pendingDivisions.find(d => d.id === id);
-        const newState = {
-          ...state,
-          pendingDivisions: state.pendingDivisions.filter(d => d.id !== id),
-          pendingClusters: state.pendingClusters.filter(c => c.divisionId !== id),
-          deletedItems: {
-            ...state.deletedItems,
-            divisions: division ? [...state.deletedItems.divisions, division] : state.deletedItems.divisions
-          }
-        };
-        syncStateMachine(newState);
-        return syncZustandState(newState);
-      });
-    }
-  },
 
-  restorePendingDivision: (id) => {
-    set((state) => {
-      const deletedDivision = state.deletedItems.divisions.find(d => d.id === id);
-      if (deletedDivision) {
-        const newState = {
-          ...state,
-          pendingDivisions: [...state.pendingDivisions, deletedDivision],
-          deletedItems: {
-            ...state.deletedItems,
-            divisions: state.deletedItems.divisions.filter(d => d.id !== id)
-          }
-        };
-        syncStateMachine(newState);
-        return syncZustandState(newState);
-      }
-      return state;
-    });
-  },
-
-  // Cluster Management Actions
-  addPendingCluster: (cluster) => {
-    const command = new AddClusterCommand(cluster);
-    const result = commandManager.executeCommand(command);
-    
-    if (result.success) {
-      set((state) => {
-        const newState = {
-          ...state,
-          pendingClusters: [...state.pendingClusters, cluster]
-        };
-        syncStateMachine(newState);
-        return syncZustandState(newState);
-      });
-    }
-  },
-
-  updatePendingCluster: (id, updates) => {
-    const command = new UpdateClusterCommand(id, updates);
-    const result = commandManager.executeCommand(command);
-    
-    if (result.success) {
-      set((state) => {
-        const newState = {
-          ...state,
-          pendingClusters: state.pendingClusters.map(c => 
-            c.id === id ? { ...c, ...updates } : c
-          )
-        };
-        syncStateMachine(newState);
-        return syncZustandState(newState);
-      });
-    }
-  },
-
-  deletePendingCluster: (id) => {
-    const command = new DeleteClusterCommand(id);
-    const result = commandManager.executeCommand(command);
-    
-    if (result.success) {
-      set((state) => {
-        const cluster = state.pendingClusters.find(c => c.id === id);
-        const newState = {
-          ...state,
-          pendingClusters: state.pendingClusters.filter(c => c.id !== id),
-          deletedItems: {
-            ...state.deletedItems,
-            clusters: cluster ? [...state.deletedItems.clusters, cluster] : state.deletedItems.clusters
-          }
-        };
-        syncStateMachine(newState);
-        return syncZustandState(newState);
-      });
-    }
-  },
-
-  restorePendingCluster: (id, clusterName, divisionName) => {
-    set((state) => {
-      const deletedCluster = state.deletedItems.clusters.find(c => 
-        c.id === id && 
-        c.name === clusterName && 
-        c.divisionName === divisionName
-      );
-      
-      if (deletedCluster) {
-        const newState = {
-          ...state,
-          pendingClusters: [...state.pendingClusters, deletedCluster],
-          deletedItems: {
-            ...state.deletedItems,
-            clusters: state.deletedItems.clusters.filter(c => 
-              !(c.id === id && c.name === clusterName && c.divisionName === divisionName)
-            )
-          }
-        };
-        syncStateMachine(newState);
-        return syncZustandState(newState);
-      }
-      return state;
-    });
-  },
-
-  // Lifecycle Management Actions
-  setLifecycleMappings: (mappings) => {
-    set((state) => {
-      const newState = {
-        ...state,
-        lifecycleMappings: mappings
-      };
-      syncStateMachine(newState);
-      return syncZustandState(newState);
-    });
-  },
-
-  addLifecycleMapping: (mapping) => {
-    set((state) => {
-      const newState = {
-        ...state,
-        lifecycleMappings: [...state.lifecycleMappings, mapping]
-      };
-      syncStateMachine(newState);
-      return syncZustandState(newState);
-    });
-  },
-
-  removeLifecycleMapping: (id) => {
-    set((state) => {
-      const newState = {
-        ...state,
-        lifecycleMappings: state.lifecycleMappings.filter(m => m.id !== id)
-      };
-      syncStateMachine(newState);
-      return syncZustandState(newState);
-    });
-  },
 
   // Multiple CSV Import Actions
   enableMultipleCsvImport: () => {
@@ -627,6 +439,114 @@ export const useSetupWizardStoreRefactored = create<RefactoredSetupWizardStore>(
           ...state.multipleCsvImport,
           importedCsvs: state.multipleCsvImport.importedCsvs.filter(csv => csv.fileName !== fileName)
         }
+      };
+      syncStateMachine(newState);
+      return syncZustandState(newState);
+    });
+  },
+
+  // Division Management Actions
+  addDivision: (division) => {
+    const result = commandManager.executeCommand(new AddDivisionCommand(division));
+    if (result.success) {
+      set(syncZustandState);
+    }
+  },
+
+  updateDivision: (id, updates) => {
+    const result = commandManager.executeCommand(new UpdateDivisionCommand(id, updates));
+    if (result.success) {
+      set(syncZustandState);
+    }
+  },
+
+  deleteDivision: (id) => {
+    const result = commandManager.executeCommand(new DeleteDivisionCommand(id));
+    if (result.success) {
+      set(syncZustandState);
+    }
+  },
+
+  restoreDivision: (division) => {
+    set((state) => {
+      const newState = {
+        ...state,
+        pendingDivisions: [...state.pendingDivisions, division],
+        deletedItems: {
+          ...state.deletedItems,
+          divisions: state.deletedItems.divisions.filter(d => d.id !== division.id)
+        }
+      };
+      syncStateMachine(newState);
+      return syncZustandState(newState);
+    });
+  },
+
+  // Cluster Management Actions
+  addCluster: (cluster) => {
+    const result = commandManager.executeCommand(new AddClusterCommand(cluster));
+    if (result.success) {
+      set(syncZustandState);
+    }
+  },
+
+  updateCluster: (id, updates) => {
+    const result = commandManager.executeCommand(new UpdateClusterCommand(id, updates));
+    if (result.success) {
+      set(syncZustandState);
+    }
+  },
+
+  deleteCluster: (id) => {
+    const result = commandManager.executeCommand(new DeleteClusterCommand(id));
+    if (result.success) {
+      set(syncZustandState);
+    }
+  },
+
+  restoreCluster: (cluster) => {
+    set((state) => {
+      const newState = {
+        ...state,
+        pendingClusters: [...state.pendingClusters, cluster],
+        deletedItems: {
+          ...state.deletedItems,
+          clusters: state.deletedItems.clusters.filter(c => c.id !== cluster.id)
+        }
+      };
+      syncStateMachine(newState);
+      return syncZustandState(newState);
+    });
+  },
+
+  // Lifecycle Management Actions
+  setLifecycleMappings: (mappings) => {
+    set((state) => {
+      const newState = {
+        ...state,
+        lifecycleMappings: mappings
+      };
+      syncStateMachine(newState);
+      return syncZustandState(newState);
+    });
+  },
+
+  addLifecycleMapping: (mapping) => {
+    set((state) => {
+      const newState = {
+        ...state,
+        lifecycleMappings: [...state.lifecycleMappings, mapping]
+      };
+      syncStateMachine(newState);
+      return syncZustandState(newState);
+    });
+  },
+
+  removeLifecycleMapping: (id) => {
+    set((state) => {
+      const newState = {
+        ...state,
+        lifecycleMappings: state.lifecycleMappings.filter(m => m.id !== id)
       };
       syncStateMachine(newState);
       return syncZustandState(newState);

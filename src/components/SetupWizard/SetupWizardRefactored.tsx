@@ -7,6 +7,9 @@ import { useSetupWizardStoreRefactored } from '../../store/setupWizardStoreRefac
 import { setupWizardConfigManager } from '../../config/SetupWizardConfig';
 import { BusinessConfigurationStepRefactored } from './steps/BusinessConfigurationStepRefactored';
 import { CsvImportStepRefactored } from './steps/CsvImportStepRefactored';
+import { DivisionsStepRefactored } from './steps/DivisionsStepRefactored';
+import { ClustersStepRefactored } from './steps/ClustersStepRefactored';
+import { ProductLifecycleStepRefactored } from './steps/ProductLifecycleStepRefactored';
 
 interface SetupWizardRefactoredProps {
   onComplete?: () => void;
@@ -88,59 +91,23 @@ export const SetupWizardRefactored: React.FC<SetupWizardRefactoredProps> = ({
 
       case 'divisions':
         return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900">Create Divisions</h2>
-              <p className="text-gray-600 mt-2">
-                Review and manage your divisions
-              </p>
-            </div>
-            <Card>
-              <CardContent className="pt-6">
-                <p className="text-gray-600">
-                  Division management component will be implemented here.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          <DivisionsStepRefactored
+            onComplete={handleStepComplete}
+          />
         );
 
       case 'clusters':
         return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900">Create Clusters</h2>
-              <p className="text-gray-600 mt-2">
-                Review and manage your clusters
-              </p>
-            </div>
-            <Card>
-              <CardContent className="pt-6">
-                <p className="text-gray-600">
-                  Cluster management component will be implemented here.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          <ClustersStepRefactored
+            onComplete={handleStepComplete}
+          />
         );
 
       case 'product-lifecycle':
         return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900">Product Lifecycle</h2>
-              <p className="text-gray-600 mt-2">
-                Configure product lifecycle tracking
-              </p>
-            </div>
-            <Card>
-              <CardContent className="pt-6">
-                <p className="text-gray-600">
-                  Product lifecycle component will be implemented here.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          <ProductLifecycleStepRefactored
+            onComplete={handleStepComplete}
+          />
         );
 
       case 'sop-cycles':
