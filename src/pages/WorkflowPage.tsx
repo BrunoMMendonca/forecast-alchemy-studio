@@ -7,12 +7,15 @@ import { useDataHandlers } from '@/hooks/useDataHandlers';
 import { JobSummary } from '@/hooks/useBackendJobStatus';
 import { GlobalSettings } from '@/types/globalSettings';
 import { NormalizedSalesData, ForecastResult } from '@/types/forecast';
+import { CsvUploadResult } from '@/components/CsvImportWizard';
 
 interface WorkflowPageContext {
   summary: JobSummary;
   globalSettings: GlobalSettings & { [key: string]: any };
   currentStep: number;
   setCurrentStep: (step: number) => void;
+  processedDataInfo: CsvUploadResult | null;
+  setProcessedDataInfo: (result: CsvUploadResult | null) => void;
   salesData: NormalizedSalesData[];
   setSalesData: (data: NormalizedSalesData[]) => void;
   cleanedData: NormalizedSalesData[];
@@ -32,6 +35,8 @@ const WorkflowPage = () => {
   const {
     currentStep,
     setCurrentStep,
+    processedDataInfo,
+    setProcessedDataInfo,
     salesData,
     setSalesData,
     cleanedData,
@@ -61,16 +66,19 @@ const WorkflowPage = () => {
   // Data handlers now get all setters from context
   const { handleDataUpload, handleImportDataCleaning, handleManualEditDataCleaning } = useDataHandlers({
     setCurrentStep,
+    setProcessedDataInfo,
     setSalesData,
     setCleanedData,
     setForecastResults,
+    setAiError,
+    processedDataInfo
   });
 
   // This wrapper function will now handle both updating the data and kicking off the backend job.
-  const handleDataCleaning = (data: NormalizedSalesData[], changedSKUs?: string[], filePath?: string) => {
+  const handleDataCleaning = (data: NormalizedSalesData[], changedSKUs?: string[], datasetId?: number) => {
     setCleanedData(data);
     if (changedSKUs && changedSKUs.length > 0) {
-      changedSKUs.forEach(sku => handleManualEditDataCleaning(sku, filePath));
+      changedSKUs.forEach(sku => handleManualEditDataCleaning(sku, datasetId, data));
     }
   };
 
@@ -86,8 +94,7 @@ const WorkflowPage = () => {
   return (
       <StepContent
         currentStep={currentStep}
-        salesData={salesData}
-        cleanedData={cleanedData}
+        processedDataInfo={processedDataInfo}
         forecastResults={forecastResults}
         selectedSKUForResults={selectedSKU}
         queueSize={summary?.total ?? 0}
@@ -101,6 +108,10 @@ const WorkflowPage = () => {
         onAIFailure={handleAIFailure}
         lastImportFileName={lastImportFileName}
         lastImportTime={lastImportTime}
+        onConfirm={async () => {}}
+        models={[]}
+        updateModel={() => {}}
+        setForecastResults={setForecastResults}
       />
   );
 };

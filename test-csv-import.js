@@ -1,78 +1,37 @@
-import fs from 'fs';
 import fetch from 'node-fetch';
 
-const BACKEND_URL = 'http://localhost:3001';
-
 async function testCsvImport() {
-  console.log('🧪 Testing CSV Import with Different Separators\n');
+  const csvData = `Código Material;Nome;Marca;Categoria;01/01/2022;01/02/2022
+95000000;SKU Name 1;Brand 1;Cat 1;90;963
+95000001;SKU Name 2;Brand 1;Cat 1;910;359`;
 
-  const testFiles = [
-    { name: 'test-comma.csv', expected: ',' },
-    { name: 'test-semicolon.csv', expected: ';' },
-    { name: 'test-tab.csv', expected: '\t' },
-    { name: 'test-pipe.csv', expected: '|' }
-  ];
-
-  for (const testFile of testFiles) {
-    try {
-      console.log(`📁 Testing ${testFile.name}...`);
-      
-      // Read the test file
-      const csvData = fs.readFileSync(testFile.name, 'utf-8');
-      
-      // Send to backend
-      const response = await fetch(`${BACKEND_URL}/api/generate-preview`, {
+  try {
+    const response = await fetch('http://localhost:3001/api/generate-preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csvData })
+      body: JSON.stringify({
+        csvData: csvData,
+        separator: ';',
+        dateFormat: 'dd/mm/yyyy',
+        numberFormat: '1,234.56'
+      })
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const errorData = await response.json();
+      console.error('❌ Error:', errorData);
+      return;
       }
 
       const result = await response.json();
-      
-      console.log(`   Expected separator: "${testFile.expected}"`);
-      console.log(`   Detected separator: "${result.separator}"`);
-      console.log(`   Headers found: ${result.headers.length}`);
-      console.log(`   Preview rows: ${result.previewRows.length}`);
-      
-      if (result.separator === testFile.expected) {
-        console.log(`   ✅ Separator detection: PASSED`);
-      } else {
-        console.log(`   ❌ Separator detection: FAILED`);
-      }
-      
-      console.log('');
-      
-    } catch (error) {
-      console.error(`   ❌ Error testing ${testFile.name}:`, error.message);
-      console.log('');
-    }
-  }
-}
-
-// Check if backend is running
-async function checkBackend() {
-  try {
-    const response = await fetch(`${BACKEND_URL}/api/settings`);
-    if (response.ok) {
-      console.log('✅ Backend server is running\n');
-      return true;
-    }
+    console.log('✅ Success!');
+    console.log('Headers:', result.headers);
+    console.log('Column Roles:', result.columnRoles);
+    console.log('First row:', result.previewRows[0]);
+    console.log('Separator detected:', result.separator);
   } catch (error) {
-    console.log('❌ Backend server is not running or not accessible');
-    console.log('   Please start the backend server with: node server.js\n');
-    return false;
+    console.error('❌ Test failed:', error.message);
   }
 }
 
-async function main() {
-  const backendRunning = await checkBackend();
-  if (backendRunning) {
-    await testCsvImport();
-  }
-}
-
-main().catch(console.error); 
+testCsvImport(); 

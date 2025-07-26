@@ -1,55 +1,135 @@
 import express from 'express';
-import Papa from 'papaparse';
-import fs from 'fs';
+import { Pool } from 'pg';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
+import fs from 'fs';
+import winston from 'winston';
+import fileUpload from 'express-fileupload';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { fileURLToPath } from 'url';
-import { db } from './db.js';
-import { callGrokAPI } from './grokService.js';
-import { applyTransformations, detectColumnRoles, normalizeAndPivotData, findField, autoDetectSeparator, transposeData, parseCsvWithHeaders } from './utils.js';
-import { optimizeParametersWithAI, getModelRecommendation } from './aiOptimizationService.js';
-import crypto from 'crypto';
 import { dirname } from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import { sha256 } from 'js-sha256';
+import crypto from 'crypto';
+import Papa from 'papaparse';
+import { parseCsvWithHeaders, detectColumnRoles, parseNumberWithFormat, parseDateWithFormat, transposeData, normalizeAndPivotData, inferDateFrequency, applyTransformations, findField, autoDetectSeparator } from './utils.js';
+import { 
+  createDataset, 
+  insertTimeSeriesData, 
+  getDatasetMetadata, 
+  getTimeSeriesData, 
+  findDatasetByHash,
+  getDatasets,
+  getDivisions,
+  getClusters,
+  getSopCycles,
+  getUserRoles
+} from './db.js';
+import { callGrokAPI } from './grokService.js';
+import { optimizeParametersWithAI, getModelRecommendation } from './aiOptimizationService.js';
 import { MODEL_METADATA } from './models/ModelMetadata.js';
-import { inferDateFrequency } from './utils.js';
 import { modelFactory } from './models/ModelFactory.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { authenticateToken } from './auth.js';
 
 const router = express.Router();
+const UPLOADS_DIR = path.resolve('uploads');
 
-const UPLOADS_DIR = path.join(__dirname, '../../uploads');
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+// Initialize Winston logger
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+});
+if (process.env.NODE_ENV !== 'production') {
+  logger.add(new winston.transports.Console({ format: winston.format.simple() }));
 }
 
-// Helper to discard old files with the same hash
-function discardOldFilesWithHash(csvHash, skipFileNames = []) {
-  const files = fs.readdirSync(UPLOADS_DIR);
-  for (const file of files) {
-    if ((file.endsWith('.json') || file.endsWith('.csv')) && file.includes(csvHash.slice(0, 8))) {
-      if (skipFileNames.includes(file)) continue;
-      const filePath = path.join(UPLOADS_DIR, file);
-      // Only add -discarded if not already present
-      if (!file.includes('-discarded.')) {
-        const newFile = file.replace(/(\.[^.]+)$/, '-discarded$1');
-        const newPath = path.join(UPLOADS_DIR, newFile);
-            fs.renameSync(filePath, newPath);
-        console.log(`Discarded file: ${file} -> ${newFile}`);
-                  }
-    }
+// Global rate limiter
+const globalLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 1000,
+  message: { error: 'Too many requests, please try again later.' }
+});
+router.use(globalLimiter);
+
+// File upload middleware
+router.use(fileUpload({
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+  abortOnLimit: true,
+  createParentPath: true
+}));
+
+// Standardized error response
+function sendError(res, status, message, details = {}) {
+  logger.error(`${message}: ${JSON.stringify(details)}`);
+  res.status(status).json({ error: message, details });
+}
+
+// Safe JSON parsing
+function safeParseJSON(data, defaultValue = {}) {
+  try {
+    return JSON.parse(data);
+          } catch (error) {
+    logger.error(`JSON parse error: ${error.message}`);
+    return defaultValue;
   }
 }
 
+// Validate dataset ID
+function validateDatasetId(datasetId) {
+  if (!datasetId || typeof datasetId !== 'number' || isNaN(datasetId)) {
+    throw new Error('Invalid datasetId. Expected a number');
+  }
+  return datasetId;
+}
+
+// Get or create SKU
+async function getOrCreateSku(client, companyId, skuCode) {
+  let skuResult = await client.query(
+    'SELECT id FROM skus WHERE company_id = $1 AND sku_code = $2',
+    [companyId, skuCode]
+  );
+  if (skuResult.rows.length === 0) {
+    const newSkuResult = await client.query(
+      'INSERT INTO skus (company_id, sku_code) VALUES ($1, $2) RETURNING id',
+      [companyId, skuCode]
+    );
+    return newSkuResult.rows[0].id;
+  }
+  return skuResult.rows[0].id;
+}
+
+// Database pool
+const pgPool = new Pool({
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT
+});
+
+// Read AI instructions from files
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const aiInstructionsSmall = fs.readFileSync(path.join(__dirname, 'config/CSVImport/ai_csv_instructions_small.txt'), 'utf-8');
+const aiInstructionsLarge = fs.readFileSync(path.join(__dirname, 'config/CSVImport/ai_csv_instructions_large.txt'), 'utf-8');
+
+// Track recent no-results logs to avoid spam
+const recentNoResultsLogs = new Set();
+
+// Job priorities
 const JOB_PRIORITIES = {
   SETUP: 1,
   DATA_CLEANING: 2,
   INITIAL_IMPORT: 3
 };
-
-
 
 function getPriorityFromReason(reason) {
   if (reason === 'settings_change' || reason === 'config' || reason === 'metric_weight_change') {
@@ -64,87 +144,1096 @@ function getPriorityFromReason(reason) {
   return JOB_PRIORITIES.INITIAL_IMPORT;
 }
 
-// Read AI instructions from files
-const aiInstructionsSmall = fs.readFileSync(path.join(__dirname, 'config/CSVImport/ai_csv_instructions_small.txt'), 'utf-8');
-const aiInstructionsLarge = fs.readFileSync(path.join(__dirname, 'config/CSVImport/ai_csv_instructions_large.txt'), 'utf-8');
+// Helper function to get default result for model
+function getDefaultResultForModel(model, sku, batchId, datasetId) {
+  return {
+    model_id: model,
+    sku_code: sku,
+    batch_id: batchId,
+    dataset_id: datasetId,
+    method: 'grid',
+    status: 'pending',
+    parameters: {},
+    scores: { mape: null, rmse: null, mae: null, accuracy: null },
+    forecasts: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+}
 
-router.post('/grok-transform', async (req, res) => {
+// Helper function to safely calculate metric
+function safeMetric(val, max) {
+  return val !== null && val !== undefined && !isNaN(val) && val <= max ? val : null;
+}
+
+// Helper function to extract best results per model method
+function extractBestResultsPerModelMethod(jobs, modelMetadataMap, weights = { mape: 0.4, rmse: 0.3, mae: 0.2, accuracy: 0.1 }) {
+  const resultsByModel = {};
+  
+  jobs.forEach(job => {
+    // Use the proper model_id column (no longer need to extract from payload)
+    const modelId = job.model_id;
+    const method = job.method;
+    const key = `${modelId}_${method}`;
+    
+    if (!modelId) {
+      console.warn('[extractBestResultsPerModelMethod] Skipping job without model_id:', job.id);
+      return;
+    }
+    
+    if (!resultsByModel[key]) {
+      resultsByModel[key] = [];
+    }
+    
+    // Use scores from optimization_results table if available, otherwise from job.scores
+    const scores = job.scores || {};
+    if (scores && typeof scores === 'object' && Object.keys(scores).length > 0) {
+      resultsByModel[key].push({
+        ...job,
+        scores: scores,
+        modelType: modelId,
+        sku: job.sku,
+        datasetId: job.dataset_id,
+        optimizationId: job.optimization_id,
+        methods: [{
+          method: method,
+          bestResult: {
+            accuracy: scores.accuracy || 0,
+            mape: scores.mape || 0,
+            rmse: scores.rmse || 0,
+            mae: scores.mae || 0,
+            compositeScore: calculateWeightedScore(scores, weights),
+            parameters: job.parameters || {},
+            jobId: job.id,
+            sku: job.sku,
+            createdAt: job.created_at,
+            completedAt: job.completed_at,
+            datasetId: job.dataset_id,
+            optimizationId: job.optimization_id
+          },
+          allResults: [{
+            accuracy: scores.accuracy || 0,
+            mape: scores.mape || 0,
+            rmse: scores.rmse || 0,
+            mae: scores.mae || 0,
+            compositeScore: calculateWeightedScore(scores, weights),
+            parameters: job.parameters || {},
+            jobId: job.id,
+            sku: job.sku,
+            createdAt: job.created_at,
+            completedAt: job.completed_at,
+            datasetId: job.dataset_id,
+            optimizationId: job.optimization_id
+          }]
+        }]
+      });
+    } else {
+      console.warn('[extractBestResultsPerModelMethod] Job has no scores:', job.id, 'scores:', job.scores);
+    }
+  });
+  
+  const bestResults = [];
+  
+  Object.entries(resultsByModel).forEach(([key, results]) => {
+    if (results.length === 0) return;
+    
+    // Find the best result based on weighted score
+    let bestResult = results[0];
+    let bestScore = calculateWeightedScore(results[0].scores, weights);
+    
+    results.forEach(result => {
+      const score = calculateWeightedScore(result.scores, weights);
+      if (score < bestScore) {
+        bestScore = score;
+        bestResult = result;
+      }
+    });
+    
+    bestResults.push(bestResult);
+  });
+  
+  console.log(`[extractBestResultsPerModelMethod] Processed ${jobs.length} jobs, found ${bestResults.length} best results`);
+  
+  return bestResults;
+}
+
+// Helper function to calculate weighted score
+function calculateWeightedScore(scores, weights) {
+  if (!scores || typeof scores !== 'object') return Infinity;
+  
+  let totalScore = 0;
+  let totalWeight = 0;
+  
+  Object.entries(weights).forEach(([metric, weight]) => {
+    const value = scores[metric];
+    if (value !== null && value !== undefined && !isNaN(value)) {
+      totalScore += value * weight;
+      totalWeight += weight;
+    }
+  });
+  
+  return totalWeight > 0 ? totalScore / totalWeight : Infinity;
+}
+
+// Helper function to get seasonal periods from frequency
+function getSeasonalPeriodsFromFrequency(frequency) {
+  const frequencyMap = {
+    'daily': 7,
+    'weekly': 52,
+    'monthly': 12,
+    'quarterly': 4,
+    'yearly': 1
+  };
+  return frequencyMap[frequency] || 12;
+}
+
+/**
+ * Health check endpoint
+ * @route GET /health
+ * @returns {object} Status of database connection
+ */
+router.get('/health', async (req, res) => {
   try {
-    const { csvData, reasoningEnabled } = req.body;
-    //console.Log(`[LOG] /grok-transform received reasoningEnabled: ${reasoningEnabled}`);
-    if (!csvData) {
-      return res.status(400).json({ error: 'Missing csvData or instructions' });
-    }
-    //console.Log('grok-transform received instructions:', aiInstructionsSmall.substring(0, 200) + '...');
-    const { data, headers } = parseCsvWithHeaders(csvData);
-
-    const sanitizedCsvData = data.map(row => {
-      const sanitizedRow = {};
-      for (const [key, value] of Object.entries(row)) {
-        let sanitizedValue = value;
-        if (value !== null && value !== undefined) {
-          sanitizedValue = String(value)
-            .replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r').replace(/\t/g, '\\t');
-        }
-        sanitizedRow[key] = sanitizedValue;
-      }
-      return sanitizedRow;
-    });
-    
-    const outputFormat = reasoningEnabled 
-      ? `{
-          "reasoning": "Detailed explanation of how you followed the instructions to transform the data, including what patterns you detected and what specific transformations you applied",
-          "data": "[transformed CSV data as array of objects]"
-        }`
-      : `{
-          "data": "[transformed CSV data as array of objects]"
-        }`;
-      
-    // Send to Grok-3 API
-    const prompt = `CSV Data (first 5 rows):\n${JSON.stringify(sanitizedCsvData.slice(0, 5), null, 2)}\n\nInstructions:\n${aiInstructionsSmall}\n\nOutput Format:\n${outputFormat}`;
-    //console.Log('Final prompt being sent to AI:', prompt);
-    const response = await callGrokAPI(prompt, 4000, reasoningEnabled);
-    //console.Log('Raw Grok-3 Response (/grok-transform):', response);
-    let parsedResponse;
-    try {
-      parsedResponse = JSON.parse(response);
-    } catch (parseError) {
-      //console.Log('Direct JSON parse failed, trying extraction methods...');
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsedResponse = JSON.parse(jsonMatch[0]);
-      } else {
-        return res.status(500).json({ error: 'Failed to parse Grok response as JSON' });
-      }
-    }
-    
-    const reasoning = parsedResponse.reasoning || 'No reasoning provided';
-    const transformedData = parsedResponse.data || parsedResponse;
-    
-    let columns = [];
-    if (Array.isArray(transformedData) && transformedData.length > 0) {
-      columns = Object.keys(transformedData[0]);
-    }
-    
-    // Get column roles as objects first
-    const columnRolesObjects = detectColumnRoles(columns);
-    // Extract just the role strings for the frontend
-    const columnRoles = columnRolesObjects.map(obj => obj.role);
-
+    const result = await pgPool.query('SELECT 1 as test');
     res.json({ 
-      transformedData,
-      columns,
-      reasoning,
-      columnRoles,
-      originalResponse: response
+      status: 'ok', 
+      message: 'Database connection successful',
+      timestamp: new Date().toISOString()
     });
-  } catch (error) {
-    console.error('Error in grok-transform:', error);
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    sendError(res, 500, 'Database connection failed', { error: err.message, code: err.code });
   }
 });
 
+/**
+ * Get schema for optimization_jobs table
+ * @route GET /schema
+ * @returns {object} Table schema
+ */
+router.get('/schema', async (req, res) => {
+  try {
+    const result = await pgPool.query(`
+    SELECT column_name, data_type 
+    FROM information_schema.columns 
+      WHERE table_name = $1 
+    ORDER BY ordinal_position
+    `, ['optimization_jobs']);
+    res.json({ 
+      status: 'ok', 
+      table: 'optimization_jobs',
+      columns: result.rows,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    sendError(res, 500, 'Schema check failed', { error: err.message, code: err.code });
+  }
+});
+
+/**
+ * Get job status
+ * @route GET /jobs/status
+ * @returns {object} Job status information
+ */
+router.get('/jobs/status', async (req, res) => {
+  const { datasetId, method } = req.query;
+  try {
+    if (!datasetId) {
+      return sendError(res, 400, 'Missing datasetId');
+    }
+    const datasetIdNum = validateDatasetId(datasetId);
+    if (method && !['grid', 'ai', 'all'].includes(method)) {
+      return sendError(res, 400, 'Invalid method', { valid: ['grid', 'ai', 'all'] });
+    }
+    const query = method && method !== 'all'
+      ? 'SELECT oj.*, ores.parameters, ores.scores, ores.forecasts FROM optimization_jobs oj LEFT JOIN optimization_results ores ON oj.id = ores.job_id AND ores.company_id = oj.company_id WHERE oj.company_id = $1 AND oj.dataset_id = $2 AND method = $3'
+      : 'SELECT oj.*, ores.parameters, ores.scores, ores.forecasts FROM optimization_jobs oj LEFT JOIN optimization_results ores ON oj.id = ores.job_id AND ores.company_id = oj.company_id WHERE oj.company_id = $1 AND oj.dataset_id = $2';
+    const params = method && method !== 'all' ? [1, datasetIdNum, method] : [1, datasetIdNum];
+    const result = await pgPool.query(query, params);
+    res.json({ status: 'ok', jobs: result.rows });
+  } catch (err) {
+    sendError(res, 500, 'Failed to fetch job status', { error: err.message });
+  }
+});
+
+/**
+ * Create optimization jobs
+ * @route POST /jobs
+ * @returns {object} Job creation result
+ */
+router.post('/jobs', authenticateToken, async (req, res) => {
+  try {
+    let { data, models, skus, reason, method = 'grid', datasetId, batchId, optimizationHash: frontendHash, metricWeights } = req.body;
+    
+    logger.info(`[Job Creation] Creating jobs for ${skus?.length || 0} SKUs, ${models?.length || 0} models, method: ${method}, datasetId: ${datasetId}`);
+    logger.info(`[Job Creation] Frontend provided optimizationHash: ${frontendHash ? 'Yes' : 'No'}`);
+    logger.info(`[Job Creation] Frontend provided metricWeights: ${metricWeights ? 'Yes' : 'No'}`);
+
+    // Use authenticated user's company and user ID
+    const companyId = req.user.company_id;
+    const userId = req.user.id;
+
+    // ===== COMPREHENSIVE VALIDATION =====
+
+    // 1. Validate required fields
+    if (!skus || !Array.isArray(skus) || skus.length === 0) {
+      logger.warn('[Job Creation] Validation failed: skus array is required and must not be empty');
+      return sendError(res, 400, 'skus array is required and must not be empty', { received: skus });
+    }
+
+    if (!models || !Array.isArray(models) || models.length === 0) {
+      logger.warn('[Job Creation] Validation failed: models array is required and must not be empty');
+      return sendError(res, 400, 'models array is required and must not be empty', { received: models });
+    }
+
+    if (!datasetId || typeof datasetId !== 'number' || isNaN(datasetId)) {
+      logger.warn('[Job Creation] Validation failed: datasetId is required and must be a number');
+      return sendError(res, 400, 'datasetId is required and must be a number', { received: datasetId });
+    }
+
+    // 2. Validate dataset exists
+    try {
+      const metadata = await getDatasetMetadata(datasetId);
+      if (!metadata) {
+        logger.warn(`[Job Creation] Validation failed: Dataset ${datasetId} not found`);
+        return sendError(res, 404, `Dataset ${datasetId} not found`, { datasetId });
+      }
+      logger.info(`[Job Creation] Dataset ${datasetId} exists: ${metadata.name}`);
+    } catch (error) {
+      logger.warn(`[Job Creation] Validation failed: Error checking dataset ${datasetId}:`, error.message);
+      return sendError(res, 500, `Error checking dataset existence: ${error.message}`, { datasetId });
+    }
+
+    // 3. Validate SKUs exist in database
+    const skuValidationResults = [];
+    for (const sku of skus) {
+      try {
+        const skuIdResult = await pgPool.query(
+          'SELECT id, sku_code, description FROM skus WHERE company_id = $1 AND sku_code = $2',
+          [companyId, sku]
+        );
+        if (skuIdResult.rows.length === 0) {
+          skuValidationResults.push({ sku, exists: false, error: 'SKU not found in database' });
+        } else {
+          skuValidationResults.push({ sku, exists: true, skuId: skuIdResult.rows[0].id, description: skuIdResult.rows[0].description });
+        }
+      } catch (error) {
+        skuValidationResults.push({ sku, exists: false, error: `Database error: ${error.message}` });
+      }
+    }
+
+    const missingSkus = skuValidationResults.filter(result => !result.exists);
+    if (missingSkus.length > 0) {
+      logger.warn('[Job Creation] Validation failed: Some SKUs not found in database');
+      return sendError(res, 400, 'Some SKUs not found in database', { missingSkus, validSkus: skuValidationResults.filter(result => result.exists) });
+    }
+    logger.info(`[Job Creation] All ${skus.length} SKUs exist in database`);
+
+    // 4. Validate data availability for database datasets
+    const dataValidationResults = [];
+    for (const sku of skus) {
+      try {
+        const timeSeriesData = await getTimeSeriesData(datasetId, sku);
+        if (!timeSeriesData || timeSeriesData.length === 0) {
+          dataValidationResults.push({ sku, hasData: false, error: 'No time series data found' });
+        } else {
+          dataValidationResults.push({ sku, hasData: true, dataPoints: timeSeriesData.length });
+        }
+      } catch (error) {
+        dataValidationResults.push({ sku, hasData: false, error: `Error loading data: ${error.message}` });
+      }
+    }
+    
+    const skusWithoutData = dataValidationResults.filter(result => !result.hasData);
+    if (skusWithoutData.length > 0) {
+      logger.warn('[Job Creation] Validation failed: Some SKUs have no data');
+      return sendError(res, 400, 'Some SKUs have no data in the dataset', { skusWithoutData, skusWithData: dataValidationResults.filter(result => result.hasData) });
+    }
+    logger.info(`[Job Creation] All ${skus.length} SKUs have data in dataset ${datasetId}`);
+
+    // 5. Validate models exist and are valid
+    const modelValidationResults = [];
+    for (const modelId of models) {
+      const modelClass = modelFactory.getModelClass(modelId);
+      if (!modelClass) {
+        modelValidationResults.push({ modelId, valid: false, error: 'Model not found' });
+      } else {
+        modelValidationResults.push({ modelId, valid: true, displayName: modelClass.metadata?.displayName || modelId });
+      }
+    }
+
+    const invalidModels = modelValidationResults.filter(result => !result.valid);
+    if (invalidModels.length > 0) {
+      logger.warn('[Job Creation] Validation failed: Some models are invalid');
+      return sendError(res, 400, 'Some models are invalid or not found', { invalidModels, validModels: modelValidationResults.filter(result => result.valid) });
+    }
+    logger.info(`[Job Creation] All ${models.length} models are valid`);
+
+    logger.info('[Job Creation] All validation passed, proceeding with job creation');
+
+    // --- JOB CREATION LOGIC ---
+    const priority = getPriorityFromReason(reason);
+    let jobsCreated = 0;
+    let jobsMerged = 0;
+
+    // Get seasonal period from dataset metadata
+    let seasonalPeriod = 12; // Default fallback
+    try {
+      const metadata = await getDatasetMetadata(datasetId);
+      if (metadata && metadata.metadata && metadata.metadata.summary && metadata.metadata.summary.frequency) {
+        const frequency = metadata.metadata.summary.frequency;
+        seasonalPeriod = getSeasonalPeriodsFromFrequency(frequency);
+        logger.info(`[Job Creation] Using seasonal period ${seasonalPeriod} from dataset ${datasetId} frequency: ${frequency}`);
+      }
+    } catch (e) {
+      logger.warn('[Job Creation] Could not get seasonal period from dataset metadata, using default:', e.message);
+    }
+          
+    for (const sku of skus) {
+      logger.info(`[Job Creation] Creating jobs for SKU: ${sku}`);
+      
+      // Include all models - the worker will filter based on actual data availability
+      const eligibleModels = models;
+      
+      // Generate optimizationId per SKU (not per job) - all models for this SKU share the same optimizationId
+      const optimizationId = uuidv4();
+
+      // Create jobs for all eligible models
+      for (const modelId of eligibleModels) {
+        // Check if model should be included in grid search using the model's own method
+        const modelClass = modelFactory.getModelClass(modelId);
+        if (method === 'grid' && modelClass && !modelClass.shouldIncludeInGridSearch()) {
+          jobsMerged++;
+          logger.info(`[Job Creation] Merged job for SKU: ${sku}, Model: ${modelId} (model opted out of grid search)`);
+          continue;
+        }
+        
+        // Generate optimization hash for this specific model
+        const optimizationHash = generateOptimizationHash(sku, modelId, method, `dataset_${datasetId}`, {}, metricWeights);
+        
+        // Check if a job with the same hash already exists
+        try {
+          const existingJob = await checkExistingOptimizationJob(optimizationHash, userId);
+          if (existingJob) {
+            if (existingJob.status === 'pending' || existingJob.status === 'running') {
+              jobsMerged++;
+              logger.info(`[Job Creation] Merged job for SKU: ${sku}, Model: ${modelId} (duplicate job ${existingJob.id} already ${existingJob.status})`);
+              continue;
+            } else if (existingJob.status === 'completed') {
+              jobsMerged++;
+              logger.info(`[Job Creation] Merged job for SKU: ${sku}, Model: ${modelId} (duplicate job ${existingJob.id} already completed)`);
+              continue;
+            }
+            // If failed or cancelled, we can create a new job
+            logger.info(`[Job Creation] Creating new job for SKU: ${sku}, Model: ${modelId} (previous job ${existingJob.id} was ${existingJob.status})`);
+          }
+        } catch (error) {
+          logger.warn(`[Job Creation] Error checking for existing job: ${error.message}`);
+          // Continue with job creation if we can't check for duplicates
+        }
+        
+        // Get friendly dataset name
+        let friendlyName = '';
+        try {
+          const metadata = await getDatasetMetadata(datasetId);
+          if (metadata && metadata.name) {
+            friendlyName = metadata.name;
+          }
+        } catch (e) {
+          logger.warn(`Could not get dataset name for ID ${datasetId}:`, e.message);
+        }
+        
+        if (!friendlyName) {
+          friendlyName = `Dataset ${datasetId}`;
+        }
+
+        // Create job data
+        const jobData = { 
+          modelTypes: [modelId], 
+          optimizationType: method, 
+          name: friendlyName, 
+          sku,
+          datasetId: datasetId
+        };
+        
+        // Insert job
+        const insertQuery = `
+          INSERT INTO optimization_jobs (
+            company_id, user_id, sku_id, sku, dataset_id, method, payload, status, reason, 
+            batch_id, priority, optimization_id, optimization_hash
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        `;
+        
+        // Lookup sku_id from skus table
+        const skuIdResult = await pgPool.query(
+          'SELECT id FROM skus WHERE company_id = $1 AND sku_code = $2',
+          [companyId, sku]
+        );
+        const skuId = skuIdResult.rows[0]?.id;
+        if (!skuId) throw new Error(`SKU not found: ${sku}`);
+        
+        // Ensure jobData is properly stringified
+        const jobDataString = typeof jobData === 'string' ? jobData : JSON.stringify(jobData);
+        await pgPool.query(insertQuery, [
+          companyId, userId, skuId, sku, datasetId, method, jobDataString, 'pending', 
+          reason || 'manual_trigger', batchId, priority, 
+          optimizationId, optimizationHash
+        ]);
+        
+        jobsCreated++;
+        logger.info(`[Job Creation] Created job for SKU: ${sku}, Model: ${modelId}, Hash: ${optimizationHash.slice(0, 8)}...`);
+      }
+    }
+
+    res.status(201).json({ 
+      message: `Successfully created ${jobsCreated} jobs`, 
+      jobsCreated, 
+      jobsCancelled: 0, 
+      jobsMerged, 
+      jobsFiltered: 0,
+      skusProcessed: skus.length, 
+      modelsPerSku: models.length, 
+      priority 
+    });
+  } catch (error) {
+    logger.error('Error in jobs post:', error.message, error.stack);
+    sendError(res, 500, 'Failed to create jobs', { error: error.message });
+  }
+});
+
+/**
+ * Get best results per model and method
+ * @route GET /jobs/best-results-per-model
+ * @returns {object} Best results grouped by model and method
+ */
+router.get('/jobs/best-results-per-model', async (req, res) => {
+  try {
+    const userId = 1; // or whatever your test user's id is
+    const { method, datasetId, sku } = req.query;
+    
+    // Accept metric weights from query params, fallback to defaults
+    const mapeWeight = parseFloat(req.query.mapeWeight) || 0.4;
+    const rmseWeight = parseFloat(req.query.rmseWeight) || 0.3;
+    const maeWeight = parseFloat(req.query.maeWeight) || 0.2;
+    const accuracyWeight = parseFloat(req.query.accuracyWeight) || 0.1;
+    const weights = { mape: mapeWeight, rmse: rmseWeight, mae: maeWeight, accuracy: accuracyWeight };
+    
+    // Validate method parameter
+    if (method && !['grid', 'ai', 'all'].includes(method)) {
+      return res.status(400).json({ error: 'Method must be "grid", "ai", or "all"' });
+    }
+    
+    // Build query based on method filter and datasetId filter
+    // Join with optimization_results to get only jobs that have results
+    let query = `
+      SELECT oj.*, ores.parameters, ores.scores, ores.forecasts 
+      FROM optimization_jobs oj 
+      LEFT JOIN optimization_results ores ON oj.id = ores.job_id AND ores.company_id = oj.company_id 
+      WHERE oj.status = 'completed' AND oj.user_id = $1 AND ores.id IS NOT NULL
+    `;
+    let params = [userId];
+    let paramIndex = 2;
+    
+    if (method && method !== 'all') {
+      query += ` AND oj.method = $${paramIndex}`;
+      params.push(method);
+      paramIndex++;
+    }
+    
+    if (datasetId) {
+      // Use datasetId directly
+      query += ` AND oj.dataset_id = $${paramIndex}`;
+      params.push(datasetId);
+      paramIndex++;
+    }
+    
+    if (sku) {
+      query += ` AND oj.sku_code = $${paramIndex}`;
+      params.push(sku);
+      paramIndex++;
+    }
+    
+    query += " ORDER BY oj.created_at DESC";
+    
+    console.log(`[API] Query: ${query}, Params:`, params);
+    
+    const result = await pgPool.query(query, params);
+    
+    if (result.rows.length === 0) {
+      // Return empty results instead of 404 to avoid console errors
+      console.log(`[API] No jobs found with criteria: datasetId='${datasetId}', sku='${sku}', method='${method}'`);
+      return res.json({
+        totalJobs: 0,
+        bestResultsPerModelMethod: [],
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Create a lookup map for model metadata
+    const modelMetadataMap = new Map();
+    // Import MODEL_METADATA if available, otherwise use empty map
+    try {
+      const { MODEL_METADATA } = await import('./models/ModelMetadata.js');
+      MODEL_METADATA.forEach(model => {
+        modelMetadataMap.set(model.id, model);
+      });
+    } catch (error) {
+      console.warn('[API] Could not load MODEL_METADATA, using empty map');
+    }
+    
+    const bestResultsPerModelMethod = extractBestResultsPerModelMethod(result.rows, modelMetadataMap, weights);
+    const response = {
+      totalJobs: result.rows.length,
+      bestResultsPerModelMethod,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log(`[API] Returning ${bestResultsPerModelMethod.length} results for datasetId: ${datasetId}, sku: ${sku}`);
+    if (bestResultsPerModelMethod.length > 0) {
+              console.log(`[API] Sample result:`, {
+          modelType: bestResultsPerModelMethod[0].modelType,
+          sku: bestResultsPerModelMethod[0].sku,
+          datasetId: bestResultsPerModelMethod[0].datasetId,
+          methodsCount: bestResultsPerModelMethod[0].methods?.length,
+          hasBestResult: bestResultsPerModelMethod[0].methods?.some(m => m.bestResult?.compositeScore !== null)
+        });
+    }
+    
+    res.json(response);
+    
+  } catch (error) {
+    console.error('Error processing best results per model:', error);
+    res.status(500).json({ error: 'Failed to process best results per model', details: error.message });
+  }
+});
+
+/**
+ * Detect existing datasets
+ * @route GET /detect-existing-data
+ * @returns {object} List of existing datasets with metadata
+ */
+router.get('/detect-existing-data', async (req, res) => {
+  try {
+    // Get all datasets for the company
+    const datasetsResult = await pgPool.query(`
+      SELECT 
+        d.id,
+        d.name,
+        d.file_path,
+        d.metadata,
+        d.uploaded_at,
+        d.dataset_hash,
+        COUNT(DISTINCT tsd.sku_code) as sku_count,
+        MIN(tsd.date) as min_date,
+        MAX(tsd.date) as max_date,
+        COUNT(DISTINCT tsd.date) as total_periods
+      FROM datasets d
+      LEFT JOIN time_series_data tsd ON d.id = tsd.dataset_id
+      WHERE d.company_id = $1
+      GROUP BY d.id, d.name, d.file_path, d.metadata, d.uploaded_at, d.dataset_hash
+      ORDER BY d.uploaded_at DESC
+    `, [1]); // Hardcoded company_id = 1 for now
+
+    const datasets = datasetsResult.rows.map(row => {
+      // Extract frequency from metadata if available
+      let frequency = 'monthly'; // default
+      if (row.metadata && row.metadata.summary && row.metadata.summary.frequency) {
+        frequency = row.metadata.summary.frequency;
+      }
+
+      // Determine import type from metadata or filename
+      let importType = 'Manual Import'; // default
+      if (row.metadata && row.metadata.source) {
+        if (row.metadata.source === 'ai-import') {
+          importType = 'AI Import';
+        } else if (row.metadata.source === 'manual-import') {
+          importType = 'Manual Import';
+        }
+      } else if (row.file_path) {
+        // Fallback: check filename for AI indicators
+        const filename = path.basename(row.file_path);
+        if (filename.includes('AI_Processed') || filename.includes('ai-import')) {
+          importType = 'AI Import';
+        }
+      }
+
+      return {
+        id: row.id.toString(),
+        name: row.name || `Dataset ${row.id}`,
+        type: importType,
+        filename: row.file_path ? path.basename(row.file_path) : `dataset_${row.id}.csv`,
+        timestamp: new Date(row.uploaded_at).getTime(),
+        summary: {
+          skuCount: parseInt(row.sku_count) || 0,
+          dateRange: [
+            row.min_date ? new Date(row.min_date).toISOString().split('T')[0] : '',
+            row.max_date ? new Date(row.max_date).toISOString().split('T')[0] : ''
+          ],
+          totalPeriods: parseInt(row.total_periods) || 0,
+          frequency: frequency
+        }
+      };
+    });
+
+    res.json({ 
+      status: 'ok',
+      datasets: datasets,
+                timestamp: new Date().toISOString()
+            });
+  } catch (err) {
+    sendError(res, 500, 'Failed to detect existing data', { error: err.message });
+  }
+});
+
+/**
+ * Get settings
+ * @route GET /settings
+ * @returns {object} Application settings
+ */
+router.get('/settings', authenticateToken, async (req, res) => {
+  try {
+    // Get company settings
+    const companySettingsResult = await pgPool.query(`
+      SELECT key, value FROM company_settings WHERE company_id = $1
+    `, [1]); // Hardcoded company_id = 1 for now
+
+    // Get user settings
+    const userSettingsResult = await pgPool.query(`
+      SELECT key, value FROM user_settings WHERE company_id = $1 AND user_id = $2
+          `, [req.user.company_id, req.user.id]);
+
+    // Combine settings
+    const rawSettings = {};
+    
+    // Add company settings
+    companySettingsResult.rows.forEach(row => {
+      rawSettings[row.key] = row.value;
+    });
+    
+    // Add user settings (user settings override company settings)
+    userSettingsResult.rows.forEach(row => {
+      rawSettings[row.key] = row.value;
+    });
+
+    // Parse and structure settings according to GlobalSettings interface
+    const settings = {
+      // Core forecast settings
+      forecastPeriods: parseInt(rawSettings['global_forecastPeriods'] || '12'),
+      
+      // Business context
+      businessContext: {
+        costOfError: rawSettings['business_costOfError'] || 'medium',
+        planningPurpose: rawSettings['business_planningPurpose'] || 'tactical',
+        updateFrequency: rawSettings['business_updateFrequency'] || 'weekly',
+        interpretabilityNeeds: rawSettings['business_interpretabilityNeeds'] || 'medium'
+      },
+      
+      // AI settings
+      aiForecastModelOptimizationEnabled: rawSettings['global_aiForecastModelOptimizationEnabled'] === 'true',
+      aiCsvImportEnabled: rawSettings['global_aiCsvImportEnabled'] !== 'false', // Default to true
+      aiFailureThreshold: parseInt(rawSettings['global_aiFailureThreshold'] || '5'),
+      aiReasoningEnabled: rawSettings['global_aiReasoningEnabled'] === 'true',
+      
+      // File processing settings
+      largeFileProcessingEnabled: rawSettings['global_largeFileProcessingEnabled'] !== 'false', // Default to true
+      largeFileThreshold: parseInt(rawSettings['global_largeFileThreshold'] || '1048576'), // 1MB default
+      
+      // Metric weights (as percentages)
+      mapeWeight: parseInt(rawSettings['global_mapeWeight'] || '40'),
+      rmseWeight: parseInt(rawSettings['global_rmseWeight'] || '30'),
+      maeWeight: parseInt(rawSettings['global_maeWeight'] || '20'),
+      accuracyWeight: parseInt(rawSettings['global_accuracyWeight'] || '10'),
+      
+      // CSV import settings
+      csvSeparator: rawSettings['global_csvSeparator'] || ',',
+      autoDetectFrequency: rawSettings['global_autoDetectFrequency'] !== 'false' // Default to true
+    };
+
+    res.json({
+      status: 'ok',
+      settings: settings,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    sendError(res, 500, 'Failed to fetch settings', { error: err.message });
+  }
+});
+
+/**
+ * Update settings
+ * @route POST /settings
+ * @returns {object} Updated settings
+ */
+router.post('/settings', authenticateToken, async (req, res) => {
+  try {
+    const { settings } = req.body;
+    if (!settings || typeof settings !== 'object') {
+      return sendError(res, 400, 'Invalid settings data');
+    }
+
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Map structured settings to database keys
+      const settingsToUpdate = {};
+
+      // Core forecast settings
+      if (settings.forecastPeriods !== undefined) {
+        settingsToUpdate['global_forecastPeriods'] = settings.forecastPeriods.toString();
+      }
+
+      // Business context settings
+      if (settings.businessContext) {
+        if (settings.businessContext.costOfError !== undefined) {
+          settingsToUpdate['business_costOfError'] = settings.businessContext.costOfError;
+        }
+        if (settings.businessContext.planningPurpose !== undefined) {
+          settingsToUpdate['business_planningPurpose'] = settings.businessContext.planningPurpose;
+        }
+        if (settings.businessContext.updateFrequency !== undefined) {
+          settingsToUpdate['business_updateFrequency'] = settings.businessContext.updateFrequency;
+        }
+        if (settings.businessContext.interpretabilityNeeds !== undefined) {
+          settingsToUpdate['business_interpretabilityNeeds'] = settings.businessContext.interpretabilityNeeds;
+        }
+      }
+
+      // AI settings
+      if (settings.aiForecastModelOptimizationEnabled !== undefined) {
+        settingsToUpdate['global_aiForecastModelOptimizationEnabled'] = settings.aiForecastModelOptimizationEnabled.toString();
+      }
+      if (settings.aiCsvImportEnabled !== undefined) {
+        settingsToUpdate['global_aiCsvImportEnabled'] = settings.aiCsvImportEnabled.toString();
+      }
+      if (settings.aiFailureThreshold !== undefined) {
+        settingsToUpdate['global_aiFailureThreshold'] = settings.aiFailureThreshold.toString();
+      }
+      if (settings.aiReasoningEnabled !== undefined) {
+        settingsToUpdate['global_aiReasoningEnabled'] = settings.aiReasoningEnabled.toString();
+      }
+
+      // File processing settings
+      if (settings.largeFileProcessingEnabled !== undefined) {
+        settingsToUpdate['global_largeFileProcessingEnabled'] = settings.largeFileProcessingEnabled.toString();
+      }
+      if (settings.largeFileThreshold !== undefined) {
+        settingsToUpdate['global_largeFileThreshold'] = settings.largeFileThreshold.toString();
+      }
+
+      // Metric weights
+      if (settings.mapeWeight !== undefined) {
+        settingsToUpdate['global_mapeWeight'] = settings.mapeWeight.toString();
+      }
+      if (settings.rmseWeight !== undefined) {
+        settingsToUpdate['global_rmseWeight'] = settings.rmseWeight.toString();
+      }
+      if (settings.maeWeight !== undefined) {
+        settingsToUpdate['global_maeWeight'] = settings.maeWeight.toString();
+      }
+      if (settings.accuracyWeight !== undefined) {
+        settingsToUpdate['global_accuracyWeight'] = settings.accuracyWeight.toString();
+      }
+
+      // CSV import settings
+      if (settings.csvSeparator !== undefined) {
+        settingsToUpdate['global_csvSeparator'] = settings.csvSeparator;
+      }
+      if (settings.autoDetectFrequency !== undefined) {
+        settingsToUpdate['global_autoDetectFrequency'] = settings.autoDetectFrequency.toString();
+      }
+
+      // Update company settings
+      for (const [key, value] of Object.entries(settingsToUpdate)) {
+        await client.query(`
+          INSERT INTO company_settings (company_id, key, value, updated_by)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (company_id, key)
+          DO UPDATE SET value = $3, updated_at = CURRENT_TIMESTAMP, updated_by = $4
+        `, [req.user.company_id, key, value, req.user.id]);
+      }
+      
+      await client.query('COMMIT');
+      
+      res.json({ 
+        status: 'ok',
+        message: 'Settings updated successfully',
+        timestamp: new Date().toISOString()
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    sendError(res, 500, 'Failed to update settings', { error: err.message });
+  }
+});
+
+/**
+ * Get available models
+ * @route GET /models
+ * @returns {object} List of available forecasting models
+ */
+router.get('/models', async (req, res) => {
+  try {
+    const models = [
+      {
+        id: 'simple-exponential-smoothing',
+        name: 'Simple Exponential Smoothing',
+        description: 'Basic exponential smoothing for trendless data',
+        category: 'smoothing',
+        parameters: ['alpha'],
+        seasonal: false
+      },
+      {
+        id: 'holt-linear-trend',
+        name: 'Holt Linear Trend',
+        description: 'Exponential smoothing with linear trend',
+        category: 'trend',
+        parameters: ['alpha', 'beta'],
+        seasonal: false
+      },
+      {
+        id: 'holt-winters',
+        name: 'Holt-Winters',
+        description: 'Exponential smoothing with trend and seasonality',
+        category: 'seasonal',
+        parameters: ['alpha', 'beta', 'gamma'],
+        seasonal: true
+      },
+      {
+        id: 'arima',
+        name: 'ARIMA',
+        description: 'Autoregressive Integrated Moving Average',
+        category: 'statistical',
+        parameters: ['p', 'd', 'q'],
+        seasonal: false
+      },
+      {
+        id: 'sarima',
+        name: 'SARIMA',
+        description: 'Seasonal ARIMA',
+        category: 'seasonal',
+        parameters: ['p', 'd', 'q', 'P', 'D', 'Q', 's'],
+        seasonal: true
+      },
+      {
+        id: 'moving-average',
+        name: 'Moving Average',
+        description: 'Simple moving average forecasting',
+        category: 'smoothing',
+        parameters: ['window'],
+        seasonal: false
+      },
+      {
+        id: 'seasonal-moving-average',
+        name: 'Seasonal Moving Average',
+        description: 'Moving average with seasonality',
+        category: 'seasonal',
+        parameters: ['window', 'seasonal_period'],
+        seasonal: true
+      },
+      {
+        id: 'linear-trend',
+        name: 'Linear Trend',
+        description: 'Simple linear regression trend',
+        category: 'trend',
+                  parameters: [],
+        seasonal: false
+      },
+      {
+        id: 'seasonal-naive',
+        name: 'Seasonal Naive',
+        description: 'Naive forecast with seasonality',
+        category: 'seasonal',
+        parameters: ['seasonal_period'],
+        seasonal: true
+      }
+    ];
+
+    // Return array directly (not wrapped in object) - matches original implementation
+    res.json(models);
+  } catch (err) {
+    sendError(res, 500, 'Failed to fetch models', { error: err.message });
+  }
+});
+
+/**
+ * Get optimization status
+ * @route GET /optimizations/status
+ * @returns {object} Optimization status and progress grouped by SKU
+ */
+router.get('/optimizations/status', async (req, res) => {
+  try {
+    // Get optimization jobs with SKU information
+    const optimizationsResult = await pgPool.query(`
+      SELECT 
+        oj.optimization_id,
+        oj.optimization_hash,
+        oj.batch_id,
+        oj.reason,
+        oj.sku_code,
+        oj.dataset_id,
+        COUNT(*) as total_jobs,
+        COUNT(CASE WHEN oj.status = 'pending' THEN 1 END) as pending_jobs,
+        COUNT(CASE WHEN oj.status = 'running' THEN 1 END) as running_jobs,
+        COUNT(CASE WHEN oj.status = 'completed' THEN 1 END) as completed_jobs,
+        COUNT(CASE WHEN oj.status = 'failed' THEN 1 END) as failed_jobs,
+        COUNT(CASE WHEN oj.status = 'cancelled' THEN 1 END) as cancelled_jobs,
+        COUNT(CASE WHEN oj.status = 'skipped' THEN 1 END) as skipped_jobs,
+        MIN(oj.created_at) as created_at,
+        MAX(oj.updated_at) as updated_at,
+        AVG(oj.progress) as avg_progress
+      FROM optimization_jobs oj
+      WHERE oj.company_id = $1 AND oj.optimization_id IS NOT NULL
+      GROUP BY oj.optimization_id, oj.optimization_hash, oj.batch_id, oj.reason, oj.sku_code, oj.dataset_id
+      ORDER BY MIN(oj.created_at) DESC
+    `, [1]); // Hardcoded company_id = 1 for now
+
+    // Group optimizations by SKU
+    const skuGroups = {};
+    
+    optimizationsResult.rows.forEach(row => {
+      const skuCode = row.sku_code || 'unknown';
+      const datasetId = row.dataset_id || 0;
+      const batchId = row.batch_id || 'default';
+      
+      if (!skuGroups[skuCode]) {
+        skuGroups[skuCode] = {
+          sku: skuCode,
+          skuDescription: skuCode, // Could be enhanced with actual SKU descriptions
+          datasetId: datasetId,
+          batches: {},
+          totalJobs: 0,
+          pendingJobs: 0,
+          runningJobs: 0,
+          completedJobs: 0,
+          failedJobs: 0,
+          cancelledJobs: 0,
+          skippedJobs: 0,
+          progress: 0,
+          isOptimizing: false,
+          methods: [],
+          models: []
+        };
+      }
+      
+      const totalJobs = parseInt(row.total_jobs);
+      const completedJobs = parseInt(row.completed_jobs);
+      const failedJobs = parseInt(row.failed_jobs);
+      const runningJobs = parseInt(row.running_jobs);
+      const pendingJobs = parseInt(row.pending_jobs);
+      const cancelledJobs = parseInt(row.cancelled_jobs);
+      const skippedJobs = parseInt(row.skipped_jobs);
+
+      let status = 'pending';
+      if (failedJobs > 0 && completedJobs === 0) {
+        status = 'failed';
+      } else if (completedJobs === totalJobs) {
+        status = 'completed';
+      } else if (runningJobs > 0 || completedJobs > 0) {
+        status = 'running';
+      }
+
+      const progress = totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 0;
+      const isOptimizing = pendingJobs > 0 || runningJobs > 0;
+
+      // Create batch object
+      const batch = {
+        batchId: batchId,
+        sku: skuCode,
+        skuDescription: skuCode,
+        datasetId: datasetId,
+        reason: row.reason,
+        priority: 1, // Default priority
+        createdAt: row.created_at,
+        optimizations: {
+          [row.optimization_id]: {
+            optimizationId: row.optimization_id,
+            modelId: 'unknown', // Could be extracted from job payload
+            modelDisplayName: 'Unknown Model',
+            modelShortName: 'Unknown',
+            method: 'grid', // Default method
+            methodDisplayName: 'Grid Search',
+            methodShortName: 'Grid',
+            reason: row.reason,
+            status: status,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            progress: progress,
+          jobs: []
+          }
+        },
+        totalJobs: totalJobs,
+        pendingJobs: pendingJobs,
+        runningJobs: runningJobs,
+        completedJobs: completedJobs,
+        failedJobs: failedJobs,
+        cancelledJobs: cancelledJobs,
+        skippedJobs: skippedJobs,
+        progress: progress,
+        isOptimizing: isOptimizing,
+        methods: ['grid'], // Default method
+        models: ['unknown'] // Default model
+      };
+
+      // Add batch to SKU group
+      skuGroups[skuCode].batches[batchId] = batch;
+      
+      // Update SKU group totals
+      skuGroups[skuCode].totalJobs += totalJobs;
+      skuGroups[skuCode].pendingJobs += pendingJobs;
+      skuGroups[skuCode].runningJobs += runningJobs;
+      skuGroups[skuCode].completedJobs += completedJobs;
+      skuGroups[skuCode].failedJobs += failedJobs;
+      skuGroups[skuCode].cancelledJobs += cancelledJobs;
+      skuGroups[skuCode].skippedJobs += skippedJobs;
+      skuGroups[skuCode].isOptimizing = skuGroups[skuCode].isOptimizing || isOptimizing;
+    });
+
+    // Convert to array and calculate SKU group progress
+    const skuGroupsArray = Object.values(skuGroups).map(skuGroup => {
+      const totalProcessable = skuGroup.totalJobs - skuGroup.cancelledJobs;
+      skuGroup.progress = totalProcessable > 0 ? Math.round(((skuGroup.completedJobs + skuGroup.failedJobs) / totalProcessable) * 100) : 0;
+      return skuGroup;
+    });
+
+    res.json({
+      status: 'ok',
+      optimizations: skuGroupsArray,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    sendError(res, 500, 'Failed to fetch optimization status', { error: err.message });
+  }
+});
+
+/**
+ * Transform CSV data using Grok
+ * @route POST /grok-transform
+ * @returns {object} Transformed data
+ */
+router.post('/grok-transform', async (req, res) => {
+  try {
+    const { csvData, reasoningEnabled } = req.body;
+    if (!csvData) {
+      return sendError(res, 400, 'Missing csvData');
+    }
+    const { data, headers } = parseCsvWithHeaders(csvData);
+    // Placeholder for Grok transformation logic
+    const transformed = data.map(row => ({ ...row, transformed: true }));
+    res.json({ status: 'ok', headers, data: transformed });
+  } catch (err) {
+    sendError(res, 500, 'Failed to process transformation', { error: err.message });
+  }
+});
+
+/**
+ * Grok generate config endpoint
+ * @route POST /grok-generate-config
+ * @returns {object} Generated configuration
+ */
 router.post('/grok-generate-config', async (req, res) => {
   try {
     const { csvChunk, fileSize, reasoningEnabled } = req.body;
@@ -171,41 +1260,26 @@ router.post('/grok-generate-config', async (req, res) => {
           }
         }`;
 
-    const prompt = `
-Context: You are processing a large CSV file of ${Math.round(fileSize / 1024)} KB.
-Sample Data (first 15 records): 
-${JSON.stringify(csvChunk, null, 2)}
+    const prompt = `CSV Data (first 5 rows):\n${JSON.stringify(csvChunk.slice(0, 5), null, 2)}\n\nInstructions:\n${aiInstructionsLarge}\n\nOutput Format:\n${outputFormat}`;
+    const response = await callGrokAPI(prompt, 4000, reasoningEnabled);
 
-Instructions: ${aiInstructionsLarge}
-
-Output Format: ${outputFormat}
-`;
-    const response = await callGrokAPI(prompt, 2000, reasoningEnabled);
-    //console.Log('Raw Grok-3 Response (/grok-generate-config):', response);
     let parsedResponse;
     try {
       parsedResponse = JSON.parse(response);
     } catch (parseError) {
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            parsedResponse = JSON.parse(jsonMatch[0]);
-        } else {
-            return res.status(500).json({ error: 'Failed to parse Grok response as JSON configuration' });
-        }
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsedResponse = JSON.parse(jsonMatch[0]);
+      } else {
+        return res.status(500).json({ error: 'Failed to parse Grok response as JSON' });
+      }
     }
+
     const reasoning = parsedResponse.reasoning || 'No reasoning provided';
-    
-    // Handle potentially nested config object
-    let config = parsedResponse;
-    if (config.config) {
-      config = config.config;
-    } else if (config.data && config.data.config) {
-      config = config.data.config;
-    }
-    
-    //console.Log('Generated config:', JSON.stringify(config, null, 2));
+    const config = parsedResponse.config || parsedResponse;
+
     res.json({ 
-      config, 
+      config,
       reasoning,
       originalResponse: response
     });
@@ -215,306 +1289,304 @@ Output Format: ${outputFormat}
   }
 });
 
+/**
+ * Apply config endpoint
+ * @route POST /apply-config
+ * @returns {object} Applied configuration result
+ */
 router.post('/apply-config', async (req, res) => {
   try {
-    const { csvData, config } = req.body;
-    if (!csvData || !config) {
-      return res.status(400).json({ error: 'Missing csvData or config' });
+    const { data, config } = req.body;
+    if (!data || !config) {
+      return res.status(400).json({ error: 'Missing data or config' });
     }
 
-    //console.Log('apply-config received config:', JSON.stringify(config, null, 2));
+    const transformedData = applyTransformations(data, config.operations);
+    const columns = Object.keys(transformedData[0] || {});
+    const columnRoles = detectColumnRoles(columns).map(obj => obj.role);
 
-    // Use the new robust parser
-    const { data } = parseCsvWithHeaders(csvData);
-
-    const { data: transformedData, columns } = applyTransformations(data, config);
-    // Get column roles as objects first
-    const columnRolesObjects = detectColumnRoles(columns);
-    // Extract just the role strings for the frontend
-    const columnRoles = columnRolesObjects.map(obj => obj.role);
-
-    const fileName = `processed-data-${Date.now()}.json`;
-    const filePath = path.join(UPLOADS_DIR, fileName);
-    fs.writeFileSync(filePath, JSON.stringify({ data: transformedData, columns }, null, 2));
-    
-    const skuCount = transformedData.length;
-    const materialCodeKey = columns[0];
-    const skuList = Array.from(new Set(transformedData.map(row => row[materialCodeKey]).filter(Boolean)));
-    const dateRange = columns && columns.length > 1 ? [columns[1], columns[columns.length - 1]] : ["N/A", "N/A"];
-
-    res.status(200).json({
-      message: 'Configuration applied and data saved successfully',
-      filePath: `uploads/${fileName}`,
-      summary: {
-        skuCount,
-        dateRange,
-        totalPeriods: columns ? columns.length - 1 : 0,
-      },
-      skuList: skuList,
-      columns: columns, 
-      previewData: transformedData.slice(0, 10),
-      columnRoles: columnRoles
+    res.json({ 
+      transformedData,
+      columns,
+      columnRoles
     });
   } catch (error) {
-    console.error('Error applying configuration:', error.message);
-    console.error(error.stack);
-    res.status(500).json({ error: 'An unexpected error occurred while applying the configuration.', details: error.message });
-  }
-});
-
-router.get('/processed-data/:fileName', (req, res) => {
-  const { fileName } = req.params;
-  const filePath = path.join(UPLOADS_DIR, fileName);
-  if (fs.existsSync(filePath)) {
-    res.sendFile(filePath);
-  } else {
-    res.status(404).json({ error: 'File not found' });
-  }
-});
-
-router.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-router.post('/jobs', (req, res) => {
-  try {
-    let { data, models, skus, reason, method = 'grid', filePath, batchId } = req.body;
-    // Standardize filePath to always be 'uploads/filename'
-    if (filePath && !filePath.startsWith('uploads/')) {
-      filePath = `uploads/${path.basename(filePath)}`;
-    }
-    console.log(`[Job Creation] Creating jobs for ${skus?.length || 0} SKUs, ${models?.length || 0} models, method: ${method}, filePath: ${filePath}`);
-    // Remove or comment out detailed logs
-    // console.log(`[Job Creation] 🔍 Creating jobs with filePath: ${filePath}`);
-    // console.log(`[Job Creation] 📊 Request details:`, { ... });
-    // ...
-    // Only keep error logs
-    // ... rest of the function unchanged ...
-    
-    // Check if filePath points to a processed JSON file
-    if (filePath) {
-      const resolvedPath = filePath.startsWith(UPLOADS_DIR) ? filePath : path.join(UPLOADS_DIR, path.basename(filePath));
-      console.log(`[Job Creation] 📁 Resolved file path: ${resolvedPath}`);
-      
-      if (fs.existsSync(resolvedPath)) {
-        try {
-          const fileContent = fs.readFileSync(resolvedPath, 'utf-8');
-          const fileData = JSON.parse(fileContent);
-          console.log(`[Job Creation] ✅ File exists and is valid JSON`);
-          console.log(`[Job Creation] 📊 File structure:`, {
-            hasData: !!fileData.data,
-            dataLength: fileData.data?.length || 0,
-            columns: fileData.columns?.length || 0,
-            source: fileData.source,
-            name: fileData.name
-          });
-        } catch (e) {
-          console.error(`[Job Creation] ❌ File exists but is not valid JSON:`, e.message);
-        }
-      } else {
-        console.error(`[Job Creation] ❌ File does not exist: ${resolvedPath}`);
-      }
-    }
-    
-    //console.Log('[Job Creation] Request:', { skus, models, filePath, reason, method, batchId });
-    const userId = 'default_user';
-    const priority = getPriorityFromReason(reason);
-    let jobsCreated = 0;
-    let jobsSkipped = 0;
-    let jobsFiltered = 0;
-    
-    if (skus && Array.isArray(skus) && skus.length > 0) {
-      const insertStmt = db.prepare("INSERT INTO jobs (userId, sku, modelId, method, payload, status, reason, batchId, priority, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-      
-      // Get model data requirements for eligibility filtering
-      const requirements = modelFactory.getModelDataRequirements();
-      const validationRatio = 0.2; // Match frontend default
-      
-      for (const sku of skus) {
-        // Get data for this specific SKU
-        let skuData = [];
-        if (data && Array.isArray(data)) {
-          skuData = data.filter(d => String(d.sku || d['Material Code']) === sku);
-        }
-
-        
-        // Filter models based on eligibility for this SKU
-        const eligibleModels = models.filter(modelId => {
-          const req = requirements[modelId];
-          if (!req) {
-            console.log(`[Job Creation] ${modelId}: No requirements found, including`);
-            return true;
-          }
-          
-          const minTrain = Number(req.minObservations);
-          const requiredTotal = Math.ceil(minTrain / (1 - validationRatio));
-          const isEligible = skuData.length >= requiredTotal;
-
-          console.log(`[Job Creation] ${modelId}: ${skuData.length} data points, requires ${requiredTotal} (${minTrain} training), eligible: ${isEligible}`);
-          
-          if (!isEligible) {
-            jobsFiltered++;
-            console.log(`[Job Creation] Filtered out ${modelId} for SKU ${sku}: insufficient data`);
-          }
-          
-          return isEligible;
-        });
-        
-
-        
-        // Create jobs for all eligible models (including non-optimizable ones)
-        for (const modelId of eligibleModels) {
-          // Check if model should be included in grid search using the model's own method
-          const modelClass = modelFactory.getModelClass(modelId);
-          if (method === 'grid' && modelClass && !modelClass.shouldIncludeInGridSearch()) {
-            jobsSkipped++;
-            console.log(`[Job Creation] Skipped job for SKU: ${sku}, Model: ${modelId} (model opted out of grid search)`);
-            continue;
-          }
-          if (method === 'grid' && modelClass) {
-            console.log(`[Job Creation] Model ${modelId} shouldIncludeInGridSearch(): ${modelClass.shouldIncludeInGridSearch()}`);
-          }
-          const payload = JSON.stringify({ skuData: [], businessContext: null });
-
-          // Read friendly dataset name from processed file if available
-          let friendlyName = '';
-          let resolvedPath = filePath;
-          if (filePath && !filePath.startsWith(UPLOADS_DIR)) {
-            resolvedPath = path.join(UPLOADS_DIR, path.basename(filePath));
-          }
-          try {
-            if (resolvedPath && fs.existsSync(resolvedPath)) {
-              const fileContent = fs.readFileSync(resolvedPath, 'utf-8');
-              const data = JSON.parse(fileContent);
-              if (data && data.name) {
-                friendlyName = data.name;
-              }
-            }
-          } catch (e) {
-            // Ignore errors, fallback below
-          }
-          if (!friendlyName && filePath) {
-            friendlyName = (filePath.split('/').pop() || '').replace(/\.(csv|json)$/i, '');
-          }
-
-          const jobData = { filePath, modelTypes: [modelId], optimizationType: method, name: friendlyName, sku };
-          //console.Log('[Job Creation] Received batchId:', batchId);
-          //console.Log('[Job Creation] Inserting job with batchId:', batchId);
-          insertStmt.run(userId, sku, modelId, method, payload, 'pending', reason || 'manual_trigger', batchId, priority, JSON.stringify(jobData));
-          //console.Log(`[Job Creation] Inserted job with batchId: ${batchId}`);
-          jobsCreated++;
-          //console.Log(`[Job Creation] Created job for SKU: ${sku}, Model: ${modelId}, File: ${filePath}, Batch: ${batchId}`);
-        }
-      }
-      insertStmt.finalize();
-      
-      res.status(201).json({ 
-        message: `Successfully created ${jobsCreated} jobs`, 
-        jobsCreated, 
-        jobsCancelled: 0, 
-        jobsSkipped, 
-        jobsFiltered,
-        skusProcessed: skus.length, 
-        modelsPerSku: models.length, 
-        priority 
-      });
-      return;
-    }
-  } catch (error) {
-    console.error('Error in jobs post:', error.message, error.stack);
+    console.error('Error in apply-config:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-router.get('/jobs/status', (req, res) => {
-  const userId = 'default_user';
-  db.all("SELECT * FROM jobs WHERE userId = ? ORDER BY method DESC, priority ASC, sku ASC, createdAt ASC", [userId], (err, rows) => {
-    if (err) {
-      console.error('Database error:', err);
-      return res.status(500).json({ error: 'Failed to get job status' });
+/**
+ * Load processed data endpoint
+ * @route GET /load-processed-data
+ * @returns {object} Processed data
+ */
+router.get('/load-processed-data', async (req, res) => {
+  try {
+    const { datasetId, sku } = req.query;
+
+    if (!datasetId) {
+      return res.status(400).json({ error: 'datasetId parameter is required' });
     }
-    //console.log('[Job Status] Returning jobs:', rows.map(j => ({ id: j.id, batchId: j.batchId })));
-    res.json(rows || []);
-  });
-});
 
-router.post('/jobs/reset', (req, res) => {
-    const userId = 'default_user';
-    db.run('DELETE FROM jobs WHERE userId = ?', [userId], function(err) {
-        if (err) {
-            console.error('Failed to reset jobs:', err);
-            return res.status(500).json({ error: 'Failed to reset jobs' });
-        }
-        res.status(200).json({ message: 'All jobs have been reset.', deletedCount: this.changes });
-    });
-});
-
-router.post('/jobs/clear-completed', (req, res) => {
-    const userId = 'default_user';
-    db.run("DELETE FROM jobs WHERE status = 'completed' AND userId = ?", [userId], function(err) {
-        if (err) {
-            console.error('Failed to clear completed jobs:', err);
-            return res.status(500).json({ error: 'Failed to clear completed jobs' });
-        }
-        res.status(200).json({ message: 'Completed jobs have been cleared.', deletedCount: this.changes });
-    });
-});
-
-router.post('/jobs/clear-pending', (req, res) => {
-    const userId = 'default_user';
-    db.run("DELETE FROM jobs WHERE status = 'pending' AND userId = ?", [userId], function(err) {
-        if (err) {
-            console.error('Failed to clear pending jobs:', err);
-            return res.status(500).json({ error: 'Failed to clear pending jobs' });
-        }
-        res.status(200).json({ message: 'Pending jobs have been cleared.', deletedCount: this.changes });
-    });
-});
-
-router.post('/register', async (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) {
-        return res.status(400).json({ error: 'Username and password are required' });
+    const id = parseInt(datasetId);
+    logger.info(`[load-processed-data] Loading dataset with ID: ${id}${sku ? ` for SKU: ${sku}` : ''}`);
+    
+    const metadata = await getDatasetMetadata(id);
+    logger.info(`[load-processed-data] Metadata result: ${metadata ? 'found' : 'not found'}`);
+    
+    if (!metadata) {
+      return sendError(res, 404, 'Dataset not found');
     }
+    
+    // Load time series data, optionally filtered by SKU
+    let timeSeriesData;
+    if (sku) {
+      timeSeriesData = await getTimeSeriesData(id, sku);
+      logger.info(`[load-processed-data] Time series data for SKU result: ${timeSeriesData ? `${timeSeriesData.length} rows` : 'not found'}`);
+    } else {
+      timeSeriesData = await getTimeSeriesData(id);
+      logger.info(`[load-processed-data] Time series data result: ${timeSeriesData ? `${timeSeriesData.length} rows` : 'not found'}`);
+    }
+    
+    if (!timeSeriesData || timeSeriesData.length === 0) {
+      return sendError(res, 404, sku ? `No time series data found for dataset and SKU ${sku}` : 'No time series data found for dataset');
+    }
+    
+    // Convert to the format expected by the frontend
+    const data = {
+      data: timeSeriesData.map(row => ({
+        'Material Code': row.sku_code,
+        'Date': row.date,
+        'Sales': row.value
+      })),
+      columns: metadata.metadata?.columns || ['Material Code', 'Date', 'Sales'],
+      columnRoles: metadata.metadata?.columnRoles || ['Material Code', 'Date', 'Sales'],
+      source: metadata.metadata?.source || 'database',
+      summary: metadata.metadata?.summary || {},
+      name: metadata.name,
+      csvHash: metadata.metadata?.csvHash
+    };
+    
+    res.json(data);
+  } catch (error) {
+    logger.error('Error loading processed data:', error);
+    sendError(res, 500, 'Failed to load processed data', { details: error.message });
+  }
+});
+
+/**
+ * AI optimize endpoint
+ * @route POST /ai-optimize
+ * @returns {object} AI optimization result
+ */
+router.post('/ai-optimize', async (req, res) => {
+  try {
+    const { modelId, data, metricWeights } = req.body;
+    const result = await optimizeParametersWithAI(modelId, data, metricWeights);
+    res.json(result);
+  } catch (error) {
+    console.error('Error in ai-optimize:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * AI model recommendation endpoint
+ * @route POST /ai-model-recommendation
+ * @returns {object} Model recommendation
+ */
+router.post('/ai-model-recommendation', async (req, res) => {
+  try {
+    const { data } = req.body;
+    const recommendation = await getModelRecommendation(data);
+    res.json(recommendation);
+  } catch (error) {
+    console.error('Error in ai-model-recommendation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Save cleaning metadata endpoint
+ * @route POST /save-cleaned-data
+ * @returns {object} Save result
+ */
+router.post('/save-cleaned-data', async (req, res) => {
+  try {
+    const { cleaningMetadata, datasetId } = req.body;
+    
+    console.log('[save-cleaned-data] Received request:', {
+      hasCleaningMetadata: !!cleaningMetadata,
+      datasetId: datasetId,
+      datasetIdType: typeof datasetId,
+      datasetIdIsNaN: isNaN(datasetId)
+    });
+    
+    if (!cleaningMetadata || !datasetId) {
+      return res.status(400).json({ error: 'Missing cleaningMetadata or datasetId' });
+    }
+
+    // Convert datasetId to number if it's a string
+    const numericDatasetId = typeof datasetId === 'string' ? parseInt(datasetId, 10) : datasetId;
+    
+    // Validate datasetId
+    const validDatasetId = validateDatasetId(numericDatasetId);
+    if (!validDatasetId) {
+      return res.status(400).json({ error: 'Invalid datasetId' });
+    }
+
+    // Save cleaning metadata to database
     try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, hashedPassword], function(err) {
-            if (err) {
-                return res.status(500).json({ error: 'Failed to register user' });
-            }
-            res.status(201).json({ message: 'User registered successfully', userId: this.lastID });
+      const client = await pool.connect();
+      try {
+        // Update the dataset's cleaning metadata
+        await client.query(
+          'UPDATE datasets SET cleaning_metadata = $1, updated_at = NOW() WHERE id = $2',
+          [JSON.stringify(cleaningMetadata), validDatasetId]
+        );
+        
+        console.log(`[save-cleaned-data] Updated cleaning metadata for dataset ${validDatasetId}`);
+        
+        res.json({ 
+          success: true,
+          datasetId: validDatasetId,
+          message: 'Cleaning metadata saved successfully'
         });
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to register user due to a server error' });
+      } finally {
+        client.release();
+      }
+    } catch (dbError) {
+      console.error('Database error saving cleaning metadata:', dbError);
+      res.status(500).json({ error: 'Failed to save cleaning metadata to database' });
     }
+  } catch (error) {
+    console.error('Error saving cleaning metadata:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-router.post('/login', (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) {
-        return res.status(400).json({ error: 'Username and password are required' });
+/**
+ * Process AI import endpoint
+ * @route POST /process-ai-import
+ * @returns {object} AI import result
+ */
+router.post('/process-ai-import', async (req, res) => {
+  try {
+    const { transformedData, originalCsvString, reasoning } = req.body;
+    if (!transformedData || !originalCsvString) {
+      return res.status(400).json({ error: 'Missing transformedData or originalCsvString' });
     }
-    db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
-        if (err || !user) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-        const match = await bcrypt.compare(password, user.password);
-        if (!match) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-        const token = jwt.sign({ userId: user.id }, 'your_jwt_secret', { expiresIn: '1h' });
-        res.json({ message: 'Login successful', token });
+
+    // Generate timestamp and hash
+    const timestamp = Date.now();
+    const csvHash = crypto.createHash('sha256').update(originalCsvString, 'utf8').digest('hex').slice(0, 30);
+    
+    // Save original CSV
+    const baseName = `AI_Processed_Upload-${timestamp}`;
+    const csvFileName = `${baseName}-${csvHash.slice(0, 8)}-original.csv`;
+    const csvFilePath = path.join(UPLOADS_DIR, csvFileName);
+    fs.writeFileSync(csvFilePath, originalCsvString);
+
+    // Process the transformed data
+    const columns = Object.keys(transformedData[0] || {});
+    const columnRoles = detectColumnRoles(columns).map(obj => obj.role);
+
+    // Filter out rows where all sales values are zero or empty
+    const filteredTransformedData = transformedData.filter(row => {
+      // Check if this row has any non-zero sales values
+      const salesValue = row['Sales'];
+      if (salesValue !== undefined && salesValue !== null && salesValue !== '' && salesValue !== 0) {
+        const num = Number(salesValue);
+        return Number.isFinite(num) && num > 0;
+      }
+      return false;
     });
+
+    // Extract summary information
+    const skuList = Array.from(new Set(filteredTransformedData.map(row => row['Material Code']).filter(Boolean)));
+    const skuCount = skuList.length;
+    const dateList = filteredTransformedData.map(row => row['Date']).filter(Boolean);
+    const uniqueDates = Array.from(new Set(dateList)).sort();
+    const dateRange = uniqueDates.length > 0 ? [uniqueDates[0], uniqueDates[uniqueDates.length - 1]] : ["N/A", "N/A"];
+    const totalPeriods = uniqueDates.length;
+    const frequency = inferDateFrequency(uniqueDates);
+
+    // Create dataset
+    const companyId = 1;
+    const divisionId = 1; // Default division for now
+    const clusterId = 1; // Default cluster for now
+    const createdBy = 1;
+    const datasetName = `AI Processed Dataset ${new Date().toISOString().slice(0,10)} - ${skuCount} products`;
+    
+    const metadata = {
+      columns,
+      columnRoles,
+      source: 'ai-import',
+      reasoning,
+      summary: {
+        skuCount,
+        dateRange,
+        totalPeriods,
+        frequency,
+      },
+      csvHash
+    };
+    
+    const datasetId = await createDataset(
+      companyId,
+      divisionId,
+      clusterId,
+      datasetName,
+      `uploads/${csvFileName}`,
+      createdBy,
+      metadata
+    );
+
+    // Insert time series data
+    const timeSeriesRows = filteredTransformedData.map(row => ({
+      sku_code: row['Material Code'],
+      date: row['Date'],
+      value: parseFloat(row['Sales']) || 0
+    })).filter(row => row.sku_code && row.date && !isNaN(row.value));
+    
+    await insertTimeSeriesData(datasetId, timeSeriesRows, companyId);
+
+    res.json({
+      success: true,
+      datasetId,
+      summary: {
+        skuCount,
+        dateRange,
+        totalPeriods,
+        frequency,
+      },
+      skuList,
+      columns,
+      columnRoles,
+      reasoning
+    });
+  } catch (error) {
+    console.error('Error processing AI import:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-router.post('/process-manual-import', async (req, res) => {
+/**
+ * Process manual import endpoint
+ * @route POST /process-manual-import
+ * @returns {object} Manual import result
+ */
+router.post('/process-manual-import', authenticateToken, async (req, res) => {
   try {
     const { headers, data, mappings, dateFormat, transpose, finalColumnRoles, originalCsvData, originalCsvString } = req.body;
 
-    // Debug log for received mappings
-    //console.Log('process-manual-import received mappings:', mappings);
-    if (finalColumnRoles) {
-      //console.Log('process-manual-import received finalColumnRoles:', finalColumnRoles);
+    // Validate required fields
+    if (!headers || !data || !mappings || !finalColumnRoles) {
+      return sendError(res, 400, 'Missing required fields', { 
+        required: ['headers', 'data', 'mappings', 'finalColumnRoles'],
+        received: Object.keys(req.body)
+      });
     }
 
     // Generate single timestamp for both files
@@ -522,7 +1594,7 @@ router.post('/process-manual-import', async (req, res) => {
 
     // Save original CSV data first (for detection logic)
     let csvHash = '';
-    
+
     // Use raw CSV string if provided, otherwise reconstruct from originalCsvData
     if (originalCsvString) {
       // Hash the raw CSV string directly (this matches the frontend hash)
@@ -539,14 +1611,14 @@ router.post('/process-manual-import', async (req, res) => {
 
     // Generate base name from timestamp
     const baseName = `Original_CSV_Upload-${timestamp}`;
-    
+
     // Save original CSV with new naming convention
     const csvFileName = `${baseName}-${csvHash.slice(0, 8)}-original.csv`;
     const csvFilePath = path.join(UPLOADS_DIR, csvFileName);
-    
+
     if (originalCsvString) {
       fs.writeFileSync(csvFilePath, originalCsvString);
-      console.log('Saved original CSV from raw string:', csvFileName);
+      logger.info('Saved original CSV from raw string:', csvFileName);
     } else if (originalCsvData && Array.isArray(originalCsvData) && originalCsvData.length > 0) {
       const csvHeaders = Object.keys(originalCsvData[0]);
       const csvContent = [
@@ -554,7 +1626,7 @@ router.post('/process-manual-import', async (req, res) => {
         ...originalCsvData.map(row => csvHeaders.map(header => row[header]).join(','))
       ].join('\n');
       fs.writeFileSync(csvFilePath, csvContent);
-      console.log('Saved original CSV from reconstructed data:', csvFileName);
+      logger.info('Saved original CSV from reconstructed data:', csvFileName);
     }
 
     // Use the provided cleaned headers and data directly
@@ -582,19 +1654,36 @@ router.post('/process-manual-import', async (req, res) => {
 
     const { data: transformedData, columns } = normalizeAndPivotData(dataRows, mappings, undefined, dateFormat, processedHeaders);
 
-    // Log the output columns for debugging
-    //console.Log('process-manual-import output columns:', columns);
-    //console.Log('process-manual-import received finalColumnRoles:', finalColumnRoles);
-
     if (!finalColumnRoles || finalColumnRoles.length !== columns.length) {
       throw new Error('finalColumnRoles length does not match normalized columns length');
     }
 
     const columnRoles = finalColumnRoles;
 
+    // Create dataset record in database
+    const companyId = req.user.company_id; // Use authenticated user's company
+    const createdBy = req.user.id; // Use authenticated user's ID
+
+    // For setup wizard, we don't create divisions/clusters automatically
+    // They will be created when the user completes the setup
+    let divisionId = null;
+    let clusterId = null;
+
     // Extract summary information
     const skuList = Array.from(new Set(transformedData.map(row => row['Material Code']).filter(Boolean)));
     const skuCount = skuList.length;
+
+    // Ensure all SKUs exist in the skus table
+    // For setup wizard, we'll create SKUs without division_id initially
+    // The division_id will be set when the user completes the setup
+    for (const skuCode of skuList) {
+      await pgPool.query(
+        'INSERT INTO skus (company_id, sku_code) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [companyId, skuCode]
+      );
+    }
+    logger.info(`[process-manual-import] Ensured ${skuCount} SKUs exist in database`);
+
     const dateList = transformedData.map(row => row['Date']).filter(Boolean);
     const uniqueDates = Array.from(new Set(dateList)).sort();
     let dateRange = ["N/A", "N/A"];
@@ -603,68 +1692,92 @@ router.post('/process-manual-import', async (req, res) => {
     }
     const totalPeriods = uniqueDates.length;
     const frequency = inferDateFrequency(uniqueDates);
-    console.log('[process-manual-import] Inferred frequency:', frequency, 'from dates:', uniqueDates);
+    logger.info('[process-manual-import] Inferred frequency:', frequency, 'from dates:', uniqueDates);
     const datasetName = `Dataset ${new Date().toISOString().slice(0,10)} - From ${dateRange[0]} to ${dateRange[1]} (${skuCount} products)`;
 
     // Auto-update global frequency setting if enabled
-    db.get("SELECT value FROM settings WHERE key = 'global_autoDetectFrequency'", [], (err, row) => {
-      if (!err && row) {
-        try {
-          const autoDetectEnabled = JSON.parse(row.value);
-          if (autoDetectEnabled) {
-            const seasonalPeriods = getSeasonalPeriodsFromFrequency(frequency);
-            db.run(
-              "INSERT OR REPLACE INTO settings (key, value, description, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
-              ['global_frequency', JSON.stringify(frequency), 'Data frequency (auto-detected from dataset)'],
-              (err) => {
-                if (err) console.error('Failed to update frequency setting:', err);
-                else console.log('Auto-updated frequency setting to:', frequency);
-              }
-            );
-            db.run(
-              "INSERT OR REPLACE INTO settings (key, value, description, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
-              ['global_seasonalPeriods', JSON.stringify(seasonalPeriods), 'Seasonal periods (auto-calculated from frequency)'],
-              (err) => {
-                if (err) console.error('Failed to update seasonal periods setting:', err);
-                else console.log('Auto-updated seasonal periods setting to:', seasonalPeriods);
-              }
-            );
-          }
-        } catch (e) {
-          console.error('Error parsing autoDetectFrequency setting:', e);
+    try {
+      const autoDetectResult = await pgPool.query(`
+        SELECT value FROM user_settings WHERE company_id = $1 AND user_id = $2 AND key = $3
+      `, [companyId, createdBy, 'global_autoDetectFrequency']);
+      
+      if (autoDetectResult.rows.length > 0) {
+        const autoDetectEnabled = JSON.parse(autoDetectResult.rows[0].value);
+        if (autoDetectEnabled) {
+          const seasonalPeriods = getSeasonalPeriodsFromFrequency(frequency);
+          
+          // Update frequency setting
+          await pgPool.query(`
+            INSERT INTO user_settings (company_id, user_id, key, value, updated_at) 
+            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+            ON CONFLICT (company_id, user_id, key) 
+            DO UPDATE SET value = $4, updated_at = CURRENT_TIMESTAMP
+          `, [companyId, createdBy, 'global_frequency', frequency]);
+          
+          // Update seasonal periods setting
+          await pgPool.query(`
+            INSERT INTO user_settings (company_id, user_id, key, value, updated_at) 
+            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+            ON CONFLICT (company_id, user_id, key) 
+            DO UPDATE SET value = $4, updated_at = CURRENT_TIMESTAMP
+          `, [companyId, createdBy, 'global_seasonalPeriods', seasonalPeriods.toString()]);
+          
+          logger.info('Auto-updated frequency settings:', { frequency, seasonalPeriods });
         }
       }
-    });
+    } catch (e) {
+      logger.error('Error updating auto-detected frequency settings:', e);
+    }
 
-    // Save the processed data to a file
-    const fileName = `${baseName}-${csvHash.slice(0, 8)}-processed.json`;
-    const filePath = path.join(UPLOADS_DIR, fileName);
-    
-    const dataToSave = {
-      data: transformedData,
+    const metadata = {
       columns: columns,
       columnRoles: columnRoles,
       source: 'manual-import',
-      timestamp: new Date().toISOString(),
       summary: {
         skuCount,
         dateRange,
         totalPeriods,
         frequency,
       },
-      name: datasetName, // Use correct name
-      csvHash // Save the hash for duplicate detection
+      csvHash: csvHash
     };
-    
-    if (csvHash) {
-      discardOldFilesWithHash(csvHash, [fileName, csvFileName]);
-    }
-    
-    fs.writeFileSync(filePath, JSON.stringify(dataToSave, null, 2));
+
+    const datasetId = await createDataset(
+      companyId,
+      divisionId,
+      clusterId,
+      datasetName,
+      `uploads/${csvFileName}`, // Store path to original audit file
+      createdBy,
+      metadata
+    );
+
+    // Convert transformed data to time series format and insert into database
+    const timeSeriesRows = transformedData.map(row => {
+      // Ensure date is in YYYY-MM-DD format for PostgreSQL
+      let formattedDate = row['Date'];
+      if (typeof formattedDate === 'string') {
+        // Try to parse and format the date
+        const parsedDate = new Date(formattedDate);
+        if (!isNaN(parsedDate.getTime())) {
+          formattedDate = parsedDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+        }
+      }
+      
+      return {
+        sku_code: row['Material Code'],
+        date: formattedDate,
+        value: parseFloat(row['Sales']) || 0
+      };
+    }).filter(row => row.sku_code && row.date && !isNaN(row.value));
+
+    await insertTimeSeriesData(datasetId, timeSeriesRows, companyId);
+
+    logger.info(`Inserted ${timeSeriesRows.length} time series rows for dataset ${datasetId}`);
 
     const result = {
       success: true,
-      filePath: `uploads/${fileName}`,
+      datasetId: datasetId,
       summary: {
         skuCount: skuCount,
         dateRange,
@@ -677,957 +1790,729 @@ router.post('/process-manual-import', async (req, res) => {
       columnRoles: columnRoles
     };
 
-    console.log('Manual import processed successfully:', {
-      filePath: result.filePath,
+    logger.info('Manual import processed successfully:', {
+      datasetId: result.datasetId,
       skuCount: result.summary.skuCount,
       totalPeriods: result.summary.totalPeriods
     });
 
     res.json(result);
   } catch (error) {
-    console.error('Error processing manual import:', error.message, error.stack);
-    res.status(500).json({ error: 'An unexpected error occurred during manual processing.', details: error.message, stack: error.stack });
+    logger.error('Error processing manual import:', error);
+    sendError(res, 500, 'An unexpected error occurred during manual processing', { 
+      details: error.message, 
+      stack: error.stack 
+    });
   }
 });
 
+/**
+ * Load cleaning metadata endpoint
+ * @route GET /load-cleaning-metadata
+ * @returns {object} Cleaning metadata
+ */
+router.get('/load-cleaning-metadata', authenticateToken, async (req, res) => {
+  try {
+    const { datasetId } = req.query;
+
+    logger.info(`[load-cleaning-metadata] Received request with datasetId: ${datasetId}`);
+
+    if (!datasetId) {
+      return sendError(res, 400, 'Missing datasetId parameter', {
+        details: 'datasetId is required to load cleaning metadata'
+      });
+    }
+
+    const datasetIdNum = validateDatasetId(datasetId);
+    logger.info(`[load-cleaning-metadata] Using dataset ID: ${datasetIdNum}`);
+
+    // Query the dataset metadata from database
+    const query = `
+      SELECT metadata
+      FROM datasets
+      WHERE id = $1 AND company_id = $2
+    `;
+
+    const result = await pgPool.query(query, [datasetIdNum, req.user.company_id]);
+
+    if (result.rows.length === 0) {
+      logger.warn(`[load-cleaning-metadata] Dataset not found: ${datasetIdNum}`);
+      return sendError(res, 404, 'Dataset not found', {
+        details: `Dataset with ID ${datasetIdNum} not found`
+      });
+    }
+
+    const metadata = result.rows[0].metadata;
+    logger.info(`[load-cleaning-metadata] Successfully loaded metadata for dataset: ${datasetIdNum}`);
+
+    res.json({
+      success: true,
+      metadata: metadata
+    });
+  } catch (error) {
+    logger.error('Error loading cleaning metadata:', error);
+    sendError(res, 500, 'An unexpected error occurred while loading cleaning metadata', { 
+      details: error.message, 
+      stack: error.stack 
+    });
+  }
+});
+
+// Generate optimization hash for job deduplication
+function generateOptimizationHash(sku, modelId, method, datasetId, parameters = {}, metricWeights = null) {
+  // Get default metric weights if not provided
+  if (!metricWeights) {
+    metricWeights = { mape: 0.4, rmse: 0.3, mae: 0.2, accuracy: 0.1 };
+  }
+  
+  // Create hash input object
+  // Note: seasonalPeriod is already included in parameters for seasonal models
+  const hashInput = {
+    sku,
+    modelId,
+    method,
+    datasetId, // Using datasetId as data identifier
+    parameters: parameters || {},
+    metricWeights
+  };
+  
+  // Generate SHA-256 hash using js-sha256 for consistency with frontend
+  return sha256(JSON.stringify(hashInput));
+}
+
+// Check if a job with the same optimization hash already exists
+async function checkExistingOptimizationJob(optimizationHash, userId = 1) {
+  try {
+    const result = await pgPool.query(
+      'SELECT id, status FROM optimization_jobs WHERE optimization_hash = $1 AND user_id = $2 ORDER BY created_at DESC LIMIT 1',
+      [optimizationHash, userId]
+    );
+    return result.rows[0];
+  } catch (err) {
+    console.error('Error checking existing optimization job:', err);
+    throw err;
+  }
+}
+
+// Check for existing optimization results by hash
+async function checkExistingOptimizationResults(optimizationHash, companyId) {
+  try {
+    const result = await pgPool.query(
+      `SELECT * FROM optimization_results 
+       WHERE optimization_hash = $1 AND company_id = $2
+       ORDER BY created_at DESC LIMIT 1`,
+      [optimizationHash, companyId]
+    );
+    return result.rows[0] || null;
+  } catch (err) {
+    console.error('Error checking existing optimization results:', err);
+    throw err;
+  }
+}
+
+// Store optimization results
+async function storeOptimizationResults(jobId, optimizationHash, modelId, method, parameters, scores, forecasts, companyId) {
+  try {
+    const result = await pgPool.query(
+      `INSERT INTO optimization_results 
+       (job_id, optimization_hash, model_id, method, parameters, scores, forecasts, company_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id`,
+      [jobId, optimizationHash, modelId, method, parameters, scores, forecasts, companyId]
+    );
+    return result.rows[0].id;
+  } catch (err) {
+    console.error('Error storing optimization results:', err);
+    throw err;
+  }
+}
+
+// Create optimization job with result caching
+async function createOptimizationJobWithResultCache(jobData) {
+  const optimizationHash = generateOptimizationHash(
+    jobData.sku,
+    jobData.modelId,
+    jobData.method,
+    jobData.datasetId,
+    jobData.parameters,
+    jobData.metricWeights
+  );
+  
+  // Check for existing results
+  const existingResult = await checkExistingOptimizationResults(optimizationHash, jobData.companyId);
+  
+  if (existingResult) {
+    // Reuse existing results
+    console.log(`[Cache] Reusing existing optimization results for hash: ${optimizationHash}`);
+    
+    // Create job that references existing results
+    const jobResult = await pgPool.query(
+      `INSERT INTO optimization_jobs 
+       (company_id, user_id, sku, dataset_id, method, payload, reason, batch_id, 
+        status, optimization_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id`,
+      [jobData.companyId, jobData.userId, jobData.sku, jobData.datasetId,
+       jobData.method, jobData.payload, jobData.reason, jobData.batchId,
+       'completed', optimizationHash]
+    );
+    
+    // Link the job to existing results
+    await pgPool.query(
+      `UPDATE optimization_results 
+       SET job_id = $1 
+       WHERE id = $2`,
+      [jobResult.rows[0].id, existingResult.id]
+    );
+    
+    return {
+      jobId: jobResult.rows[0].id,
+      cached: true,
+      resultId: existingResult.id
+    };
+  } else {
+    // Create new job for optimization
+    const jobResult = await pgPool.query(
+      `INSERT INTO optimization_jobs 
+       (company_id, user_id, sku, dataset_id, method, payload, reason, batch_id, 
+        status, optimization_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id`,
+      [jobData.companyId, jobData.userId, jobData.sku, jobData.datasetId,
+       jobData.method, jobData.payload, jobData.reason, jobData.batchId,
+       'pending', optimizationHash]
+    );
+    
+    return {
+      jobId: jobResult.rows[0].id,
+      cached: false
+    };
+  }
+}
+
+// Generate forecast hash for forecast deduplication
+function generateForecastHash(companyId, datasetId, sku, modelId, methodType, periods, parameters, optimizationId = null) {
+  // Create hash input object
+  const hashInput = {
+    companyId,
+    datasetId,
+    sku,
+    modelId,
+    methodType,
+    periods,
+    parameters: parameters || {},
+    optimizationId
+  };
+  
+  // Generate SHA-256 hash using js-sha256 for consistency
+  return sha256(JSON.stringify(hashInput));
+}
+
+// Check if a forecast with the same hash already exists
+async function checkExistingForecast(forecastHash) {
+  try {
+    const result = await pgPool.query(
+      'SELECT id, is_final_forecast, generated_at FROM forecasts WHERE company_id = 1 AND forecast_hash = $1 ORDER BY generated_at DESC LIMIT 1',
+      [forecastHash]
+    );
+    return result.rows[0];
+  } catch (err) {
+    console.error('Error checking existing forecast:', err);
+    throw err;
+  }
+}
+
+// Check if a final forecast already exists for a company/datasetId/SKU combination
+async function checkExistingFinalForecast(companyId, datasetId, sku) {
+  try {
+    const result = await pgPool.query(
+      'SELECT id, model_id, method, periods, generated_at FROM forecasts WHERE company_id = $1 AND dataset_id = $2 AND sku_id = (SELECT id FROM skus WHERE company_id = $1 AND sku_code = $3) AND is_final_forecast = true',
+      [companyId, datasetId, sku]
+    );
+    return result.rows[0];
+  } catch (err) {
+    console.error('Error checking existing final forecast:', err);
+    throw err;
+  }
+}
+
+// =====================================================
+// OPTIMIZATION RESULTS API ENDPOINTS
+// =====================================================
+
+// Get optimization results by hash
+router.get('/optimization-results/:hash', authenticateToken, async (req, res) => {
+  try {
+    const { hash } = req.params;
+    const companyId = req.user.company_id;
+    
+    const result = await pgPool.query(
+      `SELECT * FROM optimization_results 
+       WHERE optimization_hash = $1 AND company_id = $2
+       ORDER BY created_at DESC LIMIT 1`,
+      [hash, companyId]
+    );
+    
+    if (result.rows.length === 0) {
+      return sendError(res, 404, 'Optimization results not found');
+    }
+    
+    res.json({
+      success: true,
+      result: result.rows[0]
+    });
+    
+  } catch (error) {
+    logger.error('Error fetching optimization results:', error);
+    sendError(res, 500, 'Failed to fetch optimization results');
+  }
+});
+
+// Get all results for a job
+router.get('/jobs/:jobId/results', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    
+    const results = await pgPool.query(
+      `SELECT * FROM optimization_results 
+       WHERE job_id = $1
+       ORDER BY created_at DESC`,
+      [jobId]
+    );
+    
+    res.json({
+      success: true,
+      results: results.rows
+    });
+    
+  } catch (error) {
+    logger.error('Error fetching job results:', error);
+    sendError(res, 500, 'Failed to fetch job results');
+  }
+});
+
+// Create optimization job with caching
+router.post('/jobs/create-with-cache', authenticateToken, async (req, res) => {
+  try {
+    const jobData = req.body;
+    
+    // Validate required fields
+    if (!jobData.sku || !jobData.modelId || !jobData.method || !jobData.datasetId) {
+      return sendError(res, 400, 'Missing required fields: sku, modelId, method, datasetId');
+    }
+    
+    // Set defaults
+    jobData.companyId = jobData.companyId || req.user.company_id;
+    jobData.userId = jobData.userId || req.user.id;
+    jobData.batchId = jobData.batchId || `batch_${Date.now()}`;
+    jobData.reason = jobData.reason || 'manual_optimization';
+    
+    const result = await createOptimizationJobWithResultCache(jobData);
+    
+    res.json({
+      success: true,
+      jobId: result.jobId,
+      cached: result.cached,
+      message: result.cached ? 'Using cached optimization result' : 'Created new optimization job'
+    });
+    
+  } catch (error) {
+    logger.error('Error creating optimization job with cache:', error);
+    sendError(res, 500, 'Failed to create optimization job');
+  }
+});
+
+// Get cache statistics
+router.get('/jobs/cache-stats', authenticateToken, async (req, res) => {
+  try {
+    const companyId = req.user.company_id;
+    
+    const stats = await pgPool.query(`
+      SELECT 
+        COUNT(*) as total_jobs,
+        COUNT(DISTINCT optimization_hash) as unique_optimizations,
+        COUNT(*) - COUNT(DISTINCT optimization_hash) as cache_hits,
+        ROUND(
+          (COUNT(*) - COUNT(DISTINCT optimization_hash))::numeric / NULLIF(COUNT(*), 0) * 100, 2
+        ) as cache_hit_percentage
+      FROM optimization_jobs 
+      WHERE status = 'completed' AND company_id = $1
+    `, [companyId]);
+    
+    // Get optimization results stats
+    const resultsStats = await pgPool.query(`
+      SELECT 
+        COUNT(*) as total_results,
+        COUNT(DISTINCT optimization_hash) as unique_result_hashes
+      FROM optimization_results 
+      WHERE company_id = $1
+    `, [companyId]);
+    
+    res.json({
+      success: true,
+      stats: {
+        ...stats.rows[0],
+        ...resultsStats.rows[0]
+      }
+    });
+    
+  } catch (error) {
+    logger.error('Error getting cache stats:', error);
+    sendError(res, 500, 'Failed to get cache statistics');
+  }
+});
+
+// Store optimization results (for worker to use)
+router.post('/optimization-results/store', authenticateToken, async (req, res) => {
+  try {
+    const { jobId, optimizationHash, modelId, method, parameters, scores, forecasts } = req.body;
+    const companyId = req.user.company_id;
+    
+    if (!jobId || !optimizationHash || !modelId || !method) {
+      return sendError(res, 400, 'Missing required fields: jobId, optimizationHash, modelId, method');
+    }
+    
+    const resultId = await storeOptimizationResults(
+      jobId, optimizationHash, modelId, method, parameters, scores, forecasts, companyId
+    );
+    
+    res.json({
+      success: true,
+      resultId: resultId,
+      message: 'Optimization results stored successfully'
+    });
+    
+  } catch (error) {
+    logger.error('Error storing optimization results:', error);
+    sendError(res, 500, 'Failed to store optimization results');
+  }
+});
+
+// =====================================================
+// DATASET MANAGEMENT API ENDPOINTS
+// =====================================================
+
+// Endpoint to delete a dataset and all its associated data
+router.delete('/datasets/:datasetId', authenticateToken, async (req, res) => {
+  try {
+    const { datasetId } = req.params;
+    const id = parseInt(datasetId);
+    
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid dataset ID' });
+    }
+
+    console.log(`[DELETE] Deleting dataset ID: ${id}`);
+
+    // Start a transaction to ensure data consistency
+    const client = await pgPool.connect();
+
+    try {
+      await client.query('BEGIN');
+      
+      // First, get dataset information for better logging and response
+      const datasetInfo = await client.query(
+        'SELECT name, file_path, metadata FROM datasets WHERE company_id = $1 AND id = $2',
+        [req.user.company_id, id]
+      );
+      
+      if (datasetInfo.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Dataset not found' });
+      }
+      
+      const dataset = datasetInfo.rows[0];
+      const datasetName = dataset.name || (dataset.file_path ? path.basename(dataset.file_path) : `Dataset ${id}`);
+      const skuCount = dataset.metadata?.summary?.skuCount || 'Unknown';
+      
+      console.log(`[DELETE] Deleting dataset: "${datasetName}" (ID: ${id})`);
+      
+      // Delete time series data first (foreign key constraint)
+      const timeSeriesResult = await client.query(
+        'DELETE FROM time_series_data WHERE company_id = $1 AND dataset_id = $2',
+        [req.user.company_id, id]
+      );
+      console.log(`[DELETE] Deleted ${timeSeriesResult.rowCount} time series records`);
+      
+      // Delete jobs associated with this dataset
+      const jobsResult = await client.query(
+        'DELETE FROM optimization_jobs WHERE dataset_id = $1',
+        [id]
+      );
+      console.log(`[DELETE] Deleted ${jobsResult.rowCount} job records`);
+      
+      // Finally delete the dataset
+      const datasetResult = await client.query(
+        'DELETE FROM datasets WHERE company_id = $1 AND id = $2',
+        [req.user.company_id, id]
+      );
+      
+      await client.query('COMMIT');
+      
+      console.log(`[DELETE] Successfully deleted dataset: "${datasetName}" (ID: ${id})`);
+      res.json({ 
+        success: true, 
+        message: `Dataset "${datasetName}" deleted successfully`,
+        datasetInfo: {
+          id: id,
+          name: datasetName,
+          filename: dataset.file_path ? path.basename(dataset.file_path) : null,
+          skuCount: skuCount
+        },
+        deletedTimeSeriesRecords: timeSeriesResult.rowCount,
+        deletedJobRecords: jobsResult.rowCount
+      });
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error deleting dataset:', error);
+    res.status(500).json({ error: 'Failed to delete dataset', details: error.message });
+  }
+});
+
+// Endpoint to rename a dataset
+router.post('/datasets/:id/rename', authenticateToken, async (req, res) => {
+  const datasetId = parseInt(req.params.id, 10);
+  const { name } = req.body;
+  
+  if (!datasetId || !name) {
+    return res.status(400).json({ error: 'datasetId and name are required' });
+  }
+  
+  try {
+    await pgPool.query('UPDATE datasets SET name = $1 WHERE id = $2 AND company_id = $3', [name, datasetId, req.user.company_id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error renaming dataset:', error);
+    res.status(500).json({ error: 'Failed to rename dataset', details: error.message });
+  }
+});
+
+// Endpoint to update dataset frequency
+router.post('/update-dataset-frequency', authenticateToken, async (req, res) => {
+  const { datasetId, frequency } = req.body;
+  
+  if (!datasetId || !frequency) {
+    return res.status(400).json({ error: 'Missing datasetId or frequency' });
+  }
+  
+  try {
+    // Update dataset metadata with new frequency
+    const updateQuery = `
+      UPDATE datasets 
+      SET metadata = jsonb_set(
+        COALESCE(metadata, '{}'::jsonb), 
+        '{summary,frequency}', 
+        $1::jsonb
+      )
+      WHERE id = $2 AND company_id = $3
+    `;
+
+    const result = await pgPool.query(updateQuery, [JSON.stringify(frequency), datasetId, req.user.company_id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Dataset not found' });
+    }
+
+    res.json({ success: true, frequency });
+  } catch (err) {
+    console.error('Error updating frequency:', err);
+    res.status(500).json({ error: 'Failed to update frequency' });
+  }
+});
+
+// Endpoint to auto-detect dataset frequency
+router.post('/auto-detect-dataset-frequency', authenticateToken, async (req, res) => {
+  const { datasetId } = req.body;
+  
+  if (!datasetId) {
+    return res.status(400).json({ error: 'Missing datasetId' });
+  }
+  
+  try {
+    // Get time series data from database
+    const timeSeriesData = await getTimeSeriesData(datasetId);
+    if (!timeSeriesData || timeSeriesData.length === 0) {
+      return res.status(404).json({ error: 'No time series data found for dataset' });
+    }
+
+    // Extract dates and infer frequency
+    const dateList = timeSeriesData.map(row => row.date).filter(Boolean);
+    const uniqueDates = Array.from(new Set(dateList)).sort();
+    const frequency = inferDateFrequency(uniqueDates);
+
+    // Update dataset metadata with new frequency
+    const updateQuery = `
+      UPDATE datasets 
+      SET metadata = jsonb_set(
+        COALESCE(metadata, '{}'::jsonb), 
+        '{summary,frequency}', 
+        $1::jsonb
+      )
+      WHERE id = $2 AND company_id = $3
+    `;
+
+    await pgPool.query(updateQuery, [JSON.stringify(frequency), datasetId, req.user.company_id]);
+
+    res.json({ success: true, frequency });
+  } catch (err) {
+    console.error('Error auto-detecting frequency:', err);
+    res.status(500).json({ error: 'Failed to auto-detect frequency' });
+  }
+});
+
+/**
+ * Generate preview of CSV data with column role detection
+ * @route POST /generate-preview
+ * @returns {object} Preview data with column roles and processed headers
+ */
 router.post('/generate-preview', (req, res) => {
   try {
-    const { csvData, transposed } = req.body;
-    //console.Log('[LOG] /generate-preview called.');
-    //console.Log(`[LOG] csvData length: ${csvData ? csvData.length : 0}, transposed: ${transposed}`);
+    const { csvData, transposed, separator: requestedSeparator, dateFormat: requestedDateFormat, numberFormat: requestedNumberFormat } = req.body;
     
-    // Use the new robust parser
-    let { data, headers, separator } = parseCsvWithHeaders(csvData);
+    // Debug: Log received config and first few lines of CSV
+    console.log('[generate-preview] Received:', {
+      separator: requestedSeparator,
+      dateFormat: requestedDateFormat,
+      numberFormat: requestedNumberFormat,
+      transposed: transposed
+    });
+    if (csvData) {
+      console.log('[generate-preview] First 5 lines of CSV:', csvData.split('\n').slice(0, 5));
+    }
+
+    // Use the new robust parser with the requested separator
+    let { data, headers, separator } = parseCsvWithHeaders(csvData, requestedSeparator);
+
+    // Debug: Log detected headers
+    console.log('[generate-preview] Detected headers:', headers);
 
     if (transposed) {
-      //console.Log('[LOG] Transposing data...');
       const transposedResult = transposeData(data, headers);
       data = transposedResult.data;
       headers = transposedResult.headers;
-      //console.Log(`[LOG] Transposed. New headers:`, headers.slice(0, 5));
-      //console.Log(`[LOG] Transposed. New data sample:`, data.slice(0, 2));
     }
-    
-    // Get column roles as objects first
-    const columnRolesObjects = detectColumnRoles(headers);
+
+    // Get column roles as objects first, passing the date format
+    const columnRolesObjects = detectColumnRoles(headers, requestedDateFormat);
     // Extract just the role strings for the frontend
     const columnRoles = columnRolesObjects.map(obj => obj.role);
 
-    //console.Log(`[LOG] Sending response with ${headers.length} headers and ${data.slice(0, 100).length} previewRows.`);
+    // Debug: Log detected column roles
+    console.log('[generate-preview] Detected column roles:', columnRoles);
+    console.log('[generate-preview] Headers:', headers);
+
+    // Process preview data to show how dates would be interpreted with the selected format
+    // Limit to 15 rows for preview to avoid overwhelming the UI
+    const processedPreviewRows = data.slice(0, 15).map((row, rowIdx) => {
+      const processedRow = {};
+      headers.forEach((header, index) => {
+        const value = row[header];
+        const role = columnRoles[index];
+
+        if (role === 'Date') {
+          // For date columns, validate the cell value (sales numbers) against number format
+          if (value === '' || value === null || value === undefined) {
+            // Empty cells are valid - they represent no sales
+            processedRow[header] = 0;
+          } else {
+            const parsedNumber = parseNumberWithFormat(value, requestedNumberFormat);
+            if (!isNaN(parsedNumber)) {
+              processedRow[header] = parsedNumber;
+            } else {
+              processedRow[header] = `❌ Invalid (${requestedNumberFormat})`;
+            }
+          }
+        } else if (role === 'Material Code' || role === 'Description') {
+          // For Material Code and Description columns, show original value
+          processedRow[header] = value;
+        } else if (role === 'Lifecycle Phase' || role === 'Division' || role === 'Cluster') {
+          // For Lifecycle Phase, Division, and Cluster columns, preserve as text (don't parse as number)
+          processedRow[header] = value;
+        } else if (role === header) {
+          // For columns that are mapped as their own name (text fields like "Marca")
+          // Show the original value
+          processedRow[header] = value;
+        } else {
+          // For other columns (aggregatable fields), try to parse as number
+          if (value === '' || value === null || value === undefined) {
+            // Empty cells are valid - they represent no sales
+            processedRow[header] = 0;
+          } else {
+            const parsedNumber = parseNumberWithFormat(value, requestedNumberFormat);
+            if (!isNaN(parsedNumber)) {
+              processedRow[header] = parsedNumber;
+            } else {
+              processedRow[header] = `❌ Invalid (${requestedNumberFormat})`;
+            }
+          }
+        }
+      });
+      return processedRow;
+    });
+
+    // Filter out rows where all sales values are zero or empty
+    const filteredPreviewRows = processedPreviewRows.filter(row => {
+      // Check if this row has any non-zero sales values across all date columns
+      let hasNonZeroSales = false;
+      headers.forEach((header, index) => {
+        const role = columnRoles[index];
+        if (role === 'Date') {
+          const salesValue = row[header];
+          if (salesValue !== 0 && salesValue !== '' && salesValue !== null && salesValue !== undefined) {
+            hasNonZeroSales = true;
+          }
+        }
+      });
+      return hasNonZeroSales;
+    });
+
+    // Create processed headers array to show invalid date formats in headers
+    // This is only for display - the data structure keeps original header names
+    const processedHeaders = headers.map((header, index) => {
+      const role = columnRoles[index];
+      if (role === 'Date') {
+        const isHeaderValid = parseDateWithFormat(header, requestedDateFormat) !== null;
+        if (!isHeaderValid) {
+          return `❌ Invalid (${requestedDateFormat})`;
+        }
+      }
+      return header;
+    });
+
     res.json({
-      headers: headers.slice(0, 50),
-      previewRows: data.slice(0, 100),
+      headers: processedHeaders.slice(0, 50),
+      originalHeaders: headers.slice(0, 50), // Add original headers for data access
+      previewRows: filteredPreviewRows,
       columnRoles,
       separator,
-      transposed: !!transposed
+      transposed: !!transposed,
+      dateFormat: requestedDateFormat,
+      numberFormat: requestedNumberFormat
     });
+
+    // Debug: Log what we're sending back
+    console.log('[generate-preview] Sending response with processed data:');
+    console.log('[generate-preview] First row preview data:', filteredPreviewRows[0]);
+    console.log('[generate-preview] Date columns in first row:', Object.keys(filteredPreviewRows[0]).filter(key => 
+      columnRoles[processedHeaders.indexOf(key)] === 'Date'
+    ).map(key => `${key}: ${filteredPreviewRows[0][key]}`));
   } catch (error) {
     console.error('Error in generate-preview:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-router.get('/load-processed-data', (req, res) => {
-  try {
-    const { filePath } = req.query;
-    
-    if (!filePath) {
-      return res.status(400).json({ error: 'filePath parameter is required' });
-    }
+// =====================================================
+// MODEL MANAGEMENT API ENDPOINTS
+// =====================================================
 
-    // Construct the full path to the file
-    const fullPath = path.join(__dirname, '../../', filePath);
-    
-    // Security check: ensure the path is within the uploads directory
-    const uploadsDir = path.join(__dirname, '../../uploads');
-    if (!fullPath.startsWith(uploadsDir)) {
-      return res.status(403).json({ error: 'Access denied: file path is outside uploads directory' });
-    }
-
-    // Check if file exists
-    if (!fs.existsSync(fullPath)) {
-      return res.status(404).json({ error: 'File not found' });
-    }
-
-    // Read and parse the JSON file
-    const fileContent = fs.readFileSync(fullPath, 'utf-8');
-    const data = JSON.parse(fileContent);
-
-    res.json(data);
-  } catch (error) {
-    console.error('Error loading processed data:', error);
-    res.status(500).json({ error: 'Failed to load processed data' });
-  }
-});
-
-// New: AI Parameter Optimization endpoint
-router.post('/ai-optimize', async (req, res) => {
-  try {
-    const { modelType, historicalData, currentParameters, seasonalPeriod, targetMetric, businessContext, gridBaseline, aiEnabled } = req.body;
-    if (!aiEnabled) {
-      return res.status(200).json({ message: 'AI optimization is disabled. No optimization performed.' });
-    }
-    const result = await optimizeParametersWithAI(
-      modelType,
-      historicalData,
-      currentParameters,
-      seasonalPeriod,
-      targetMetric,
-      businessContext,
-      gridBaseline
-    );
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// New: AI Model Recommendation endpoint
-router.post('/ai-model-recommendation', async (req, res) => {
-  try {
-    const { historicalData, dataFrequency, businessContext, aiEnabled } = req.body;
-    if (!aiEnabled) {
-      return res.status(200).json({ message: 'AI model recommendation is disabled. No recommendation performed.' });
-    }
-    const result = await getModelRecommendation(
-      historicalData,
-      dataFrequency,
-      businessContext
-    );
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Endpoint to save cleaned data from manual edits or UI cleaning
-router.post('/save-cleaned-data', (req, res) => {
-  try {
-    const { data, columns } = req.body;
-    
-    // Extract hash from the data to generate proper filename
-    // Only consider files matching the new processed file pattern
-    let csvHash = '';
-    let baseName = '';
-    
-    const files = fs.readdirSync(UPLOADS_DIR);
-    // Only match new processed file pattern
-    const processedFiles = files.filter(f => /^Original_CSV_Upload-\d+-[a-f0-9]{8}-processed\.json$/.test(f) && !f.includes('-discarded'));
-    
-    if (processedFiles.length > 0) {
-      // Use the most recent processed file (by timestamp in filename)
-      const latestFile = processedFiles.sort((a, b) => {
-        // Extract timestamp from filename
-        const aMatch = a.match(/^Original_CSV_Upload-(\d+)-[a-f0-9]{8}-processed\.json$/);
-        const bMatch = b.match(/^Original_CSV_Upload-(\d+)-[a-f0-9]{8}-processed\.json$/);
-        const aTime = aMatch ? parseInt(aMatch[1], 10) : 0;
-        const bTime = bMatch ? parseInt(bMatch[1], 10) : 0;
-        return aTime - bTime;
-      }).pop();
-      const filePath = path.join(UPLOADS_DIR, latestFile);
-      try {
-        const fileContent = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        if (fileContent.csvHash) {
-          csvHash = fileContent.csvHash;
-          // Extract baseName from the filename
-          const match = latestFile.match(/^Original_CSV_Upload-(\d+)-([a-f0-9]{8})-processed\.json$/);
-          if (match) {
-            baseName = `Original_CSV_Upload-${match[1]}`;
-          }
-        }
-      } catch (err) {
-        console.error('Error reading existing processed file:', err);
-      }
-    }
-    
-    // If we couldn't find the hash, generate a new one using the new convention
-    if (!csvHash) {
-      const dataString = JSON.stringify(data);
-      csvHash = crypto.createHash('sha256').update(dataString, 'utf8').digest('hex').slice(0, 30);
-      baseName = `Original_CSV_Upload-${Date.now()}`;
-    }
-    
-    // Use the new naming convention
-    const fileName = `${baseName}-${csvHash.slice(0, 8)}-cleaning.json`;
-    const filePath = path.join(UPLOADS_DIR, fileName);
-    
-    const dataToSave = {
-      data,
-      columns,
-      csvHash,
-      timestamp: new Date().toISOString(),
-      source: 'manual-cleaning'
-    };
-    
-    fs.writeFileSync(filePath, JSON.stringify(dataToSave, null, 2));
-    
-    // Return the processed file path, not the cleaning file path
-    // The processedDataInfo should always point to the processed file
-    const processedFileName = `${baseName}-${csvHash.slice(0, 8)}-processed.json`;
-    res.status(200).json({ filePath: `uploads/${processedFileName}` });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to save cleaned data', details: error.message });
-  }
-});
-
-router.post('/process-ai-import', async (req, res) => {
-  try {
-    const { transformedData, columns, columnRoles, finalColumnRoles, originalCsvData, originalCsvString } = req.body;
-    
-    if (!transformedData || !Array.isArray(transformedData) || transformedData.length === 0) {
-      return res.status(400).json({ error: 'Missing or invalid transformed data' });
-    }
-
-    if (!columns || !Array.isArray(columns) || columns.length === 0) {
-      return res.status(400).json({ error: 'Missing or invalid columns' });
-    }
-
-    //console.Log('process-ai-import received:', {
-    //  dataLength: transformedData.length,
-    //  columns: columns,
-    //  columnRoles: columnRoles
-    //});
-
-    // Generate single timestamp for both files
-    const timestamp = Date.now();
-
-    // Save original CSV data first (for detection logic)
-    let csvHash = '';
-    
-    // Use raw CSV string if provided, otherwise reconstruct from originalCsvData
-    if (originalCsvString) {
-      // Hash the raw CSV string directly (this matches the frontend hash)
-      csvHash = crypto.createHash('sha256').update(originalCsvString, 'utf8').digest('hex').slice(0, 30);
-    } else if (originalCsvData && Array.isArray(originalCsvData) && originalCsvData.length > 0) {
-      // Fallback: Convert array of objects back to CSV format
-      const csvHeaders = Object.keys(originalCsvData[0]);
-      const csvContent = [
-        csvHeaders.join(','),
-        ...originalCsvData.map(row => csvHeaders.map(header => row[header]).join(','))
-      ].join('\n');
-      csvHash = crypto.createHash('sha256').update(csvContent, 'utf8').digest('hex').slice(0, 30);
-    }
-
-    // Generate base name from timestamp
-    const baseName = `Original_CSV_Upload-${timestamp}`;
-    
-    // Save original CSV with new naming convention
-    const csvFileName = `${baseName}-${csvHash.slice(0, 8)}-original.csv`;
-    const csvFilePath = path.join(UPLOADS_DIR, csvFileName);
-    
-    if (originalCsvString) {
-      fs.writeFileSync(csvFilePath, originalCsvString);
-      console.log('Saved original CSV from raw string:', csvFileName);
-    } else if (originalCsvData && Array.isArray(originalCsvData) && originalCsvData.length > 0) {
-      const csvHeaders = Object.keys(originalCsvData[0]);
-      const csvContent = [
-        csvHeaders.join(','),
-        ...originalCsvData.map(row => csvHeaders.map(header => row[header]).join(','))
-      ].join('\n');
-      fs.writeFileSync(csvFilePath, csvContent);
-      console.log('Saved original CSV from reconstructed data:', csvFileName);
-    }
-
-    // Transform AI wide format to long format (matching manual flow)
-    const materialCodeKey = columns[0] || 'Material Code';
-    const descriptionKey = columns.find(col => col === 'Description');
-    
-    // Identify date columns (all columns except Material Code, Description, and categorical columns)
-    const dateColumns = columns.filter(col => {
-      if (col === materialCodeKey || col === 'Description') return false;
-      if (columnRoles && columnRoles[columns.indexOf(col)] === 'Ignore') return false;
-      // Check if it's a date format (YYYY-MM-DD)
-      return /^\d{4}-\d{2}-\d{2}$/.test(col);
-    });
-    
-    // Identify categorical columns (non-date, non-ignored columns)
-    const categoricalColumns = columns.filter(col => {
-      if (col === materialCodeKey || col === 'Description') return false;
-      if (columnRoles && columnRoles[columns.indexOf(col)] === 'Ignore') return false;
-      return !dateColumns.includes(col);
-    });
-    
-    // Transform to long format
-    const longFormatData = [];
-    for (const row of transformedData) {
-      for (const dateCol of dateColumns) {
-        const entry = {
-          'Material Code': row[materialCodeKey],
-          'Date': dateCol,
-          'Sales': Number(row[dateCol]) || 0
-        };
-        
-        // Add Description if present
-        if (descriptionKey && row[descriptionKey]) {
-          entry['Description'] = row[descriptionKey];
-        }
-        
-        // Add categorical columns
-        for (const catCol of categoricalColumns) {
-          entry[catCol] = row[catCol];
-        }
-        
-        if (entry['Material Code'] && entry['Date']) {
-          longFormatData.push(entry);
-        }
-      }
-    }
-    
-    // Build output columns (matching manual flow)
-    const outputColumns = [
-      'Material Code',
-      ...(descriptionKey ? ['Description'] : []),
-      ...categoricalColumns,
-      'Date',
-      'Sales'
-    ];
-    
-    // Use finalColumnRoles from frontend if provided and valid
-    if (!finalColumnRoles || finalColumnRoles.length !== outputColumns.length) {
-      throw new Error('finalColumnRoles length does not match normalized columns length');
-    }
-    const outputColumnRoles = finalColumnRoles;
-
-    // Extract summary information
-    const skuList = Array.from(new Set(longFormatData.map(row => row['Material Code']).filter(Boolean)));
-    
-    // Determine date range from the date columns
-    const dateRange = dateColumns.length > 0 ? [dateColumns[0], dateColumns[dateColumns.length - 1]] : ["N/A", "N/A"];
-    
-    // Infer frequency from date columns
-    const frequency = inferDateFrequency(dateColumns);
-    console.log('[process-ai-import] Inferred frequency:', frequency, 'from dates:', dateColumns);
-
-    // Auto-update global frequency setting if enabled
-    db.get("SELECT value FROM settings WHERE key = 'global_autoDetectFrequency'", [], (err, row) => {
-      if (!err && row) {
-        try {
-          const autoDetectEnabled = JSON.parse(row.value);
-          if (autoDetectEnabled) {
-            const seasonalPeriods = getSeasonalPeriodsFromFrequency(frequency);
-            db.run(
-              "INSERT OR REPLACE INTO settings (key, value, description, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
-              ['global_frequency', JSON.stringify(frequency), 'Data frequency (auto-detected from dataset)'],
-              (err) => {
-                if (err) console.error('Failed to update frequency setting:', err);
-                else console.log('Auto-updated frequency setting to:', frequency);
-              }
-            );
-            db.run(
-              "INSERT OR REPLACE INTO settings (key, value, description, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
-              ['global_seasonalPeriods', JSON.stringify(seasonalPeriods), 'Seasonal periods (auto-calculated from frequency)'],
-              (err) => {
-                if (err) console.error('Failed to update seasonal periods setting:', err);
-                else console.log('Auto-updated seasonal periods setting to:', seasonalPeriods);
-              }
-            );
-          }
-        } catch (e) {
-          console.error('Error parsing autoDetectFrequency setting:', e);
-        }
-      }
-    });
-
-    // Save the transformed data to a file
-    const fileName = `${baseName}-${csvHash.slice(0, 8)}-processed.json`;
-    const filePath = path.join(UPLOADS_DIR, fileName);
-    
-    const dataToSave = {
-      data: longFormatData,
-      columns: outputColumns,
-      columnRoles: outputColumnRoles,
-      source: 'ai-import',
-      timestamp: new Date().toISOString(),
-      summary: {
-        skuCount: skuList.length,
-        dateRange,
-        totalPeriods: dateColumns.length,
-        frequency,
-      },
-      name: fileName, // Default name, can be updated later via /save-dataset-name
-      csvHash // Save the hash for duplicate detection
-    };
-    
-    if (csvHash) {
-      discardOldFilesWithHash(csvHash, [fileName, csvFileName]);
-    }
-    
-    fs.writeFileSync(filePath, JSON.stringify(dataToSave, null, 2));
-
-    const result = {
-      success: true,
-      filePath: `uploads/${fileName}`,
-      summary: {
-        skuCount: skuList.length,
-        dateRange,
-        totalPeriods: dateColumns.length,
-        frequency,
-      },
-      skuList: skuList,
-      columns: outputColumns,
-      previewData: longFormatData.slice(0, 10),
-      columnRoles: outputColumnRoles
-    };
-
-    //console.Log('AI import processed successfully:', {
-    //  filePath: result.filePath,
-    //  skuCount: result.summary.skuCount,
-    //  totalPeriods: result.summary.totalPeriods
-    //});
-
-    res.json(result);
-  } catch (error) {
-    console.error('Error in process-ai-import:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Helper function to calculate file hash
-function calculateFileHash(filePath) {
-  const fileBuffer = fs.readFileSync(filePath);
-  return crypto.createHash('sha256').update(fileBuffer).digest('hex');
-}
-
-// Helper function to extract timestamp from filename
-function extractTimestamp(filename) {
-  const match = filename.match(/(\d{13,})/);
-  return match ? parseInt(match[1]) : 0;
-}
-
-// Endpoint to detect existing data and return the latest cleaned data
-router.get('/detect-existing-data', async (req, res) => {
-  try {
-    const files = fs.readdirSync(UPLOADS_DIR);
-    const datasets = [];
-
-    // Group files by hash
-    const fileGroups = {};
-
-    files.forEach(file => {
-      // Match JSON files with our new naming pattern: <BaseName>-<ShortHash>-processed.json
-      const jsonMatch = file.match(/Original_CSV_Upload-(\d+)-([a-f0-9]{8})-processed\.json/);
-      if (jsonMatch) {
-        const [, timestamp, shortHash] = jsonMatch;
-        if (!fileGroups[shortHash]) {
-          fileGroups[shortHash] = { json: null, csv: null, timestamp: null };
-        }
-        fileGroups[shortHash].json = file;
-        fileGroups[shortHash].timestamp = timestamp;
-      }
-
-      // Match CSV files with our new naming pattern: <BaseName>-<ShortHash>-original.csv
-      const csvMatch = file.match(/Original_CSV_Upload-(\d+)-([a-f0-9]{8})-original\.csv/);
-      if (csvMatch) {
-        const [, timestamp, shortHash] = csvMatch;
-        if (!fileGroups[shortHash]) {
-          fileGroups[shortHash] = { json: null, csv: null, timestamp: null };
-        }
-        fileGroups[shortHash].csv = file;
-        fileGroups[shortHash].timestamp = timestamp;
-      }
-    });
-
-    // Process each group that has both CSV and JSON
-    for (const [shortHash, group] of Object.entries(fileGroups)) {
-      if (group.json && group.csv) {
-        try {
-          const jsonPath = path.join(UPLOADS_DIR, group.json);
-          const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-          
-          if (jsonData.summary && jsonData.name) {
-            datasets.push({
-              id: group.timestamp,
-              name: jsonData.name,
-              type: jsonData.source === 'ai-import' ? 'AI Import' : 'Manual Import',
-              summary: jsonData.summary,
-              filename: group.json,
-              timestamp: parseInt(group.timestamp)
-            });
-          }
-        } catch (error) {
-          console.error(`Error processing dataset ${shortHash}:`, error);
-        }
-      }
-    }
-
-    // Sort by timestamp (newest first)
-    datasets.sort((a, b) => b.timestamp - a.timestamp);
-
-    //console.Log('Detected datasets:', datasets);
-    res.json({ datasets });
-  } catch (error) {
-    console.error('Error detecting existing data:', error);
-    res.status(500).json({ error: 'Failed to detect existing data' });
-  }
-});
-
-// Endpoint to update the dataset name in a cleaned JSON file
-router.post('/save-dataset-name', (req, res) => {
-  try {
-    const { filePath, name } = req.body;
-    if (!filePath || !name) {
-      return res.status(400).json({ error: 'filePath and name are required' });
-    }
-    const fullPath = path.join(__dirname, '../../', filePath);
-    if (!fs.existsSync(fullPath)) {
-      return res.status(404).json({ error: 'File not found' });
-    }
-    const fileContent = fs.readFileSync(fullPath, 'utf-8');
-    const fileJson = JSON.parse(fileContent);
-    fileJson.name = name;
-    fs.writeFileSync(fullPath, JSON.stringify(fileJson, null, 2));
-    res.status(200).json({ success: true });
-  } catch (error) {
-    console.error('Error saving dataset name:', error);
-    res.status(500).json({ error: 'Failed to save dataset name', details: error.message });
-  }
-});
-
-// Endpoint to check for duplicate CSV uploads by hash
-router.post('/check-csv-duplicate', async (req, res) => {
-  try {
-    const { csvData } = req.body;
-    if (!csvData) {
-      return res.status(400).json({ error: 'Missing csvData' });
-    }
-    // Compute SHA-256 hash of the raw CSV data
-    const hash = crypto.createHash('sha256').update(csvData, 'utf8').digest('hex').slice(0, 30);
-    const files = fs.readdirSync(UPLOADS_DIR);
-    let foundDataset = null;
-    // Look for a JSON file with this hash in its metadata
-    for (const file of files) {
-      if (file.endsWith('.json')) {
-        const jsonPath = path.join(UPLOADS_DIR, file);
-        try {
-          const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-          if (jsonData.csvHash && jsonData.csvHash === hash) {
-            foundDataset = {
-              name: jsonData.name,
-              summary: jsonData.summary,
-              filename: file,
-              hash,
-            };
-            break;
-          }
-        } catch (e) { /* ignore parse errors */ }
-      }
-    }
-    if (foundDataset) {
-      return res.json({ duplicate: true, existingDataset: foundDataset });
-    }
-    // Optionally, also check for CSV files with the hash in their filename
-    // (if you want to prevent re-upload of the exact same CSV file)
-    res.json({ duplicate: false, hash });
-  } catch (error) {
-    console.error('Error in /check-csv-duplicate:', error);
-    res.status(500).json({ error: 'Failed to check for duplicate CSV' });
-  }
-});
-
-// Helper to get default/baseline result for non-optimizable models
-function getDefaultResultForModel(model, sku, batchId, filePath) {
-  return {
-    modelType: model.id,
-    displayName: model.displayName || model.id,
-    category: model.category || 'Other',
-    description: model.description || '',
-    isSeasonal: model.isSeasonal || false,
-    sku,
-    batchId,
-    filePath,
-    methods: [
-      {
-        method: 'grid',
-        bestResult: {
-          accuracy: null,
-          parameters: model.defaultParameters || {},
-          mape: null,
-          rmse: null,
-          mae: null,
-          jobId: null,
-          sku,
-          batchId,
-          filePath,
-          createdAt: null,
-          completedAt: null,
-          compositeScore: null,
-          isDefault: true, // Mark as default/baseline
-          note: 'This model uses default parameters optimized for general use.'
-        }
-      }
-    ]
-  };
-}
-
-// Add this helper at the top of the file or near extractBestResultsPerModelMethod
-function safeMetric(val, max) {
-  if (val === null || val === undefined || val === "" || isNaN(Number(val))) return max;
-  return Number(val);
-}
-
-// In extractBestResultsPerModelMethod, after collecting bestResultsMap, add all non-optimizable models as baselines if not already present
-function extractBestResultsPerModelMethod(jobs, modelMetadataMap, weights = { mape: 0.4, rmse: 0.3, mae: 0.2, accuracy: 0.1 }) {
-  console.log(`[API] extractBestResultsPerModelMethod called with ${jobs.length} jobs`);
-  const bestResultsMap = {};
-  
-  for (const job of jobs) {
-    const resultData = JSON.parse(job.result || '{}');
-    const method = job.method;
-    const batchId = job.batchId;
-    const filePath = (() => {
-      try {
-        const dataObj = JSON.parse(job.data || '{}');
-        return dataObj.filePath || '';
-      } catch {
-        return '';
-      }
-    })();
-
-    if (resultData.results && Array.isArray(resultData.results)) {
-      for (const modelResult of resultData.results) {
-        if (!modelResult.success) continue;
-        
-        const modelType = modelResult.modelType;
-        const sku = job.sku;
-        const modelInfo = modelMetadataMap.get(modelType) || {};
-        
-        // --- GROUP BY modelType, method, sku, batchId (or filePath) ---
-        const groupKey = `${modelType}__${method}__${sku}__${batchId || filePath}`;
-
-        if (!bestResultsMap[groupKey]) {
-          bestResultsMap[groupKey] = {
-            modelType,
-            displayName: modelInfo.displayName || modelType,
-            category: modelInfo.category || 'Unknown',
-            description: modelInfo.description || '',
-            isSeasonal: modelInfo.isSeasonal || false,
-            method,
-            sku,
-            batchId,
-            filePath,
-            allResults: []
-          };
-        }
-        
-        bestResultsMap[groupKey].allResults.push({
-          accuracy: modelResult.accuracy,
-          parameters: modelResult.parameters,
-          mape: modelResult.mape,
-          rmse: modelResult.rmse,
-          mae: modelResult.mae,
-          jobId: job.id,
-          sku,
-          batchId,
-          filePath,
-          createdAt: job.createdAt,
-          completedAt: job.completedAt
-        });
-      }
-    }
-  }
-  
-  // For each group, compute composite score and select best
-  Object.values(bestResultsMap).forEach(group => {
-    const results = group.allResults;
-      if (!results.length) return;
-    const maxMAPE = Math.max(...results.map(r => r.mape || 0), 1);
-      const maxRMSE = Math.max(...results.map(r => r.rmse || 0), 1);
-      const maxMAE = Math.max(...results.map(r => r.mae || 0), 1);
-      results.forEach(r => {
-        // Use safeMetric for all metrics
-        const mape = safeMetric(r.mape, maxMAPE);
-        const rmse = safeMetric(r.rmse, maxRMSE);
-        const mae  = safeMetric(r.mae, maxMAE);
-        const accuracy = safeMetric(r.accuracy, 0); // for accuracy, missing = 0 (worst)
-
-        const normAccuracy = Math.max(0, Math.min(1, accuracy / 100));
-        const normMAPE = Math.max(0, Math.min(1, 1 - (mape / maxMAPE)));
-        const normRMSE = Math.max(0, Math.min(1, 1 - (rmse / maxRMSE)));
-        const normMAE = Math.max(0, Math.min(1, 1 - (mae / maxMAE)));
-        r.compositeScore =
-          (weights.mape * normMAPE) +
-          (weights.rmse * normRMSE) +
-          (weights.mae * normMAE) +
-          (weights.accuracy * normAccuracy);
-      });
-      // Pick the result with the highest composite score
-      const best = results.reduce((best, curr) =>
-        (curr.compositeScore > (best.compositeScore || -Infinity)) ? curr : best, results[0]);
-    group.bestResult = best;
-  });
-
-  // Convert to array format
-  const results = Object.values(bestResultsMap).map(group => ({
-    modelType: group.modelType,
-    displayName: group.displayName,
-    category: group.category,
-    description: group.description,
-    isSeasonal: group.isSeasonal,
-    sku: group.sku,
-    batchId: group.batchId,
-    filePath: group.filePath,
-    methods: [
-      {
-        method: group.method,
-        bestResult: group.bestResult
-      }
-    ]
-  }));
-
-  console.log(`[API] extractBestResultsPerModelMethod returning ${results.length} results:`, results.map(r => ({
-    modelType: r.modelType,
-    sku: r.sku,
-    filePath: r.filePath,
-    method: r.methods[0]?.method
-  })));
-
-  // Add models that should be included in grid search but are missing from results
-  const allModelIds = Array.from(modelMetadataMap.keys());
-   for (const modelId of allModelIds) {
-    const model = modelMetadataMap.get(modelId);
-    // Check if model should be included in grid search using the model's own method
-    const modelClass = modelFactory.getModelClass(modelId);
-    if (!modelClass || !modelClass.shouldIncludeInGridSearch()) {
-      continue; // Skip models that opt out of grid search
-    }
-    const seenCombos = new Set(results.map(r => `${r.modelType}|${r.sku}|${r.batchId}|${r.filePath}`));
-      for (const job of jobs) {
-        const comboKey = `${modelId}|${job.sku}|${job.batchId}|${job.data ? JSON.parse(job.data).filePath || '' : ''}`;
-        if (!seenCombos.has(comboKey)) {
-        results.push(getDefaultResultForModel(model, job.sku, job.batchId, job.data ? JSON.parse(job.data).filePath : ''));
-      }
-    }
-  }
-
-  // After building results array, ensure every model is represented for each (sku, filePath, batchId) combo
-  // Use MODEL_METADATA to get the full list of models
-  // Collect all unique (sku, filePath, batchId) combos from jobs
-  const combos = [];
-  for (const job of jobs) {
-    const sku = job.sku;
-    const batchId = job.batchId;
-    const filePath = (() => {
-      try {
-        const dataObj = JSON.parse(job.data || '{}');
-        return dataObj.filePath || '';
-      } catch {
-        return '';
-      }
-    })();
-    combos.push({ sku, batchId, filePath });
-  }
-  // For each combo, ensure every model/method is present
-  const seenCombos = new Set(results.map(r => `${r.modelType}|${r.sku}|${r.batchId}|${r.filePath}|${r.methods[0]?.method}`));
-  for (const { sku, batchId, filePath } of combos) {
-    for (const modelId of allModelIds) {
-      const model = modelMetadataMap.get(modelId);
-      for (const method of ['grid', 'ai']) {
-        const comboKey = `${modelId}|${sku}|${batchId}|${filePath}|${method}`;
-        if (!seenCombos.has(comboKey)) {
-          results.push({
-            modelType: model.id,
-            displayName: model.displayName || model.id,
-            category: model.category || 'Other',
-            description: model.description || '',
-            isSeasonal: model.isSeasonal || false,
-            sku,
-            batchId,
-            filePath,
-            methods: [
-              {
-                method,
-                bestResult: {
-                  accuracy: null,
-                  parameters: [],
-                  mape: null,
-                  rmse: null,
-                  mae: null,
-                  jobId: null,
-                  sku,
-                  batchId,
-                  filePath,
-                  createdAt: null,
-                  completedAt: null,
-                  compositeScore: null,
-                  status: 'ineligible',
-                  reason: 'No result available for this model/method (ineligible, failed, or not run)'
-                }
-              }
-            ]
-          });
-          seenCombos.add(comboKey); // Prevent duplicates
-        }
-      }
-    }
-  }
-  return results;
-}
-
-// Get optimization results summary with model metadata
-router.get('/jobs/results-summary', (req, res) => {
-    const userId = 'default_user';
-    const { method } = req.query;
-    
-    // Validate method parameter
-    if (method && !['grid', 'ai', 'all'].includes(method)) {
-        return res.status(400).json({ error: 'Method must be "grid", "ai", or "all"' });
-    }
-    
-    // Build query based on method filter
-    let query = "SELECT * FROM jobs WHERE status = 'completed' AND userId = ? AND result IS NOT NULL";
-    let params = [userId];
-    
-    if (method && method !== 'all') {
-        query += " AND method = ?";
-        params.push(method);
-    }
-    
-    query += " ORDER BY createdAt DESC";
-    
-    db.all(query, params, (err, jobs) => {
-        if (err) {
-            console.error('Database error:', err);
-            return res.status(500).json({ error: 'Failed to fetch optimization results' });
-        }
-        
-        if (jobs.length === 0) {
-            return res.status(404).json({ error: 'No completed optimization jobs found' });
-        }
-        
-        try {
-            // Create a lookup map for model metadata
-            const modelMetadataMap = new Map();
-            MODEL_METADATA.forEach(model => {
-                modelMetadataMap.set(model.id, model);
-            });
-            
-            const summary = {
-                totalJobs: jobs.length,
-                totalResults: 0,
-                modelBreakdown: {},
-                categoryBreakdown: {},
-                seasonalVsNonSeasonal: { seasonal: 0, nonSeasonal: 0 },
-                methodBreakdown: { grid: 0, ai: 0 },
-                averageMetrics: { accuracy: 0, mape: 0, rmse: 0, mae: 0 },
-                bestResults: [],
-                bestResultsPerModelMethod: extractBestResultsPerModelMethod(jobs, modelMetadataMap, weights)
-            };
-            
-            let totalAccuracy = 0;
-            let totalMape = 0;
-            let totalRmse = 0;
-            let totalMae = 0;
-            let successfulResults = 0;
-            
-            for (const job of jobs) {
-                const resultData = JSON.parse(job.result || '{}');
-                summary.methodBreakdown[job.method] = (summary.methodBreakdown[job.method] || 0) + 1;
-                
-                // Extract individual model results from the optimization result
-                if (resultData.results && Array.isArray(resultData.results)) {
-                    for (const modelResult of resultData.results) {
-                        summary.totalResults++;
-                        
-                        // Get model metadata for enhanced information
-                        const modelInfo = modelMetadataMap.get(modelResult.modelType) || {};
-                        
-                        // Model breakdown
-                        if (!summary.modelBreakdown[modelResult.modelType]) {
-                            summary.modelBreakdown[modelResult.modelType] = {
-                                displayName: modelInfo.displayName || modelResult.modelType,
-                                category: modelInfo.category || 'Unknown',
-                                description: modelInfo.description || '',
-                                isSeasonal: modelInfo.isSeasonal || false,
-                                count: 0,
-                                successfulCount: 0,
-                                averageAccuracy: 0,
-                                bestAccuracy: 0,
-                                totalAccuracy: 0
-                            };
-                        }
-                        
-                        const modelStats = summary.modelBreakdown[modelResult.modelType];
-                        modelStats.count++;
-                        
-                        if (modelResult.success) {
-                            modelStats.successfulCount++;
-                            modelStats.totalAccuracy += modelResult.accuracy;
-                            modelStats.averageAccuracy = modelStats.totalAccuracy / modelStats.successfulCount;
-                            modelStats.bestAccuracy = Math.max(modelStats.bestAccuracy, modelResult.accuracy);
-                            
-                            // Global averages
-                            totalAccuracy += modelResult.accuracy;
-                            totalMape += modelResult.mape;
-                            totalRmse += modelResult.rmse;
-                            totalMae += modelResult.mae;
-                            successfulResults++;
-                        }
-                        
-                        // Category breakdown
-                        const category = modelInfo.category || 'Unknown';
-                        if (!summary.categoryBreakdown[category]) {
-                            summary.categoryBreakdown[category] = {
-                                count: 0,
-                                successfulCount: 0,
-                                averageAccuracy: 0,
-                                totalAccuracy: 0
-                            };
-                        }
-                        
-                        const categoryStats = summary.categoryBreakdown[category];
-                        categoryStats.count++;
-                        if (modelResult.success) {
-                            categoryStats.successfulCount++;
-                            categoryStats.totalAccuracy += modelResult.accuracy;
-                            categoryStats.averageAccuracy = categoryStats.totalAccuracy / categoryStats.successfulCount;
-                        }
-                        
-                        // Seasonal vs Non-seasonal
-                        if (modelInfo.isSeasonal) {
-                            summary.seasonalVsNonSeasonal.seasonal++;
-                        } else {
-                            summary.seasonalVsNonSeasonal.nonSeasonal++;
-                        }
-                        
-                        // Track best results
-                        if (modelResult.success && modelResult.accuracy > 0) {
-                            summary.bestResults.push({
-                                modelType: modelResult.modelType,
-                                modelDisplayName: modelInfo.displayName || modelResult.modelType,
-                                modelCategory: modelInfo.category || 'Unknown',
-                                accuracy: modelResult.accuracy,
-                                parameters: modelResult.parameters,
-                                jobId: job.id,
-                                sku: job.sku,
-                                method: job.method
-                            });
-                        }
-                    }
-                }
-            }
-            
-            // Calculate global averages
-            if (successfulResults > 0) {
-                summary.averageMetrics.accuracy = totalAccuracy / successfulResults;
-                summary.averageMetrics.mape = totalMape / successfulResults;
-                summary.averageMetrics.rmse = totalRmse / successfulResults;
-                summary.averageMetrics.mae = totalMae / successfulResults;
-            }
-            
-            // Sort best results by accuracy
-            summary.bestResults.sort((a, b) => b.accuracy - a.accuracy);
-            summary.bestResults = summary.bestResults.slice(0, 10); // Top 10
-            
-            res.json(summary);
-            
-        } catch (error) {
-            console.error('Error processing optimization results summary:', error);
-            res.status(500).json({ error: 'Failed to process optimization results summary', details: error.message });
-        }
-    });
-});
-
-// Add endpoint to get available models
+// Get available models with data requirements
 router.get('/models', (req, res) => {
   try {
     const seasonalPeriod = req.query.seasonalPeriod ? parseInt(req.query.seasonalPeriod) : 12;
@@ -1643,83 +2528,12 @@ router.get('/models', (req, res) => {
         isSeasonal: false
       }
     }));
-    
+
     res.json(enhancedModels);
   } catch (error) {
     console.error('[API] Error fetching models:', error);
     res.status(500).json({ error: 'Failed to fetch models' });
   }
-});
-
-// New endpoint: Get best results per model and method
-router.get('/jobs/best-results-per-model', (req, res) => {
-    const userId = 'default_user';
-    const { method, filePath, sku } = req.query;
-    // Accept metric weights from query params, fallback to defaults
-    const mapeWeight = parseFloat(req.query.mapeWeight) || 0.4;
-    const rmseWeight = parseFloat(req.query.rmseWeight) || 0.3;
-    const maeWeight = parseFloat(req.query.maeWeight) || 0.2;
-    const accuracyWeight = parseFloat(req.query.accuracyWeight) || 0.1;
-    const weights = { mape: mapeWeight, rmse: rmseWeight, mae: maeWeight, accuracy: accuracyWeight };
-    // Validate method parameter
-    if (method && !['grid', 'ai', 'all'].includes(method)) {
-        return res.status(400).json({ error: 'Method must be "grid", "ai", or "all"' });
-    }
-    // Build query based on method filter and filePath filter
-    let query = "SELECT * FROM jobs WHERE status = 'completed' AND userId = ? AND result IS NOT NULL";
-    let params = [userId];
-    if (method && method !== 'all') {
-        query += " AND method = ?";
-        params.push(method);
-    }
-    if (filePath) {
-        query += " AND data LIKE ?";
-        params.push(`%${filePath}%`);
-    }
-    if (sku) {
-        query += " AND sku = ?";
-        params.push(sku);
-    }
-    query += " ORDER BY createdAt DESC";
-    db.all(query, params, (err, jobs) => {
-        if (err) {
-            console.error('Database error:', err);
-            return res.status(500).json({ error: 'Failed to fetch optimization results' });
-        }
-        
-        console.log(`[API] best-results-per-model query:`, { method, filePath, sku, query, params });
-        console.log(`[API] Found ${jobs.length} jobs for best-results-per-model`);
-        if (jobs.length > 0) {
-            console.log(`[API] Sample jobs:`, jobs.slice(0, 3).map(j => ({
-                id: j.id,
-                sku: j.sku,
-                method: j.method,
-                status: j.status,
-                modelId: j.modelId,
-                data: j.data ? JSON.parse(j.data).filePath : 'no data'
-            })));
-        }
-        
-        if (jobs.length === 0) {
-            return res.status(404).json({ error: 'No completed optimization jobs found' });
-        }
-        try {
-            // Create a lookup map for model metadata
-            const modelMetadataMap = new Map();
-            MODEL_METADATA.forEach(model => {
-                modelMetadataMap.set(model.id, model);
-            });
-            const bestResultsPerModelMethod = extractBestResultsPerModelMethod(jobs, modelMetadataMap, weights);
-            res.json({
-                totalJobs: jobs.length,
-                bestResultsPerModelMethod,
-                timestamp: new Date().toISOString()
-            });
-        } catch (error) {
-            console.error('Error processing best results per model:', error);
-            res.status(500).json({ error: 'Failed to process best results per model', details: error.message });
-        }
-    });
 });
 
 // Get model data requirements
@@ -1742,11 +2556,11 @@ router.post('/models/check-compatibility', (req, res) => {
     if (!modelTypes || !Array.isArray(modelTypes)) {
       return res.status(400).json({ error: 'modelTypes must be an array' });
     }
-    
+
     if (typeof dataLength !== 'number' || dataLength < 0) {
       return res.status(400).json({ error: 'dataLength must be a non-negative number' });
     }
-    
+
     const compatibility = {
       dataLength,
       seasonalPeriod,
@@ -1754,7 +2568,7 @@ router.post('/models/check-compatibility', (req, res) => {
       incompatibleModels: [],
       totalModels: modelTypes.length
     };
-    
+
     for (const modelType of modelTypes) {
       const isCompatible = modelFactory.isModelCompatible(modelType, dataLength, seasonalPeriod);
       const requirements = modelFactory.getModelDataRequirements(seasonalPeriod)[modelType];
@@ -1774,10 +2588,10 @@ router.post('/models/check-compatibility', (req, res) => {
         });
       }
     }
-    
+
     compatibility.compatibleCount = compatibility.compatibleModels.length;
     compatibility.incompatibleCount = compatibility.incompatibleModels.length;
-    
+
     res.json(compatibility);
   } catch (error) {
     console.error('[API] Error checking model compatibility:', error);
@@ -1785,415 +2599,1147 @@ router.post('/models/check-compatibility', (req, res) => {
   }
 });
 
-// Export optimization results as CSV
-router.get('/jobs/export-results', (req, res) => {
-    const userId = 'default_user';
-    const { method, format = 'csv', filePath, sku } = req.query;
-    
-    // Get metric weights from query parameters (same as used in best result calculation)
-    const mapeWeight = parseFloat(req.query.mapeWeight) || 0.4;
-    const rmseWeight = parseFloat(req.query.rmseWeight) || 0.3;
-    const maeWeight = parseFloat(req.query.maeWeight) || 0.2;
-    const accuracyWeight = parseFloat(req.query.accuracyWeight) || 0.1;
-    const weights = { mape: mapeWeight, rmse: rmseWeight, mae: maeWeight, accuracy: accuracyWeight };
+// =====================================================
+// HIERARCHY MANAGEMENT API ENDPOINTS
+// =====================================================
 
-    
-    // Validate method parameter
-    if (method && !['grid', 'ai', 'all'].includes(method)) {
-        return res.status(400).json({ error: 'Method must be "grid", "ai", or "all"' });
-    }
-    
-    // Build query based on method filter and filePath filter
-    let query = "SELECT * FROM jobs WHERE status = 'completed' AND userId = ? AND result IS NOT NULL";
-    let params = [userId];
-    
-    if (method && method !== 'all') {
-        query += " AND method = ?";
-        params.push(method);
-    }
-    
-    // Add filePath filter if specified
-    if (filePath) {
-        query += " AND data LIKE ?";
-        params.push(`%${filePath}%`);
-    }
-    
-    // Add SKU filter if specified
-    if (sku) {
-        query += " AND sku = ?";
-        params.push(sku);
-    }
-    
-    query += " ORDER BY createdAt DESC";
-    
-    db.all(query, params, (err, jobs) => {
-        if (err) {
-            console.error('Database error:', err);
-            return res.status(500).json({ error: 'Failed to fetch optimization results' });
-        }
-        
-        if (jobs.length === 0) {
-            const filterMessage = filePath ? ` for dataset: ${filePath}` : '';
-            return res.status(404).json({ error: `No completed optimization jobs found${filterMessage}` });
-        }
-        
-        try {
-            const results = [];
-            
-            // Create a lookup map for model metadata
-            const modelMetadataMap = new Map();
-            MODEL_METADATA.forEach(model => {
-                modelMetadataMap.set(model.id, model);
-            });
-            
-            // Group results by job to calculate normalization factors per job
-            const jobResultsMap = new Map();
-            
-            for (const job of jobs) {
-                const jobData = JSON.parse(job.data || '{}');
-                const resultData = JSON.parse(job.result || '{}');
-                
-                // Extract individual model results from the optimization result
-                if (resultData.results && Array.isArray(resultData.results)) {
-                    const jobResults = [];
-                    
-                    for (const modelResult of resultData.results) {
-                        // Get model metadata for enhanced information
-                        const modelInfo = modelMetadataMap.get(modelResult.modelType) || {};
-                        
-                        jobResults.push({
-                            // Job metadata
-                            jobId: job.id,
-                            sku: job.sku,
-                            modelId: job.modelId,
-                            method: job.method,
-                            reason: job.reason,
-                            batchId: job.batchId,
-                            createdAt: job.createdAt,
-                            completedAt: job.completedAt,
-                            duration: job.completedAt ? 
-                                Math.round((new Date(job.completedAt) - new Date(job.createdAt)) / 1000) : null,
-                            
-                            // Model result data
-                            modelType: modelResult.modelType,
-                            modelDisplayName: modelInfo.displayName || modelResult.modelType,
-                            modelCategory: modelInfo.category || 'Unknown',
-                            modelDescription: modelInfo.description || '',
-                            isSeasonal: modelInfo.isSeasonal || false,
-                            parameters: JSON.stringify(modelResult.parameters),
-                            accuracy: modelResult.accuracy,
-                            mape: modelResult.mape,
-                            rmse: modelResult.rmse,
-                            mae: modelResult.mae,
-                            success: modelResult.success,
-                            error: modelResult.error,
-                            
-                            // Training data info
-                            trainingDataSize: resultData.trainingDataSize,
-                            validationDataSize: resultData.validationDataSize,
-                            
-                            // Best result info (will be calculated later with current weights)
-                            isBestResult: false,
-                                // Dataset info
-                                filePath: jobData.filePath || job.filePath || '',
-                                datasetName: jobData.name || ''
-                        });
-                  }
-                    
-                    jobResultsMap.set(job.id, jobResults);
-                }
-            }
-            
-            // Calculate normalization factors and composite scores for each job
-            for (const [jobId, jobResults] of jobResultsMap) {
-                if (jobResults.length === 0) continue;
-                
-                // Find max values for normalization (avoid division by zero)
-                const maxMAPE = Math.max(...jobResults.map(r => r.mape || 0), 1);
-                const maxRMSE = Math.max(...jobResults.map(r => r.rmse || 0), 1);
-                const maxMAE = Math.max(...jobResults.map(r => r.mae || 0), 1);
-                
-                // Calculate normalized metrics and composite scores
-                jobResults.forEach(result => {
-                    // Use safeMetric for all metrics
-                    const mape = safeMetric(result.mape, maxMAPE);
-                    const rmse = safeMetric(result.rmse, maxRMSE);
-                    const mae  = safeMetric(result.mae, maxMAE);
-                    const accuracy = safeMetric(result.accuracy, 0); // for accuracy, missing = 0 (worst)
-
-                    result.normAccuracy = Math.max(0, Math.min(1, accuracy / 100));
-                    result.normMAPE = Math.max(0, Math.min(1, 1 - (mape / maxMAPE)));
-                    result.normRMSE = Math.max(0, Math.min(1, 1 - (rmse / maxRMSE)));
-                    result.normMAE = Math.max(0, Math.min(1, 1 - (mae / maxMAE)));
-                    // Composite score using the weights
-                    result.compositeScore = 
-                        (weights.mape * result.normMAPE) +
-                        (weights.rmse * result.normRMSE) +
-                        (weights.mae * result.normMAE) +
-                        (weights.accuracy * result.normAccuracy);
-                });
-                
-                // Find the best result for this job using current weights
-                const bestResult = jobResults.reduce((best, curr) =>
-                    (curr.compositeScore > (best.compositeScore || -Infinity)) ? curr : best, jobResults[0]);
-                
-                // Mark the best result
-                jobResults.forEach(result => {
-                    result.isBestResult = result === bestResult;
-                });
-                
-                
-                // Add all results from this job to the main results array
-                results.push(...jobResults);
-            }
-            
-            if (results.length === 0) {
-                return res.status(404).json({ error: 'No optimization results found in completed jobs' });
-            }
-
-            // Filter to only best results if requested
-            const bestOnly = req.query.bestOnly === 'true';
-            const filteredResults = bestOnly ? results.filter(r => r.isBestResult) : results;
-
-            // Generate CSV content with enhanced model information and normalized metrics
-            const csvHeaders = [
-                'Dataset Name',
-                'Job ID', 'SKU', 'Model ID', 'Model Display Name', 'Model Category', 'Model Description', 
-                'Is Seasonal', 'Method', 'Reason', 'Batch ID',
-                'Created At', 'Completed At', 'Duration (seconds)',
-                'Parameters', 'Accuracy (%)', 'MAPE', 'RMSE', 'MAE',
-                'Normalized Accuracy', 'Normalized MAPE', 'Normalized RMSE', 'Normalized MAE',
-                'Composite Score', 'MAPE Weight', 'RMSE Weight', 'MAE Weight', 'Accuracy Weight',
-                'Success', 'Error', 'Training Data Size', 'Validation Data Size', 'Is Best Result'
-            ];
-            
-            const csvRows = filteredResults.map(result => {
-                // For ARIMA/SARIMA, if parameters include 'auto: true' and also fitted p/d/q (and for SARIMA: P/D/Q/s), export those instead of just 'auto'
-                let paramObj;
-                try {
-                  paramObj = typeof result.parameters === 'string' ? JSON.parse(result.parameters) : result.parameters;
-                } catch (e) {
-                  paramObj = result.parameters;
-                }
-                if ((result.modelId === 'arima' || result.modelId === 'sarima') && paramObj && paramObj.auto === true) {
-                  // Remove 'auto' and 'verbose', keep only numeric params
-                  const filtered = {};
-                  for (const key of Object.keys(paramObj)) {
-                    if (['p','d','q','P','D','Q','s'].includes(key) && typeof paramObj[key] === 'number') {
-                      filtered[key] = paramObj[key];
-                    }
-                  }
-                  // If we found any numeric params, use them; else fallback to original
-                  result.parameters = Object.keys(filtered).length > 0 ? JSON.stringify(filtered) : result.parameters;
-                }
-                return [
-                  // ... existing code ...
-                result.datasetName || (result.filePath ? (result.filePath.split('/').pop() || '').replace(/\.(csv|json)$/i, '') : ''),
-                result.jobId,
-                result.sku,
-                result.modelId,
-                result.modelDisplayName,
-                result.modelCategory,
-                result.modelDescription,
-                result.isSeasonal ? 'Yes' : 'No',
-                result.method,
-                result.reason,
-                result.batchId,
-                result.createdAt,
-                result.completedAt,
-                result.duration,
-                result.parameters,
-                result.accuracy,
-                result.mape,
-                result.rmse,
-                result.mae,
-                result.normAccuracy?.toFixed(4) || '',
-                result.normMAPE?.toFixed(4) || '',
-                result.normRMSE?.toFixed(4) || '',
-                result.normMAE?.toFixed(4) || '',
-                result.compositeScore?.toFixed(4) || '',
-                weights.mape,
-                weights.rmse,
-                weights.mae,
-                weights.accuracy,
-                result.success,
-                result.error,
-                result.trainingDataSize,
-                result.validationDataSize,
-                result.isBestResult
-                ];
-            });
-            
-            getCsvSeparator((separator) => {
-              const csvContent = [
-                    csvHeaders.join(separator),
-                    ...csvRows.map(row => row.map(cell => {
-                        // Escape separators and quotes in CSV
-                        if (typeof cell === 'string' && (cell.includes(separator) || cell.includes('"') || cell.includes('\n'))) {
-                        return `"${cell.replace(/"/g, '""')}"`;
-                    }
-                    return cell;
-                    }).join(separator))
-                ].join('\n');
-            
-            // Set response headers for CSV download
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const methodSuffix = method && method !== 'all' ? `-${method}` : '';
-            const filename = `optimization-results${methodSuffix}-${timestamp}.csv`;
-            
-            res.setHeader('Content-Type', 'text/csv');
-            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-            res.send(csvContent);
-            });
-            
-        } catch (error) {
-            console.error('Error processing optimization results:', error);
-            res.status(500).json({ error: 'Failed to process optimization results', details: error.message });
-        }
-    });
+// Get divisions for a company
+router.get('/divisions', async (req, res) => {
+  try {
+    const companyId = parseInt(req.query.companyId) || 1; // Default to company 1 for now
+    const divisions = await getDivisions(companyId);
+    res.json(divisions);
+  } catch (error) {
+    console.error('[API] Error fetching divisions:', error);
+    res.status(500).json({ error: 'Failed to fetch divisions' });
+  }
 });
 
-// Settings endpoints
-router.get('/settings', (req, res) => {
-  const userId = 'default_user';
-  db.all("SELECT key, value, description FROM settings WHERE key LIKE 'global_%'", [], (err, rows) => {
-    if (err) {
-      console.error('Database error:', err);
-      return res.status(500).json({ error: 'Failed to get settings' });
+// Get clusters for a company/division
+router.get('/clusters', async (req, res) => {
+  try {
+    const companyId = parseInt(req.query.companyId) || 1;
+    const divisionId = req.query.divisionId ? parseInt(req.query.divisionId) : null;
+    const clusters = await getClusters(companyId, divisionId);
+    res.json(clusters);
+  } catch (error) {
+    console.error('[API] Error fetching clusters:', error);
+    res.status(500).json({ error: 'Failed to fetch clusters' });
+  }
+});
+
+// Get S&OP cycles for a company/division
+router.get('/sop-cycles', async (req, res) => {
+  try {
+    const companyId = parseInt(req.query.companyId) || 1;
+    const divisionId = req.query.divisionId ? parseInt(req.query.divisionId) : null;
+    const cycles = await getSopCycles(companyId, divisionId);
+    res.json(cycles);
+  } catch (error) {
+    console.error('[API] Error fetching S&OP cycles:', error);
+    res.status(500).json({ error: 'Failed to fetch S&OP cycles' });
+  }
+});
+
+// Get user roles and permissions
+router.get('/user-roles', async (req, res) => {
+  try {
+    const userId = parseInt(req.query.userId) || 1;
+    const companyId = parseInt(req.query.companyId) || 1;
+    const roles = await getUserRoles(userId, companyId);
+    res.json(roles);
+  } catch (error) {
+    console.error('[API] Error fetching user roles:', error);
+    res.status(500).json({ error: 'Failed to fetch user roles' });
+  }
+});
+
+// Get datasets with hierarchy information
+router.get('/datasets', async (req, res) => {
+  try {
+    const companyId = parseInt(req.query.companyId) || 1;
+    const divisionId = req.query.divisionId ? parseInt(req.query.divisionId) : null;
+    const clusterId = req.query.clusterId ? parseInt(req.query.clusterId) : null;
+    // Use the imported getDatasets function
+    const datasets = await getDatasets(companyId, divisionId, clusterId);
+    res.json(datasets);
+  } catch (error) {
+    console.error('[API] Error fetching datasets:', error);
+    res.status(500).json({ error: 'Failed to fetch datasets' });
+  }
+});
+
+// Get dataset metadata with hierarchy information
+router.get('/datasets/:datasetId', async (req, res) => {
+  try {
+    const datasetId = validateDatasetId(parseInt(req.params.datasetId));
+    const metadata = await getDatasetMetadata(datasetId);
+    
+    if (!metadata) {
+      return res.status(404).json({ error: 'Dataset not found' });
     }
     
-    // Convert rows to settings object
-    const settings = {};
-    rows.forEach(row => {
-      try {
-        settings[row.key] = JSON.parse(row.value);
-      } catch (e) {
-        settings[row.key] = row.value;
-      }
-    });
+    res.json(metadata);
+  } catch (error) {
+    console.error('[API] Error fetching dataset metadata:', error);
+    res.status(500).json({ error: 'Failed to fetch dataset metadata' });
+  }
+});
+
+// =====================================================
+// SETUP WIZARD API ENDPOINTS
+// =====================================================
+
+// Check if setup is required
+router.get('/setup/status', async (req, res) => {
+  try {
+    const companyId = parseInt(req.query.companyId) || 1;
     
-    // Provide defaults for missing settings
-    const defaultSettings = {
-      global_frequency: settings.global_frequency || 'monthly',
-      global_seasonalPeriods: settings.global_seasonalPeriods || 12,
-      global_autoDetectFrequency: settings.global_autoDetectFrequency !== false, // default to true
-      global_csvSeparator: settings.global_csvSeparator || ','
+    console.log(`[SETUP STATUS] Checking setup status for companyId: ${companyId}`);
+    
+    // Get company details including the new setup_wizard_accessible flag
+    const companyResult = await pgPool.query(
+      'SELECT setup_completed, setup_wizard_accessible FROM companies WHERE id = $1',
+      [companyId]
+    );
+    
+    if (companyResult.rows.length === 0) {
+      console.log(`[SETUP STATUS] Company not found for id: ${companyId}`);
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    
+    const company = companyResult.rows[0];
+    
+    console.log(`[SETUP STATUS] Company found:`);
+    console.log(`  - setup_completed: ${company.setup_completed}`);
+    console.log(`  - setup_wizard_accessible: ${company.setup_wizard_accessible}`);
+    
+    // Check if we have more than just the default division/cluster
+    const divisionsResult = await pgPool.query(
+      'SELECT COUNT(*) as count FROM divisions WHERE company_id = $1',
+      [companyId]
+    );
+    
+    const clustersResult = await pgPool.query(
+      'SELECT COUNT(*) as count FROM clusters WHERE company_id = $1',
+      [companyId]
+    );
+    
+    const datasetsResult = await pgPool.query(
+      'SELECT COUNT(*) as count FROM datasets WHERE company_id = $1',
+      [companyId]
+    );
+    
+    // Use setup_completed flag for initial setup status
+    // Use setup_wizard_accessible flag for admin access control
+   
+    const hasDatasets = datasetsResult.rows[0].count > 0;
+    
+    const response = {
+      setupRequired: !company.setup_completed,
+      setupWizardAccessible: company.setup_wizard_accessible,
+      hasDatasets,
+      divisionCount: parseInt(divisionsResult.rows[0].count),
+      clusterCount: parseInt(clustersResult.rows[0].count),
+      datasetCount: parseInt(datasetsResult.rows[0].count)
     };
     
-    res.json(defaultSettings);
-  });
+    console.log(`[SETUP STATUS] Response:`);
+    console.log(`  - setupRequired: ${response.setupRequired}`);
+    console.log(`  - setupWizardAccessible: ${response.setupWizardAccessible}`);
+    console.log(`  - divisionCount: ${response.divisionCount}`);
+    console.log(`  - clusterCount: ${response.clusterCount}`);
+    console.log(`  - datasetCount: ${response.datasetCount}`);
+    
+    res.json(response);
+  } catch (error) {
+    console.error('[API] Error checking setup status:', error);
+    res.status(500).json({ error: 'Failed to check setup status' });
+  }
 });
 
-router.post('/settings', (req, res) => {
-  const userId = 'default_user';
-  const { frequency, seasonalPeriods, autoDetectFrequency, csvSeparator } = req.body;
-  
-  const settingsToUpdate = [
-    { key: 'global_frequency', value: JSON.stringify(frequency), description: 'Data frequency (daily, weekly, monthly, quarterly, yearly)' },
-    { key: 'global_seasonalPeriods', value: JSON.stringify(seasonalPeriods), description: 'Number of periods in each season' },
-    { key: 'global_autoDetectFrequency', value: JSON.stringify(autoDetectFrequency), description: 'Whether to automatically detect frequency from dataset' },
-    { key: 'global_csvSeparator', value: JSON.stringify(csvSeparator), description: 'Default CSV separator for import/export' }
-  ];
-  
-  let completed = 0;
-  let hasError = false;
-  
-  settingsToUpdate.forEach(setting => {
-    db.run(
-      "INSERT OR REPLACE INTO settings (key, value, description, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
-      [setting.key, setting.value, setting.description],
-      (err) => {
-        if (err) {
-          console.error('Database error:', err);
-          hasError = true;
+// Create company
+router.post('/setup/companies', authenticateToken, async (req, res) => {
+  try {
+    const { 
+      name, 
+      description, 
+      country, 
+      website, 
+      phone, 
+      address, 
+      city, 
+      state_province, 
+      postal_code, 
+      company_size, 
+      fiscal_year_start, 
+      timezone, 
+      currency, 
+      logo_url, 
+      notes 
+    } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Company name is required' });
+    }
+    
+    const result = await pgPool.query(
+      `INSERT INTO companies (
+        name, description, country, website, phone, 
+        address, city, state_province, postal_code, company_size, 
+        fiscal_year_start, timezone, currency, logo_url, notes
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+      ) RETURNING id, name, description, country, website, phone, 
+        address, city, state_province, postal_code, company_size, 
+        fiscal_year_start, timezone, currency, logo_url, notes`,
+      [
+        name, description || null, country || null, 
+        website || null, phone || null, address || null, city || null, 
+        state_province || null, postal_code || null, company_size || null, 
+        fiscal_year_start || null, timezone || 'UTC', currency || 'USD', 
+        logo_url || null, notes || null
+      ]
+    );
+    
+    res.json({
+      success: true,
+      company: result.rows[0]
+    });
+  } catch (error) {
+    console.error('[API] Error creating company:', error);
+    res.status(500).json({ error: 'Failed to create company' });
+  }
+});
+
+// Get companies
+router.get('/companies', async (req, res) => {
+  try {
+    const result = await pgPool.query(
+      `SELECT id, name, description, country, website, phone, 
+        address, city, state_province, postal_code, company_size, 
+        fiscal_year_start, timezone, currency, logo_url, notes, 
+        created_at, updated_at 
+       FROM companies ORDER BY name`
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('[API] Error fetching companies:', error);
+    res.status(500).json({ error: 'Failed to fetch companies' });
+  }
+});
+
+// Create division
+router.post('/setup/divisions', authenticateToken, async (req, res) => {
+  try {
+          const { name, description, industry } = req.body;
+      const companyId = req.user.company_id;
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Division name is required' });
+    }
+    
+    const result = await pgPool.query(
+      'INSERT INTO divisions (company_id, name, description, industry, is_active) VALUES ($1, $2, $3, $4, true) RETURNING id, name, description, industry, is_active',
+      [companyId, name, description || null, industry || null]
+    );
+    
+    res.json({
+      success: true,
+      division: result.rows[0]
+    });
+  } catch (error) {
+    console.error('[API] Error creating division:', error);
+    res.status(500).json({ error: 'Failed to create division' });
+  }
+});
+
+// Update division
+router.put('/setup/divisions/:id', async (req, res) => {
+  try {
+    const divisionId = parseInt(req.params.id);
+    const { name, description, industry } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Division name is required' });
+    }
+    
+    const result = await pgPool.query(
+      'UPDATE divisions SET name = $1, description = $2, industry = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 RETURNING id, name, description, industry',
+      [name, description || null, industry || null, divisionId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Division not found' });
+    }
+    
+    res.json({
+      success: true,
+      division: result.rows[0]
+    });
+  } catch (error) {
+    console.error('[API] Error updating division:', error);
+    res.status(500).json({ error: 'Failed to update division' });
+  }
+});
+
+// Create cluster
+router.post('/setup/clusters', authenticateToken, async (req, res) => {
+  try {
+          const { divisionId, name, description, countryCode, region } = req.body;
+      const companyId = req.user.company_id;
+    
+    if (!name || !divisionId) {
+      return res.status(400).json({ error: 'Cluster name and division ID are required' });
+    }
+    
+    const result = await pgPool.query(
+      'INSERT INTO clusters (company_id, division_id, name, description, country_code, region, is_active) VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING id, name, description, country_code, region, is_active',
+      [companyId, divisionId, name, description || null, countryCode || null, region || null]
+    );
+    
+    res.json({
+      success: true,
+      cluster: result.rows[0]
+    });
+  } catch (error) {
+    console.error('[API] Error creating cluster:', error);
+    res.status(500).json({ error: 'Failed to create cluster' });
+  }
+});
+
+// Update cluster
+router.put('/setup/clusters/:id', async (req, res) => {
+  try {
+    const clusterId = parseInt(req.params.id);
+    const { name, description, countryCode, region } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Cluster name is required' });
+    }
+    
+    const result = await pgPool.query(
+      'UPDATE clusters SET name = $1, description = $2, country_code = $3, region = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING id, name, description, country_code, region',
+      [name, description || null, countryCode || null, region || null, clusterId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Cluster not found' });
+    }
+    
+    res.json({
+      success: true,
+      cluster: result.rows[0]
+    });
+  } catch (error) {
+    console.error('[API] Error updating cluster:', error);
+    res.status(500).json({ error: 'Failed to update cluster' });
+  }
+});
+
+// Create S&OP cycle
+router.post('/setup/sop-cycles', authenticateToken, async (req, res) => {
+  try {
+          const { divisionId, name, description, startDate, endDate } = req.body;
+      const companyId = req.user.company_id;
+    
+    if (!name || !divisionId) {
+      return res.status(400).json({ error: 'S&OP cycle name and division ID are required' });
+    }
+    
+    const result = await pgPool.query(
+      'INSERT INTO sop_cycles (company_id, division_id, name, description, start_date, end_date) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, description, start_date, end_date',
+      [companyId, divisionId, name, description || null, startDate || null, endDate || null]
+    );
+    
+    res.json({
+      success: true,
+      sopCycle: result.rows[0]
+    });
+  } catch (error) {
+    console.error('[API] Error creating S&OP cycle:', error);
+    res.status(500).json({ error: 'Failed to create S&OP cycle' });
+  }
+});
+
+// Complete setup
+router.post('/setup/complete', authenticateToken, async (req, res) => {
+  try {
+          const companyId = req.user.company_id;
+    
+    // Mark setup as complete in the companies table
+    const result = await pgPool.query(
+      'UPDATE companies SET setup_completed = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, name, setup_completed',
+      [companyId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Setup completed successfully',
+      company: result.rows[0]
+    });
+  } catch (error) {
+    console.error('[API] Error completing setup:', error);
+    res.status(500).json({ error: 'Failed to complete setup' });
+  }
+});
+
+// Create divisions from CSV (silent creation for setup wizard)
+router.post('/setup/csv/create-divisions', authenticateToken, async (req, res) => {
+  try {
+    const { companyId, divisionNames } = req.body;
+    const userId = req.user.id;
+    
+    if (!companyId || !divisionNames || !Array.isArray(divisionNames)) {
+      return res.status(400).json({ error: 'Company ID and division names array are required' });
+    }
+    
+    const createdDivisions = [];
+    
+    for (const divisionName of divisionNames) {
+      if (divisionName && divisionName.trim()) {
+        try {
+          const result = await pgPool.query(
+            'INSERT INTO divisions (company_id, name, description, created_by, is_active) VALUES ($1, $2, $3, $4, true) RETURNING id, name',
+            [companyId, divisionName.trim(), `Division created from CSV import`, userId]
+          );
+          createdDivisions.push(result.rows[0]);
+        } catch (error) {
+          // If division already exists, skip it
+          if (error.code === '23505') { // Unique constraint violation
+            console.log(`Division "${divisionName}" already exists, skipping`);
+            continue;
+          }
+          throw error;
         }
-        completed++;
-        
-        if (completed === settingsToUpdate.length) {
-          if (hasError) {
-            res.status(500).json({ error: 'Failed to update settings' });
-          } else {
-            res.json({ success: true, message: 'Settings updated successfully' });
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Created ${createdDivisions.length} divisions`,
+      divisions: createdDivisions
+    });
+  } catch (error) {
+    console.error('[API] Error creating divisions from CSV:', error);
+    res.status(500).json({ error: 'Failed to create divisions from CSV' });
+  }
+});
+
+// Create clusters from CSV (silent creation for setup wizard)
+router.post('/setup/csv/create-clusters', authenticateToken, async (req, res) => {
+  try {
+    const { companyId, divisionNames, clusterNames } = req.body;
+    const userId = req.user.id;
+    
+    if (!companyId || !clusterNames || !Array.isArray(clusterNames)) {
+      return res.status(400).json({ error: 'Company ID and cluster names array are required' });
+    }
+    
+    const createdClusters = [];
+    
+    // Handle different scenarios based on whether division names are provided
+    if (divisionNames && Array.isArray(divisionNames) && divisionNames.length > 0) {
+      // Scenario 1: Division names provided - create clusters for specific divisions
+      const divisionsResult = await pgPool.query(
+        'SELECT id, name FROM divisions WHERE company_id = $1 AND name = ANY($2)',
+        [companyId, divisionNames]
+      );
+      const divisions = divisionsResult.rows;
+      
+              // Create clusters for each matching division
+      for (const division of divisions) {
+        for (const clusterName of clusterNames) {
+          if (clusterName && clusterName.trim()) {
+            try {
+              const result = await pgPool.query(
+                'INSERT INTO clusters (company_id, division_id, name, description, created_by, is_active) VALUES ($1, $2, $3, $4, $5, true) RETURNING id, name, division_id',
+                [companyId, division.id, clusterName.trim(), `Cluster created from CSV import`, userId]
+              );
+              createdClusters.push(result.rows[0]);
+            } catch (error) {
+              // If cluster already exists for this division, skip it
+              if (error.code === '23505') { // Unique constraint violation
+                console.log(`Cluster "${clusterName}" already exists for division "${division.name}", skipping`);
+                continue;
+              }
+              throw error;
+            }
           }
         }
       }
-    );
-  });
-});
-
-// Helper function to get seasonal periods from frequency
-function getSeasonalPeriodsFromFrequency(frequency) {
-  switch (frequency) {
-    case 'daily': return 7; // weekly seasonality
-    case 'weekly': return 52; // yearly seasonality
-    case 'monthly': return 12; // yearly seasonality
-    case 'quarterly': return 4; // yearly seasonality
-    case 'yearly': return 1; // no seasonality
-    default: return 12; // default to monthly
-  }
-}
-
-// Helper function to get CSV separator from settings
-function getCsvSeparator(callback) {
-  db.get("SELECT value FROM settings WHERE key = 'global_csvSeparator'", [], (err, row) => {
-    if (err || !row) {
-      callback(','); // default to comma
     } else {
-      try {
-        const separator = JSON.parse(row.value);
-        callback(separator);
-      } catch (e) {
-        callback(','); // fallback to comma
+      // Scenario 2: No division names provided - create clusters for all divisions
+      // This is for division-level CSV without division column
+      const divisionsResult = await pgPool.query(
+        'SELECT id, name FROM divisions WHERE company_id = $1',
+        [companyId]
+      );
+      const divisions = divisionsResult.rows;
+      
+      if (divisions.length === 0) {
+        // No divisions exist yet - create a default division first
+        const defaultDivisionResult = await pgPool.query(
+          'INSERT INTO divisions (company_id, name, description, created_by, is_active) VALUES ($1, $2, $3, $4, true) RETURNING id, name',
+          [companyId, 'Default Division', 'Default division created for cluster import', userId]
+        );
+        divisions.push(defaultDivisionResult.rows[0]);
+      }
+      
+      // Create clusters for each division
+      for (const division of divisions) {
+        for (const clusterName of clusterNames) {
+          if (clusterName && clusterName.trim()) {
+            try {
+              const result = await pgPool.query(
+                'INSERT INTO clusters (company_id, division_id, name, description, created_by, is_active) VALUES ($1, $2, $3, $4, $5, true) RETURNING id, name, division_id',
+                [companyId, division.id, clusterName.trim(), `Cluster created from CSV import`, userId]
+              );
+              createdClusters.push(result.rows[0]);
+            } catch (error) {
+              // If cluster already exists for this division, skip it
+              if (error.code === '23505') { // Unique constraint violation
+                console.log(`Cluster "${clusterName}" already exists for division "${division.name}", skipping`);
+                continue;
+              }
+              throw error;
+            }
+          }
+        }
       }
     }
-  });
-}
-
-// Endpoint to update frequency in dataset summary
-router.post('/update-dataset-frequency', async (req, res) => {
-  const { filePath, frequency } = req.body;
-  if (!filePath || !frequency) return res.status(400).json({ error: 'Missing filePath or frequency' });
-  try {
-    const fullPath = path.join(UPLOADS_DIR, path.basename(filePath));
-    const data = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
-    data.summary = data.summary || {};
-    data.summary.frequency = frequency;
-    fs.writeFileSync(fullPath, JSON.stringify(data, null, 2));
-    res.json({ success: true, frequency });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update frequency' });
-  }
-});
-
-// Endpoint to re-run auto frequency inference and update summary
-router.post('/auto-detect-dataset-frequency', async (req, res) => {
-  const { filePath } = req.body;
-  if (!filePath) return res.status(400).json({ error: 'Missing filePath' });
-  try {
-    const fullPath = path.join(UPLOADS_DIR, path.basename(filePath));
-    const data = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
-    // Try to infer frequency from dates in the data
-    const dateList = data.data.map(row => row['Date']).filter(Boolean);
-    const uniqueDates = Array.from(new Set(dateList)).sort();
-    const frequency = inferDateFrequency(uniqueDates);
-    data.summary = data.summary || {};
-    data.summary.frequency = frequency;
-    fs.writeFileSync(fullPath, JSON.stringify(data, null, 2));
-    res.json({ success: true, frequency });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to auto-detect frequency' });
-  }
-});
-
-// Endpoint to get the count of processed datasets
-router.get('/datasets/count', (req, res) => {
-  try {
-    const files = fs.readdirSync(UPLOADS_DIR);
-    // Only count processed dataset files (ending with -processed.json)
-    const processedFiles = files.filter(f => /-processed\.json$/i.test(f));
-    res.json({ count: processedFiles.length });
+    
+    res.json({
+      success: true,
+      message: `Created ${createdClusters.length} clusters`,
+      clusters: createdClusters
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to count datasets', details: error.message });
+    console.error('[API] Error creating clusters from CSV:', error);
+    res.status(500).json({ error: 'Failed to create clusters from CSV' });
+  }
+});
+
+/**
+ * Get organization structure configuration
+ * @route GET /organization-structure-config
+ * @returns {object} Organization structure configuration
+ */
+router.get('/organization-structure-config', authenticateToken, async (req, res) => {
+  try {
+    const result = await pgPool.query(`
+      SELECT value FROM company_settings 
+      WHERE company_id = $1 AND key = 'organization_structure_config'
+    `, [req.user.company_id]);
+
+
+
+    if (result.rows.length === 0) {
+      // Return default configuration
+      const defaultConfig = {
+        hasMultipleDivisions: false,
+        hasMultipleClusters: false,
+        importLevel: 'company',
+        csvUploadType: null,
+        divisionCsvType: null,
+        setupFlow: {
+          skipDivisionStep: false,
+          skipClusterStep: false,
+          divisionValue: null,
+          clusterValue: null,
+          requiresCsvUpload: false,
+          csvStructure: {
+            hasDivisionColumn: false,
+            hasClusterColumn: false,
+          },
+        }
+      };
+
+      return res.json({
+        status: 'ok',
+        config: defaultConfig,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // JSONB values are automatically parsed by PostgreSQL, so we can use them directly
+    const config = result.rows[0].value;
+    
+    res.json({
+      status: 'ok',
+      config: config,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    sendError(res, 500, 'Failed to fetch organization structure configuration', { error: err.message });
+  }
+});
+
+/**
+ * Save organization structure configuration
+ * @route POST /organization-structure-config
+ * @returns {object} Success response
+ */
+router.post('/organization-structure-config', authenticateToken, async (req, res) => {
+  try {
+    const { config } = req.body;
+    if (!config || typeof config !== 'object') {
+      return sendError(res, 400, 'Invalid configuration data');
+    }
+
+    // Validate required fields
+    const requiredFields = ['hasMultipleDivisions', 'hasMultipleClusters', 'importLevel'];
+    for (const field of requiredFields) {
+      if (config[field] === undefined) {
+        return sendError(res, 400, `Missing required field: ${field}`);
+      }
+    }
+
+    // Save to company_settings table
+    await pgPool.query(`
+      INSERT INTO company_settings (company_id, key, value, updated_by)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (company_id, key)
+      DO UPDATE SET value = $3, updated_at = CURRENT_TIMESTAMP, updated_by = $4
+    `, [req.user.company_id, 'organization_structure_config', JSON.stringify(config), req.user.id]);
+
+    res.json({
+      status: 'ok',
+      message: 'Organization structure configuration saved successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    sendError(res, 500, 'Failed to save organization structure configuration', { error: err.message });
+  }
+});
+
+/**
+ * Get S&OP cycle configurations
+ * @route GET /sop-cycle-configs
+ * @returns {object} List of S&OP cycle configurations
+ */
+router.get('/sop-cycle-configs', authenticateToken, async (req, res) => {
+  try {
+    const companyId = req.user.company_id;
+    const divisionId = req.query.divisionId ? parseInt(req.query.divisionId) : null;
+    
+    let query = `
+      SELECT 
+        sc.*,
+        d.name as division_name
+      FROM sop_cycle_configs sc
+      LEFT JOIN divisions d ON sc.division_id = d.id
+      WHERE sc.company_id = $1
+    `;
+    const params = [companyId];
+    
+    if (divisionId) {
+      query += ' AND sc.division_id = $2';
+      params.push(divisionId);
+    }
+    
+    query += ' ORDER BY sc.created_at DESC';
+    
+    const result = await pgPool.query(query, params);
+    
+    res.json({
+      status: 'ok',
+      configs: result.rows,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    sendError(res, 500, 'Failed to fetch S&OP cycle configurations', { error: err.message });
+  }
+});
+
+/**
+ * Create S&OP cycle configuration
+ * @route POST /sop-cycle-configs
+ * @returns {object} Created configuration
+ */
+router.post('/sop-cycle-configs', authenticateToken, async (req, res) => {
+  try {
+    const {
+      divisionId,
+      frequency,
+      startDay,
+      startMonth,
+      cutOffDays,
+      description,
+      autoGenerate,
+      generateFromDate,
+      generateCount,
+      workingDaysSettings,
+      workingDaysConfig
+    } = req.body;
+    
+    const companyId = req.user.company_id;
+    const userId = req.user.id;
+    
+    // Validate required fields
+    if (!frequency || !startDay || !generateFromDate) {
+      return sendError(res, 400, 'Frequency, start day, and generate from date are required');
+    }
+    
+    // Validate frequency
+    if (!['weekly', 'monthly', 'quarterly', 'yearly'].includes(frequency)) {
+      return sendError(res, 400, 'Invalid frequency. Must be weekly, monthly, quarterly, or yearly');
+    }
+    
+    // Validate working days settings
+    if (workingDaysSettings) {
+      if (typeof workingDaysSettings !== 'object') {
+        return sendError(res, 400, 'Working days settings must be an object');
+      }
+      
+      if (workingDaysSettings.startDate && typeof workingDaysSettings.startDate.useWorkingDays !== 'boolean') {
+        return sendError(res, 400, 'startDate.useWorkingDays must be a boolean');
+      }
+      
+      if (workingDaysSettings.cutOffPeriod && typeof workingDaysSettings.cutOffPeriod.useWorkingDays !== 'boolean') {
+        return sendError(res, 400, 'cutOffPeriod.useWorkingDays must be a boolean');
+      }
+    }
+    
+    // Validate start day based on frequency
+    if (frequency === 'weekly' && (startDay < 1 || startDay > 7)) {
+      return sendError(res, 400, 'Start day for weekly cycles must be 1-7 (Monday=1, Sunday=7)');
+    }
+    if (frequency !== 'weekly' && (startDay < 1 || startDay > 31)) {
+      return sendError(res, 400, 'Start day must be 1-31');
+    }
+    
+    // Validate start month for quarterly/yearly
+    if ((frequency === 'quarterly' || frequency === 'yearly') && (!startMonth || startMonth < 1 || startMonth > 12)) {
+      return sendError(res, 400, 'Start month is required for quarterly and yearly cycles');
+    }
+    
+    // Validate cut-off days based on frequency
+    const getMaxCutOffDays = (freq) => {
+      switch (freq) {
+        case 'weekly':
+          return 6; // 7 days - 1 day minimum cycle
+        case 'monthly':
+          return 27; // 31 days - 4 days minimum cycle (for shortest month)
+        case 'quarterly':
+          return 88; // 92 days - 4 days minimum cycle
+        case 'yearly':
+          return 361; // 365 days - 4 days minimum cycle
+        default:
+          return 30;
+      }
+    };
+    
+    const maxCutOffDays = getMaxCutOffDays(frequency);
+    if (cutOffDays < 0 || cutOffDays > maxCutOffDays) {
+      return sendError(res, 400, `Cut-off days must be 0-${maxCutOffDays} for ${frequency} cycles`);
+    }
+    
+    // Validate working days config if any working days settings are enabled
+    const useWorkingDays = workingDaysSettings?.startDate?.useWorkingDays || workingDaysSettings?.cutOffPeriod?.useWorkingDays;
+    if (useWorkingDays) {
+      if (!workingDaysConfig || typeof workingDaysConfig !== 'object') {
+        return sendError(res, 400, 'Working days configuration is required when working days are enabled');
+      }
+      
+      const requiredDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+      for (const day of requiredDays) {
+        if (typeof workingDaysConfig[day] !== 'boolean') {
+          return sendError(res, 400, `Working days configuration must include boolean value for ${day}`);
+        }
+      }
+      
+      // Validate holidays if provided
+      if (workingDaysConfig.holidays && Array.isArray(workingDaysConfig.holidays)) {
+        for (const holiday of workingDaysConfig.holidays) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(holiday)) {
+            return sendError(res, 400, 'Holiday dates must be in YYYY-MM-DD format');
+          }
+        }
+      }
+      
+      // Validate holidayObjects if provided
+      if (workingDaysConfig.holidayObjects && Array.isArray(workingDaysConfig.holidayObjects)) {
+        for (const holiday of workingDaysConfig.holidayObjects) {
+          if (!holiday.name || !holiday.startDate || !holiday.endDate) {
+            return sendError(res, 400, 'Holiday objects must include name, startDate, and endDate');
+          }
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(holiday.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(holiday.endDate)) {
+            return sendError(res, 400, 'Holiday dates must be in YYYY-MM-DD format');
+          }
+        }
+      }
+    }
+    
+    // Check for existing configuration with same division and frequency
+    const existingResult = await pgPool.query(
+      'SELECT id FROM sop_cycle_configs WHERE company_id = $1 AND division_id IS NOT DISTINCT FROM $2 AND frequency = $3',
+      [companyId, divisionId || null, frequency]
+    );
+    
+    if (existingResult.rows.length > 0) {
+      return sendError(res, 409, 'Configuration already exists for this division and frequency');
+    }
+    
+    // Insert configuration
+    const result = await pgPool.query(`
+      INSERT INTO sop_cycle_configs (
+        company_id, division_id, frequency, start_day, start_month, cut_off_days,
+        description, auto_generate, generate_from_date, generate_count, 
+        working_days_settings, working_days_config, created_by, updated_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      RETURNING *
+    `, [
+      companyId, divisionId || null, frequency, startDay, startMonth || null,
+      cutOffDays || 3, description || null, autoGenerate !== false,
+      generateFromDate, generateCount || 12, 
+      workingDaysSettings ? JSON.stringify(workingDaysSettings) : null,
+      useWorkingDays ? JSON.stringify(workingDaysConfig) : null,
+      userId, userId
+    ]);
+    
+    res.json({
+      status: 'ok',
+      config: result.rows[0],
+      message: 'S&OP cycle configuration created successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    sendError(res, 500, 'Failed to create S&OP cycle configuration', { error: err.message });
+  }
+});
+
+/**
+ * Generate S&OP cycles from configuration
+ * @route POST /sop-cycle-configs/:configId/generate
+ * @returns {object} Generation result
+ */
+router.post('/sop-cycle-configs/:configId/generate', authenticateToken, async (req, res) => {
+  try {
+    const configId = parseInt(req.params.configId);
+    const userId = req.user.id;
+    
+    if (!configId) {
+      return sendError(res, 400, 'Invalid configuration ID');
+    }
+    
+    // Verify configuration exists and user has access
+    const configResult = await pgPool.query(
+      'SELECT * FROM sop_cycle_configs WHERE id = $1 AND company_id = $2',
+      [configId, req.user.company_id]
+    );
+    
+    if (configResult.rows.length === 0) {
+      return sendError(res, 404, 'Configuration not found');
+    }
+    
+    // Generate cycles using the helper function
+    const generateResult = await pgPool.query(
+      'SELECT generate_sop_cycles_from_config($1, $2) as cycles_created',
+      [configId, userId]
+    );
+    
+    const cyclesCreated = generateResult.rows[0].cycles_created;
+    
+    res.json({
+      status: 'ok',
+      message: `Generated ${cyclesCreated} S&OP cycles`,
+      cyclesCreated,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    sendError(res, 500, 'Failed to generate S&OP cycles', { error: err.message });
+  }
+});
+
+/**
+ * Get S&OP cycles with enhanced information
+ * @route GET /sop-cycles
+ * @returns {object} List of S&OP cycles
+ */
+router.get('/sop-cycles', authenticateToken, async (req, res) => {
+  try {
+    const companyId = req.user.company_id;
+    const divisionId = req.query.divisionId ? parseInt(req.query.divisionId) : null;
+    const status = req.query.status;
+    const current = req.query.current === 'true';
+    
+    let query = `
+      SELECT 
+        sc.*,
+        d.name as division_name,
+        scc.frequency as config_frequency,
+        CASE 
+          WHEN sc.cut_off_date <= CURRENT_DATE THEN 'locked'
+          WHEN sc.end_date <= CURRENT_DATE THEN 'completed'
+          WHEN sc.start_date <= CURRENT_DATE AND sc.end_date > CURRENT_DATE THEN 'active'
+          ELSE 'upcoming'
+        END as cycle_status
+      FROM sop_cycles sc
+      LEFT JOIN divisions d ON sc.division_id = d.id
+      LEFT JOIN sop_cycle_configs scc ON sc.config_id = scc.id
+      WHERE sc.company_id = $1
+    `;
+    const params = [companyId];
+    let paramIndex = 1;
+    
+    if (divisionId) {
+      paramIndex++;
+      query += ` AND sc.division_id = $${paramIndex}`;
+      params.push(divisionId);
+    }
+    
+    if (status) {
+      paramIndex++;
+      query += ` AND sc.status = $${paramIndex}`;
+      params.push(status);
+    }
+    
+    if (current) {
+      paramIndex++;
+      query += ` AND sc.is_current = $${paramIndex}`;
+      params.push(true);
+    }
+    
+    query += ' ORDER BY sc.start_date DESC';
+    
+    const result = await pgPool.query(query, params);
+    
+    res.json({
+      status: 'ok',
+      cycles: result.rows,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    sendError(res, 500, 'Failed to fetch S&OP cycles', { error: err.message });
+  }
+});
+
+/**
+ * Create S&OP cycle
+ * @route POST /sop-cycles
+ * @returns {object} Created cycle
+ */
+router.post('/sop-cycles', authenticateToken, async (req, res) => {
+  try {
+    const {
+      divisionId,
+      configId,
+      name,
+      description,
+      startDate,
+      endDate,
+      cutOffDate
+    } = req.body;
+    
+    const companyId = req.user.company_id;
+    const userId = req.user.id;
+    
+    // Validate required fields
+    if (!name || !startDate || !endDate || !cutOffDate) {
+      return sendError(res, 400, 'Name, start date, end date, and cut-off date are required');
+    }
+    
+    // Validate dates
+    if (new Date(startDate) >= new Date(endDate)) {
+      return sendError(res, 400, 'Start date must be before end date');
+    }
+    
+    if (new Date(cutOffDate) >= new Date(endDate)) {
+      return sendError(res, 400, 'Cut-off date must be before end date');
+    }
+    
+    // Insert cycle
+    const result = await pgPool.query(`
+      INSERT INTO sop_cycles (
+        company_id, division_id, config_id, name, description,
+        start_date, end_date, cut_off_date, created_by, updated_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING *
+    `, [
+      companyId, divisionId || null, configId || null, name, description || null,
+      startDate, endDate, cutOffDate, userId, userId
+    ]);
+    
+    res.json({
+      status: 'ok',
+      cycle: result.rows[0],
+      message: 'S&OP cycle created successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    sendError(res, 500, 'Failed to create S&OP cycle', { error: err.message });
+  }
+});
+
+/**
+ * Update S&OP cycle status
+ * @route PUT /sop-cycles/:cycleId/status
+ * @returns {object} Updated cycle
+ */
+router.put('/sop-cycles/:cycleId/status', authenticateToken, async (req, res) => {
+  try {
+    const cycleId = parseInt(req.params.cycleId);
+    const { status, isCurrent } = req.body;
+    const userId = req.user.id;
+    
+    if (!cycleId) {
+      return sendError(res, 400, 'Invalid cycle ID');
+    }
+    
+    // Verify cycle exists and user has access
+    const cycleResult = await pgPool.query(
+      'SELECT * FROM sop_cycles WHERE id = $1 AND company_id = $2',
+      [cycleId, req.user.company_id]
+    );
+    
+    if (cycleResult.rows.length === 0) {
+      return sendError(res, 404, 'Cycle not found');
+    }
+    
+    // Update cycle
+    const updateFields = [];
+    const params = [cycleId, userId];
+    let paramIndex = 2;
+    
+    if (status) {
+      paramIndex++;
+      updateFields.push(`status = $${paramIndex}`);
+      params.push(status);
+    }
+    
+    if (isCurrent !== undefined) {
+      paramIndex++;
+      updateFields.push(`is_current = $${paramIndex}`);
+      params.push(isCurrent);
+    }
+    
+    if (updateFields.length === 0) {
+      return sendError(res, 400, 'No fields to update');
+    }
+    
+    updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+    updateFields.push(`updated_by = $2`);
+    
+    const result = await pgPool.query(`
+      UPDATE sop_cycles 
+      SET ${updateFields.join(', ')}
+      WHERE id = $1
+      RETURNING *
+    `, params);
+    
+    res.json({
+      status: 'ok',
+      cycle: result.rows[0],
+      message: 'S&OP cycle updated successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    sendError(res, 500, 'Failed to update S&OP cycle', { error: err.message });
+  }
+});
+
+/**
+ * Get S&OP cycle permissions
+ * @route GET /sop-cycles/:cycleId/permissions
+ * @returns {object} List of permissions
+ */
+router.get('/sop-cycles/:cycleId/permissions', authenticateToken, async (req, res) => {
+  try {
+    const cycleId = parseInt(req.params.cycleId);
+    
+    if (!cycleId) {
+      return sendError(res, 400, 'Invalid cycle ID');
+    }
+    
+    // Verify cycle exists and user has access
+    const cycleResult = await pgPool.query(
+      'SELECT * FROM sop_cycles WHERE id = $1 AND company_id = $2',
+      [cycleId, req.user.company_id]
+    );
+    
+    if (cycleResult.rows.length === 0) {
+      return sendError(res, 404, 'Cycle not found');
+    }
+    
+    // Get permissions
+    const result = await pgPool.query(`
+      SELECT 
+        scp.*,
+        u.username,
+        u.first_name,
+        u.last_name
+      FROM sop_cycle_permissions scp
+      JOIN users u ON scp.user_id = u.id
+      WHERE scp.cycle_id = $1
+      ORDER BY scp.granted_at DESC
+    `, [cycleId]);
+    
+    res.json({
+      status: 'ok',
+      permissions: result.rows,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    sendError(res, 500, 'Failed to fetch S&OP cycle permissions', { error: err.message });
+  }
+});
+
+/**
+ * Grant S&OP cycle permission
+ * @route POST /sop-cycles/:cycleId/permissions
+ * @returns {object} Created permission
+ */
+router.post('/sop-cycles/:cycleId/permissions', authenticateToken, async (req, res) => {
+  try {
+    const cycleId = parseInt(req.params.cycleId);
+    const { userId, permissionType, expiresAt } = req.body;
+    const grantedBy = req.user.id;
+    
+    if (!cycleId || !userId || !permissionType) {
+      return sendError(res, 400, 'Cycle ID, user ID, and permission type are required');
+    }
+    
+    // Validate permission type
+    if (!['view', 'edit', 'approve', 'admin'].includes(permissionType)) {
+      return sendError(res, 400, 'Invalid permission type');
+    }
+    
+    // Verify cycle exists and user has access
+    const cycleResult = await pgPool.query(
+      'SELECT * FROM sop_cycles WHERE id = $1 AND company_id = $2',
+      [cycleId, req.user.company_id]
+    );
+    
+    if (cycleResult.rows.length === 0) {
+      return sendError(res, 404, 'Cycle not found');
+    }
+    
+    // Insert permission
+    const result = await pgPool.query(`
+      INSERT INTO sop_cycle_permissions (
+        company_id, cycle_id, user_id, permission_type, granted_by, expires_at
+      ) VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (cycle_id, user_id, permission_type) 
+      DO UPDATE SET 
+        granted_at = CURRENT_TIMESTAMP,
+        granted_by = $5,
+        expires_at = $6
+      RETURNING *
+    `, [req.user.company_id, cycleId, userId, permissionType, grantedBy, expiresAt || null]);
+    
+    res.json({
+      status: 'ok',
+      permission: result.rows[0],
+      message: 'Permission granted successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    sendError(res, 500, 'Failed to grant permission', { error: err.message });
   }
 });
 

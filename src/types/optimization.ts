@@ -35,7 +35,7 @@ export type OptimizationStatus = 'not_started' | 'queued' | 'running' | 'done' |
 
 export interface OptimizationResult {
   parameters: Record<string, number>;
-  accuracy: number;
+  
   confidence?: number;
   reasoning?: string;
   updatedAt: string;

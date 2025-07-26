@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { NormalizedSalesData } from '@/pages/Index';
+import { NormalizedSalesData } from '@/types/forecast';
 import { ModelConfig } from '@/types/forecast';
 
 interface NavigationOptimizationState {

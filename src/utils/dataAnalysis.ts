@@ -160,24 +160,29 @@ export function calculateVolatility(sales: number[], dates?: Date[]): Volatility
 /**
  * Finds correlations between SKUs
  */
-export function findCorrelations(data: any[], selectedSKU: string): CorrelationResult[] {
-  const skus = Array.from(new Set(data.map(d => d['Material Code'])));
+export function findCorrelations(data: any[], selectedSKU: string, columnMapping?: Record<string, string>): CorrelationResult[] {
+  // Use column mapping if available, otherwise fallback to hardcoded names
+  const skuColumn = columnMapping?.['Material Code'] || 'Material Code';
+  const dateColumn = columnMapping?.['Date'] || 'Date';
+  const salesColumn = columnMapping?.['Sales'] || 'Sales';
+  
+  const skus = Array.from(new Set(data.map(d => d[skuColumn])));
   const correlations: CorrelationResult[] = [];
 
   // Get sales data for selected SKU
   const selectedSales = data
-    .filter(d => d['Material Code'] === selectedSKU)
-    .sort((a, b) => new Date(a['Date']).getTime() - new Date(b['Date']).getTime())
-    .map(d => d['Sales']);
+    .filter(d => d[skuColumn] === selectedSKU)
+    .sort((a, b) => new Date(a[dateColumn]).getTime() - new Date(b[dateColumn]).getTime())
+    .map(d => d[salesColumn]);
 
   // Calculate correlation with other SKUs
   skus.forEach(sku => {
     if (sku === selectedSKU) return;
 
     const otherSales = data
-      .filter(d => d['Material Code'] === sku)
-      .sort((a, b) => new Date(a['Date']).getTime() - new Date(b['Date']).getTime())
-      .map(d => d['Sales']);
+      .filter(d => d[skuColumn] === sku)
+      .sort((a, b) => new Date(a[dateColumn]).getTime() - new Date(b[dateColumn]).getTime())
+      .map(d => d[salesColumn]);
 
     // Ensure both arrays have the same length
     const minLength = Math.min(selectedSales.length, otherSales.length);

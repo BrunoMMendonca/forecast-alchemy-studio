@@ -155,9 +155,9 @@ export const OptimizationLogger: React.FC<OptimizationLoggerProps> = ({ isVisibl
                           </div>
                         )}
                         
-                        {step.accuracy !== undefined && (
+                        {step.!== undefined && (
                           <div className="mt-1 text-gray-600">
-                            <strong>Accuracy:</strong> {step.accuracy.toFixed(1)}%
+                            <strong>Accuracy:</strong> {step..toFixed(1)}%
                             {step.confidence && ` (confidence: ${step.confidence.toFixed(1)}%)`}
                           </div>
                         )}

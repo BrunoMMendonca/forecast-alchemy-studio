@@ -6,6 +6,9 @@
 - **Backend Migration Consistency Check.md**  
   Documents the completed migration of all core functionality to the backend, confirms architectural principles, and lists next steps for multi-tenancy and user authentication.
 
+- **CSV Import Validation & Error Handling.md**  
+  Documents comprehensive improvements to CSV import validation and error handling: strict format validation for dates and numbers, progression blocking when validation errors exist, standardized ErrorHandler component for consistent UI styling, visual error indicators in preview tables, column count validation to prevent separator mismatch, and helpful links for format assistance. **Ensures users cannot proceed with invalid data and provides clear guidance on how to fix issues.**
+
 - **Data Cleaning Methods & Implementation.md**  
   Explains the two main data cleaning workflows: CSV import/export and interactive editing, with backend integration, UI, and technical details.
 
@@ -37,19 +40,19 @@
   Describes the high-level goals and vision for the project, targeting a collaborative, multi-tenant SaaS platform for business analysts and planners, with pillars of accuracy, usability, collaboration, and performance.
 
 - **Queue Processing & Job Management.md**  
-  Details the backend job queue and worker system, including API-driven job creation, persistent storage in SQLite, asynchronous processing, and the single source of truth pattern for UI state.
+  Details the backend job queue and worker system, including API-driven job creation, persistent storage in SQLite, asynchronous processing, and real-time status updates. **Recently enhanced with comprehensive UI improvements: model status table with row striping, status icons, progress bars, column distribution improvements, status alignment using flex containers, summary statistics, tabbed interface, real-time updates, batch management features, and improved action controls. The terminology for duplicate jobs is now 'Merged' (replacing 'Skipped'), with user-friendly banners, tooltips, and batch-level progress summaries reflecting this change.**
 
 - **UI State Management & Data Flow.md**  
-  Explains the "single source of truth" pattern for React state, where page-level components fetch data and pass it down as props, ensuring consistent and predictable UI state across the app.
+  Documents the evolution from "single source of truth" pattern to Zustand-based store architecture with automatic reactivity. **Covers the migration from prop drilling to centralized state management using multiple domain-specific stores (Model UI Store, SKU Store, Forecast Results Store), store integration patterns, component subscription patterns, debugging tools, and performance optimizations.**
 
 - **Upload Wizard & Data Transformation.md**  
-  Provides a technical breakdown of the CSV import process, including frontend and backend logic, AI-powered data transformation, deduplication, and the step-by-step workflow for importing and preparing data.
+  Provides a technical breakdown of the CSV import process, including frontend and backend logic, AI-powered data transformation, deduplication, and the step-by-step workflow for importing and preparing data. **Recently enhanced with robust format validation, standardized error handling, progression blocking for validation errors, and consistent UI styling across all error states.**
 
 - **useOptimization Hook Deprecation.md**  
   Documents the migration from the legacy `useOptimization` frontend hook to a backend-driven job queue, simplifying state management and aligning with the backend-first architecture.
 
 - **Workflow Summary.md**  
-  Summarizes the main steps of the application's workflow, from data upload and cleaning to forecasting and optimization, including recent UI/UX enhancements and troubleshooting tips.
+  Summarizes the main steps of the application's workflow, from data upload and cleaning to forecasting and optimization, including recent UI/UX enhancements and troubleshooting tips. **Recently updated to reflect enhanced optimization queue UI, Zustand state management, CSV import validation improvements, data cleaning enhancements, and the new 'Merged' job status logic.**
 
 - **Writing Effective AI Memory.md**  
   A guide for writing and maintaining high-quality documentation in the AI Memory folder, emphasizing the importance of explaining "why" decisions were made, linking to code, documenting gotchas, and keeping docs up to date.
@@ -93,6 +96,18 @@
 - **Composite Score Normalization Fix (2024-07)**  
   See: Optimization Results Export System, Model Score Display Enhancement.  
   Documents the fix for negative normalized metric values in composite score calculations. The issue was that the backend calculated batch-relative max values for MAPE, RMSE, and MAE but then ignored them in favor of fixed thresholds (MAPE=100%, RMSE=1, MAE=1). This caused negative normalized values when actual metrics exceeded these fixed thresholds. The fix uses batch-relative max values for normalization and adds clamping to ensure normalized values stay within [0, 1] range, making composite scores more meaningful by reflecting relative performance within each dataset.
+
+- **CSV Import Validation & Error Handling (2024-07)**  
+  See: Upload Wizard & Data Transformation, Data Cleaning Methods & Implementation.  
+  Documents comprehensive improvements to CSV import validation and error handling: strict format validation for dates and numbers, progression blocking when validation errors exist, standardized ErrorHandler component for consistent UI styling, visual error indicators in preview tables, column count validation to prevent separator mismatch, and helpful links for format assistance. **Ensures users cannot proceed with invalid data and provides clear guidance on how to fix issues.**
+
+- **Optimization Queue UI Enhancements (2024-07)**  
+  See: Queue Processing & Job Management, Workflow Summary, UI State Management & Data Flow.  
+  Documents comprehensive UI improvements to the optimization queue system: enhanced model status table with row striping, status icons, progress bars, column distribution improvements, status alignment using flex containers, summary statistics cards, tabbed interface for different job states, real-time updates, batch management features, improved action controls for job management, and the new 'Merged' job status logic and terminology throughout the UI.
+
+- **Zustand State Management Migration (2024-07)**  
+  See: UI State Management & Data Flow, Workflow Summary.  
+  Documents the complete migration from "single source of truth" pattern with prop drilling to Zustand-based store architecture with automatic reactivity. **Covers the implementation of multiple domain-specific stores (Model UI Store, SKU Store, Forecast Results Store), store integration patterns, component subscription patterns, debugging tools, performance optimizations, and the benefits of centralized state management.**
 
 - **Known Issues & Gotchas.md**  
   (Placeholder) For recurring issues, troubleshooting tips, and backend/frontend gotchas. Add details as needed. 

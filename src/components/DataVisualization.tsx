@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, AlertTriangle, TrendingUp, Calendar, Activity, Maximize2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { NormalizedSalesData } from '@/pages/Index';
+import { NormalizedSalesData } from '@/types/forecast';
 import { detectSeasonality, analyzeTrend, calculateVolatility, findCorrelations, findDateGaps, calculateCompleteness, countZeroValues, countMissingValues, countDateGaps } from '@/utils/dataAnalysis';
 import { getBlueTone } from '@/utils/colors';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -13,24 +13,58 @@ import { useSKUStore } from '@/store/skuStore';
 
 interface DataVisualizationProps {
   data: NormalizedSalesData[];
+  processedDataInfo?: { 
+    datasetId?: number; 
+    optimizationId?: string; 
+    uuid?: string;
+    columnRoles?: string[];
+    columns?: string[];
+  } | null;
 }
 
-export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) => {
+export const DataVisualization: React.FC<DataVisualizationProps> = ({ data, processedDataInfo }) => {
   const [viewMode, setViewMode] = useState<'overview' | 'details'>('overview');
   const [seasonalityMode, setSeasonalityMode] = useState<'average' | 'full'>('average');
 
   const skus = useMemo(() => {
-    return Array.from(new Set(data.map(d => d['Material Code']))).sort();
-  }, [data]);
+    // Use column mapping if available
+    let skuColumnName = 'Material Code'; // Default fallback
+    
+    if (processedDataInfo?.columnRoles && processedDataInfo?.columns) {
+      const materialCodeIndex = processedDataInfo.columnRoles.indexOf('Material Code');
+      if (materialCodeIndex !== -1) {
+        skuColumnName = processedDataInfo.columns[materialCodeIndex];
+      }
+    }
+    
+    return Array.from(new Set(data.map(d => d[skuColumnName] || d['Material Code']))).sort();
+  }, [data, processedDataInfo]);
 
   const descriptions = useMemo(() => {
     const map: Record<string, string> = {};
+    
+    // Use column mapping if available
+    let skuColumnName = 'Material Code'; // Default fallback
+    let descColumnName = 'Description'; // Default fallback
+    
+    if (processedDataInfo?.columnRoles && processedDataInfo?.columns) {
+      const materialCodeIndex = processedDataInfo.columnRoles.indexOf('Material Code');
+      const descIndex = processedDataInfo.columnRoles.indexOf('Description');
+      if (materialCodeIndex !== -1) {
+        skuColumnName = processedDataInfo.columns[materialCodeIndex];
+      }
+      if (descIndex !== -1) {
+        descColumnName = processedDataInfo.columns[descIndex];
+      }
+    }
+    
     data.forEach(d => {
-      const sku = String(d['Material Code']);
-      if (d.Description && !map[sku]) map[sku] = String(d.Description);
+      const sku = String(d[skuColumnName] || d['Material Code']);
+      const desc = d[descColumnName] || d.Description;
+      if (desc && !map[sku]) map[sku] = String(desc);
     });
     return map;
-  }, [data]);
+  }, [data, processedDataInfo]);
 
   const selectedSKU = useSKUStore(state => state.selectedSKU);
   const setSelectedSKU = useSKUStore(state => state.setSelectedSKU);
@@ -38,11 +72,34 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) =>
   const chartData = useMemo(() => {
     if (!selectedSKU) return [];
     
+    // Use column mapping if available
+    let skuColumnName = 'Material Code'; // Default fallback
+    let dateColumnName = 'Date'; // Default fallback
+    let salesColumnName = 'Sales'; // Default fallback
+    
+    if (processedDataInfo?.columnRoles && processedDataInfo?.columns) {
+      const materialCodeIndex = processedDataInfo.columnRoles.indexOf('Material Code');
+      const dateIndex = processedDataInfo.columnRoles.indexOf('Date');
+      const salesIndex = processedDataInfo.columnRoles.indexOf('Sales');
+      if (materialCodeIndex !== -1) {
+        skuColumnName = processedDataInfo.columns[materialCodeIndex];
+      }
+      if (dateIndex !== -1) {
+        dateColumnName = processedDataInfo.columns[dateIndex];
+      }
+      if (salesIndex !== -1) {
+        salesColumnName = processedDataInfo.columns[salesIndex];
+      }
+    }
+    
     return data
-      .filter(d => d['Material Code'] === selectedSKU)
-      .sort((a, b) => new Date(a['Date']).getTime() - new Date(b['Date']).getTime())
-      .map(d => ({ date: d['Date'], sales: d['Sales'] }));
-  }, [data, selectedSKU]);
+      .filter(d => String(d[skuColumnName] || d['Material Code']) === selectedSKU)
+      .sort((a, b) => new Date(a[dateColumnName] || a['Date']).getTime() - new Date(b[dateColumnName] || b['Date']).getTime())
+      .map(d => ({ 
+        date: d[dateColumnName] || d['Date'], 
+        sales: d[salesColumnName] || d['Sales'] 
+      }));
+  }, [data, selectedSKU, processedDataInfo]);
 
   // 1. Detect aggregatable fields (exclude fixed fields)
   const aggregatableFields = useMemo(() => {
@@ -403,7 +460,7 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) =>
       // Per-SKU: merge actual and volatility
       return (analysis.volatility.volatilityLine || []).map((row, i) => ({
         ...row,
-        actual: sales[i] ?? null
+        actual: sales?.[i] ?? null
       }));
     }
     return [];
@@ -412,14 +469,14 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) =>
   const handlePrevSKU = () => {
     const currentIndex = skus.indexOf(selectedSKU);
     if (currentIndex > 0) {
-      setSelectedSKU(skus[currentIndex - 1]);
+      setSelectedSKU(String(skus[currentIndex - 1]));
     }
   };
 
   const handleNextSKU = () => {
     const currentIndex = skus.indexOf(selectedSKU);
     if (currentIndex < skus.length - 1) {
-      setSelectedSKU(skus[currentIndex + 1]);
+      setSelectedSKU(String(skus[currentIndex + 1]));
     }
   };
 
@@ -495,10 +552,11 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({ data }) =>
               </SelectTrigger>
               <SelectContent>
                 {skus.map(sku => {
-                  const desc = descriptions[sku];
+                  const skuStr = String(sku);
+                  const desc = descriptions[skuStr];
                   return (
-                    <SelectItem key={sku} value={sku}>
-                      {desc ? `${sku} - ${desc}` : sku}
+                    <SelectItem key={skuStr} value={skuStr}>
+                      {desc ? `${skuStr} - ${desc}` : skuStr}
                     </SelectItem>
                   );
                 })}

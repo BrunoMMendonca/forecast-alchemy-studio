@@ -13,9 +13,10 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({ data }) => {
   const selectedSKU = useSKUStore(state => state.selectedSKU);
   const setSelectedSKU = useSKUStore(state => state.setSelectedSKU);
 
-  // Get unique SKUs from data, ensuring we handle both sku and Material Code fields
+  // Get unique SKUs from data using legacy fallback logic
   const skus = React.useMemo(() => {
     const uniqueSKUs = new Set<string>();
+    
     data.forEach(item => {
       const sku = item.sku || item['Material Code'];
       if (sku) {

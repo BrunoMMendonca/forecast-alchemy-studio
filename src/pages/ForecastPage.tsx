@@ -58,7 +58,7 @@ const ForecastPage = () => {
   }, [processedDataInfo]);
   
   // Data handlers now get all setters from context
-  const { processNewData, createAllJobs: originalCreateAllJobs, handleImportDataCleaning } = useDataHandlers({
+  const { processNewData, createAllJobs: originalCreateAllJobs, handleImportDataCleaning, handleManualEditDataCleaning } = useDataHandlers({
     setCurrentStep,
     setProcessedDataInfo,
     setForecastResults,
@@ -66,7 +66,8 @@ const ForecastPage = () => {
     setAiError,
     onFileNameChange: () => {}, // Not used in this context
     lastImportFileName: null,
-    lastImportTime: null
+    lastImportTime: null,
+    processedDataInfo // Add canonical datasetId access
   });
 
   // Wrapper for createAllJobs that updates the global batchId and passes it to job creation
@@ -87,8 +88,12 @@ const ForecastPage = () => {
 
   // Wrapper function that handles both data processing and job creation
   const handleConfirm = useCallback(async (result: CsvUploadResult, isExistingData: boolean = false) => {
-    // First process the data (sets processedDataInfo and navigates to step 1)
-    processNewData(result);
+    // Set the processed data info but don't automatically navigate to next step
+    // This allows the CSV import wizard to stay on the upload step for multiple imports
+    if (setProcessedDataInfo) {
+      setProcessedDataInfo(result);
+    }
+    setForecastResults([]);
     
     // Only create jobs for new data uploads, not when loading existing data
     if (!isExistingData) {
@@ -97,22 +102,25 @@ const ForecastPage = () => {
       setBatchId(newBatchId);
       await originalCreateAllJobs(result, newBatchId);
     }
-  }, [processNewData, originalCreateAllJobs, setBatchId]);
+  }, [setProcessedDataInfo, setForecastResults, originalCreateAllJobs, setBatchId]);
 
-  // Handle data cleaning and update processedDataInfo with new filePath
-  const handleDataCleaning = useCallback((data: any[], changedSKUs?: string[], filePath?: string) => {
-    if (filePath && processedDataInfo) {
-      // Update processedDataInfo with the new filePath from the latest cleaning operation
-      const updatedProcessedDataInfo = {
-        ...processedDataInfo,
-        filePath: filePath
-      };
-      setProcessedDataInfo(updatedProcessedDataInfo);
-    } else if (processedDataInfo) {
-      // No new filePath, but keep the current dataset loaded
+  // Handle data cleaning - DO NOT update the canonical datasetId
+  const handleDataCleaning = useCallback((data: any[], changedSKUs?: string[], datasetId?: number) => {
+    // Keep the original processedDataInfo.datasetId as the canonical one
+    // The datasetId parameter from data cleaning is only used for the cleaning operation itself
+    // but should not replace the canonical datasetId for the dataset
+    if (processedDataInfo) {
+      // Only update other properties if needed, but keep the original datasetId
       setProcessedDataInfo({ ...processedDataInfo });
     }
-  }, [processedDataInfo, setProcessedDataInfo]);
+    
+    // Create jobs for changed SKUs
+    if (changedSKUs && changedSKUs.length > 0) {
+      changedSKUs.forEach(sku => {
+        handleManualEditDataCleaning(sku, datasetId, data);
+      });
+    }
+  }, [processedDataInfo, setProcessedDataInfo, handleManualEditDataCleaning]);
   
   // Add a useEffect to log when processedDataInfo changes
   useEffect(() => {
@@ -120,6 +128,11 @@ const ForecastPage = () => {
 
   const selectedSKU = useSKUStore(state => state.selectedSKU);
   const setSelectedSKU = useSKUStore(state => state.setSelectedSKU);
+
+  // Add a wrapper for handleImportDataCleaning to accept the new data parameter
+  const handleImportDataCleaningWrapper = useCallback((skus: string[], datasetId?: number, data?: any[]) => {
+    handleImportDataCleaning(skus, datasetId, data);
+  }, [handleImportDataCleaning]);
 
   return (
       <StepContent
@@ -133,7 +146,7 @@ const ForecastPage = () => {
         aiForecastModelOptimizationEnabled={globalSettings?.aiForecastModelOptimizationEnabled ?? false}
         onConfirm={handleConfirm}
         onDataCleaning={handleDataCleaning}
-        onImportDataCleaning={handleImportDataCleaning}
+        onImportDataCleaning={handleImportDataCleaningWrapper}
         onForecastGeneration={setForecastResults}
         onStepChange={setCurrentStep}
         onAIFailure={handleAIFailure}

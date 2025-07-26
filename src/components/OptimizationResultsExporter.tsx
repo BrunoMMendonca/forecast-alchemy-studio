@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,11 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Download, FileSpreadsheet, Loader2, AlertCircle, CheckCircle, Database, Package, Star } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useGlobalSettings } from '@/hooks/useGlobalSettings';
+import { useOptimizationStatusContext } from '@/contexts/OptimizationStatusContext';
 
 interface OptimizationResultsExporterProps {
   className?: string;
   currentDataset?: {
-    filePath?: string;
+    datasetId?: number;
     filename?: string;
     name?: string;
   } | null;
@@ -27,14 +28,58 @@ export const OptimizationResultsExporter: React.FC<OptimizationResultsExporterPr
   selectedSKU,
   skuCount = 1,
   datasetCount = 1,
-  selectedSKUDescription
+  selectedSKUDescription,
 }) => {
   const [isExporting, setIsExporting] = React.useState<string | null>(null);
-  const [datasetSpecific, setDatasetSpecific] = React.useState(true);
   const [bestOnly, setBestOnly] = React.useState(false);
-  const [skuSpecific, setSkuSpecific] = useState(false);
+  // Single export mode state
+  const [exportMode, setExportMode] = useState<'dataset' | 'sku' | 'global'>('dataset');
   const { toast } = useToast();
   const globalSettings = useGlobalSettings();
+  const { skuGroups, activeOptimizations, completedOptimizations, failedOptimizations } = useOptimizationStatusContext();
+
+  // Create a flat array of all optimizations for compatibility
+  const optimizations = useMemo(() => {
+    const allOptimizations: any[] = [];
+    
+    // Add active optimizations
+    activeOptimizations.forEach(batch => {
+      Object.values(batch.optimizations).forEach(opt => {
+        allOptimizations.push({
+          ...opt,
+          datasetId: batch.datasetId,
+          sku: batch.sku,
+          isOptimizing: batch.isOptimizing
+        });
+      });
+    });
+    
+    // Add completed optimizations
+    completedOptimizations.forEach(batch => {
+      Object.values(batch.optimizations).forEach(opt => {
+        allOptimizations.push({
+          ...opt,
+          datasetId: batch.datasetId,
+          sku: batch.sku,
+          isOptimizing: false
+        });
+      });
+    });
+    
+    // Add failed optimizations
+    failedOptimizations.forEach(batch => {
+      Object.values(batch.optimizations).forEach(opt => {
+        allOptimizations.push({
+          ...opt,
+          datasetId: batch.datasetId,
+          sku: batch.sku,
+          isOptimizing: false
+        });
+      });
+    });
+    
+    return allOptimizations;
+  }, [activeOptimizations, completedOptimizations, failedOptimizations]);
 
   // Derived logic for toggles based on the table
   // Dataset Specific
@@ -43,33 +88,52 @@ export const OptimizationResultsExporter: React.FC<OptimizationResultsExporterPr
   const multipleDatasets = datasetCount > 1;
   const multipleSKUs = skuCount > 1;
 
-  // Dataset Specific toggle
-  const isDatasetSpecific = onlyOneDataset || datasetSpecific;
+  // Derived booleans from exportMode
+  const isDatasetSpecific = exportMode === 'dataset';
+  const isSkuSpecific = exportMode === 'sku';
+
+  // Toggle handlers
+  const handleDatasetSpecificChange = (checked: boolean) => {
+    if (checked) setExportMode('dataset');
+    else setExportMode('global');
+  };
+  const handleSkuSpecificChange = (checked: boolean) => {
+    if (checked) setExportMode('sku');
+    else setExportMode('global');
+  };
+
+  // Disable logic for toggles
   const isDatasetSpecificDisabled = onlyOneDataset;
+  const isSkuSpecificDisabled = onlyOneSKU;
 
-  // SKU Specific toggle (fully derived, no local state)
-  // Only relevant if selectedSKU is present
-  let isSkuSpecific = false;
-  let isSkuSpecificDisabled = false;
+  // [EXPORTER STATE] log
+  console.log('[EXPORTER STATE]', {
+    exportMode,
+    isDatasetSpecific,
+    isSkuSpecific,
+    optimizations,
+    selectedSKU
+  });
 
-  console.log('isDatasetSpecific:', isDatasetSpecific, 'isSkuSpecific:', isSkuSpecific, 'Número de SKUs:', skuCount, 'SKU Único:', onlyOneSKU);
-  console.log('Dataset Specific Disabled:', isDatasetSpecificDisabled, 'SKU Specific Disabled:', isSkuSpecificDisabled);
-
-  if (isDatasetSpecific) {
-    if (onlyOneSKU) {
-      isSkuSpecific = true;
-      isSkuSpecificDisabled = true;
+  // Improved SKU-specific export disabling logic
+  let isSkuExportDisabled = false;
+  if (isSkuSpecific && selectedSKU) {
+    const optimizationForSKU = optimizations.find(opt => opt.sku === selectedSKU);
+    if (optimizationForSKU) {
+      isSkuExportDisabled = optimizationForSKU.isOptimizing;
     } else {
-      isSkuSpecific = false;
-      isSkuSpecificDisabled = false;
+      isSkuExportDisabled = false;
     }
-  } else {
-    // Dataset Specific is OFF (all datasets)
-    isSkuSpecific = false;
-    isSkuSpecificDisabled = false;
   }
-
-  console.log('skuCount:', skuCount, 'selectedSKU:', selectedSKU, 'isSkuSpecific:', isSkuSpecific, 'isSkuSpecificDisabled:', isSkuSpecificDisabled);
+  
+  // Dataset-specific export disabling logic
+  const isDatasetExportDisabled = isDatasetSpecific && optimizations.some(opt => {
+    const datasetIdMatch = !currentDataset?.datasetId || opt.datasetId === currentDataset.datasetId;
+    return datasetIdMatch && opt.isOptimizing;
+  });
+  
+  // Global export disabling logic
+  const isGlobalExportDisabled = exportMode === 'global' && optimizations.some(opt => opt.isOptimizing);
 
   const exportResults = async (method: 'grid' | 'ai' | 'all') => {
     setIsExporting(method);
@@ -96,12 +160,12 @@ export const OptimizationResultsExporter: React.FC<OptimizationResultsExporterPr
       }
 
       // Add dataset filter if enabled and dataset is available
-      if (datasetSpecific && currentDataset?.filePath) {
-        params.append('filePath', currentDataset.filePath);
+      if (isDatasetSpecific && currentDataset?.datasetId) {
+        params.append('datasetId', currentDataset.datasetId.toString());
       }
 
       // Add SKU filter if enabled and SKU is available
-      if (skuSpecific && selectedSKU) {
+      if (isSkuSpecific && selectedSKU) {
         params.append('sku', selectedSKU);
       }
 
@@ -139,7 +203,7 @@ export const OptimizationResultsExporter: React.FC<OptimizationResultsExporterPr
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      const datasetInfo = datasetSpecific && currentDataset?.name ? ` for ${currentDataset.name}` : '';
+      const datasetInfo = isDatasetSpecific && currentDataset?.name ? ` for ${currentDataset.name}` : '';
       toast({
         title: "Export Successful",
         description: `${method.toUpperCase()} optimization results exported successfully${datasetInfo} with current metric weights.`,
@@ -190,7 +254,7 @@ export const OptimizationResultsExporter: React.FC<OptimizationResultsExporterPr
       <CardContent>
         <div className="space-y-3">
           <p className="text-sm text-gray-600">
-            Download detailed CSV reports of optimization results including parameters, accuracy metrics, and performance data.
+            Download detailed CSV reports of optimization results including parameters, metrics, and performance data.
           </p>
           
           {/* Best Only toggle */}
@@ -216,9 +280,9 @@ export const OptimizationResultsExporter: React.FC<OptimizationResultsExporterPr
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="dataset-specific"
-                    checked={isDatasetSpecific}
-                    onCheckedChange={setDatasetSpecific}
-                    disabled={isDatasetSpecificDisabled || isExporting !== null}
+                    checked={onlyOneDataset ? true : isDatasetSpecific}
+                    onCheckedChange={handleDatasetSpecificChange}
+                    disabled={onlyOneDataset ? true : isDatasetSpecificDisabled || isExporting !== null}
                   />
                   <Label htmlFor="dataset-specific" className="text-sm font-medium">
                     Export dataset-specific results only
@@ -227,7 +291,7 @@ export const OptimizationResultsExporter: React.FC<OptimizationResultsExporterPr
                 <p className="text-xs text-blue-700 mt-1">
                   {onlyOneDataset
                     ? `Will export only results for: ${currentDataset.name || currentDataset.filename} (Only one dataset available)`
-                    : datasetSpecific
+                    : isDatasetSpecific
                       ? `Will export only results for: ${currentDataset.name || currentDataset.filename}`
                       : 'Will export all optimization results from all datasets'
                   }
@@ -241,15 +305,15 @@ export const OptimizationResultsExporter: React.FC<OptimizationResultsExporterPr
               <Package className="h-4 w-4 text-green-600" />
                   <Switch
                     id="sku-specific"
-              checked={skuSpecific}
-              onCheckedChange={setSkuSpecific}
+              checked={isSkuSpecific}
+              onCheckedChange={handleSkuSpecificChange}
               disabled={isSkuSpecificDisabled}
                   />
                   <Label htmlFor="sku-specific" className="text-sm font-medium">
                     Export SKU-specific results only
                   </Label>
             <span className="text-xs text-green-700 ml-2">
-              {skuSpecific
+              {isSkuSpecific
                 ? (selectedSKU
                     ? <>Will export results for SKU: <b>{selectedSKU}</b>{selectedSKUDescription ? ` (${selectedSKUDescription})` : ''}</>
                     : "Will export results for the selected SKU")
@@ -258,7 +322,13 @@ export const OptimizationResultsExporter: React.FC<OptimizationResultsExporterPr
             </div>
           
           <div className="grid gap-3">
-            {methods.map((method) => (
+            {methods.map((method) => {
+              const disabled =
+                isExporting !== null ||
+                isSkuExportDisabled ||
+                isDatasetExportDisabled ||
+                isGlobalExportDisabled;
+              return (
               <div key={method} className="flex items-center justify-between p-3 border rounded-lg">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
@@ -272,7 +342,7 @@ export const OptimizationResultsExporter: React.FC<OptimizationResultsExporterPr
                     {method === 'all' && (
                       <Badge variant="default" className="text-xs">Complete</Badge>
                     )}
-                    {datasetSpecific && (
+                      {isDatasetSpecific && (
                       <Badge variant="secondary" className="text-xs">Dataset-Specific</Badge>
                     )}
                     {isSkuSpecific && (
@@ -281,13 +351,19 @@ export const OptimizationResultsExporter: React.FC<OptimizationResultsExporterPr
                   </div>
                   <p className="text-sm text-gray-600">{getMethodDescription(method)}</p>
                 </div>
-                
                 <Button
                   onClick={() => exportResults(method)}
-                  disabled={isExporting !== null}
+                    disabled={disabled}
                   variant="outline"
                   size="sm"
                   className="ml-4"
+                    title={
+                      isExporting !== null ? 'Export in progress' :
+                      isSkuExportDisabled ? 'Cannot export: Optimization is still running or incomplete for the selected SKU.' :
+                      isDatasetExportDisabled ? 'Cannot export: Optimization is still running or incomplete for this dataset.' :
+                      isGlobalExportDisabled ? 'Cannot export: Optimization is still running or incomplete.' :
+                      undefined
+                    }
                 >
                   {isExporting === method ? (
                     <>
@@ -302,7 +378,8 @@ export const OptimizationResultsExporter: React.FC<OptimizationResultsExporterPr
                   )}
                 </Button>
               </div>
-            ))}
+              );
+            })}
           </div>
           
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -310,14 +387,14 @@ export const OptimizationResultsExporter: React.FC<OptimizationResultsExporterPr
             <ul className="text-sm text-blue-800 space-y-1">
               <li>• Job metadata (ID, SKU, model, method, timestamps)</li>
               <li>• Model parameters and configuration</li>
-              <li>• Accuracy metrics (Accuracy %, MAPE, RMSE, MAE)</li>
+              <li>• Accuracy metrics (Accuracy, MAPE, RMSE, MAE)</li>
               <li>• Normalized metrics (0-1 scale, higher is better)</li>
               <li>• Composite score using current metric weights</li>
               <li>• Metric weights used for "best result" calculation</li>
               <li>• Training and validation data sizes</li>
               <li>• Success/failure status and error messages</li>
               <li>• Best result identification</li>
-              {datasetSpecific && <li>• <strong>Filtered to current dataset only</strong></li>}
+              {isDatasetSpecific && <li>• <strong>Filtered to current dataset only</strong></li>}
               {isSkuSpecific && <li>• <strong>Filtered to current SKU only</strong></li>}
               {bestOnly && <li>• <strong>Only best results (winner params)</strong></li>}
             </ul>

@@ -5,7 +5,8 @@ import ARIMAPromise from 'arima/async.js';
 export class SARIMAModel extends BaseModel {
   static metadata = {
     id: 'sarima',
-    displayName: 'SARIMA (Seasonal ARIMA)',
+    displayName: 'SARIMA (Seasonal Autoregressive Integrated Moving Average)',
+    shortName: 'SARIMA',
     parameters: [
       { name: 'p', type: 'number', default: 1, visible: true, label: 'AR Order (p)', description: 'Number of autoregressive terms.' },
       { name: 'd', type: 'number', default: 1, visible: true, label: 'Difference Order (d)', description: 'Number of nonseasonal differences needed for stationarity.' },
@@ -44,12 +45,17 @@ export class SARIMAModel extends BaseModel {
       throw new Error('Training data must have at least 20 observations for SARIMA (to capture seasonal patterns)');
     }
 
+    // Set up column mapping if data has metadata
+    if (data && data.length > 0 && data[0]._columnMapping) {
+      this.columnMapping = data[0]._columnMapping;
+    }
 
     const values = data.map((d, index) => {
       let extractedValue;
       if (typeof d === 'object') {
-        // Fix: Use nullish coalescing to handle zero values properly
-        extractedValue = d.Sales ?? d.sales ?? d.value ?? d.amount ?? undefined;
+        // Use column mapping if available, otherwise fallback to legacy logic
+        extractedValue = this.getColumnValue(d, 'Sales', 'Sales') ?? 
+                        d.sales ?? d.value ?? d.amount ?? undefined;
         // Log any problematic extractions
         if (extractedValue === undefined) {
           console.error(`[SARIMA] 🚨 DEBUG: No sales property found at index ${index}. Available properties:`, Object.keys(d));
@@ -163,7 +169,9 @@ export class SARIMAModel extends BaseModel {
     try {
       const values = testData.map(d => {
         if (typeof d === 'object') {
-          return d.sales || d.Sales || d.value || d.amount || d;
+          // Use column mapping if available, otherwise fallback to legacy logic
+          return this.getColumnValue(d, 'Sales', 'Sales') ?? 
+                 (d.sales || d.Sales || d.value || d.amount || d);
         }
         return d;
       });

@@ -9,7 +9,7 @@ interface ReasoningDisplayProps {
   reasoning: string;
   confidence: number;
   method: string;
-  expectedAccuracy?: number;
+  
   factors?: {
     stability?: number;
     interpretability?: number;
@@ -24,7 +24,6 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
   reasoning,
   confidence,
   method,
-  expectedAccuracy,
   factors,
   title = "Optimization Reasoning",
   compact = false
@@ -77,10 +76,10 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
                 {getMethodIcon(method)}
                 <span className="font-medium">Method:</span>
                 <span className="capitalize">{getMethodLabel(method)}</span>
-                {expectedAccuracy && (
+                {&& (
                   <>
                     <span className="text-slate-400">•</span>
-                    <span>Expected: {expectedAccuracy.toFixed(1)}% accuracy</span>
+                    <span>Expected: {.toFixed(1)}% </span>
                   </>
                 )}
               </div>
@@ -107,10 +106,9 @@ export const ReasoningDisplay: React.FC<ReasoningDisplayProps> = ({
           <Badge variant="outline" className={getConfidenceColor(confidence)}>
             {confidence.toFixed(1)}% confidence
           </Badge>
-          {expectedAccuracy && (
+          {&& (
             <Badge variant="secondary">
-              {expectedAccuracy.toFixed(1)}% expected accuracy
-            </Badge>
+              {.toFixed(1)}% expected </Badge>
           )}
         </CardDescription>
       </CardHeader>

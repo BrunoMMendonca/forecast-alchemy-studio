@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { ModelConfig } from '@/types/forecast';
 import { SalesData } from '@/types/forecast';
-import { NormalizedSalesData, ForecastResult } from '@/pages/Index';
+import { NormalizedSalesData, ForecastResult } from '@/types/forecast';
 import { BusinessContext } from '@/types/businessContext';
 
 interface WorkerMessage {

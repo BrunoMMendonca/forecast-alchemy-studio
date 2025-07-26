@@ -1,156 +1,207 @@
-# Workflow Summary
+# Workflow Summary: A Technical Guide
 
-## 1. Main Steps
+*This document summarizes the main steps of the application's workflow, from data upload and cleaning to forecasting and optimization, including recent UI/UX enhancements and troubleshooting tips.*
 
-### Step 0: Existing Data Detection & Deduplication (New)
-- On app load or CSV upload, the frontend hashes the raw CSV (SHA-256, 30 hex chars) and checks with the backend for duplicates via `/api/check-csv-duplicate`.
-- The backend scans for existing processed datasets (JSONs with `csvHash`) and returns any matches.
-- If a duplicate is found, the user can load the existing dataset directly, skipping the import wizard.
-- The frontend also presents a list of all detected datasets for manual selection ("Continue with Existing Data").
+## 1. Core Workflow Overview
 
-### Step 1: Choose your data (Finished/Adjustments allowed)
-- User uploads sales data via the `CsvImportWizard.tsx` component **if no duplicate is found**.
-- The wizard provides two main paths for data processing:
-  - **AI-Powered Transformation**: The user is prompted to let the AI automatically clean, pivot, and prepare the data. This is the recommended path.
-    - **Small files** are transformed directly via a single API call.
-    - **Large files** trigger a more robust two-step process where the AI first generates a transformation `config` from a sample, which is then applied to the full dataset on the backend. This avoids timeouts and performance issues.
-  - **Manual Import**: The user can opt to manually transpose the data and map columns.
-- The output of this step is a clean, wide-format dataset ready for the subsequent steps, with consistent metadata (`summary`, `columnRoles`, `name`, `csvHash`).
-- For a deep technical dive, see `Upload Wizard & Data Transformation.md`.
-
-### Step 2: Clean and Prepare (Finished/Adjustments allowed)
-- User reviews the transformed data and can optionally perform further cleaning (outlier detection, manual edits).
-- **Fullscreen Data Clean Modal**: Users can open a comprehensive fullscreen interface that combines chart visualization and table editing in one seamless experience.
-  - **Chart Integration**: The modal displays the same chart as the main view but fills all available space
-  - **Table Editing**: Enhanced edit table below the chart with improved styling and keyboard shortcuts
-  - **Globalized Controls**: SKU selector, z-score selector, and navigation buttons sync between modal and main app
-  - **Enhanced UX**: Auto-selection of largest outlier, keyboard shortcuts (Enter to save), modern input styling
-- Import/export of cleaning data is supported via "Import Cleaning Data" and "Export Cleaning Data" buttons.
-- User can freely navigate between "Clean and Prepare" and other pages for flexibility.
-- **Dataset Switching**: When switching between datasets, the app properly resets cleaning state and loads the correct cleaning data for the new dataset (if it exists).
-- **Cleaning Data Persistence**: All cleaning changes are saved using the new naming convention (`<BaseName>-<ShortHash>-cleaning.json`) and properly linked to their source datasets.
-- **State Management**: The app maintains proper state separation between datasets, ensuring cleaning data from one dataset doesn't interfere with another.
-- **Chart Data Consistency**: Both the main chart and modal chart use the same fallback logic for displaying original vs. cleaned series, ensuring consistent data display across all views.
-
-### Step 3: Explore (Finished/Adjustments allowed)
-- User visually inspects cleaned data, aggregates, trends, and other analytics.
-
-### Step 4: Forecast & Optimize (Ongoing)
-- **Optimization**: Adjusts model parameters to get the best forecast for each SKU/model.
-  - Automatic optimization is triggered by:
-    - New data upload (Step 1)
-    - Data cleaning (Step 2)
-    - Relevant settings changes (see `Optimization reasons.md`)
-  - Only SKUs that have changed are re-optimized (minimizing unnecessary work and API calls).
-  - **Queue System**: All optimizations are managed via a global queue, ensuring jobs are processed sequentially and according to current settings (see `Queue Processing & Job Management.md`).
-  - **Models & Methods:** The backend now runs a full suite of professional-grade forecasting models, including `Simple Exponential Smoothing`, `Holt-Winters`, `SARIMA`, and more.
-    - **Grid Search:** The system runs a comprehensive grid search across all applicable models and their parameter combinations to find the best-fitting forecast for each SKU.
-    - **AI-Enhanced Optimization:** If enabled, the system can use AI to intelligently refine the search for optimal parameters.
-    - **Manual Mode:** Users can always manually override parameters for any model.
-  - User can see which SKUs/models are optimized (and by which method), queued, or in progress.
-  - User can manually adjust parameters (Manual mode), but cannot trigger optimization directly.
-  - The user can pick the best model for each SKU. Automatic model selection happens, but the user can override it.
-  - **Persistence:** All results, selections, and queue state are persisted to the backend database and restored on reload. The backend serves as the single source of truth for all application data.
-
-- **Tune (In Development):**
-  - With a model selected for each SKU, a "final" single forecast per SKU is shown alongside cleaned historical data.
-  - User can manually adjust forecast values for each time period (not historical data).
-  - An AI chat assists with bulk or complex forecast adjustments (e.g., "Increase forecast for SKU X by 10% for next 3 months").
-
-### Settings
-- Forecast periods (future time periods) can be set in general settings.
-- AI optimization (GROK-3) can be enabled/disabled in general settings.
-- Composite score weights (MAPE, RMSE, MAE, Accuracy) can be adjusted in general settings to change how the "best" model is selected.
-- All settings changes are reflected in the queue and optimization logic.
-- **Metric Weight Changes**: When composite score weights are modified, a new optimization round is triggered for all SKUs/models/methods to re-evaluate which parameter sets are optimal under the new criteria.
-
-## Forecast Step Enhancements (2024-06)
-
-### Model Selection & Eligibility
-- **Smart Model Filtering**: Models are automatically filtered based on data requirements and SKU characteristics
-- **Clear Feedback**: Disabled models show specific reasons (e.g., "Requires 24 points, you have 12")
-- **Backend Validation**: Eligibility is checked consistently between frontend and backend
-- **Data Requirements**: Each model defines minimum observations needed for reliable forecasting
-
-### Parameter Management
-- **Modular Controls**: Parameter controls are split into focused components for better maintainability
-- **Friendly Labels**: Parameters display human-readable names and helpful descriptions
-- **Type Support**: Supports number sliders, boolean switches, and select dropdowns
-- **Method Selection**: Users can switch between Manual/Grid/AI parameter sources
-- **Optimization Integration**: Grid and AI results are stored separately and can be applied
-
-### Global Settings Integration
-- **Centralized Configuration**: Forecast periods and CSV separator settings in one place
-- **Persistent Storage**: Settings are saved to both localStorage and backend database
-- **Real-time Sync**: Changes propagate immediately to all relevant components
-- **Default Values**: Consistent behavior across sessions with sensible defaults
-
-### UI/UX Improvements
-- **Enhanced Model Cards**: Better visual hierarchy and information display
-- **Parameter Sliders**: Intuitive controls with optimization indicators
-- **Settings Panel**: Accessible from main forecast interface and dedicated settings
-- **Error Handling**: Clear messages when models are ineligible or optimization fails
+The application follows a structured workflow designed to transform raw CSV data into actionable forecasts through a series of interconnected steps. Each step builds upon the previous one, with data flowing seamlessly through the system.
 
 ---
 
-## 2. UI/UX Enhancements (Recently Implemented)
+## 2. Step-by-Step Workflow
 
-### Floating UI Elements
-- **Job Monitor & Setup Buttons**: Moved to a dedicated floating container at the top right of the screen, eliminating overlaps with toasts and other UI elements.
-- **Logo Branding**: Moved the Forecast Alchemy Studio logo to a floating container at the top left, removed the header title for cleaner branding.
-- **Professional Layout**: Improved organization of key controls with consistent positioning across different screen sizes.
+### Step 1: Upload & Transform
+- **Purpose**: Import CSV data and transform it into the standardized format required for forecasting.
+- **Process**: 
+  - User uploads CSV file (drag-and-drop or file picker)
+  - System auto-detects separator, date format, and number format
+  - **NEW**: Robust format validation with visual error indicators
+  - **NEW**: Progression blocking when validation errors exist
+  - User can choose AI-powered or manual transformation
+  - Data is cleaned, normalized, and prepared for analysis
+- **Output**: Standardized dataset ready for cleaning and analysis.
+- **Persistence**: All data is stored in the backend database with hash-based duplicate detection.
 
-### Fullscreen Data Clean Modal
-- **Comprehensive Interface**: Fullscreen modal that combines chart visualization and table editing in one seamless experience.
-- **Responsive Chart**: Chart fills all available vertical space above the edit table for maximum visibility.
-- **Globalized Controls**: SKU selector, z-score selector, and navigation buttons maintain consistency between modal and main app.
-- **Enhanced UX**: Keyboard shortcuts, auto-selection of largest outlier, modern input styling with blue borders.
-- **Seamless Integration**: Modal doesn't close on save, maintains state consistency with main app.
+### Step 2: Clean & Prepare
+- **Purpose**: Identify and correct outliers, add notes, and ensure data quality.
+- **Process**:
+  - **NEW**: Fullscreen data cleaning modal with enhanced UX
+  - **NEW**: Globalized controls between modal and main app
+  - **NEW**: Keyboard shortcuts and auto-selection features
+  - Interactive chart shows outliers with z-score highlighting
+  - User can edit individual data points or import bulk corrections
+  - **NEW**: Enhanced table editing with improved input styling
+  - **NEW**: Responsive chart that fills available space
+- **Output**: Cleaned dataset with outlier corrections and notes.
+- **Persistence**: Cleaning data is saved to backend with new naming convention.
 
-### Mobile Responsiveness Considerations
-- **Current State**: The application is currently desktop-only with no responsive breakpoints.
-- **Future Enhancement**: Mobile responsiveness is planned as a future improvement to make the app smartphone-friendly.
-- **Areas for Improvement**: Header, floating elements, charts, and tables need responsive design for mobile devices.
+### Step 3: Forecast & Optimize
+- **Purpose**: Generate forecasts using optimized model parameters for each SKU.
+- **Process**:
+  - **NEW**: Enhanced optimization queue UI with comprehensive model status table
+  - **NEW**: Row striping, status icons, and progress bars for better readability
+  - **NEW**: Column distribution and spacing improvements
+  - **NEW**: Status alignment using flex containers
+  - **NEW**: Action buttons positioned below table with proper spacing
+  - **NEW**: Summary statistics and tabbed interface for job management
+  - **NEW**: Real-time updates and batch management features
+  - System automatically optimizes model parameters using grid search
+  - AI-enhanced optimization available if enabled
+  - Manual parameter adjustment always available
+  - Results are displayed with performance metrics and visualizations
+- **Output**: Optimized forecasts with performance metrics for each SKU/model combination.
+- **Persistence**: All optimization results and parameter selections are stored in the backend database.
+
+### Step 4: Tune (In Development)
+- **Purpose**: Fine-tune forecasts and make manual adjustments with AI assistance.
+- **Process**:
+  - User selects best model for each SKU
+  - Final forecast is displayed alongside historical data
+  - Manual adjustments can be made to forecast values
+  - AI chat assists with bulk or complex adjustments
+- **Output**: Final, tuned forecasts ready for business use.
 
 ---
 
-## 3. Troubleshooting Checklist
+## 3. Recent UI/UX Enhancements
 
-If the workflow does not behave as expected, check:
-1. **Is deduplication working?** Are both frontend and backend hashing the exact same raw CSV string, and is the hash stored and checked consistently?
-2. **Is the queue state being updated and persisted correctly?**
-3. **Are optimizations only triggered by the correct events (see `Optimization reasons.md`)?**
-4. **Is AI job addition/removal respecting the current AI enablement settings?**
-5. **Are user selections and manual parameters persisting across navigation and reloads?**
-6. **Is the UI reflecting the true state of the queue, optimizations, and results?**
-7. **Are chart data displays consistent between modal and main views?** Both should use the same fallback logic for original/cleaned series.
-8. **Are floating UI elements positioned correctly without overlaps?** Job Monitor and Setup buttons should be at top right, logo at top left.
-9. **Is the fullscreen modal working properly?** Chart should fill available space, controls should sync with main app.
+### A. Data Cleaning Improvements
+- **Fullscreen Modal**: Comprehensive data cleaning interface that combines chart and table editing
+- **Globalized Controls**: SKU selector, z-score selector, and navigation buttons sync between modal and main app
+- **Enhanced UX**: Keyboard shortcuts, auto-selecting largest outlier, improved input styling
+- **Responsive Design**: Chart fills all available space with proper proportions
 
----
+### B. Optimization Queue Enhancements
+- **Model Status Table**: Comprehensive display of all model/method combinations with current status
+- **Visual Improvements**: Row striping, status icons, progress bars, and proper column distribution
+- **Status Alignment**: Status icon and text aligned on single line using flex containers
+- **Summary Cards & Tabs**: Now use 'Merged' (with icon) instead of 'Skipped' for duplicate jobs, with consistent terminology throughout the UI
+- **Batch-Level Progress**: The batch progress summary row now shows 'Merged' (with icon) instead of 'Skipped'
+- **Banner**: An orange banner at the top of the queue informs users how many jobs were merged and why, referencing the 'Merged' tab for details
+- **Tooltips & Info**: Tooltips and a 'Learn more' button provide user-friendly explanations of what 'Merged' means, reducing confusion about data freshness and job deduplication
+- **No More 'Skipped'**: The term 'Skipped' has been fully removed from the UI and documentation in favor of 'Merged'
+- **Real-time Updates**: Automatic refresh of job status without manual intervention
 
-## 4. Summary Table
-
-| Step                  | Trigger/Event                | System Action                        | Persistence | User Control |
-|-----------------------|------------------------------|--------------------------------------|-------------|--------------|
-| Existing Data Check   | App load/CSV upload          | Check for duplicates, present options| Backend DB  | Yes          |
-| Choose your data      | CSV upload                   | Initiate AI/manual import wizard     | Backend DB  | Yes          |
-| Clean/Prepare         | Data edit/clean              | Queue optimizations for affected SKU | Backend DB  | Yes          |
-| Clean/Prepare Modal   | Open fullscreen editor       | Display comprehensive cleaning interface | Backend DB  | Yes          |
-| Explore               | Navigation                   | No optimization, just view           | Backend DB  | Yes          |
-| Forecast              | Data/settings change         | Queue optimizations as needed        | Backend DB  | Yes          |
-| Tune                  | Manual forecast adjustment   | No queue, direct user edit           | Backend DB  | Yes          |
-| Settings              | Change AI/periods/weights    | Queue/clear jobs as needed           | Backend DB  | Yes          |
+### C. CSV Import Validation
+- **Strict Format Validation**: Enhanced validation for dates and numbers with visual error indicators
+- **Progression Blocking**: Users cannot proceed when validation errors exist
+- **Standardized Error Handling**: Consistent ErrorHandler component styling across all error states
+- **Helpful Guidance**: Contextual suggestions and links for fixing validation issues
 
 ---
 
-**For more details on deduplication, optimization triggers, queue processing, and persistence, see:**
-- `Upload Wizard & Data Transformation.md`
-- `Optimization reasons.md`
-- `Queue Processing & Job Management.md`
-- `Forecast Methods & Parameter Persisten.md`
-- `Data Cleaning Methods & Implementation.md` - Fullscreen modal details
-- `UI State Management & Data Flow.md` - Globalized state and floating UI elements
+## 4. Data Flow Architecture
+
+### A. Single Source of Truth
+- **Backend Database**: All data is stored in SQLite database
+- **Zustand Stores**: Frontend state management with automatic reactivity
+- **Real-time Sync**: UI updates automatically reflect backend state changes
+
+### B. State Management
+- **Model UI Store**: Manages model parameters, method selection, and optimization state
+- **SKU Store**: Manages selected SKU with persistence
+- **Forecast Results Store**: Manages forecast results and pending operations
+- **Optimization Status**: Real-time job status and queue management
+
+### C. Data Persistence
+- **Backend Storage**: All data persists in SQLite database
+- **Hash-based Detection**: Prevents duplicate imports and enables existing data loading
+- **Automatic Cleanup**: Old data is automatically managed to prevent bloat
+
+---
+
+## 5. Optimization System
+
+### A. Trigger Mechanisms
+- **Data Changes**: New uploads or data cleaning trigger optimization
+- **Settings Changes**: Relevant configuration changes trigger re-optimization
+- **Manual Triggers**: Users can manually trigger optimization for specific SKUs
+
+### B. Optimization Methods
+- **Grid Search**: Systematic parameter optimization across all models
+- **AI Enhancement**: AI-powered parameter refinement (optional)
+- **Manual Mode**: Direct parameter adjustment by users
+
+### C. Queue Management
+- **Persistent Queue**: Jobs persist across server restarts
+- **Real-time Status**: Live updates of job progress and status
+- **Batch Operations**: Efficient processing of multiple jobs
+- **Error Handling**: Robust error recovery and retry mechanisms
+
+---
+
+## 6. Performance Considerations
+
+### A. Backend Processing
+- **Asynchronous Jobs**: Long-running operations don't block the UI
+- **Worker Processes**: Background processing for optimization tasks
+- **Database Optimization**: Efficient queries and indexing for large datasets
+
+### B. Frontend Performance
+- **Selective Rendering**: Components only re-render when their data changes
+- **Optimized Polling**: Efficient status updates without excessive API calls
+- **Memory Management**: Automatic cleanup of old data and completed jobs
+
+### C. Scalability
+- **Modular Architecture**: Easy to add new models and features
+- **Batch Processing**: Efficient handling of multiple SKUs and models
+- **Resource Management**: Automatic resource allocation and cleanup
+
+---
+
+## 7. Troubleshooting Guide
+
+### A. Common Issues
+- **Import Errors**: Check CSV format and validation settings
+- **Optimization Failures**: Review job status and error messages
+- **Performance Issues**: Monitor queue status and resource usage
+- **Data Sync Issues**: Verify backend connectivity and state management
+
+### B. Debug Tools
+- **Zustand Debugger**: Built-in state inspection and debugging
+- **Job Monitor**: Real-time queue status and job management
+- **Error Logs**: Detailed error messages and stack traces
+- **Performance Metrics**: System performance and resource usage
+
+### C. Recovery Procedures
+- **Failed Jobs**: Retry or cancel failed optimizations
+- **Data Corruption**: Restore from backup or re-import data
+- **State Issues**: Reset stores or restart application
+- **Queue Problems**: Clear completed jobs or reset optimization queue
+
+---
+
+## 8. Future Enhancements
+
+### A. Planned Features
+- **Advanced Tuning**: Enhanced forecast adjustment capabilities
+- **Collaborative Features**: Multi-user support and sharing
+- **Advanced Analytics**: Deeper insights and performance analysis
+- **Mobile Support**: Responsive design for mobile devices
+
+### B. Performance Improvements
+- **WebSocket Support**: Real-time updates without polling
+- **Caching**: Result caching for repeated operations
+- **Distributed Processing**: Multiple worker processes
+- **Compression**: Data compression for large datasets
+
+### C. User Experience
+- **Workflow Templates**: Save and reuse workflow configurations
+- **Progress Estimation**: Better time estimates for long operations
+- **Notification System**: Enhanced user notifications and alerts
+- **Help System**: Contextual help and documentation
+
+---
+
+**For related documentation, see:**
+- `Upload Wizard & Data Transformation.md` - Detailed import process
+- `Data Cleaning Methods & Implementation.md` - Cleaning workflows
+- `Queue Processing & Job Management.md` - Optimization system
+- `UI State Management & Data Flow.md` - State management patterns
+
+
+
+
 
 
 

@@ -4,6 +4,7 @@ export class HoltLinearTrend extends BaseModel {
   static metadata = {
     id: 'holt-linear-trend',
     displayName: "Holt's Linear Trend",
+    shortName: "Holt's Linear Trend",
     parameters: [
       { name: 'alpha', type: 'number', default: 0.3, visible: true, label: 'Level Smoothing (alpha)', description: 'Controls the smoothing of the level component.' },
       { name: 'beta', type: 'number', default: 0.1, visible: true, label: 'Trend Smoothing (beta)', description: 'Controls the smoothing of the trend component.' },

@@ -4,6 +4,7 @@ export class SimpleExponentialSmoothing extends BaseModel {
   static metadata = {
     id: 'simple-exponential-smoothing',
     displayName: 'Simple Exponential Smoothing',
+    shortName: 'Simple Exponential Smoothing',
     parameters: [
       { name: 'alpha', type: 'number', default: 0.3, visible: true, label: 'Smoothing Factor (alpha)', description: 'Controls the rate at which the influence of past observations decreases.' },
     ],
@@ -29,10 +30,17 @@ export class SimpleExponentialSmoothing extends BaseModel {
       throw new Error('Training data cannot be empty');
     }
 
-    // Extract sales values from data - check for both lowercase and uppercase field names
+    // Set up column mapping if data has metadata
+    if (data && data.length > 0 && data[0]._columnMapping) {
+      this.columnMapping = data[0]._columnMapping;
+    }
+
+    // Extract sales values from data using column mapping if available
     const values = data.map(d => {
       if (typeof d === 'object') {
-        return d.sales || d.Sales || d.value || d.amount || d;
+        // Use column mapping if available, otherwise fallback to legacy logic
+        return this.getColumnValue(d, 'Sales', 'Sales') ?? 
+               (d.sales || d.Sales || d.value || d.amount || d);
       }
       return d;
     });
@@ -75,7 +83,9 @@ export class SimpleExponentialSmoothing extends BaseModel {
 
     const values = testData.map(d => {
       if (typeof d === 'object') {
-        return d.sales || d.Sales || d.value || d.amount || d;
+        // Use column mapping if available, otherwise fallback to legacy logic
+        return this.getColumnValue(d, 'Sales', 'Sales') ?? 
+               (d.sales || d.Sales || d.value || d.amount || d);
       }
       return d;
     });
@@ -141,3 +151,5 @@ export class SimpleExponentialSmoothing extends BaseModel {
     this.alpha = parameters.alpha || this.alpha;
   }
 } 
+  
+ 

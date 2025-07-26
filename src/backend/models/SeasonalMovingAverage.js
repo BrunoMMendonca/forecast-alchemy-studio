@@ -4,6 +4,7 @@ export class SeasonalMovingAverage extends BaseModel {
   static metadata = {
     id: 'seasonal-moving-average',
     displayName: 'Seasonal Moving Average',
+    shortName: 'Seasonal Moving Average',
     parameters: [
       { name: 'window', type: 'number', default: 3, visible: true, label: 'Window Size', description: 'Number of periods to average over.' },
     ],
@@ -31,9 +32,16 @@ export class SeasonalMovingAverage extends BaseModel {
       throw new Error(`Training data must have at least one full season (${this.seasonLength} observations)`);
     }
 
+    // Set up column mapping if data has metadata
+    if (data && data.length > 0 && data[0]._columnMapping) {
+      this.columnMapping = data[0]._columnMapping;
+    }
+
     const values = data.map(d => {
       if (typeof d === 'object') {
-        return d.sales || d.Sales || d.value || d.amount || d;
+        // Use column mapping if available, otherwise fallback to legacy logic
+        return this.getColumnValue(d, 'Sales', 'Sales') ?? 
+               (d.sales || d.Sales || d.value || d.amount || d);
       }
       return d;
     });
@@ -106,7 +114,9 @@ export class SeasonalMovingAverage extends BaseModel {
 
     const values = testData.map(d => {
       if (typeof d === 'object') {
-        return d.sales || d.Sales || d.value || d.amount || d;
+        // Use column mapping if available, otherwise fallback to legacy logic
+        return this.getColumnValue(d, 'Sales', 'Sales') ?? 
+               (d.sales || d.Sales || d.value || d.amount || d);
       }
       return d;
     });
@@ -157,3 +167,5 @@ export class SeasonalMovingAverage extends BaseModel {
     this.window = parameters.window || this.window;
   }
 }
+
+

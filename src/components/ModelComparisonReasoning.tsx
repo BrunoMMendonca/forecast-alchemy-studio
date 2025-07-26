@@ -7,7 +7,7 @@ import { Star, TrendingUp, Shield, Zap, Brain } from 'lucide-react';
 interface ModelComparison {
   model: string;
   score: number;
-  accuracy: number;
+  
   stability: number;
   interpretability: number;
   businessFit: number;
@@ -19,7 +19,7 @@ interface ModelComparisonReasoningProps {
   comparisons: ModelComparison[];
   reasoning: string;
   decisionFactors: {
-    accuracyWeight: number;
+    
     stabilityWeight: number;
     interpretabilityWeight: number;
     businessWeight: number;
@@ -39,7 +39,7 @@ export const ModelComparisonReasoning: React.FC<ModelComparisonReasoningProps> =
 
   const getFactorIcon = (factor: string) => {
     switch (factor) {
-      case 'accuracy': return <TrendingUp className="h-3 w-3" />;
+      case '': return <TrendingUp className="h-3 w-3" />;
       case 'stability': return <Shield className="h-3 w-3" />;
       case 'interpretability': return <Brain className="h-3 w-3" />;
       case 'business': return <Zap className="h-3 w-3" />;
@@ -61,8 +61,8 @@ export const ModelComparisonReasoning: React.FC<ModelComparisonReasoningProps> =
           <div className="text-sm font-medium mb-2">Decision Criteria Weights:</div>
           <div className="grid grid-cols-4 gap-2 text-xs">
             <div className="flex items-center gap-1">
-              {getFactorIcon('accuracy')}
-              <span>Accuracy: {decisionFactors.accuracyWeight.toFixed(1)}%</span>
+              {getFactorIcon('')}
+              <span>Accuracy: {decisionFactors.Weight.toFixed(1)}%</span>
             </div>
             <div className="flex items-center gap-1">
               {getFactorIcon('stability')}
@@ -103,9 +103,9 @@ export const ModelComparisonReasoning: React.FC<ModelComparisonReasoningProps> =
               
               <div className="grid grid-cols-4 gap-2 text-xs mb-2">
                 <div className="flex items-center gap-1">
-                  {getFactorIcon('accuracy')}
-                  <span className={getScoreColor(comparison.accuracy)}>
-                    {comparison.accuracy.toFixed(1)}%
+                  {getFactorIcon('')}
+                  <span className={getScoreColor(comparison.)}>
+                    {comparison..toFixed(1)}%
                   </span>
                 </div>
                 <div className="flex items-center gap-1">

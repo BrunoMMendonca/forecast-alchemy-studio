@@ -3,7 +3,7 @@ import { CsvUploadResult } from '@/components/CsvImportWizard';
 
 interface DatasetFile {
   filename: string;
-  filePath: string;
+  datasetId: number;
   hash: string;
   timestamp: number;
   size: number;
@@ -19,13 +19,14 @@ interface Dataset {
     skuCount: number;
     dateRange: [string, string];
     totalPeriods: number;
+    frequency?: string;
   };
   filename: string;
   timestamp: number;
 }
 
 interface LastLoadedDataset {
-  filePath: string;
+  datasetId: number;
   filename: string;
   name: string;
   timestamp: number;
@@ -74,19 +75,8 @@ export const useExistingDataDetection = (): UseExistingDataDetectionReturn => {
 
   const loadLatestCleanedData = useCallback(async (dataset: Dataset): Promise<CsvUploadResult | null> => {
     try {
-      // Extract baseName and hash from the filename using the new naming convention
-      // Format: Original_CSV_Upload-<timestamp>-<hash>-processed.json
-      const match = dataset.filename.match(/^Original_CSV_Upload-(\d+)-([a-f0-9]{8})-processed\.json$/);
-      if (!match) {
-        console.error('[DETECT] Invalid filename format:', dataset.filename);
-        return null;
-      }
-      
-      const [, timestamp, hash] = match;
-      const baseName = `Original_CSV_Upload-${timestamp}`;
-      
-      // Load the processed data using the new API format
-      const response = await fetch(`/api/load-processed-data?baseName=${encodeURIComponent(baseName)}&hash=${encodeURIComponent(hash)}`);
+      // Load the processed data using the dataset ID from the database
+      const response = await fetch(`/api/load-processed-data?datasetId=${dataset.id}`);
       if (!response.ok) {
         throw new Error('Failed to load cleaned data');
       }
@@ -96,7 +86,7 @@ export const useExistingDataDetection = (): UseExistingDataDetectionReturn => {
       // Create a CsvUploadResult from the loaded data
       const result: CsvUploadResult = {
         success: true,
-        filePath: `uploads/${dataset.filename}`,
+        datasetId: parseInt(dataset.id),
         summary: {
           skuCount: dataset.summary.skuCount,
           dateRange: dataset.summary.dateRange,
@@ -105,7 +95,7 @@ export const useExistingDataDetection = (): UseExistingDataDetectionReturn => {
         skuList: fileData.data?.map((row: any) => row['Material Code']).filter(Boolean) || []
       };
       
-      console.log(`[DETECT] Loaded existing data: ${dataset.name} -> ${dataset.filename}`);
+      console.log(`[DETECT] Loaded existing data: ${dataset.name} -> dataset_${dataset.id}`);
       return result;
     } catch (err) {
       console.error('Error loading existing data:', err);
@@ -129,7 +119,7 @@ export const useExistingDataDetection = (): UseExistingDataDetectionReturn => {
   // Function to set the last loaded dataset
   const setLastLoadedDataset = useCallback((dataset: Dataset) => {
     const lastLoaded: LastLoadedDataset = {
-      filePath: `uploads/${dataset.filename}`,
+      datasetId: parseInt(dataset.id),
       filename: dataset.filename,
       name: dataset.name,
       timestamp: dataset.timestamp,
@@ -153,7 +143,14 @@ export const useExistingDataDetection = (): UseExistingDataDetectionReturn => {
     }
 
     // Check if the dataset still exists in the current datasets list
-    const datasetExists = datasets.find(d => d.filename === lastLoadedDataset.filename);
+    // Try to match by filename first (for backward compatibility)
+    let datasetExists = datasets.find(d => d.filename === lastLoadedDataset.filename);
+    
+    // If not found by filename, try to match by datasetId
+    if (!datasetExists && lastLoadedDataset.datasetId) {
+      datasetExists = datasets.find(d => d.id === lastLoadedDataset.datasetId.toString());
+    }
+    
     if (!datasetExists) {
       // Clear the stored info since the dataset is gone
       setLastLoadedDatasetState(null);

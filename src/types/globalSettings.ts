@@ -12,7 +12,8 @@ export interface GlobalSettings {
   mapeWeight: number; // as percent, e.g. 40
   rmseWeight: number;
   maeWeight: number;
-  accuracyWeight: number;
+  accuracyWeight: number; // as percent, e.g. 10
+  
   frequency?: string;
   autoDetectFrequency?: boolean;
   csvSeparator?: string;

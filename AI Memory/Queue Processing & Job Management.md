@@ -1,85 +1,344 @@
-# Backend Job Queue & Worker: Implementation Guide
+# Queue Processing & Job Management: A Technical Guide
 
-## 1. Core Principles
+*This document outlines the backend job queue system that manages optimization tasks, ensuring reliable processing and real-time status updates with enhanced UI features.*
 
-- **Backend as the Single Source of Truth:** The job queue's state is managed entirely by the backend server in a persistent SQLite database. The frontend is a consumer of this state. In the future, this principle will expand to include all user data (datasets, forecasts, etc.).
-- **API-Driven Operations:** All queue mutations (creating jobs, clearing the queue) are handled via API endpoints. The frontend does not manipulate the queue state directly.
-- **Persistent & Asynchronous:** Jobs are stored in a database, allowing a separate worker process to execute them asynchronously. This ensures that UI performance is never blocked by optimizations and that jobs are not lost on browser refresh.
-- **Robust Job Creation:** The job creation endpoint can handle both full dataset uploads and specific SKU lists, with a "reason" for tracking job origins.
+## Key Features
+- Real-time status updates and progress tracking
+- User-friendly queue management interface
+- Visual indicators for job status and progress
+- **Merged Jobs:** Duplicate jobs are now marked as 'Merged' (replacing 'Skipped'), with clear banners, tooltips, and batch-level progress summaries in the UI.
 
----
+## 1. Core Problem / Use Case
 
-## 2. How It Works
+The application needs to handle long-running optimization tasks without blocking the UI. Users need real-time visibility into optimization progress, the ability to manage jobs, and a clear understanding of which models are being processed.
 
-### A. The Lifecycle of a Job
-
-1.  **Job Creation (Frontend)**:
-    - A user action (like uploading a file or cleaning data) triggers a function in `useDataHandlers.ts`.
-    - This handler makes a `POST` request to the `/api/jobs` endpoint on the backend, sending along the relevant data, models, and a reason for the job.
-
-2.  **Job Ingestion (Backend API)**:
-    - The `server.js` receives the request.
-    - It parses the request and creates corresponding job entries in the `jobs` table in the SQLite database. Each job is initially marked with a `pending` status.
-
-3.  **Job Processing (Backend Worker)**:
-    - A separate worker process, started by running `node server.js worker`, continuously polls the database for `pending` jobs (`runWorker()` function).
-    - When a job is found, the worker updates its status to `running` and begins executing the optimization logic.
-    - **Dataset Frequency Extraction**: For optimization jobs, the worker extracts the dataset frequency from the file's summary and computes the seasonal period (weekly → 52, monthly → 12). This is passed through job data to ensure seasonal models use the correct seasonal period.
-    - It uses the `GridOptimizer` and `ModelFactory` to run a comprehensive, real-world analysis using all available forecasting models (including ARIMA, Holt-Winters, etc.). This is not a simulation.
-    - It periodically updates the job's `progress` in the database.
-    - Upon completion, the worker updates the job's status to `completed` and stores the final result as a JSON string in the `result` column. If an error occurs, the status is set to `failed`.
-
-4.  **Status Polling (Frontend)**:
-    - The `useBackendJobStatus.ts` hook on the frontend periodically sends a `GET` request to the `/api/jobs/status` endpoint.
-    - The backend returns the current list of all jobs from the database.
-    - The hook processes these jobs, updates its internal state (`jobs`, `summary`), and makes the data available to the UI.
-
-5.  **UI Updates**:
-    - The `ForecastPage.tsx` component consumes the data from `useBackendJobStatus`.
-    - It passes this data down to child components like `MainLayout` and `OptimizationQueuePopup`.
-    - This "single source of truth" pattern ensures all UI elements are always in sync with the backend's state.
+**Key Requirements:**
+- Asynchronous processing of optimization jobs
+- Real-time status updates and progress tracking
+- User-friendly queue management interface
+- Visual indicators for job status and progress
+- Batch management and priority handling
+- Error handling and recovery mechanisms
 
 ---
 
-## 3. Technical Details
+## 2. How It Works: The Job Queue Architecture
 
-### A. Key Code Points
+### A. Backend Components
 
-| Area                     | File / Component                     | Key Function / Hook         | Purpose                                                      |
-| ------------------------ | ------------------------------------ | --------------------------- | ------------------------------------------------------------ |
-| **Job Creation (Client)**| `src/hooks/useDataHandlers.ts`       | `handleDataUpload`          | Submits job requests to the backend API.                     |
-| **Job Ingestion (Server)**| `server.js`         | `app.post('/api/jobs')`     | Creates job records in the SQLite database.                  |
-| **Job Processing (Server)**| `src/backend/worker.js`         | `processJob`  | Fetches and executes pending jobs using the `GridOptimizer` and `ModelFactory`.         |
-| **Status Polling (Client)**| `src/hooks/useBackendJobStatus.ts`   | `useBackendJobStatus`       | Periodically fetches job status from the backend.            |
-| **UI Display**           | `src/components/OptimizationQueuePopup.tsx` | -                   | Renders the job queue and progress to the user.              |
-| **UI State Management**  | `src/pages/ForecastPage.tsx`         | -                           | Acts as the single source of truth for all job-related UI.   |
+**Job Queue**: SQLite-based persistent queue (`forecast-jobs.db`)
+- Stores all optimization jobs with status, priority, and metadata
+- Ensures jobs persist across server restarts
+- Supports batch operations and job relationships
+
+**Worker Process**: Background process that processes jobs from the queue
+- Continuously polls for pending jobs
+- Updates job status in real-time
+- Handles job failures and retries
+
+**Status API**: REST endpoints that provide real-time job status
+- `/api/jobs/status` - Get current job status and queue information
+- `/api/jobs/cancel/:id` - Cancel a specific optimization
+- `/api/jobs/pause/:id` - Pause a specific optimization
+- `/api/jobs/resume/:id` - Resume a paused optimization
+- `/api/jobs/clear-completed` - Clear all completed jobs
+- `/api/jobs/reset` - Reset all optimizations
+
+### B. Frontend Components
+
+**OptimizationQueue**: Main queue display component with enhanced UI
+- Comprehensive model status table
+- Real-time updates and progress tracking
+- Action controls for job management
+
+**OptimizationQueuePopup**: Modal wrapper for the queue interface
+- Provides easy access from main UI
+- Responsive design for different screen sizes
+
+**OptimizationStatusContext**: React context for status management
+- Manages global optimization state
+- Provides status updates to all components
+
+**useOptimizationStatus**: Hook for accessing optimization status
+- Subscribes to status updates
+- Provides status data to components
 
 ---
 
-## 4. Troubleshooting Checklist
+## 3. Enhanced UI Features (Recently Implemented)
 
-If queue processing fails or behaves unexpectedly, check the following:
+### A. Model Status Table
 
-1.  **Are the backend API and Worker processes running?** You need two terminals: one for `node server.js api` and one for `node server.js worker`.
-2.  **Are jobs being created correctly in the `forecast-jobs.db` file?** Use a SQLite viewer to inspect the `jobs` table.
-3.  **Is the backend worker picking up pending jobs?** Check the terminal output for the worker process for logs like "Worker: Picked up job...".
-4.  **Is the frontend successfully polling the `/api/jobs/status` endpoint?** Check the browser's network tab for successful `200 OK` responses.
-5.  **Is the `ForecastPage` component passing the `jobs` and `summary` props correctly down to its children?** This was the source of a previous bug that caused UI inconsistencies.
+**Comprehensive Display**
+- Shows all model/method combinations with their current status
+- Displays job progress, priority, and completion status
+- Provides clear visual hierarchy and organization
+
+**Visual Improvements**
+- **Row Striping**: Alternating row colors for better readability
+- **Status Icons**: Visual icons for different job statuses (pending, running, completed, failed)
+- **Progress Bars**: Individual progress bars for each model/method combination
+- **Column Distribution**: Evenly distributed columns with proper spacing
+- **Status Alignment**: Status icon and text aligned on single line using flex containers
+
+**Table Structure**
+```typescript
+interface JobStatusRow {
+  modelId: string;
+  method: 'grid' | 'ai';
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;
+  priority: 'high' | 'medium' | 'low' | 'normal';
+  startTime?: string;
+  endTime?: string;
+  error?: string;
+}
+```
+
+### B. Optimization Queue Interface
+
+**Summary Statistics**
+- Overview cards showing active, completed, failed, and total jobs
+- Real-time counters that update automatically
+- Visual indicators for queue health
+
+**Tabbed Interface**
+- Separate tabs for active, completed, and failed optimizations
+- Easy navigation between different job states
+- Filtered views for better organization
+
+**Real-time Updates**
+- Automatic refresh of job status without manual intervention
+- WebSocket-like experience with polling
+- Immediate UI updates when jobs change state
+
+### C. Action Controls
+
+**Individual Controls**
+- Pause, resume, and cancel individual optimizations
+- Context-sensitive actions based on job status
+- Confirmation dialogs for destructive actions
+
+**Bulk Actions**
+- Clear completed jobs to free up resources
+- Reset all optimizations for fresh start
+- Batch operations for efficiency
+
+**Progress Tracking**
+- Overall progress bar showing queue completion
+- Individual job progress indicators
+- Time estimates for remaining work
 
 ---
 
-## 5. Gotchas & Historical Context
+## 4. Job Lifecycle Management
 
-- **Initial Architecture**: The application's first version of a queue (`useOptimizationQueue.ts`) ran on the browser's main thread, which caused the UI to freeze during long optimizations. This file and pattern are now obsolete.
-- **The Backend Shift**: The architecture was migrated to a full backend job queue to solve the UI freezing issue and provide a more scalable, persistent solution. The current implementation uses the real, modular forecasting engine and is not a simulation.
-- **UI State Synchronization**: A critical lesson learned was to have a single component (`ForecastPage`) fetch the backend status and pass it down as props. Independent fetching in child components led to race conditions and UI bugs. This is documented further in `UI State Management & Data Flow.md`. 
+### A. Job Creation
+1. **Trigger**: Optimization is triggered by data changes or user actions
+2. **Validation**: System validates job parameters and requirements
+3. **Queuing**: Job is added to SQLite database with 'pending' status
+4. **Notification**: User is notified of job creation
+
+### B. Job Processing
+1. **Worker Pickup**: Background worker selects next available job
+2. **Status Update**: Job status changes to 'running'
+3. **Processing**: Model optimization runs with progress updates
+4. **Completion**: Job is marked as 'completed' or 'failed'
+
+### C. Job Cleanup
+1. **Result Storage**: Optimization results are stored in database
+2. **State Update**: UI state is updated with new results
+3. **Cleanup**: Completed jobs can be cleared from queue
+4. **Notification**: User is notified of job completion
 
 ---
 
-## 6. UI Consistency & Single Source of Truth (Update)
+## 5. Database Schema
 
-- **All job progress and status in the UI must be derived from the backend's persistent queue.**
-- **Never use frontend-only counters or state for job progress.**
-- The job monitor badge, popup, and all related UI must use the same backend-driven source of truth to avoid inconsistencies.
-- The `ForecastPage` component should fetch job status and pass it down as props to all child components, ensuring a single source of truth for job status and progress.
-- This pattern eliminates race conditions and UI bugs, and ensures the UI always reflects the true backend state. 
+### A. Jobs Table
+```sql
+CREATE TABLE jobs (
+  id INTEGER PRIMARY KEY,
+  filePath TEXT NOT NULL,
+  sku TEXT NOT NULL,
+  modelId TEXT NOT NULL,
+  method TEXT NOT NULL,
+  status TEXT NOT NULL,
+  priority INTEGER DEFAULT 0,
+  batchId TEXT,
+  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  startedAt DATETIME,
+  completedAt DATETIME,
+  error TEXT,
+  result TEXT
+);
+```
+
+### B. Optimizations Table
+```sql
+CREATE TABLE optimizations (
+  id INTEGER PRIMARY KEY,
+  batchId TEXT UNIQUE NOT NULL,
+  filePath TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL,
+  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  completedAt DATETIME
+);
+```
+
+### C. Results Table
+```sql
+CREATE TABLE results (
+  id INTEGER PRIMARY KEY,
+  jobId INTEGER,
+  modelId TEXT NOT NULL,
+  method TEXT NOT NULL,
+  parameters TEXT,
+  metrics TEXT,
+  predictions TEXT,
+  FOREIGN KEY (jobId) REFERENCES jobs(id)
+);
+```
+
+---
+
+## 6. Integration Points
+
+### A. ForecastEngine Integration
+- Triggers optimization when data changes
+- Displays optimization status and progress
+- Provides access to optimization controls
+
+### B. ModelParameterPanel Integration
+- Shows model eligibility and status
+- Displays optimization results
+- Provides parameter adjustment controls
+
+### C. MainLayout Integration
+- Provides queue access via floating button
+- Shows overall optimization status
+- Manages optimization state globally
+
+### D. OptimizationStatusContext Integration
+- Manages global optimization state
+- Provides status updates to all components
+- Handles optimization lifecycle events
+
+---
+
+## 7. Error Handling & Recovery
+
+### A. Failed Jobs
+- Jobs that fail are marked with error details
+- Error messages are displayed in the UI
+- Failed jobs can be retried or cancelled
+
+### B. Retry Logic
+- Automatic retry for transient failures
+- Configurable retry limits and intervals
+- Manual retry options for failed jobs
+
+### C. User Notifications
+- Toast notifications for job status changes
+- In-app notifications for important events
+- Email notifications for long-running jobs
+
+### D. Error Recovery
+- Manual reset capabilities for stuck jobs
+- Queue cleanup for corrupted jobs
+- System recovery after server restarts
+
+---
+
+## 8. Performance Considerations
+
+### A. Batch Processing
+- Multiple jobs processed efficiently
+- Batch operations reduce database load
+- Parallel processing where possible
+
+### B. Status Polling
+- Optimized polling intervals to reduce server load
+- Adaptive polling based on queue activity
+- Efficient status updates to minimize bandwidth
+
+### C. Memory Management
+- Completed jobs can be cleared to free resources
+- Result caching for frequently accessed data
+- Automatic cleanup of old job data
+
+### D. Concurrent Processing
+- Worker can handle multiple jobs simultaneously
+- Queue prioritization for important jobs
+- Resource allocation based on job complexity
+
+---
+
+## 9. "Gotchas" & Historical Context
+
+- **Job Persistence**: Jobs are stored in SQLite, so they persist across server restarts. This ensures no work is lost.
+- **Status Synchronization**: The frontend polls for status updates. Ensure polling intervals are appropriate for your use case.
+- **Batch Management**: Jobs are grouped by batch ID for efficient processing. Use batch operations when possible.
+- **Priority Handling**: Jobs have priority levels that affect processing order. High priority jobs are processed first.
+- **Error Recovery**: Failed jobs can be retried or cancelled. Always check error messages for debugging.
+- **Queue Cleanup**: Regularly clear completed jobs to prevent queue bloat and improve performance.
+
+---
+
+## 10. Future Enhancements
+
+### A. Planned Features
+- **WebSocket Support**: Real-time updates without polling
+- **Advanced Scheduling**: Time-based job scheduling
+- **Resource Monitoring**: CPU and memory usage tracking
+- **Job Dependencies**: Complex job workflows with dependencies
+
+### B. Performance Improvements
+- **Distributed Processing**: Multiple worker processes
+- **Job Queuing**: Advanced queuing algorithms
+- **Caching**: Result caching for repeated optimizations
+- **Compression**: Data compression for large results
+
+### C. User Experience
+- **Job Templates**: Save and reuse job configurations
+- **Progress Estimation**: Better time estimates for jobs
+- **Notification Preferences**: Customizable notification settings
+- **Mobile Support**: Responsive design for mobile devices
+
+---
+
+## 5. UI/UX: Optimization Queue
+- **Merged Jobs:** When a duplicate optimization is detected, the new job is marked as 'Merged' instead of 'Skipped'.
+- **Banner:** An orange banner at the top of the queue informs users how many jobs were merged and why, referencing the 'Merged' tab for details.
+- **Summary Cards & Tabs:** The queue UI uses the terminology 'Merged' everywhere (cards, tabs, batch summaries), with the Merge icon and orange color for consistency.
+- **Batch-Level Progress:** The batch progress summary row now shows 'Merged' (with icon) instead of 'Skipped'.
+- **Tooltips & Info:** Tooltips and a 'Learn more' button provide user-friendly explanations of what 'Merged' means, reducing confusion about data freshness and job deduplication.
+- **No More 'Skipped':** The term 'Skipped' has been fully removed from the UI and documentation in favor of 'Merged'.
+
+## 6. User Experience
+- Users are clearly informed when jobs are merged, why it happens, and that the latest data will always be used.
+- The UI is consistent, modern, and avoids confusion about job status or data freshness.
+
+**For related documentation, see:**
+- `Forecast Methods & Parameter Persisten.md` - Parameter persistence and method selection
+- `Performance & Scalability Strategy.md` - Backend architecture overview
+- `UI State Management & Data Flow.md` - Frontend state management patterns 
+---
+
+## 5. UI/UX: Optimization Queue
+- **Merged Jobs:** When a duplicate optimization is detected, the new job is marked as 'Merged' instead of 'Skipped'.
+- **Banner:** An orange banner at the top of the queue informs users how many jobs were merged and why, referencing the 'Merged' tab for details.
+- **Summary Cards & Tabs:** The queue UI uses the terminology 'Merged' everywhere (cards, tabs, batch summaries), with the Merge icon and orange color for consistency.
+- **Batch-Level Progress:** The batch progress summary row now shows 'Merged' (with icon) instead of 'Skipped'.
+- **Tooltips & Info:** Tooltips and a 'Learn more' button provide user-friendly explanations of what 'Merged' means, reducing confusion about data freshness and job deduplication.
+- **No More 'Skipped':** The term 'Skipped' has been fully removed from the UI and documentation in favor of 'Merged'.
+
+## 6. User Experience
+- Users are clearly informed when jobs are merged, why it happens, and that the latest data will always be used.
+- The UI is consistent, modern, and avoids confusion about job status or data freshness.
+
+**For related documentation, see:**
+- `Forecast Methods & Parameter Persisten.md` - Parameter persistence and method selection
+- `Performance & Scalability Strategy.md` - Backend architecture overview
+- `UI State Management & Data Flow.md` - Frontend state management patterns 

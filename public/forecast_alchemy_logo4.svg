@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="138mm"
+   height="138mm"
+   viewBox="0 0 138.00001 138"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4.2 (f4327f4, 2025-05-13)"
+   sodipodi:docname="forecast_alchemy_logo2.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="1.0396254"
+     inkscape:cx="136.10671"
+     inkscape:cy="415.05334"
+     inkscape:window-width="3440"
+     inkscape:window-height="1369"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1">
+    <clipPath
+       id="clip0">
+      <rect
+         x="55"
+         y="201"
+         width="500"
+         height="372"
+         id="rect1" />
+    </clipPath>
+    <clipPath
+       id="clip0-4">
+      <rect
+         x="59"
+         y="207"
+         width="501"
+         height="372"
+         id="rect1-8" />
+    </clipPath>
+    <clipPath
+       id="clip0-2">
+      <rect
+         x="59"
+         y="207"
+         width="501"
+         height="372"
+         id="rect1-4" />
+    </clipPath>
+    <clipPath
+       id="clip0-22">
+      <rect
+         x="390"
+         y="61"
+         width="500"
+         height="549"
+         id="rect1-1" />
+    </clipPath>
+  </defs>
+  <g
+     inkscape:label="Camada 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-69.082679,-38.709925)">
+    <g
+       clip-path="url(#clip0-22)"
+       transform="matrix(0.26458333,0,0,0.26458333,-31.247875,24.979328)"
+       id="g14">
+      <text
+         font-family="'GetVoIP Grotesque', 'GetVoIP Grotesque_MSFontService', sans-serif"
+         font-weight="700"
+         font-size="53px"
+         transform="translate(471.333,499)"
+         id="text1">FORECAST</text>
+      <text
+         font-family="'GetVoIP Grotesque', 'GetVoIP Grotesque_MSFontService', sans-serif"
+         font-weight="700"
+         font-size="53px"
+         transform="translate(489.253,563)"
+         id="text2">ALCHEMY</text>
+      <path
+         d="m 579.767,148.463 c 80.251,-18.425 159.701,29.329 177.456,106.662 17.756,77.332 -32.907,154.96 -113.158,173.385 -80.251,18.425 -159.701,-29.329 -177.456,-106.662 -17.756,-77.332 32.907,-154.96 113.158,-173.385 z"
+         fill="#3370f5"
+         fill-rule="evenodd"
+         fill-opacity="0.85098"
+         id="path2" />
+      <path
+         d="m 696.349,134.383 c 51.204,-11.757 101.898,18.713 113.226,68.055 11.329,49.343 -20.997,98.873 -72.201,110.629 -51.204,11.756 -101.897,-18.713 -113.226,-68.056 -11.329,-49.342 20.997,-98.872 72.201,-110.628 z"
+         fill="#fcb75e"
+         fill-rule="evenodd"
+         fill-opacity="0.85098"
+         id="path3" />
+      <path
+         d="m 531.376,124.689 c 62.748,-14.407 124.87,22.932 138.753,83.399 13.883,60.467 -25.73,121.163 -88.479,135.57 -62.748,14.407 -124.87,-22.932 -138.753,-83.399 -13.883,-60.466 25.73,-121.163 88.479,-135.57 z"
+         fill="#8247cf"
+         fill-rule="evenodd"
+         fill-opacity="0.85098"
+         id="path4" />
+      <path
+         d="m 859.45,255.096 c 13.491,-3.098 26.848,4.93 29.833,17.931 2.985,13.001 -5.532,26.052 -19.024,29.149 -13.491,3.098 -26.848,-4.931 -29.833,-17.931 -2.985,-13.001 5.532,-26.052 19.024,-29.149 z"
+         fill="#3370f5"
+         fill-rule="evenodd"
+         fill-opacity="0.85098"
+         id="path5" />
+      <path
+         d="m 809.67,316.921 c 6.738,-1.547 13.409,2.463 14.899,8.956 1.491,6.493 -2.763,13.01 -9.501,14.557 -6.737,1.547 -13.408,-2.462 -14.899,-8.955 -1.491,-6.493 2.763,-13.011 9.501,-14.558 z"
+         fill="#ff7581"
+         fill-rule="evenodd"
+         fill-opacity="0.847059"
+         id="path6" />
+      <path
+         d="m 656.489,61.8205 c 10.462,-2.4021 20.819,3.8234 23.134,13.9048 2.314,10.0815 -4.29,20.2013 -14.752,22.6033 -10.462,2.4024 -20.82,-3.8234 -23.134,-13.9048 -2.315,-10.0815 4.29,-20.2013 14.752,-22.6033 z"
+         fill="#ff7581"
+         fill-rule="evenodd"
+         fill-opacity="0.847059"
+         id="path7" />
+      <path
+         d="M 0,12.165 C 0,5.44647 5.2484,0 11.7226,0 c 6.4742,0 11.7226,5.44647 11.7226,12.165 0,6.7186 -5.2484,12.1651 -11.7226,12.1651 C 5.2484,24.3301 0,18.8836 0,12.165 Z"
+         fill="#8247cf"
+         fill-rule="evenodd"
+         fill-opacity="0.85098"
+         transform="matrix(0.223773,0.974641,0.974641,-0.223773,387.766,260.889)"
+         id="path8" />
+      <path
+         d="m 444.144,397.713 c 7.59,-1.743 15.105,2.774 16.784,10.088 1.679,7.315 -3.113,14.657 -10.703,16.4 -7.59,1.742 -15.105,-2.774 -16.784,-10.089 -1.68,-7.314 3.112,-14.656 10.703,-16.399 z"
+         fill="#fcb75e"
+         fill-rule="evenodd"
+         fill-opacity="0.85098"
+         id="path9" />
+      <path
+         d="m 642.009,250.762 c 51.325,-11.784 102.137,18.757 113.492,68.215 11.356,49.458 -21.046,99.104 -72.371,110.888 -51.324,11.784 -102.137,-18.757 -113.492,-68.215 -11.355,-49.458 21.046,-99.104 72.371,-110.888 z"
+         fill="#ff7581"
+         fill-rule="evenodd"
+         fill-opacity="0.847059"
+         id="path10" />
+      <path
+         d="m 626.446,172.486 c 48.933,-11.235 97.377,17.883 108.203,65.036 10.826,47.153 -20.065,94.485 -68.998,105.72 -48.932,11.235 -97.376,-17.883 -108.202,-65.036 -10.826,-47.153 20.065,-94.485 68.997,-105.72 z"
+         fill="#ffffff"
+         fill-rule="evenodd"
+         fill-opacity="0.341176"
+         id="path11" />
+      <path
+         d="m 629.066,175.238 c 47.355,-10.872 94.237,17.307 104.714,62.94 10.478,45.633 -19.418,91.439 -66.773,102.312 -47.355,10.872 -94.237,-17.307 -104.714,-62.94 -10.477,-45.633 19.418,-91.439 66.773,-102.312 z"
+         fill="#262626"
+         fill-rule="evenodd"
+         fill-opacity="0.670588"
+         id="path12" />
+      <path
+         d="m 627.939,177.957 c 45.206,-10.379 89.961,16.521 99.962,60.083 10.002,43.562 -18.537,87.29 -63.743,97.669 -45.206,10.379 -89.96,-16.521 -99.962,-60.083 -10.001,-43.562 18.537,-87.29 63.743,-97.669 z"
+         fill="#262626"
+         fill-rule="evenodd"
+         id="path13" />
+      <text
+         fill="#ffffff"
+         font-family="'Days Sans Black', 'Days Sans Black_MSFontService', sans-serif"
+         font-weight="900"
+         font-size="59px"
+         transform="translate(598.465,279)"
+         id="text13">F</text>
+      <text
+         fill="#ffffff"
+         font-family="'Days Sans Black', 'Days Sans Black_MSFontService', sans-serif"
+         font-weight="900"
+         font-size="59px"
+         transform="translate(643.132,279)"
+         id="text14">A</text>
+    </g>
+  </g>
+</svg>

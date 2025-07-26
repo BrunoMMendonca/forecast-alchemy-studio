@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'GetVoIP Grotesque';
+  src: url('/fonts/GetVoIP Grotesque.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -97,6 +105,34 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Global placeholder styling - lighter text for better UX */
+  input::placeholder,
+  textarea::placeholder {
+    color: hsl(var(--muted-foreground) / 0.7) !important;
+    opacity: 1 !important;
+  }
+
+  /* For WebKit browsers (Chrome, Safari, Edge) */
+  input::-webkit-input-placeholder,
+  textarea::-webkit-input-placeholder {
+    color: hsl(var(--muted-foreground) / 0.7) !important;
+    opacity: 1 !important;
+  }
+
+  /* For Firefox */
+  input::-moz-placeholder,
+  textarea::-moz-placeholder {
+    color: hsl(var(--muted-foreground) / 0.7) !important;
+    opacity: 1 !important;
+  }
+
+  /* For IE/Edge */
+  input::-ms-input-placeholder,
+  textarea::-ms-input-placeholder {
+    color: hsl(var(--muted-foreground) / 0.7) !important;
+    opacity: 1 !important;
   }
 }
 

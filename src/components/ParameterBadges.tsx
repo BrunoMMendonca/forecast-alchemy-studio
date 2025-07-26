@@ -6,10 +6,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 interface ParameterBadgesProps {
   canOptimize: boolean;
   aiForecastModelOptimizationEnabled: boolean;
-  localSelectedMethod: 'ai' | 'grid' | 'manual' | undefined;
+  localSelectedMethod: string;
   cacheVersion: number;
-  onMethodChange: (method: 'ai' | 'grid' | 'manual') => void;
-  hasGridParameters?: boolean;
+  onMethodChange: (method: 'manual' | 'ai' | 'grid') => void;
+  hasGridParameters: boolean;
   bestMethod?: string;
   winnerMethod?: string;
   isWinner?: boolean;
@@ -21,10 +21,10 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
   localSelectedMethod,
   cacheVersion,
   onMethodChange,
-  hasGridParameters = false,
+  hasGridParameters,
   bestMethod,
   winnerMethod,
-  isWinner
+  isWinner,
 }) => {
   if (!canOptimize) {
     return (
@@ -40,14 +40,13 @@ export const ParameterBadges: React.FC<ParameterBadgesProps> = ({
 
   // Helper to render star icon for best method and winner
   const renderStar = (method: string) => {
+    if (isWinner && winnerMethod === method) {
+      // Filled yellow star for overall winner's method
+      return <Star className="inline-block h-4 w-4 text-yellow-400 ml-1" fill="#facc15" />;
+    }
     if (bestMethod === method) {
-      if (isWinner && winnerMethod === method) {
-        // Filled yellow star for overall winner's method
-        return <Star className="h-3 w-3 ml-1 text-yellow-500 fill-yellow-500 inline" />;
-      } else {
-        // Outline blue star for best method of this model
-        return <Star className="h-3 w-3 ml-1 text-blue-400 inline" />;
-      }
+      // Outlined star for best method (not overall winner)
+      return <Star className="inline-block h-4 w-4 text-yellow-400 ml-1" />;
     }
     return null;
   };

@@ -6,6 +6,7 @@ export class ARIMAModel extends BaseModel {
   static metadata = {
     id: 'arima',
     displayName: 'ARIMA (Autoregressive Integrated Moving Average)',
+    shortName: 'ARIMA',
     parameters: [
       { name: 'p', type: 'number', default: 1, visible: true, label: 'AR Order (p)', description: 'Number of autoregressive terms.' },
       { name: 'd', type: 'number', default: 1, visible: true, label: 'Difference Order (d)', description: 'Number of nonseasonal differences needed for stationarity.' },

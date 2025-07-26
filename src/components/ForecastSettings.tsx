@@ -11,6 +11,8 @@ import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useGlobalSettings } from '@/hooks/useGlobalSettings';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { ZustandStoreDebugger } from './ModelUIDebugPanel';
 
 interface ForecastSettingsProps {
   forecastPeriods: number;
@@ -33,6 +35,7 @@ interface ForecastSettingsProps {
   rmseWeight: number;
   maeWeight: number;
   accuracyWeight: number;
+  
   setWeights: (weights: { mape: number; rmse: number; mae: number; accuracy: number }) => void;
 }
 
@@ -85,7 +88,7 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
   const [editAccuracy, setEditAccuracy] = useState(accuracyWeight);
   
   // Calculate total
-  const total = editMape + editRmse + editMae + editAccuracy;
+  const total = editMape + editRmse + editMae ;
   const isValid = total === 100;
 
   // Color palette for the bar
@@ -94,7 +97,6 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
     { label: 'MAPE', value: editMape, color: colors[0] },
     { label: 'RMSE', value: editRmse, color: colors[1] },
     { label: 'MAE', value: editMae, color: colors[2] },
-    { label: 'Accuracy', value: editAccuracy, color: colors[3] },
   ], [editMape, editRmse, editMae, editAccuracy]);
 
   // Minimum percent to show label inside bar
@@ -142,7 +144,16 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
     setEditAccuracy(DEFAULT_WEIGHTS.accuracy);
   };
 
+  // Debugger toggle state (could be moved to global settings)
+  const [debugEnabled, setDebugEnabled] = useState(false);
+
   return (
+    <Tabs defaultValue="settings" className="w-full">
+      <TabsList>
+        <TabsTrigger value="settings">Settings</TabsTrigger>
+        <TabsTrigger value="debug">Debug</TabsTrigger>
+      </TabsList>
+      <TabsContent value="settings">
     <div className="space-y-8">
       {/* Composite Score Weights Section */}
       <div className="space-y-2">
@@ -218,9 +229,9 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
             />
           </div>
           <div>
-            <Label htmlFor="accuracy-weight">Accuracy Weight</Label>
+            <Label htmlFor="-weight">Accuracy Weight</Label>
             <Input
-              id="accuracy-weight"
+              id="-weight"
               type="number"
               min={0}
               max={100}
@@ -373,7 +384,7 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
             </span>
           </div>
           <p className="text-sm text-slate-500">
-            Use the Grok API to optimize model parameters for best forecast accuracy. When disabled, traditional grid search will be used.
+            Use the Grok API to optimize model parameters for best forecast . When disabled, traditional grid search will be used.
           </p>
           
           {/* AI Failure Threshold & Business Context */}
@@ -458,5 +469,17 @@ export const ForecastSettings: React.FC<ForecastSettingsProps> = ({
         </p>
       </div>
     </div>
+      </TabsContent>
+      <TabsContent value="debug">
+        <div className="space-y-4">
+          <Label htmlFor="debug-toggle" className="text-lg">Zustand Debugger</Label>
+          <div className="flex items-center gap-2">
+            <Switch id="debug-toggle" checked={debugEnabled} onCheckedChange={setDebugEnabled} />
+            <span className="text-sm text-slate-600">{debugEnabled ? 'Enabled' : 'Disabled'}</span>
+          </div>
+          {debugEnabled && <ZustandStoreDebugger />}
+        </div>
+      </TabsContent>
+    </Tabs>
   );
 };

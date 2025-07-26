@@ -27,70 +27,58 @@ export class GridOptimizer {
   }
 
   // Generate SARIMA parameters with the correct seasonal period
-  generateSARIMAParameters() {
+  async generateSARIMAParameters() {
     // Get seasonal period from global settings (this should match the dataset frequency)
-    return new Promise(async (resolve) => {
-      try {
-        const db = (await import('../db.js')).db;
-        db.get("SELECT value FROM settings WHERE key = 'global_seasonalPeriods'", [], async (err, row) => {
-          if (!err && row) {
+    try {
+      const { pgPool } = await import('../db.js');
+      const result = await pgPool.query("SELECT value FROM settings WHERE key = 'global_seasonalPeriods'", []);
+      
+      if (result.rows.length > 0) {
             try {
-              const seasonalPeriods = JSON.parse(row.value);
-              const sarimaParams = this.createSARIMAParameters(seasonalPeriods);
-              resolve(sarimaParams);
+          const seasonalPeriods = JSON.parse(result.rows[0].value);
+          return this.createSARIMAParameters(seasonalPeriods);
             } catch (e) {
               console.error('Error parsing seasonal periods setting:', e);
               // Fallback: try to get from frequency setting
-              db.get("SELECT value FROM settings WHERE key = 'global_frequency'", [], (err, freqRow) => {
-                if (!err && freqRow) {
+          const freqResult = await pgPool.query("SELECT value FROM settings WHERE key = 'global_frequency'", []);
+          if (freqResult.rows.length > 0) {
                   try {
-                    const frequency = JSON.parse(freqRow.value);
+              const frequency = JSON.parse(freqResult.rows[0].value);
                     const seasonalPeriods = this.getSeasonalPeriodsFromFrequency(frequency);
-                    const sarimaParams = this.createSARIMAParameters(seasonalPeriods);
-                    resolve(sarimaParams);
+              return this.createSARIMAParameters(seasonalPeriods);
                   } catch (e) {
                     console.error('Error parsing frequency setting:', e);
                     // Default to monthly (12)
-                    const sarimaParams = this.createSARIMAParameters(12);
-                    resolve(sarimaParams);
+              return this.createSARIMAParameters(12);
                   }
                 } else {
                   // Default to monthly (12)
-                  const sarimaParams = this.createSARIMAParameters(12);
-                  resolve(sarimaParams);
+            return this.createSARIMAParameters(12);
                 }
-              });
             }
           } else {
             // Fallback: try to get from frequency setting
-            db.get("SELECT value FROM settings WHERE key = 'global_frequency'", [], (err, freqRow) => {
-              if (!err && freqRow) {
+        const freqResult = await pgPool.query("SELECT value FROM settings WHERE key = 'global_frequency'", []);
+        if (freqResult.rows.length > 0) {
                 try {
-                  const frequency = JSON.parse(freqRow.value);
+            const frequency = JSON.parse(freqResult.rows[0].value);
                   const seasonalPeriods = this.getSeasonalPeriodsFromFrequency(frequency);
-                  const sarimaParams = this.createSARIMAParameters(seasonalPeriods);
-                  resolve(sarimaParams);
+            return this.createSARIMAParameters(seasonalPeriods);
                 } catch (e) {
                   console.error('Error parsing frequency setting:', e);
                   // Default to monthly (12)
-                  const sarimaParams = this.createSARIMAParameters(12);
-                  resolve(sarimaParams);
+            return this.createSARIMAParameters(12);
                 }
               } else {
                 // Default to monthly (12)
-                const sarimaParams = this.createSARIMAParameters(12);
-                resolve(sarimaParams);
+          return this.createSARIMAParameters(12);
               }
-            });
           }
-        });
       } catch (error) {
         console.error('Error getting seasonal periods for SARIMA:', error);
         // Default to monthly (12)
-        const sarimaParams = this.createSARIMAParameters(12);
-        resolve(sarimaParams);
+      return this.createSARIMAParameters(12);
       }
-    });
   }
 
   // Helper function to get seasonal periods from frequency
@@ -415,6 +403,13 @@ export class GridOptimizer {
       
       // Pass seasonalPeriod for seasonal models
       const model = await this.modelFactory.createModel(modelType, parameters, seasonalPeriod);
+
+      console.log(`[GridOptimizer] Created model instance:`, {
+        modelType,
+        instanceType: model.constructor.name,
+        hasTrainMethod: typeof model.train === 'function',
+        trainMethodSource: model.train.toString().substring(0, 50)
+      });
 
       await model.train(trainingData);
       

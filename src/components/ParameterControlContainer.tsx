@@ -3,10 +3,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { ModelConfig, SalesData } from '@/types/forecast';
-import { useParameterControlLogic } from '@/hooks/useParameterControlLogic';
 import { ParameterBadges } from './ParameterBadges';
 import { ParameterSliders } from './ParameterSliders';
 import { ParameterStatusDisplay } from './ParameterStatusDisplay';
+import { useModelUIStore, ModelMethod } from '@/store/optimizationStore';
 
 interface ParameterControlContainerProps {
   model: ModelConfig;
@@ -17,6 +17,8 @@ interface ParameterControlContainerProps {
   onMethodSelection?: (method: 'ai' | 'grid' | 'manual') => void;
   disabled?: boolean;
   aiForecastModelOptimizationEnabled?: boolean;
+  filePath: string;
+  uuid: string;
 }
 
 export const ParameterControlContainer: React.FC<ParameterControlContainerProps> = ({
@@ -28,36 +30,34 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
   onMethodSelection,
   disabled = false,
   aiForecastModelOptimizationEnabled = true,
+  filePath,
+  uuid,
 }) => {
-  const {
-    isReasoningExpanded,
-    setIsReasoningExpanded,
-    localSelectedMethod,
-    setLocalSelectedMethod,
-    optimizationData,
-    isManual,
-    getParameterValue,
-    canOptimize,
-    hasParameters,
-    hasOptimizationResults,
-    cacheVersion
-  } = useParameterControlLogic(model, selectedSKU, data, onParameterUpdate);
+  console.log('[ParameterControlContainer] filePath:', filePath, 'uuid:', uuid, 'modelId:', model.id);
+  const modelUI = useModelUIStore(state => state.getModelUIState(filePath, uuid, selectedSKU, model.id));
+  const setSelectedMethod = useModelUIStore(state => state.setSelectedMethod);
+  const setParameters = useModelUIStore(state => state.setParameters);
 
-  const handleParameterChange = useCallback((parameter: string, values: number[]) => {
-    const newValue = values[0];
-    onParameterUpdate(parameter, newValue);
-  }, [onParameterUpdate]);
+  // Use selectedMethod from Zustand, or default to grid/ai/manual based on available parameters
+  const localSelectedMethod =
+    modelUI?.selectedMethod ||
+    (modelUI?.grid?.parameters ? 'grid' : modelUI?.ai?.parameters ? 'ai' : 'manual');
 
-  // Handle badge clicks with immediate local state update
-  const handlePreferenceChange = useCallback((newMethod: 'manual' | 'ai' | 'grid') => {
-    // Prevent duplicate calls by checking if we're already in this method
-    if (localSelectedMethod === newMethod) {
-      return;
-    }
-    
-    // Update local state immediately for visual feedback
-    setLocalSelectedMethod(newMethod);
-    
+  // Get parameters for the selected method from Zustand
+  const getParameterValue = (parameter: string): number | undefined => {
+    const methodState = modelUI?.[localSelectedMethod as ModelMethod];
+    return methodState?.parameters?.[parameter];
+  };
+
+  // Handle badge clicks
+  const handlePreferenceChange = (newMethod: ModelMethod) => {
+    console.log('[handlePreferenceChange] Attempting to set method:', newMethod, 'for', { filePath, uuid, selectedSKU, modelId: model.id });
+    if (localSelectedMethod === newMethod) return;
+    setSelectedMethod(filePath, uuid, selectedSKU, model.id, newMethod);
+    setTimeout(() => {
+      const updatedModelUI = useModelUIStore.getState().getModelUIState(filePath, uuid, selectedSKU, model.id);
+      console.log('[handlePreferenceChange] After setSelectedMethod, modelUI:', updatedModelUI);
+    }, 100);
     if (onMethodSelection) {
       onMethodSelection(newMethod);
     } else {
@@ -65,32 +65,34 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
         onResetToManual();
       }
     }
-  }, [localSelectedMethod, onMethodSelection, onResetToManual, setLocalSelectedMethod]);
+  };
 
   // Helper to determine if best parameters differ from manualParameters
-  const bestParams = model.bestSource === 'ai' ? model.aiParameters : model.gridParameters;
-  const canCopyBestToManual = !!model.bestSource && bestParams && JSON.stringify(bestParams) !== JSON.stringify(model.manualParameters);
+  const bestParams = modelUI?.grid?.parameters || modelUI?.ai?.parameters;
+  const manualParams = modelUI?.manual?.parameters;
+  const canCopyBestToManual = bestParams && manualParams && JSON.stringify(bestParams) !== JSON.stringify(manualParams);
 
   // Handler for copying best to manual
-  const handleCopyBestToManual = useCallback(() => {
+  const handleCopyBestToManual = () => {
     if (!bestParams) return;
-    // Update each parameter in manualParameters and parameters
-    Object.entries(bestParams).forEach(([param, value]) => {
-      onParameterUpdate(param, value as number);
-    });
-    // Switch to manual mode
-    setLocalSelectedMethod('manual');
+    setParameters(filePath, uuid, selectedSKU, model.id, 'manual', { parameters: { ...bestParams } });
+    setSelectedMethod(filePath, uuid, selectedSKU, model.id, 'manual');
     if (onMethodSelection) {
       onMethodSelection('manual');
     } else {
       onResetToManual();
     }
-  }, [bestParams, onParameterUpdate, setLocalSelectedMethod, onMethodSelection, onResetToManual]);
+  };
 
   // If model has no parameters, don't render anything
+  const hasParameters = model.parameters && Object.keys(model.parameters).length > 0;
   if (!hasParameters) {
     return null;
   }
+
+  // Winner/compositeScore from Zustand
+  const isWinner = !!modelUI?.[localSelectedMethod as ModelMethod]?.isWinner;
+  const compositeScore = modelUI?.[localSelectedMethod as ModelMethod]?.compositeScore;
 
   return (
     <Card className="w-full">
@@ -101,64 +103,41 @@ export const ParameterControlContainer: React.FC<ParameterControlContainerProps>
             <div className="flex items-center space-x-3">
               <Settings className="h-4 w-4" />
               <span className="font-medium">Parameters</span>
+              {/* {isWinner && <span className="ml-2 px-2 py-1 bg-yellow-300 text-yellow-900 rounded text-xs font-bold">Winner</span>} */}
             </div>
             <div className="flex items-center gap-2">
               <ParameterBadges
-                canOptimize={canOptimize}
+                canOptimize={hasParameters}
                 aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
                 localSelectedMethod={localSelectedMethod}
-                cacheVersion={cacheVersion}
+                cacheVersion={0}
                 onMethodChange={handlePreferenceChange}
-                hasGridParameters={!!model.gridParameters}
-                bestMethod={model.bestMethod}
-                winnerMethod={model.winnerMethod}
-                isWinner={model.isWinner}
+                hasGridParameters={!!modelUI?.grid?.parameters}
+                bestMethod={undefined}
+                winnerMethod={undefined}
+                isWinner={isWinner}
               />
-              {/* Copy Best to Manual Button */}
-              {canCopyBestToManual && (
-                <button
-                  className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded border border-blue-300 hover:bg-blue-200"
-                  onClick={handleCopyBestToManual}
-                  disabled={!canCopyBestToManual}
-                  title="Copy the best (Grid/AI) parameters to Manual for further tuning"
-                >
-                  Copy Best to Manual
-                </button>
-              )}
             </div>
           </div>
 
           {/* Parameter sliders - always visible */}
           <ParameterSliders
             model={model}
-            isManual={isManual}
-            disabled={disabled}
+            modelId={model.id}
+            isManual={localSelectedMethod === 'manual'}
+            disabled={disabled || localSelectedMethod !== 'manual'}
             getParameterValue={getParameterValue}
-            onParameterChange={handleParameterChange}
+            onParameterChange={(parameter, values) => {
+              const v = Array.isArray(values) ? values[0] : values;
+              setParameters(filePath, uuid, selectedSKU, model.id, localSelectedMethod, { parameters: { ...(modelUI?.[localSelectedMethod]?.parameters || {}), [parameter]: v } });
+              if (typeof v === 'number') {
+                onParameterUpdate(parameter, v);
+              }
+            }}
           />
 
-          {/* Optimization reasoning - collapsible */}
-          {hasOptimizationResults && (
-            <Collapsible open={isReasoningExpanded} onOpenChange={setIsReasoningExpanded}>
-              <CollapsibleTrigger asChild>
-                <div className="flex items-center space-x-2 cursor-pointer hover:bg-slate-50 p-2 rounded">
-                  {isReasoningExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  <span className="text-sm font-medium">Optimization Details</span>
-                </div>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="pt-2">
-                  <ParameterStatusDisplay
-                    canOptimize={canOptimize}
-                    isManual={isManual}
-                    optimizationData={optimizationData}
-                    hasOptimizationResults={hasOptimizationResults}
-                    localSelectedMethod={localSelectedMethod}
-                  />
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
+          {/* Optimization reasoning - collapsible (if needed) */}
+          {/* TODO: Reimplement optimization reasoning/expansion logic in new structure if needed */}
         </div>
       </CardContent>
     </Card>

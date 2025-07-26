@@ -59,10 +59,23 @@ export const useModelParameters = (aiForecastModelOptimizationEnabled: boolean =
       // Only allow updates to valid parameter keys
       const validKeys = model.defaultParameters ? Object.keys(model.defaultParameters) : [];
       if (!validKeys.includes(parameter)) return model;
+      const newManualParameters = { ...model.manualParameters, [parameter]: value };
+      const newParameters = { ...model.manualParameters, [parameter]: value };
+      // Parameter audit log
+      const paramKeys = Object.keys(newParameters);
+      if (paramKeys.some(k => !validKeys.includes(k))) {
+        console.error(
+          `[PARAM AUDIT] Model: ${model.id}, Unexpected keys after updateParameter:`,
+          paramKeys.filter(k => !validKeys.includes(k)),
+          new Error().stack
+        );
+      } else {
+        console.log(`[PARAM AUDIT] Model: ${model.id}, Parameters after updateParameter:`, newParameters);
+      }
       return {
         ...model,
-        manualParameters: { ...model.manualParameters, [parameter]: value },
-        parameters: { ...model.manualParameters, [parameter]: value }, // Active set is manual when editing
+        manualParameters: newManualParameters,
+        parameters: newParameters,
         // Clear optimization data when manually changing parameters
         gridParameters: model.gridParameters,
         aiParameters: model.aiParameters,
@@ -75,13 +88,26 @@ export const useModelParameters = (aiForecastModelOptimizationEnabled: boolean =
   }, []);
 
   const resetModel = useCallback((modelId: string) => {
-    setModels(prev => prev.map(model => 
-      model.id === modelId 
-        ? { 
+    setModels(prev => prev.map(model => {
+      if (model.id !== modelId) return model;
+      const validKeys = model.defaultParameters ? Object.keys(model.defaultParameters) : [];
+      const newManualParameters = { ...model.defaultParameters };
+      const newParameters = { ...model.defaultParameters };
+      // Parameter audit log
+      const paramKeys = Object.keys(newParameters);
+      if (paramKeys.some(k => !validKeys.includes(k))) {
+        console.error(
+          `[PARAM AUDIT] Model: ${model.id}, Unexpected keys after resetModel:`,
+          paramKeys.filter(k => !validKeys.includes(k)),
+          new Error().stack
+        );
+      } else {
+        console.log(`[PARAM AUDIT] Model: ${model.id}, Parameters after resetModel:`, newParameters);
+      }
+      return {
             ...model, 
-            // Reset to original default parameters
-            manualParameters: { ...model.defaultParameters },
-            parameters: { ...model.defaultParameters },
+        manualParameters: newManualParameters,
+        parameters: newParameters,
             gridParameters: model.gridParameters,
             aiParameters: model.aiParameters,
             bestSource: model.bestSource,
@@ -89,9 +115,8 @@ export const useModelParameters = (aiForecastModelOptimizationEnabled: boolean =
             optimizationReasoning: undefined,
             optimizationMethod: undefined,
             isWinner: false
-          }
-        : model
-    ));
+      };
+    }));
   }, []);
 
   const updateModelOptimization = useCallback((modelId: string, optimizationData: any) => {

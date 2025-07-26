@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NormalizedSalesData, ForecastResult } from '@/pages/Index';
+import { NormalizedSalesData, ForecastResult } from '@/types/forecast';
 
 export const useAppState = () => {
   const [salesData, setSalesData] = useState<NormalizedSalesData[]>([]);

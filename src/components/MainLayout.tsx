@@ -1,93 +1,66 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { FloatingSettingsButton } from '@/components/FloatingSettingsButton';
 import { StepNavigation } from '@/components/StepNavigation';
-import { List, Loader2, CheckCircle, XCircle, X } from 'lucide-react';
+import { List, Loader2, CheckCircle, XCircle, X, LogOut, User } from 'lucide-react';
 import { useUnifiedState } from '@/hooks/useUnifiedState';
 import { fetchAvailableModels } from '@/utils/modelConfig';
-import { JobSummary, useBackendJobStatus } from '@/hooks/useBackendJobStatus';
 import { useGlobalSettings } from '@/hooks/useGlobalSettings';
 import { useExistingDataDetection } from '@/hooks/useExistingDataDetection';
 import { cn } from '@/lib/utils';
 import { OptimizationQueuePopup } from '@/components/OptimizationQueuePopup';
 import { useToast } from '@/hooks/use-toast';
-import { Job } from '@/types/optimization';
 import { CsvUploadResult } from '@/components/CsvImportWizard';
 import { ForecastResult, ModelConfig } from '@/types/forecast';
 import { useSKUStore } from '@/store/skuStore';
+import { useOptimizationStatusContext } from '@/contexts/OptimizationStatusContext';
 
-interface JobMonitorButtonProps {
-  summary: JobSummary;
-  onOpen: () => void;
-}
+const JobMonitorButton = ({ onOpen }: { onOpen: () => void }) => {
+  const { summary } = useOptimizationStatusContext();
 
-const defaultSummary: JobSummary = {
-  total: 0,
-  pending: 0,
-  running: 0,
-  completed: 0,
-  failed: 0,
-  cancelled: 0,
-  isOptimizing: false,
-  progress: 0,
-  batchTotal: 0,
-  batchCompleted: 0
-};
-
-const JobMonitorButton = ({ summary = defaultSummary, onOpen }: JobMonitorButtonProps) => {
-  const getButtonContent = () => {
-    if (summary.isOptimizing) {
-      return {
-        icon: <Loader2 className="h-4 w-4 mr-2 animate-spin" />,
-        text: `Processing jobs: ${summary.batchCompleted}/${summary.batchTotal}`,
-        variant: 'default',
-        className: 'bg-blue-600 hover:bg-blue-700 text-white',
-      };
-    }
+  // Determine badge content and color
+  let badge;
+  if (summary.isOptimizing) {
+    badge = (
+      <span className="flex items-center gap-1 text-xs text-blue-100 bg-blue-500 rounded-full px-3 py-1 animate-pulse transition ring-0 hover:ring-2 hover:ring-blue-300 cursor-pointer" onClick={onOpen}>
+        <span className="w-2 h-2 bg-blue-200 rounded-full"></span>
+        Active
+      </span>
+    );
+  } else {
     const totalProcessable = summary.total - summary.cancelled;
     if (summary.total > 0 && summary.completed + summary.failed === totalProcessable) {
-       if (summary.failed > 0) {
-        return {
-          icon: <XCircle className="h-4 w-4 mr-2" />,
-          text: `Finished (${summary.failed} Failed${summary.cancelled > 0 ? `, ${summary.cancelled} Cancelled` : ''})`,
-          variant: 'destructive',
-          className: '',
-        };
+      if (summary.failed > 0) {
+        badge = (
+          <span className="flex items-center gap-1 text-xs text-red-600 bg-red-100 rounded-full px-3 py-1 transition ring-0 hover:ring-2 hover:ring-red-300 cursor-pointer" onClick={onOpen}>
+            <span className="w-2 h-2 bg-red-400 rounded-full"></span>
+            Failed
+          </span>
+        );
+      } else {
+        badge = (
+          <span className="flex items-center gap-1 text-xs text-green-700 bg-green-100 rounded-full px-3 py-1 transition ring-0 hover:ring-2 hover:ring-green-300 cursor-pointer" onClick={onOpen}>
+            <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+            Complete
+          </span>
+        );
       }
-      return {
-        icon: <CheckCircle className="h-4 w-4 mr-2" />,
-        text: `Processing Complete${summary.cancelled > 0 ? ` (${summary.cancelled} Cancelled)` : ''}`,
-        variant: 'default',
-        className: 'bg-green-600 hover:bg-green-700 text-white',
-      };
+    } else {
+      // Idle state
+      badge = (
+        <span className="flex items-center gap-1 text-xs text-gray-600 bg-gray-200 rounded-full px-3 py-1 transition ring-0 hover:ring-2 hover:ring-gray-400 cursor-pointer" onClick={onOpen}>
+          <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
+          Idle
+        </span>
+      );
     }
-    return {
-      icon: <List className="h-4 w-4 mr-2" />,
-      text: 'View Job Monitor',
-      variant: 'outline',
-      className: '',
-    };
-  };
-
-  const { icon, text, variant, className } = getButtonContent();
+  }
 
   return (
-        <div
-          className={cn(
-            "shadow-lg rounded-full flex items-center transition-all h-12",
-            className
-          )}
-        >
-          <Button
-              variant={variant as any}
-              className="rounded-full h-12 px-6 flex items-center"
-              onClick={onOpen}
-          >
-              {icon}
-              <span className="font-semibold">{text}</span>
-          </Button>
-        </div>
+    <div className="flex items-center transition-all h-12">
+      {badge}
+    </div>
   );
 };
 
@@ -96,19 +69,55 @@ export const MainLayout: React.FC = () => {
   const showFloatingButton = location.pathname.startsWith('/forecast');
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+
+  // Ref for StepNavigation
+  const stepNavRef = useRef<HTMLDivElement | null>(null);
+  const [floatingTop, setFloatingTop] = useState<number>(48); // default fallback
+
+  // Load user info on mount
+  useEffect(() => {
+    const loadUserInfo = async () => {
+      try {
+        const sessionToken = localStorage.getItem('sessionToken');
+        if (sessionToken) {
+          const response = await fetch('/api/auth/me', {
+            headers: {
+              'Authorization': `Bearer ${sessionToken}`
+            }
+          });
+          if (response.ok) {
+            const result = await response.json();
+            setUser(result.user);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load user info:', error);
+      }
+    };
+    loadUserInfo();
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('sessionToken');
+    localStorage.removeItem('refreshToken');
+    window.location.reload();
+  };
 
   // === Hoisted State for ForecastPage ===
   const [currentStep, setCurrentStep] = useState(0);
   const [processedDataInfo, setProcessedDataInfo] = useState<CsvUploadResult | null>(null);
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
+  
   const [aiError, setAiError] = useState<string | null>(null);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [isAutoLoading, setIsAutoLoading] = useState(true);
   const [models, setModels] = useState<ModelConfig[]>([]); // Local model state
+  const [modelsLoaded, setModelsLoaded] = useState(false); // Track if models have been successfully loaded
   const [datasetCount, setDatasetCount] = useState<number>(1);
+  const modelsLoadAttemptedRef = useRef(false); // Track if we've attempted to load models
   // =====================================
 
-  const { jobs, summary, isPaused, setIsPaused } = useBackendJobStatus(batchId);
   const globalSettings = useGlobalSettings({
     onSettingsChange: async (changedSetting: string) => {
       // Trigger optimization when metric weights change
@@ -137,7 +146,7 @@ export const MainLayout: React.FC = () => {
                   models: modelIds,
                   method,
                   reason: 'metric_weight_change',
-                  filePath: processedDataInfo.filePath,
+                  datasetId: processedDataInfo.datasetId,
                   batchId: Date.now().toString()
                 }),
               });
@@ -207,26 +216,35 @@ export const MainLayout: React.FC = () => {
     return () => clearTimeout(timer);
   }, [location.pathname, processedDataInfo, autoLoadLastDataset, setProcessedDataInfo, setCurrentStep, toast]);
 
-  // Auto-select first SKU after data load if none is selected
   useEffect(() => {
-    if (
-      processedDataInfo &&
-      (!selectedSKU || !processedDataInfo.skuList?.includes(selectedSKU)) &&
-      processedDataInfo.skuList &&
-      processedDataInfo.skuList.length > 0
-    ) {
+    // Clear persisted SKU if there are no datasets/SKUs loaded
+    if (!processedDataInfo || !processedDataInfo.skuList || processedDataInfo.skuList.length === 0) {
+      localStorage.removeItem('sku-storage');
+      setSelectedSKU('');
+    } else if (!selectedSKU || !processedDataInfo.skuList.includes(selectedSKU)) {
       setSelectedSKU(processedDataInfo.skuList[0]);
     }
   }, [processedDataInfo, selectedSKU, setSelectedSKU]);
 
   // Fetch models from backend on app start
   useEffect(() => {
+    // Only load models once on mount
+    if (modelsLoadAttemptedRef.current) {
+      return;
+    }
+    modelsLoadAttemptedRef.current = true;
+
     async function loadModels() {
       try {
         const backendModels = await fetchAvailableModels();
         
         if (!backendModels || backendModels.length === 0) {
+          // Only clear models if we haven't successfully loaded any yet
+          if (!modelsLoaded) {
           setModels([]);
+          } else {
+            console.warn('[MainLayout] Backend returned no models, but keeping existing models loaded');
+          }
           return;
         }
         
@@ -261,20 +279,26 @@ export const MainLayout: React.FC = () => {
         });
         
         setModels(transformedModels);
+        setModelsLoaded(true);
       } catch (err) {
-        setModels([]); // Set empty array on error
+        // Only clear models if we haven't successfully loaded any yet
+        if (!modelsLoaded) {
+          setModels([]); // Set empty array on error only if no models were loaded before
+        } else {
+          console.warn('[MainLayout] Failed to fetch models from backend, but keeping existing models loaded:', err);
+        }
       }
     }
     loadModels();
-  }, [setModels]);
+  }, []); // Empty dependency array - only run once on mount
 
   useEffect(() => {
     async function fetchDatasetCount() {
       try {
-        const res = await fetch('/api/datasets/count');
+        const res = await fetch('/api/detect-existing-data');
         if (res.ok) {
           const data = await res.json();
-          setDatasetCount(data.count || 1);
+          setDatasetCount(data.datasets?.length || 1);
         }
       } catch (e) {
         setDatasetCount(1);
@@ -287,6 +311,13 @@ export const MainLayout: React.FC = () => {
     setCurrentStep(stepIndex);
   };
 
+  // Explicit function to clear models (for dataset changes, etc.)
+  const clearModels = useCallback(() => {
+    setModels([]);
+    setModelsLoaded(false);
+    modelsLoadAttemptedRef.current = false; // Allow reloading in the future
+  }, []);
+
   // Model update function
   const updateModel = useCallback((modelId: string, updates: Partial<ModelConfig>) => {
     setModels(prev => prev.map(model =>
@@ -294,15 +325,20 @@ export const MainLayout: React.FC = () => {
     ));
   }, []);
 
+  // Wrapper function for setForecastResults
+  const setForecastResultsWithLogging = useCallback((results: ForecastResult[]) => {
+    setForecastResults(results);
+  }, []);
+
   const outletContext = {
-    summary,
+    summary: processedDataInfo?.summary ?? null,
     ...globalSettings,
     currentStep,
     setCurrentStep,
     processedDataInfo,
     setProcessedDataInfo,
     forecastResults,
-    setForecastResults,
+    setForecastResults: setForecastResultsWithLogging,
     aiError,
     setAiError,
     batchId,
@@ -310,20 +346,47 @@ export const MainLayout: React.FC = () => {
     isAutoLoading,
     models,
     updateModel,
+    clearModels,
   };
+
+  useEffect(() => {
+    if (stepNavRef.current) {
+      const rect = stepNavRef.current.getBoundingClientRect();
+      // Add scroll offset for sticky headers, etc.
+      setFloatingTop(rect.top + window.scrollY);
+    }
+  }, [stepNavRef, currentStep, location.pathname]);
 
   return (
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white dark:bg-gray-800 shadow-sm">
           <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+            <div className="flex items-center">
+              <img src="/forecast_alchemy_logo.svg" alt="Forecast Alchemy Logo" className="h-10 w-auto mr-2" />
+              <h1 className="text-xl font-bold text-gray-800 dark:text-gray-200">Forecast Alchemy</h1>
+            </div>
+            <div className="flex items-center gap-4">
+              {user && (
+                <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <User className="h-5 w-5" />
+                  <span>{user.username}</span>
+                </div>
+              )}
+              <Button variant="ghost" onClick={handleLogout} className="flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
+                <LogOut className="h-4 w-4" />
+                <span>Logout</span>
+              </Button>
+            </div>
           </div>
-          <StepNavigation
-            currentStep={currentStep}
-            onStepClick={handleStepClick}
-            uploadSummary={processedDataInfo?.summary ?? null}
-            forecastResultsLength={forecastResults.length}
-          />
+          <div ref={stepNavRef}>
+            <StepNavigation
+              currentStep={currentStep}
+              onStepClick={handleStepClick}
+              uploadSummary={processedDataInfo?.summary ?? null}
+              forecastResultsLength={forecastResults.length}
+            />
+          </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
           <Outlet context={outletContext} />
@@ -332,40 +395,36 @@ export const MainLayout: React.FC = () => {
       <OptimizationQueuePopup
           isOpen={isQueueOpen}
           onOpenChange={setIsQueueOpen}
-          jobs={jobs as Job[]}
-          summary={summary}
-          isPaused={isPaused}
-          setIsPaused={setIsPaused}
           currentDataset={processedDataInfo ? {
-            filePath: processedDataInfo.filePath,
-            filename: processedDataInfo.filePath?.split('/').pop(),
-            name: processedDataInfo.filePath?.split('/').pop()?.replace(/\.(csv|json)$/, '')
+            datasetId: processedDataInfo.datasetId,
+            filename: processedDataInfo.datasetId ? `dataset_${processedDataInfo.datasetId}` : undefined,
+            name: processedDataInfo.datasetId ? `dataset_${processedDataInfo.datasetId}` : undefined
           } : null}
           selectedSKU={selectedSKU}
           skuCount={processedDataInfo?.skuList ? new Set(processedDataInfo.skuList).size : (processedDataInfo?.summary?.skuCount || 1)}
           datasetCount={datasetCount}
       />
       {/* Floating container for Job Monitor and Setup button */}
-      <div className="fixed top-6 right-6 z-50 flex flex-row items-center gap-4 min-w-[260px]">
-        <JobMonitorButton summary={summary} onOpen={() => setIsQueueOpen(true)} />
+      <div
+        className="fixed right-16 z-50 flex flex-row items-center gap-4"
+        style={{ top: `${floatingTop}px` }}
+      >
+        <JobMonitorButton onOpen={() => setIsQueueOpen(true)} />
         <FloatingSettingsButton
           {...globalSettings}
           settingsOpen={settingsOpen}
           setSettingsOpen={setSettingsOpen}
           currentDataset={processedDataInfo ? {
-            filePath: processedDataInfo.filePath,
-            filename: processedDataInfo.filePath?.split('/').pop(),
-            name: processedDataInfo.filePath?.split('/').pop()?.replace(/\.(csv|json)$/, '')
+            datasetId: processedDataInfo.datasetId,
+            filename: processedDataInfo.datasetId ? `dataset_${processedDataInfo.datasetId}` : undefined,
+            name: processedDataInfo.datasetId ? `dataset_${processedDataInfo.datasetId}` : undefined
           } : null}
           selectedSKU={selectedSKU}
           skuCount={processedDataInfo?.skuList ? new Set(processedDataInfo.skuList).size : (processedDataInfo?.summary?.skuCount || 1)}
           datasetCount={datasetCount}
         />
       </div>
-      {/* Floating logo container, top left */}
-      <div className="fixed top-4 left-6 z-50">
-        <img src="/forecast_alchemy_logo.svg" alt="Forecast Alchemy Logo" className="h-20 w-auto" />
-      </div>
+      {/* Zustand debug panel moved to Debug tab in settings */}
     </div>
   );
 };

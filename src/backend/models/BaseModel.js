@@ -3,10 +3,38 @@ export class BaseModel {
   constructor(parameters = {}) {
     this.parameters = parameters;
     this.name = 'BaseModel';
+    this.columnMapping = null; // Will be set during training
+  }
+
+  // Helper method to get column value using mapping or fallback
+  getColumnValue(row, role, fallbackName) {
+    if (this.columnMapping && this.columnMapping[role]) {
+      return row[this.columnMapping[role]];
+    }
+    return row[fallbackName];
+  }
+
+  // Helper method to extract sales data using column mapping
+  extractSalesData(data) {
+    return data.map(row => this.getColumnValue(row, 'Sales', 'Sales'));
+  }
+
+  // Helper method to extract date data using column mapping
+  extractDateData(data) {
+    return data.map(row => this.getColumnValue(row, 'Date', 'Date'));
+  }
+
+  // Helper method to extract SKU data using column mapping
+  extractSKUData(data) {
+    return data.map(row => this.getColumnValue(row, 'Material Code', 'Material Code'));
   }
 
   // Train the model with historical data
   train(data) {
+    // Set up column mapping if data has metadata
+    if (data && data.length > 0 && data[0]._columnMapping) {
+      this.columnMapping = data[0]._columnMapping;
+    }
     throw new Error('train() method must be implemented by subclass');
   }
 

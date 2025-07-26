@@ -11,9 +11,9 @@ const db = new sqlite3.Database(dbPath);
 console.log('Checking optimization jobs in database...\n');
 
 // Check all jobs
-db.all("SELECT id, sku, method, status, createdAt, completedAt FROM jobs ORDER BY createdAt DESC LIMIT 10", [], (err, rows) => {
+db.all("SELECT id, sku, method, status, createdAt, completedAt FROM optimization_jobs ORDER BY createdAt DESC LIMIT 10", [], (err, rows) => {
   if (err) {
-    console.error('Error querying jobs:', err);
+    console.error('Error querying optimization jobs:', err);
     return;
   }
   
@@ -23,19 +23,19 @@ db.all("SELECT id, sku, method, status, createdAt, completedAt FROM jobs ORDER B
   });
   
   // Check completed jobs specifically
-  db.all("SELECT COUNT(*) as count FROM jobs WHERE status = 'completed'", [], (err, completedRows) => {
+  db.all("SELECT COUNT(*) as count FROM optimization_jobs WHERE status = 'completed'", [], (err, completedRows) => {
     if (err) {
       console.error('Error querying completed jobs:', err);
     } else {
-      console.log(`\nCompleted jobs: ${completedRows[0].count}`);
+      console.log(`\nCompleted optimization jobs: ${completedRows[0].count}`);
     }
     
     // Check jobs with results
-    db.all("SELECT COUNT(*) as count FROM jobs WHERE status = 'completed' AND result IS NOT NULL", [], (err, resultRows) => {
+    db.all("SELECT COUNT(*) as count FROM optimization_jobs WHERE status = 'completed' AND result IS NOT NULL", [], (err, resultRows) => {
       if (err) {
         console.error('Error querying jobs with results:', err);
       } else {
-        console.log(`Jobs with results: ${resultRows[0].count}`);
+        console.log(`Optimization jobs with results: ${resultRows[0].count}`);
       }
       
       db.close();

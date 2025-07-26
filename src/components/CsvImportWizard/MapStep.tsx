@@ -1,9 +1,47 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
+import { parseDateWithFormat } from '@/utils/dateUtils';
+import { useSetupWizardStore } from '@/store/setupWizardStore';
+
+// Helper function to get icon for column role
+const getRoleIcon = (role: string, context: string, orgStructure?: any) => {
+  switch (role) {
+    case 'Material Code':
+      return '🔢';
+    case 'Description':
+      return '📄';
+    case 'Date':
+      return '📅';
+    case 'Division':
+      // Only show special icon if Division is enabled in organizational structure
+      if (context === 'setup' && orgStructure?.hasMultipleDivisions) {
+        return '🏢';
+      }
+      return 'Σ'; // Show aggregatable field icon when disabled
+    case 'Cluster':
+      // Only show special icon if Cluster is enabled in organizational structure
+      if (context === 'setup' && orgStructure?.hasMultipleClusters) {
+        return '📍';
+      }
+      return 'Σ'; // Show aggregatable field icon when disabled
+    case 'Lifecycle Phase':
+      // Only show special icon if Lifecycle tracking is enabled in organizational structure
+      if (context === 'setup' && orgStructure?.enableLifecycleTracking) {
+        return '❤️'; // Red heart - represents the life/vitality of the product through its lifecycle
+      }
+      return 'Σ'; // Show aggregatable field icon when disabled
+    case 'Ignore':
+      return '❌';
+    default:
+      // For any other role (including Division/Cluster when they become aggregatable fields),
+      // show the standard aggregatable field icon
+      return 'Σ';
+  }
+};
 
 interface MapStepProps {
-  isAIMapping: boolean;
+  isAiMapping: boolean;
   mappingHeader: string[];
   mappingRows: any[];
   mappingRoles: string[];
@@ -24,10 +62,13 @@ interface MapStepProps {
   manualConfirmLoading: boolean;
   handleConfirmClick: () => Promise<void>;
   onBack: () => void;
+  dateFormat: string;
+  context?: 'forecast' | 'setup';
+  onProceedToNextStep?: () => Promise<void>;
 }
 
 export const MapStep: React.FC<MapStepProps> = ({
-  isAIMapping,
+  isAiMapping,
   mappingHeader,
   mappingRows,
   mappingRoles,
@@ -48,11 +89,42 @@ export const MapStep: React.FC<MapStepProps> = ({
   manualConfirmLoading,
   handleConfirmClick,
   onBack,
+  dateFormat,
+  context = 'forecast',
+  onProceedToNextStep,
 }) => {
+  // Get setup wizard store for organizational structure
+  const setupWizardStore = useSetupWizardStore();
+  const orgStructure = context === 'setup' ? setupWizardStore.orgStructure : null;
+
+  // Helper function to check if a column contains valid dates
+  const isDateColumn = (colIdx: number): boolean => {
+    if (!mappingRows || mappingRows.length === 0) return false;
+    
+    const columnValues = mappingRows.map(row => row[mappingHeader[colIdx]]);
+    const validDates = columnValues.filter(val => {
+      if (!val || typeof val !== 'string') return false;
+      return parseDateWithFormat(val, dateFormat) !== null;
+    });
+    
+    // At least 50% of values should be valid dates
+    return validDates.length >= columnValues.length * 0.5;
+  };
+
+  // Helper to safely render cell values
+  const safeCellValue = (val: any) => {
+    if (val === undefined || val === null || val === '' || (typeof val === 'number' && isNaN(val)) || val === 'NaN') {
+      return '';
+    }
+    return String(val);
+  };
+
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold">Step 2: Map Columns</h3>
-      {aiTransformResult && isAIMapping && (
+      
+
+      {aiTransformResult && isAiMapping && (
         <div className="mb-4">
           <h4 className="font-medium mb-2">AI-Suggested Mappings</h4>
           <div className="flex flex-wrap gap-2">
@@ -74,7 +146,7 @@ export const MapStep: React.FC<MapStepProps> = ({
                 className="ml-1 text-blue-500 hover:text-red-500"
                 onClick={() => {
                   setCustomAggTypes(prev => prev.filter(t => t !== type));
-                  if (isAIMapping) {
+                  if (isAiMapping) {
                     setAiColumnRoles(prev => prev.map(role => role === type ? 'Ignore' : role));
                   } else {
                     setColumnRoles(prev => prev.map(role => role === type ? 'Ignore' : role));
@@ -93,7 +165,11 @@ export const MapStep: React.FC<MapStepProps> = ({
             onKeyDown={e => {
               if (e.key === 'Enter') {
                 const val = e.currentTarget.value.trim();
-                if (val && !customAggTypes.includes(val)) {
+                if (
+                  val &&
+                  !customAggTypes.includes(val) &&
+                  !mappingHeader.includes(val)
+                ) {
                   setCustomAggTypes(prev => [...prev, val]);
                   e.currentTarget.value = '';
                 }
@@ -101,6 +177,14 @@ export const MapStep: React.FC<MapStepProps> = ({
             }}
           />
         </div>
+      </div>
+      <div className="mb-2 text-sm text-slate-600 text-center">
+        📊 Showing sample of {Math.min(mappingRows.length, mappingRowLimit)} rows from your dataset
+        {mappingRows.length > mappingRowLimit && (
+          <span className="block text-xs text-slate-500 mt-1">
+            (Total dataset has {mappingRows.length} rows)
+          </span>
+        )}
       </div>
       <div className="overflow-x-auto border rounded">
         <table className="min-w-full text-xs">
@@ -112,7 +196,7 @@ export const MapStep: React.FC<MapStepProps> = ({
                   <select
                     value={mappingRoles[i] || 'Ignore'}
                     onChange={e => {
-                      if (isAIMapping) {
+                      if (isAiMapping) {
                         setAiColumnRoles(prev => {
                           const newRoles = [...prev];
                           newRoles[i] = e.target.value;
@@ -123,16 +207,28 @@ export const MapStep: React.FC<MapStepProps> = ({
                       }
                     }}
                     className="mt-1 border rounded px-1 py-0.5 text-xs"
+                    disabled={mappingRoles[i] === 'Date'}
                   >
-                    {DROPDOWN_OPTIONS.filter(opt => {
-                      const isMultiAllowed = opt.value === 'Ignore' || opt.value === 'Date';
-                      const isAssignedElsewhere = mappingRoles.some((role, idx) => idx !== i && role === opt.value);
-                      return !(!isMultiAllowed && isAssignedElsewhere);
-                    }).map(opt => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
+                    {mappingRoles[i] === 'Date' ? (
+                      <>
+                        <option value="Date">📅 Date</option>
+                        <option value="Ignore">❌ Ignore</option>
+                      </>
+                    ) : (
+                      DROPDOWN_OPTIONS.filter(opt => {
+                        const isMultiAllowed = opt.value === 'Ignore' || opt.value === 'Date';
+                        const isAssignedElsewhere = mappingRoles.some((role, idx) => idx !== i && role === opt.value);
+                        // Only show "Date" option if the column contains valid dates
+                        if (opt.value === 'Date' && !isDateColumn(i)) {
+                          return false;
+                        }
+                        return !(!isMultiAllowed && isAssignedElsewhere);
+                      }).map(opt => (
+                        <option key={opt.value} value={opt.value}>
+                          {getRoleIcon(opt.value, context, orgStructure)} {opt.label}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </th>
               ))}
@@ -143,58 +239,18 @@ export const MapStep: React.FC<MapStepProps> = ({
               <tr key={rowIdx}>
                 {mappingHeader.map((header, colIdx) => (
                   <td key={colIdx} className="px-4 py-2 whitespace-nowrap text-sm text-slate-700">
-                    {row[header]}
+                    {safeCellValue(row[header])}
                   </td>
                 ))}
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
-      {dateRange.start !== -1 && dateRange.end !== -1 && (
-        <div className="flex items-center gap-2 mt-2">
-          <span className="text-xs">Date columns from</span>
-          <select
-            value={dateRange.start}
-            onChange={e => handleDateRangeChange('start', Number(e.target.value))}
-            className="border rounded px-1 py-0.5 text-xs"
-          >
-            {mappingRoles.map((role, i) => role === 'Date' && <option key={i} value={i}>{mappingHeader[i]}</option>)}
-          </select>
-          <span className="text-xs">to</span>
-          <select
-            value={dateRange.end}
-            onChange={e => handleDateRangeChange('end', Number(e.target.value))}
-            className="border rounded px-1 py-0.5 text-xs"
-          >
-            {mappingRoles.map((role, i) => role === 'Date' && <option key={i} value={i}>{mappingHeader[i]}</option>)}
-          </select>
-        </div>
-      )}
-      <div className="mt-4">
-        <h4 className="font-medium mb-2">Preview Normalized Data</h4>
-        <div className="overflow-x-auto border rounded-lg bg-white">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
-              <tr>
-                {(Array.isArray(mappingNormalizedHeaders) ? mappingNormalizedHeaders : []).map(h => <th key={h} className="px-2 py-1 bg-slate-100 border-b">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 bg-white">
-              {mappingNormalizedData.slice(0, 10).map((row, i) => (
-                <tr key={i}>
-                  {mappingNormalizedHeaders.map(header => (
-                    <td key={header} className="px-4 py-2 whitespace-nowrap text-sm text-slate-700">{row[header]}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </div>
+      
       <div className="flex justify-between mt-4">
         <Button variant="outline" onClick={onBack}>Back</Button>
-        <div className="flex flex-col items-end">
+        <div className="flex flex-col items-end gap-2">
           <Button onClick={handleConfirmClick} disabled={manualConfirmLoading || !mappingHasMaterialCode}>
             {manualConfirmLoading ? (
               <>
@@ -205,6 +261,9 @@ export const MapStep: React.FC<MapStepProps> = ({
               'Confirm Mapping & Import'
             )}
           </Button>
+          
+
+          
           {!mappingHasMaterialCode && (
             <span className="text-xs text-red-600 mt-1">You must map at least one column as <b>Material Code</b> to continue.</span>
           )}

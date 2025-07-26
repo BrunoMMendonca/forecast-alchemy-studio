@@ -1,137 +1,315 @@
 # Upload Wizard & Data Transformation: A Technical Guide
 
-This document provides a detailed technical breakdown of the CSV import process, covering the frontend React components, the backend Node.js server, the AI-powered data transformation logic, and the deduplication/existing data detection flow.
+*This document provides a technical breakdown of the CSV import process, including frontend and backend logic, AI-powered data transformation, deduplication, and the step-by-step workflow for importing and preparing data.*
 
-## 1. Core Principles (Updated)
+## 1. Core Problem / Use Case
 
-- **Single Parse, Single Source:** The CSV is parsed and cleaned ONCE during the preview step. All subsequent steps (mapping, normalization, backend upload) use this cleaned, user-confirmed data (wide format).
-- **No Re-parsing:** The backend never re-parses the raw CSV. It receives only the cleaned, wide-format data and headers from the frontend.
-- **Explicit Data Format:**
-  - **Wide format** is used for storage, display, and backend upload.
-  - **Long format** is only used for analysis components (outlier detection, forecasting) as needed.
-- **WYSIWYG:** What the user sees in the preview is exactly what gets imported and stored.
-- **Deduplication:** The raw CSV string is hashed (SHA-256, truncated to 30 hex chars) immediately after upload. This hash is used for duplicate detection on both frontend and backend, and is stored with each processed dataset.
-- **Consistent Output:** Both AI and manual imports now produce identical JSON structure, including metadata (`summary`, `columnRoles`, `name`, `csvHash`).
-- **Existing Data Detection:** On app load, the backend scans for processed JSONs and their hashes. The frontend presents these for selection, allowing users to skip upload if a match is found.
-- **Loading Existing Data:** Loading an existing dataset skips the wizard and loads the data directly into the main workflow (Clean & Prepare step).
+Users need to upload CSV files containing sales data and transform them into a standardized format for forecasting. The system must handle various CSV formats, detect data structure, validate formats, and provide both AI-powered and manual transformation options.
 
----
-
-## 2. Updated Data Flow
-
-| Step                | Frontend → Backend | Backend → Frontend | Format Used           |
-|---------------------|-------------------|--------------------|-----------------------|
-| Existing Data Check | Raw CSV           | Duplicate info     | Hash                  |
-| Preview             | Raw CSV           | Cleaned preview    | Wide (for preview)    |
-| Mapping             | Cleaned preview   | -                  | Wide                  |
-| Confirm Import      | Cleaned wide      | -                  | Wide (for storage)    |
-| Analysis            | Wide              | Long (if needed)   | Long (for analysis)   |
-
-- **Deduplication:** After upload, the frontend hashes the raw CSV and checks with the backend for duplicates. If a match is found, the user can load the existing dataset instead of re-importing.
-- **After preview:** All mapping, normalization, and backend upload use the cleaned, de-blanked, user-confirmed preview data (wide format).
-- **Backend:** Accepts only cleaned data and headers, never the raw CSV (except for deduplication hash).
-- **Long format:** Used only for outlier detection, forecasting, or charts that require it.
+**Key Requirements:**
+- Support multiple CSV separators (comma, semicolon, tab, pipe)
+- Auto-detect date and number formats
+- Validate data formats with user-friendly error messages
+- Block progression when validation errors exist
+- Provide both AI-powered and manual transformation workflows
+- Handle large files with appropriate processing strategies
+- Prevent duplicate imports with hash-based detection
 
 ---
 
-## 3. Troubleshooting Checklist (Updated)
-- If you see "Invalid Date" or blank columns in the data, check that the backend is using the cleaned preview data, not re-parsing the raw CSV.
-- If the preview and final import differ, ensure all steps use the previewed data.
-- If deduplication is not working, ensure both frontend and backend are hashing the exact same raw CSV string (not a reconstructed version).
+## 2. How It Works: The Import Architecture
+
+The system provides a comprehensive import solution with robust validation and error handling:
+
+### A. Upload & Preview Flow
+
+**Step 1: File Upload**
+- User selects CSV file or drags and drops
+- System detects file size and applies large file processing if needed
+- Duplicate detection using SHA-256 hash comparison
+- Auto-detection of separator, date format, and number format
+
+**Step 2: Preview Generation**
+- Backend processes CSV with detected/selected formats
+- Returns preview data with validation markers for invalid formats
+- Frontend displays preview table with error highlighting
+- Validation errors block progression to mapping step
+
+**Step 3: Format Validation**
+- **Date Format Validation**: Checks if dates match selected format (dd/mm/yyyy, mm/dd/yyyy, etc.)
+- **Number Format Validation**: Validates numbers against selected format (1,234.56, 1.234,56, etc.)
+- **Column Count Validation**: Ensures sufficient columns (minimum 4) to prevent separator mismatch
+- **Visual Error Indicators**: Invalid cells and headers highlighted in red
+- **Progression Blocking**: "Next: Mapping" button disabled when validation errors exist
+
+**Step 4: Error Handling**
+- **Standardized ErrorHandler Component**: Consistent styling for all error states
+- **Validation Warnings**: ErrorHandler-style warnings for format and column issues
+- **Helpful Links**: Date format help, number format help, CSV structure guide
+- **Suggestions**: Contextual suggestions for fixing validation issues
+
+### B. AI-Powered Transformation
+
+**AI Flow Selection**
+- System checks if AI features are enabled and file size is appropriate
+- Large files can be processed with AI if enabled in settings
+- AI processing includes reasoning and transformation suggestions
+
+**AI Processing Stages**
+1. **Initialization**: Prepare file for AI processing
+2. **Description**: AI analyzes file structure and content
+3. **Transformation**: AI applies data transformation
+4. **Preview**: Show AI-transformed data for user review
+5. **Mapping**: AI-suggested column role mapping
+
+**AI Error Handling**
+- Graceful fallback to manual import on AI failure
+- Custom error dialog with detailed error messages
+- Automatic switching to manual workflow
+
+### C. Manual Transformation
+
+**Manual Flow**
+- Direct preview of parsed CSV data
+- User-controlled format selection and validation
+- Manual column role mapping
+- Real-time validation feedback
+
+**Format Controls**
+- **Separator Selection**: Comma, semicolon, tab, pipe with auto-detection
+- **Date Format Selection**: Multiple format options with validation
+- **Number Format Selection**: Various number format options with validation
+- **Transpose Option**: Toggle between wide and long data formats
 
 ---
 
-## 4. Gotchas & Lessons Learned
-- Never re-parse or reconstruct the CSV from objects for deduplication—always use the raw uploaded string for hashing.
-- Never re-parse the raw CSV after preview. Always use the cleaned, user-confirmed data for all further steps.
-- Be explicit about when you're using wide vs. long format, and only transform when necessary.
-- Always include all required metadata (`summary`, `columnRoles`, `name`, `csvHash`) in saved JSONs for detection and UI consistency.
+## 3. Key Code Pointers
+
+| Area                     | File / Component                     | Key Function / Hook         | Purpose                                                      |
+| ------------------------ | ------------------------------------ | --------------------------- | ------------------------------------------------------------ |
+| **Main Wizard**          | `src/components/CsvImportWizard.tsx` | `CsvImportWizard`           | Orchestrates the entire import workflow                      |
+| **Upload Step**          | `src/components/CsvImportWizard/UploadStep.tsx` | `UploadStep` | Handles file upload and drag-and-drop                        |
+| **Preview Step**         | `src/components/CsvImportWizard/PreviewStep.tsx` | `PreviewStep` | Shows data preview with validation and error handling        |
+| **Error Handler**        | `src/components/CsvImportWizard/ErrorHandler.tsx` | `ErrorHandler` | Standardized error display component                         |
+| **Backend Preview**      | `src/backend/routes.js`              | `POST /api/generate-preview` | Generates preview data with validation markers               |
+| **Format Validation**    | `src/utils/csvUtils.ts`              | `parseNumberWithFormat`     | Validates number formats with strict regex                   |
+| **AI Transformation**    | `src/utils/aiDataTransform.ts`       | `transformDataWithAI`       | AI-powered data transformation                               |
+| **Duplicate Detection**  | `src/backend/routes.js`              | `POST /api/check-csv-duplicate` | Prevents duplicate imports using hash comparison             |
 
 ---
 
-## 5. Summary Table (Updated)
+## 4. Validation System
 
-| Stage                     | Component/File                           | Key Function(s)                   | Critical Logic                                      |
-| ------------------------- | ---------------------------------------- | --------------------------------- | --------------------------------------------------- |
-| **Deduplication**         | `CsvImportWizard.tsx`, `server.js`       | `checkCsvDuplicate` endpoint, hash logic | Hashes raw CSV, checks for duplicates before import. |
-| **State & Orchestration** | `CsvImportWizard.tsx`                    | `handleFileChange`, `handleAITransform`, `handleManualConfirm` | Manages state, ensures all steps use cleaned preview data. |
-| **File Upload UI**        | `CsvImportWizard/UploadStep.tsx`         | -                                 | Renders the dropzone and "Continue with Existing Data" section. |
-| **AI/Manual Choice UI**   | `CsvImportWizard/ChoiceStep.tsx`         | -                                 | Renders the two import path choices.                |
-| **Data Preview UI**       | `CsvImportWizard/PreviewStep.tsx`        | -                                 | Renders the data preview table.                     |
-| **Column Mapping UI**     | `CsvImportWizard/MapStep.tsx`            | -                                 | Renders the column mapping interface.               |
-| **Backend Pivot**         | `server.js`                              | `pivotTable`                      | Date normalization, chronological sort, sparsity.   |
-| **API Response**          | `server.js`                              | `/apply-config`, `/process-manual-import` | Returns `{ transformedData, columns }` using only cleaned data. |
+### A. Format Validation Logic
 
----
+**Date Format Validation**
+```javascript
+// Backend validation in generate-preview endpoint
+const parseDateWithFormat = (value, format) => {
+  // Strict validation based on selected format
+  // Returns null for invalid dates
+  // Adds "❌ Invalid (format)" marker to invalid values
+};
+```
 
-## 6. Frontend Components
+**Number Format Validation**
+```javascript
+// Enhanced validation with strict regex patterns
+const parseNumberWithFormat = (value, format) => {
+  // Validates thousands separators, decimal places
+  // Checks for required format elements
+  // Returns NaN for invalid numbers
+  // Adds "❌ Invalid (format)" marker to invalid values
+};
+```
 
-The wizard's frontend is architected as a main state container that renders different child components for each step of the process.
+### B. Validation Error Detection
 
-### A. Main Container: `CsvImportWizard.tsx`
-This component is the brain of the wizard. It does not render much UI itself but is responsible for:
-- **State Management**: Holding all key state variables (`file`, `originalCsv`, `aiStep`, `step`, `aiResult`, `aiResultColumns`, etc.).
-- **Orchestration**: Rendering the correct child component based on the current `step` and `aiStep`.
-- **Handler Functions**: Containing all the core logic for file handling (`handleFileChange`), AI interaction (`handleAITransform`, `handleConfigProcessing`), and manual import processing (`handleManualConfirm`).
+**Frontend Error Detection**
+```javascript
+const hasFormatErrors = () => {
+  // Check for "❌ Invalid" markers in data and headers
+  // Returns true if any validation errors found
+};
 
-### B. Child Step Components (`src/components/CsvImportWizard/`)
-These are "dumb" components that primarily focus on rendering the UI for a specific step and calling handler functions passed down from the parent.
-- **`UploadStep.tsx`**: Displays the file dropzone, "Continue with Existing Data" section with dataset cards, and handles the initial file selection.
-- **`ChoiceStep.tsx`**: Presents the user with the "AI-Powered" vs. "Manual Import" options.
-- **`PreviewStep.tsx`**: Renders the data preview table, either from the AI transformation or the manual controls (separator, transpose).
-- **`MapStep.tsx`**: Shows the column mapping interface and the final normalized data preview before import.
+const hasInsufficientColumns = () => {
+  // Check if CSV has fewer than 4 columns
+  // Indicates likely separator mismatch
+};
 
----
+const hasValidationErrors = () => {
+  // Combines format and column validation
+  // Used to block progression
+};
+```
 
-## 7. Backend Server: `server.js`
+### C. Visual Error Indicators
 
-The backend handles all data processing and communication with the Grok AI API.
+**Error Highlighting**
+- **Invalid Headers**: Red background with red border
+- **Invalid Cells**: Red background with left red border
+- **Separator Dropdown**: Red border when insufficient columns
+- **Validation Warning**: ErrorHandler-style warning banner
 
-### A. API Endpoints
-
-- **`POST /api/grok-transform`**: Used for the small file workflow.
-- **`POST /api/grok-generate-config`**: Used for the large file workflow (step 1).
-- **`POST /api/apply-config`**: Used for the large file workflow (step 2).
-- **`POST /api/check-csv-duplicate`**: Checks for existing datasets with the same CSV hash before import.
-- **`GET /api/detect-existing-data`**: Returns a list of all processed datasets and their metadata for existing data detection.
-
-### B. The `pivotTable` Function
-This is the most complex and critical part of the backend transformation logic.
-- **Purpose**: To transform data from a "long" format (one row per sale) to a "wide" format (one row per product, with dates as columns).
-- **Sparsity**: It only creates columns for dates that **actually exist** in the dataset.
-- **Chronological Sorting**: It performs a proper date-based sort on columns.
-
----
-
-## 8. Troubleshooting Checklist
-
-If the upload or transformation fails, check the following:
-1.  **Is the parent `CsvImportWizard.tsx` passing the correct props to the active child step component?**
-2.  **Is the frontend using `aiResultColumns` to render the table headers in `PreviewStep.tsx` or `MapStep.tsx`?**
-3.  **Does the backend API response include the `columns` array?** Check the browser's network tab.
-4.  **Are the backend logs for `pivotTable` showing correct sorting?**
-5.  **Is the correct workflow (small vs. large file) being triggered in `CsvImportWizard.tsx`?**
-6.  **Is deduplication working?** Ensure both frontend and backend are hashing the exact same raw CSV string, and that the hash is stored and checked consistently.
+**Progression Control**
+- **Disabled Button**: "Next: Mapping" button disabled when errors exist
+- **Tooltip**: Explains why button is disabled
+- **Visual Feedback**: Button appears grayed out
 
 ---
 
-## Summary Table
+## 5. Error Handling System
 
-| Stage                     | Component/File                           | Key Function(s)                   | Critical Logic                                      |
-| ------------------------- | ---------------------------------------- | --------------------------------- | --------------------------------------------------- |
-| **Deduplication**         | `CsvImportWizard.tsx`, `server.js`       | `checkCsvDuplicate` endpoint, hash logic | Hashes raw CSV, checks for duplicates before import. |
-| **State & Orchestration** | `CsvImportWizard.tsx`                    | `handleFileChange`, `handleAITransform` | Manages state and renders the correct step component. |
-| **File Upload UI**        | `CsvImportWizard/UploadStep.tsx`         | -                                 | Renders the dropzone and existing data selection.   |
-| **AI/Manual Choice UI**   | `CsvImportWizard/ChoiceStep.tsx`         | -                                 | Renders the two import path choices.                |
-| **Data Preview UI**       | `CsvImportWizard/PreviewStep.tsx`        | -                                 | Renders the data preview table.                     |
-| **Column Mapping UI**     | `CsvImportWizard/MapStep.tsx`            | -                                 | Renders the column mapping interface.               |
-| **Backend Pivot**         | `server.js`                              | `pivotTable`                      | Date normalization, chronological sort, sparsity.   |
-| **API Response**          | `server.js`                              | `/apply-config` handler           | Returns `{ transformedData, columns }`.             | 
+### A. Standardized ErrorHandler Component
 
-## CSV Separator Workflow (2024-06)
+**Error Types**
+- `no-data`: Unable to preview data
+- `format-issues`: Format validation problems
+- `parsing-error`: CSV parsing errors
+- `loading`: Processing state
+- `ai-error`: AI processing failures
 
-- The upload wizard now respects a global CSV separator setting (comma, semicolon, tab, pipe).
-- On import, the backend auto-detects the separator but allows user override in the preview step.
-- The detected/selected separator is returned to the frontend and used for preview and mapping.
-- The global setting is editable in the main settings panel and is stored in the backend database.
-- A test script (`test-csv-import.js`) verifies backend separator detection for all supported types. 
+**Consistent Styling**
+- Centered layout with dashed border
+- Icon, title, message, suggestions structure
+- Helpful links for format assistance
+- Action buttons (Back, Try Again)
+
+### B. Validation Warning Integration
+
+**Warning Display**
+```javascript
+{hasValidationErrors() && (
+  <div className="mt-4 text-center py-6 border border-dashed rounded-lg bg-slate-50">
+    <AlertCircle className="w-8 h-8 text-slate-400 mx-auto mb-3" />
+    <div className="text-slate-700 font-medium mb-2">
+      {/* Dynamic title based on error type */}
+    </div>
+    <div className="text-slate-500 text-sm mb-4">
+      {/* Dynamic message */}
+    </div>
+    {/* Suggestions and helpful links */}
+  </div>
+)}
+```
+
+**Consistent UX**
+- Same visual style as ErrorHandler component
+- Icon size, layout, typography consistency
+- Suggestions and helpful links integration
+- Professional appearance across all error states
+
+---
+
+## 6. Backend Integration
+
+### A. Preview Generation Endpoint
+
+**API**: `POST /api/generate-preview`
+**Parameters**:
+- `csvData`: Raw CSV content
+- `separator`: CSV separator (auto-detected or user-selected)
+- `dateFormat`: Date format for validation
+- `numberFormat`: Number format for validation
+- `transposed`: Whether data should be transposed
+
+**Response**:
+- `headers`: Column headers with validation markers
+- `previewRows`: Preview data with validation markers
+- `originalHeaders`: Original headers for data access
+- `separator`: Detected/used separator
+- `dateFormat`: Detected/used date format
+- `numberFormat`: Detected/used number format
+- `columnRoles`: Auto-detected column roles
+
+### B. Validation Markers
+
+**Format**: `❌ Invalid (format)` appended to invalid values
+**Detection**: Frontend checks for these markers to identify errors
+**Display**: Invalid values highlighted in red in preview table
+
+### C. Duplicate Detection
+
+**Hash Generation**: SHA-256 hash of CSV content
+**Database Check**: Compare hash against existing datasets
+**User Choice**: Load existing or upload anyway
+**Prevention**: Avoids duplicate processing and storage
+
+---
+
+## 7. User Experience Flow
+
+### A. Successful Import
+1. **File Upload**: User selects or drags CSV file
+2. **Auto-Detection**: System detects formats automatically
+3. **Preview Display**: Shows data with validation results
+4. **Format Adjustment**: User can adjust formats if needed
+5. **Validation**: System validates all data formats
+6. **Progression**: User proceeds to mapping step
+7. **Transformation**: Data transformed to standard format
+8. **Completion**: Dataset ready for forecasting
+
+### B. Error Handling Flow
+1. **Error Detection**: System identifies validation issues
+2. **Visual Feedback**: Errors highlighted in preview table
+3. **Warning Display**: ErrorHandler-style warning banner
+4. **Progression Blocked**: "Next: Mapping" button disabled
+5. **User Guidance**: Suggestions and helpful links provided
+6. **Format Adjustment**: User fixes format issues
+7. **Re-validation**: System re-validates after changes
+8. **Progression**: User proceeds when errors resolved
+
+### C. AI Processing Flow
+1. **AI Selection**: System determines if AI processing is appropriate
+2. **AI Analysis**: AI analyzes file structure and content
+3. **Transformation**: AI applies data transformation
+4. **Preview**: Shows AI-transformed data
+5. **User Review**: User reviews AI suggestions
+6. **Confirmation**: User confirms AI transformation
+7. **Completion**: Dataset ready for forecasting
+
+---
+
+## 8. "Gotchas" & Historical Context
+
+- **Validation Markers**: The system uses "❌ Invalid (format)" markers in data to indicate validation errors. These markers are added by the backend and detected by the frontend for error highlighting.
+
+- **Progression Blocking**: Users cannot proceed to the mapping step when validation errors exist. This prevents importing invalid data and ensures data quality.
+
+- **Consistent Error Handling**: All error states use the same ErrorHandler component styling for consistency and professional appearance.
+
+- **Format Validation**: Both date and number format validation are strict and require exact format matching. This prevents data corruption from format mismatches.
+
+- **Column Count Validation**: The system requires at least 4 columns to prevent separator mismatch issues. This helps users identify and fix CSV parsing problems.
+
+- **Visual Feedback**: Error highlighting uses red backgrounds and borders to clearly indicate validation issues in the preview table.
+
+- **Helpful Links**: The system provides links to format help and CSV structure guides to assist users in fixing validation issues.
+
+---
+
+## 9. Future Enhancements
+
+### A. Planned Features
+- **Advanced Format Detection**: More sophisticated format auto-detection
+- **Batch Import**: Support for multiple file imports
+- **Template System**: Save and reuse import configurations
+- **Validation Rules**: Custom validation rules for specific data types
+
+### B. Performance Improvements
+- **Streaming Processing**: Handle very large files with streaming
+- **Caching**: Cache validation results for repeated imports
+- **Parallel Processing**: Process multiple files simultaneously
+
+### C. User Experience
+- **Real-time Validation**: Validate formats as user types
+- **Format Suggestions**: Suggest formats based on data analysis
+- **Import History**: Track and manage import history
+- **Collaborative Import**: Support for team-based data imports
+
+---
+
+**For related documentation, see:**
+- `Data Cleaning Methods & Implementation.md` - Data cleaning workflows
+- `Queue Processing & Job Management.md` - Optimization triggering
+- `UI State Management & Data Flow.md` - State management patterns 

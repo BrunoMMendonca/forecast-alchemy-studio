@@ -12,14 +12,14 @@ console.log('Updating existing jobs with updatedAt field...');
 
 // Update existing jobs to have updatedAt = createdAt
 db.run(`
-  UPDATE jobs 
+  UPDATE optimization_jobs 
   SET updatedAt = createdAt 
   WHERE updatedAt IS NULL OR updatedAt = ''
 `, function(err) {
   if (err) {
-    console.error('Error updating jobs:', err);
+    console.error('Error updating optimization jobs:', err);
   } else {
-    console.log(`Updated ${this.changes} existing jobs with updatedAt field`);
+    console.log(`Updated ${this.changes} existing optimization jobs with updatedAt field`);
   }
   
   // Close the database

@@ -4,7 +4,7 @@ import { ReasoningDisplay } from './ReasoningDisplay';
 
 interface OptimizationData {
   confidence?: number;
-  expectedAccuracy?: number;
+  
   reasoning?: any;
   factors?: any;
   method?: string;
@@ -33,11 +33,7 @@ export const ParameterStatusDisplay: React.FC<ParameterStatusDisplayProps> = ({
           <span className="text-slate-600">
             Confidence: <span className="font-medium">{optimizationData.confidence?.toFixed(1)}%</span>
           </span>
-          {optimizationData.expectedAccuracy && (
-            <span className="text-slate-600">
-              Expected Accuracy: <span className="font-medium">{optimizationData.expectedAccuracy.toFixed(1)}%</span>
-            </span>
-          )}
+
         </div>
       )}
 
@@ -49,7 +45,6 @@ export const ParameterStatusDisplay: React.FC<ParameterStatusDisplayProps> = ({
             factors={optimizationData.factors}
             method={optimizationData.method || 'unknown'}
             confidence={optimizationData.confidence || 0}
-            expectedAccuracy={optimizationData.expectedAccuracy}
           />
         </div>
       )}

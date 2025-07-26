@@ -1,9 +1,17 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Bot, Brain } from 'lucide-react';
+import { RefreshCw, Bot, Brain, AlertCircle, Calendar, Hash, FileText } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { ErrorHandler } from './ErrorHandler';
 import MarkdownRenderer from '../ui/MarkdownRenderer';
+import { parseNumberWithFormat } from '@/utils/csvUtils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const PREVIEW_ROW_LIMIT = 15;
 
@@ -71,11 +79,16 @@ interface PreviewStepProps {
   transposed: boolean;
   data: any[];
   header: string[];
+  originalHeaders: string[];
   onSeparatorChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   onTransposeChange: (isChecked: boolean) => void;
   onBackToChoice: () => void;
   onBackToUpload: () => void;
   onNextToMapping: () => void;
+  dateFormat: string;
+  onDateFormatChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  numberFormat: string;
+  onNumberFormatChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
 }
 
 export const PreviewStep: React.FC<PreviewStepProps> = ({
@@ -90,12 +103,19 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
   transposed,
   data,
   header,
+  originalHeaders,
   onSeparatorChange,
   onTransposeChange,
   onBackToChoice,
   onBackToUpload,
   onNextToMapping,
+  dateFormat,
+  onDateFormatChange,
+  numberFormat,
+  onNumberFormatChange,
 }) => {
+  console.log('[renderContent] PreviewStep numberFormat:', numberFormat);
+
   // AI Preview
   if (aiCsvImportEnabled && aiStep === 'ai-preview' && aiTransformedData) {
     const totalRows = aiTransformedData.length;
@@ -151,6 +171,14 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
           </div>
         )}
         
+        <div className="mb-2 text-sm text-slate-600 text-center">
+          📊 Showing sample of {Math.min(totalRows, PREVIEW_ROW_LIMIT)} rows from your dataset
+          {totalRows > PREVIEW_ROW_LIMIT && (
+            <span className="block text-xs text-slate-500 mt-1">
+              (Total dataset has {totalRows} rows)
+            </span>
+          )}
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead>
@@ -186,13 +214,77 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
 
   // Manual Preview
   if (previewLoading) {
-    return (
-      <div className="text-blue-600 text-center py-8">
-        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
-        Parsing CSV and preparing preview...
-      </div>
-    );
+    return <ErrorHandler errorType="loading" />;
   }
+
+  // Helper function to scroll to format selectors
+  const handleFormatHelp = (type: 'date' | 'number') => {
+    const selectorId = type === 'date' ? 'dateFormat' : 'numberFormat';
+    const element = document.getElementById(selectorId);
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    element?.focus();
+  };
+
+  // Check for format validation errors in the preview data
+  const hasFormatErrors = () => {
+    if (!data.length || !header.length) return false;
+    
+    // Check for invalid format markers in the data
+    for (let i = 0; i < Math.min(10, data.length); i++) {
+      const row = data[i];
+      for (const headerName of header) {
+        const cellValue = row[headerName];
+        if (typeof cellValue === 'string' && cellValue.includes('❌ Invalid')) {
+          return true;
+        }
+      }
+    }
+    
+    // Check for invalid format markers in headers
+    for (const headerName of header) {
+      if (typeof headerName === 'string' && headerName.includes('❌ Invalid')) {
+        return true;
+      }
+    }
+    
+    return false;
+  };
+
+  // Check if CSV has too few columns (likely separator mismatch)
+  const hasInsufficientColumns = () => {
+    return header.length < 4;
+  };
+
+  // Check for any validation issues that should block progression
+  const hasValidationErrors = () => {
+    return hasFormatErrors() || hasInsufficientColumns();
+  };
+
+  // Find the first numeric-looking value in the data for preview
+  const getSampleNumericValue = () => {
+    for (let i = 0; i < header.length; i++) {
+      for (let j = 0; j < Math.min(10, data.length); j++) {
+        const val = data[j][header[i]];
+        if (typeof val === 'string' && /[0-9]/.test(val)) {
+          return val;
+        }
+      }
+    }
+    return null;
+  };
+  const sampleValue = getSampleNumericValue();
+  const parsedSample = sampleValue ? parseNumberWithFormat(sampleValue, numberFormat) : null;
+
+  // Accept NUMBER_FORMAT_OPTIONS as a prop or define it here
+  const NUMBER_FORMAT_OPTIONS = [
+    '1,234.56',
+    '1.234,56',
+    '1234.56',
+    '1234,56',
+    '1 234,56',
+    '1 234.56',
+    '1234',
+  ];
 
   return (
     <div className="space-y-4">
@@ -211,12 +303,59 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
               value={separator}
               onChange={onSeparatorChange}
               disabled={previewLoading}
-              className="border rounded px-2 py-1 text-sm bg-white"
+              className={`border rounded px-2 py-1 text-sm bg-white ${
+                hasInsufficientColumns() ? 'border-red-400 bg-red-50' : ''
+              }`}
             >
               <option value=",">,</option>
               <option value=";">;</option>
               <option value="\t">Tab</option>
               <option value="|">|</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+                            <label htmlFor="dateFormat" className="text-sm">Date format:</label>
+            <select
+              id="dateFormat"
+              value={dateFormat}
+              onChange={onDateFormatChange}
+              disabled={previewLoading}
+              className="border rounded px-2 py-1 text-sm bg-white"
+            >
+              <option value="yyyy-mm-dd">YYYY-MM-DD (2023-12-31)</option>
+              <option value="dd/mm/yyyy">DD/MM/YYYY (31/12/2023)</option>
+              <option value="mm/dd/yyyy">MM/DD/YYYY (12/31/2023)</option>
+              <option value="dd-mm-yyyy">DD-MM-YYYY (31-12-2023)</option>
+              <option value="yyyy/mm/dd">YYYY/MM/DD (2023/12/31)</option>
+              <option value="yyyy">YYYY (2023)</option>
+              <option value="yyyy-ww">YYYY-WW (2023-W05)</option>
+              <option value="ww-yyyy">WW-YYYY (W05-2023)</option>
+              <option value="yyyy/ww">YYYY/WW (2023/W05)</option>
+              <option value="ww/yyyy">WW/YYYY (W05/2023)</option>
+              <option value="yyyy-wwrange">YYYY-WWW-WWW (2023-W01-W05)</option>
+              <option value="weekrange">WW-WW (W01-W05)</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+                            <label htmlFor="numberFormat" className="text-sm">Numbers format:</label>
+            <select
+              id="numberFormat"
+              value={numberFormat}
+              onChange={onNumberFormatChange}
+              disabled={previewLoading}
+              className="border rounded px-2 py-1 text-sm bg-white"
+            >
+              {NUMBER_FORMAT_OPTIONS.map(opt => (
+                <option key={opt} value={opt}>{
+                  opt === '1,234.56' ? '1,234.56 (comma thousands, dot decimal)' :
+                  opt === '1.234,56' ? '1.234,56 (dot thousands, comma decimal)' :
+                  opt === '1234.56' ? '1234.56 (no thousands, dot decimal)' :
+                  opt === '1234,56' ? '1234,56 (no thousands, comma decimal)' :
+                  opt === '1 234,56' ? '1 234,56 (space thousands, comma decimal)' :
+                  opt === '1 234.56' ? '1 234.56 (space thousands, dot decimal)' :
+                  opt === '1234' ? '1234 (integer)' : opt
+                }</option>
+              ))}
             </select>
           </div>
           <div className="flex items-center gap-2">
@@ -230,41 +369,175 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
         </div>
         {data.length > 0 ? (
           <>
+            <div className="mb-2 text-sm text-slate-600 text-center">
+              📊 Showing sample of {data.length} rows from your dataset
+              {data.length >= PREVIEW_ROW_LIMIT}
+            </div>
             <div className="overflow-x-auto border rounded">
               <table className="min-w-full text-xs">
                 <thead>
                   <tr>
-                    {header.map((h, i) => (
-                      <th key={i} className="px-2 py-1 bg-slate-100 border-b whitespace-nowrap">{h}</th>
-                    ))}
+                    {header.map((h, i) => {
+                      const hasError = typeof h === 'string' && h.includes('❌ Invalid');
+                      return (
+                        <th 
+                          key={i} 
+                          className={`px-2 py-1 border-b whitespace-nowrap ${
+                            hasError ? 'bg-red-100 border-red-400' : 'bg-slate-100'
+                          }`}
+                        >
+                          {h}
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
                   {data.map((row, i) => (
                     <tr key={i} className="bg-white border-b hover:bg-gray-50">
-                      {header.map((headerName, j) => (
-                        <td key={j} className="px-4 py-2 whitespace-nowrap">{row[headerName]}</td>
-                      ))}
+                      {header.map((displayHeader, j) => {
+                        // Use original header for data access, display header for display
+                        const originalHeader = originalHeaders[j] || displayHeader;
+                        const cellValue = row[originalHeader];
+                        const hasError = typeof cellValue === 'string' && cellValue.includes('❌ Invalid');
+                        return (
+                          <td 
+                            key={j} 
+                            className={`px-4 py-2 whitespace-nowrap ${
+                              hasError ? 'bg-red-50 border-l-4 border-red-400' : ''
+                            }`}
+                          >
+                            {cellValue}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            
+            {/* Validation warning - using ErrorHandler style */}
+            {hasValidationErrors() && (
+              <div className="mt-4 text-center py-6 border border-dashed rounded-lg bg-slate-50">
+                <AlertCircle className="w-8 h-8 text-slate-400 mx-auto mb-3" />
+                <div className="text-slate-700 font-medium mb-2">
+                  {hasInsufficientColumns() && hasFormatErrors() 
+                    ? 'Multiple validation issues detected'
+                    : hasInsufficientColumns()
+                    ? 'Insufficient columns detected'
+                    : 'Format validation issues detected'
+                  }
+                </div>
+                <div className="text-slate-500 text-sm mb-4">
+                  {hasInsufficientColumns() && hasFormatErrors()
+                    ? 'Your CSV has both column count and format issues that need to be resolved.'
+                    : hasInsufficientColumns()
+                    ? `Your CSV appears to have too few columns (${header.length} detected).`
+                    : 'Some dates or numbers don\'t match the selected formats.'
+                  }
+                </div>
+                
+                <div className="text-left max-w-md mx-auto">
+                  <div className="text-xs text-slate-600 font-medium mb-2">Suggestions:</div>
+                  <ul className="text-xs text-slate-500 space-y-1 mb-4">
+                    {hasInsufficientColumns() && (
+                      <li className="flex items-start">
+                        <span className="text-slate-400 mr-2">•</span>
+                        <span>Try changing the separator setting above (currently: {separator})</span>
+                      </li>
+                    )}
+                    {hasInsufficientColumns() && (
+                      <li className="flex items-start">
+                        <span className="text-slate-400 mr-2">•</span>
+                        <span>Check if your CSV uses a different delimiter (comma, semicolon, tab, pipe)</span>
+                      </li>
+                    )}
+                    {hasFormatErrors() && (
+                      <li className="flex items-start">
+                        <span className="text-slate-400 mr-2">•</span>
+                        <span>Review the date and number format settings above</span>
+                      </li>
+                    )}
+                    {hasFormatErrors() && (
+                      <li className="flex items-start">
+                        <span className="text-slate-400 mr-2">•</span>
+                        <span>Ensure consistent formatting throughout your file</span>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+
+                {/* Helpful links */}
+                <div className="border-t pt-4 mt-4">
+                  <div className="text-xs text-slate-600 font-medium mb-2">Need help with formats?</div>
+                  <div className="flex flex-wrap gap-2 justify-center text-xs">
+                    <button
+                      onClick={() => handleFormatHelp('date')}
+                      className="text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                    >
+                      <Calendar className="w-3 h-3" />
+                      Date Format Help
+                    </button>
+                    <button
+                      onClick={() => handleFormatHelp('number')}
+                      className="text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                    >
+                      <Hash className="w-3 h-3" />
+                      Number Format Help
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Open CSV structure help
+                        window.open('https://help.example.com/csv-structure', '_blank');
+                      }}
+                      className="text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                    >
+                      <FileText className="w-3 h-3" />
+                      CSV Structure Guide
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div className="flex justify-between mt-4">
               <Button variant="outline" onClick={onBackToChoice}>Back</Button>
-              <Button onClick={onNextToMapping}>Next: Mapping</Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div>
+                      <Button 
+                        onClick={onNextToMapping}
+                        disabled={hasValidationErrors()}
+                        className={hasValidationErrors() ? 'opacity-50 cursor-not-allowed' : ''}
+                      >
+                        Next: Mapping
+                      </Button>
+                    </div>
+                  </TooltipTrigger>
+                  {hasValidationErrors() && (
+                    <TooltipContent>
+                      <p>
+                        {hasInsufficientColumns() && hasFormatErrors()
+                          ? 'Please fix the column count and format validation errors before proceeding'
+                          : hasInsufficientColumns()
+                          ? 'Please fix the column count issue (try changing the separator) before proceeding'
+                          : 'Please fix the format validation errors before proceeding'
+                        }
+                      </p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </>
         ) : (
-          <div>
-            <div className="text-center py-8 border border-dashed rounded-lg bg-slate-50">
-              <div className="text-slate-500">No data to preview.</div>
-              <div className="text-xs text-slate-400 mt-1">Please check your file or adjust the separator/transpose settings above.</div>
-            </div>
-            <div className="flex justify-start mt-4">
-              <Button variant="outline" onClick={onBackToChoice}>Back</Button>
-            </div>
-          </div>
+          <ErrorHandler 
+            errorType="no-data" 
+            onBack={onBackToChoice}
+            onFormatHelp={handleFormatHelp}
+          />
         )}
       </div>
     </div>

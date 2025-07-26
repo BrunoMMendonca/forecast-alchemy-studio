@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Download, Edit3, Save, Trash2, Eye, TrendingUp, CheckCircle } from 'lucide-react';
-import { NormalizedSalesData, ForecastResult } from '@/pages/Index';
+import { NormalizedSalesData, ForecastResult } from '@/types/forecast';
 import { useToast } from '@/hooks/use-toast';
 import { exportForecastResults, generateSOPSummary, ExportOptions } from '@/utils/exportUtils';
 import { useGlobalSettings } from '@/hooks/useGlobalSettings';
@@ -77,7 +77,7 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
       
       if (skuResults.length > 0) {
         const bestResult = skuResults.reduce((best, current) => 
-          (current.accuracy || 0) > (best.accuracy || 0) ? current : best
+          (current.compositeScore || 0) > (best.compositeScore || 0) ? current : best
         );
         
         if (bestResult && bestResult.predictions) {
@@ -122,7 +122,7 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
   
   const bestModel = selectedSKUResults.length > 0 
     ? selectedSKUResults.reduce((best, current) => 
-        (current.accuracy || 0) > (best.accuracy || 0) ? current : best
+        (current.compositeScore || 0) > (best.compositeScore || 0) ? current : best
       )
     : null;
 
@@ -305,9 +305,9 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
             <Badge variant="secondary">
               Selected: {finalizedModels[selectedSKU] || 'None'}
             </Badge>
-            {bestModel?.accuracy && (
+            {bestModel?.compositeScore && (
               <Badge variant="outline">
-                {bestModel.accuracy.toFixed(1)}% Accuracy
+                {bestModel.compositeScore.toFixed(1)}% Score
               </Badge>
             )}
           </div>
@@ -342,9 +342,9 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
                     </div>
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between">
-                        <span>Accuracy:</span>
-                        <Badge variant={result.accuracy && result.accuracy > 80 ? 'default' : 'secondary'}>
-                          {result.accuracy?.toFixed(1) || 'N/A'}%
+                        <span>Performance:</span>
+                        <Badge variant={result.compositeScore && result.compositeScore > 80 ? 'default' : 'secondary'}>
+                          {result.compositeScore?.toFixed(1) || 'N/A'}%
                         </Badge>
                       </div>
                       <div className="flex justify-between">
@@ -503,147 +503,10 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b">
+                  <tr>
                     <th className="text-left p-2">SKU</th>
-                    <th className="text-left p-2">Selected Model</th>
-                    <th className="text-left p-2">Accuracy</th>
-                    <th className="text-center p-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {skus.map((sku) => {
-                    const selectedModel = finalizedModels[sku];
-                    const modelResult = forecastResults.find(r => r.sku === sku && r.model === selectedModel);
-                    return (
-                      <tr key={sku} className="border-b hover:bg-slate-50">
-                        <td className="p-2 font-medium">{sku}</td>
-                        <td className="p-2">{selectedModel || 'Not selected'}</td>
-                        <td className="p-2">
-                          {modelResult?.accuracy ? (
-                            <Badge variant={modelResult.accuracy > 80 ? 'default' : 'secondary'}>
-                              {modelResult.accuracy.toFixed(1)}%
-                            </Badge>
-                          ) : (
-                            'N/A'
-                          )}
-                        </td>
-                        <td className="p-2 text-center">
-                          {selectedModel ? (
-                            <CheckCircle className="h-4 w-4 text-green-500 mx-auto" />
-                          ) : (
-                            <div className="h-4 w-4 border-2 border-slate-300 rounded mx-auto" />
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Finalize Button */}
-        <div className="flex justify-center">
-          <Button 
-            onClick={handleFinalizeForecast}
-            size="lg"
-            className="px-8"
-            disabled={skus.some(sku => !finalizedModels[sku])}
-          >
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Finalize Model Selection
-          </Button>
-        </div>
-      </div>
-
-      {/* Separator */}
-      {showExportSection && (
-        <div className="my-8">
-          <Separator />
-        </div>
-      )}
-
-      {/* Step 2: Export & Documentation */}
-      {showExportSection && (
-        <div className="space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-8 h-8 bg-green-100 rounded-full">
-              <span className="text-sm font-semibold text-green-600">2</span>
-            </div>
-            <h2 className="text-xl font-semibold text-slate-800">Export & Documentation</h2>
-          </div>
-
-          {/* Export Options */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Export Forecast</CardTitle>
-              <CardDescription>
-                Choose your export format and scope for S&OP or analysis
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Export Mode</Label>
-                  <Select value={exportMode} onValueChange={(value: 'all_models' | 'single_forecast') => setExportMode(value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="single_forecast">Single Forecast (S&OP)</SelectItem>
-                      <SelectItem value="all_models">All Models Comparison</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {exportMode === 'single_forecast' && (
-                  <div className="space-y-2">
-                    <Label>Model Selection</Label>
-                    <Select value={selectedModel} onValueChange={setSelectedModel}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Auto-select best" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="auto_select_best">Auto-select Best Model</SelectItem>
-                        {models.map(model => (
-                          <SelectItem key={model} value={model}>{model}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                <Button onClick={() => handleExport('csv')} className="flex-1">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export CSV
-                </Button>
-                <Button onClick={() => handleExport('json')} variant="outline" className="flex-1">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export JSON
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* S&OP Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle>S&OP Summary</CardTitle>
-              <CardDescription>
-                Overview of finalized forecasts for Sales & Operations Planning
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">SKU</th>
-                      <th className="text-left p-2">Selected Model</th>
-                      <th className="text-left p-2">Accuracy</th>
+                    <th className="text-left p-2">Model</th>
+                    <th className="text-center p-2">Accuracy</th>
                       <th className="text-right p-2">Total Forecast</th>
                       <th className="text-right p-2">Avg per Period</th>
                       <th className="text-center p-2">Periods</th>
@@ -670,6 +533,40 @@ export const ForecastFinalization: React.FC<ForecastFinalizationProps> = ({
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+      {/* Step 2: Export Section */}
+      {showExportSection && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-8 h-8 bg-green-100 rounded-full">
+              <span className="text-sm font-semibold text-green-600">2</span>
+            </div>
+            <h2 className="text-xl font-semibold text-slate-800">Export Forecast Results</h2>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Export Options</CardTitle>
+              <CardDescription>
+                Choose your preferred export format and options
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex gap-4">
+                  <Button onClick={() => handleExport('csv')} className="flex-1">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export as CSV
+                  </Button>
+                  <Button onClick={() => handleExport('json')} className="flex-1">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export as JSON
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -1,4 +1,4 @@
-import { NormalizedSalesData, ForecastResult } from '@/pages/Index';
+import { NormalizedSalesData, ForecastResult } from '@/types/forecast';
 import { ModelConfig } from '@/types/forecast';
 import { detectDateFrequency, generateForecastDates } from '@/utils/dateUtils';
 import { 

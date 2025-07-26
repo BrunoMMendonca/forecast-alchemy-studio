@@ -37,9 +37,9 @@ export const ForecastSummaryStats: React.FC<ForecastSummaryStatsProps> = ({
           </div>
           <div>
             <div className="text-2xl font-bold text-orange-600">
-              {results.filter(r => r.accuracy && r.accuracy > 80).length}
+              {results.filter(r => r.&& r.> 80).length}
             </div>
-            <div className="text-sm text-slate-600">High Accuracy (&gt;80%)</div>
+            <div className="text-sm text-slate-600">High Performance</div>
           </div>
         </div>
       </CardContent>

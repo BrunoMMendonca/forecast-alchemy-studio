@@ -313,3 +313,189 @@ export const transformYearMonthCSV = (csvText: string, delimiter: string = ';'):
     rows: newRows
   };
 };
+
+// New utility functions for metadata-based cleaning
+export interface CleaningOperation {
+  id: string;
+  timestamp: string;
+  type: 'outlier_correction' | 'manual_edit' | 'note_addition';
+  sku: string;
+  date: string;
+  originalValue: number;
+  newValue?: number;
+  note?: string;
+}
+
+export interface CleaningMetadata {
+  version: number;
+  lastUpdated: string | null;
+  operations: CleaningOperation[];
+  activeCorrections: Record<string, Record<string, {
+    originalValue: number;
+    correctedValue: number;
+    note?: string;
+  }>>;
+}
+
+// Apply cleaning metadata to original data
+export const applyCleaningMetadata = (
+  originalData: NormalizedSalesData[],
+  cleaningMetadata: CleaningMetadata
+): NormalizedSalesData[] => {
+  if (!cleaningMetadata.activeCorrections) {
+    return originalData;
+  }
+
+  return originalData.map(item => {
+    const sku = item['Material Code'];
+    const date = item['Date'];
+    
+    const skuCorrections = cleaningMetadata.activeCorrections[sku];
+    if (!skuCorrections) {
+      return item;
+    }
+
+    const dateCorrection = skuCorrections[date];
+    if (!dateCorrection) {
+      return item;
+    }
+
+    // Apply the correction
+    return {
+      ...item,
+      Sales: dateCorrection.correctedValue,
+      note: dateCorrection.note
+    };
+  });
+};
+
+// Create cleaning metadata from individual edits
+export const createCleaningMetadata = (
+  originalData: NormalizedSalesData[],
+  cleanedData: NormalizedSalesData[],
+  newOperations: CleaningOperation[] = [],
+  previousOperations: CleaningOperation[] = []
+): CleaningMetadata => {
+  // Merge previous operations with new ones (audit trail)
+  const operations = [...(previousOperations || []), ...newOperations];
+
+  // Build active corrections from the full operations array
+  const activeCorrections: Record<string, Record<string, any>> = {};
+  operations.forEach(op => {
+    const sku = String(op.sku);
+    const date = String(op.date);
+    const { originalValue, newValue, note } = op;
+    if (!activeCorrections[sku]) {
+      activeCorrections[sku] = {};
+    }
+    // Always use the latest operation for each sku/date
+    activeCorrections[sku][date] = {
+      originalValue,
+      correctedValue: newValue,
+      note
+    };
+  });
+
+  return {
+    version: 1,
+    lastUpdated: new Date().toISOString(),
+    operations,
+    activeCorrections
+  };
+};
+
+// Generate a unique operation ID
+export const generateOperationId = (): string => {
+  return `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
+/**
+ * Attempts to auto-detect the most likely number format from an array of string samples.
+ * Supports formats: 1,234.56 (en-US), 1.234,56 (de-DE, pt-BR), 1234.56, 1234,56, 1 234,56
+ * Returns the best guess and a ranked list of candidates with match counts.
+ */
+export function autoDetectNumberFormat(samples: string[]): {
+  bestGuess: string | null,
+  candidates: { format: string, count: number }[]
+} {
+  // Supported formats and their regexes
+  const formats = [
+    { format: '1,234.56', regex: /^-?\d{1,3}(,\d{3})*(\.\d+)?$/ }, // en-US
+    { format: '1.234,56', regex: /^-?\d{1,3}(\.\d{3})*(,\d+)?$/ }, // de-DE, pt-BR
+    { format: '1234.56', regex: /^-?\d+\.\d+$/ }, // plain dot decimal
+    { format: '1234,56', regex: /^-?\d+,\d+$/ }, // plain comma decimal
+    { format: '1 234,56', regex: /^-?\d{1,3}( \d{3})*(,\d+)?$/ }, // space thousands, comma decimal
+    { format: '1 234.56', regex: /^-?\d{1,3}( \d{3})*(\.\d+)?$/ }, // space thousands, dot decimal
+    { format: '1234', regex: /^-?\d+$/ }, // integer
+  ];
+
+  const counts = formats.map(({ format, regex }) => ({
+    format,
+    count: samples.filter(s => regex.test(s)).length
+  }));
+
+  // Sort by count descending
+  const sorted = counts.sort((a, b) => b.count - a.count);
+  let bestGuess = sorted[0]?.count > 0 ? sorted[0].format : null;
+
+  // If all samples are integers and no other format matches, default to '1234'
+  if (!bestGuess && samples.length > 0 && samples.every(s => /^-?\d+$/.test(s))) {
+    bestGuess = '1234';
+  }
+
+  return {
+    bestGuess,
+    candidates: sorted.filter(c => c.count > 0)
+  };
+}
+
+/**
+ * Parses a string as a number using the selected number format.
+ * Handles thousands and decimal separators for formats like 1,234.56, 1.234,56, etc.
+ */
+export function parseNumberWithFormat(value: string, format: string): number {
+  if (typeof value !== 'string') return NaN;
+  let cleaned = value.trim();
+  switch (format) {
+    case '1,234.56': // comma thousands, dot decimal
+      cleaned = cleaned.replace(/,/g, '');
+      break;
+    case '1.234,56': // dot thousands, comma decimal
+      cleaned = cleaned.replace(/\./g, '').replace(/,/g, '.');
+      break;
+    case '1234.56': // no thousands, dot decimal
+      // nothing to replace
+      break;
+    case '1234,56': // no thousands, comma decimal
+      cleaned = cleaned.replace(/,/g, '.');
+      break;
+    case '1 234,56': // space thousands, comma decimal
+      cleaned = cleaned.replace(/ /g, '').replace(/,/g, '.');
+      break;
+    case '1 234.56': // space thousands, dot decimal
+      cleaned = cleaned.replace(/ /g, '');
+      break;
+    case '1234': // integer
+      // nothing to replace
+      break;
+    default:
+      // fallback: try to parse as float
+      break;
+  }
+  return parseFloat(cleaned);
+}
+
+export function autoDetectSeparator(firstLine: string): string {
+  if (!firstLine) return ',';
+  const candidates = [',', ';', '\t', '|'];
+  let maxCount = 0;
+  let detected = ',';
+  for (const sep of candidates) {
+    const count = (firstLine.match(new RegExp(`\\${sep}`, 'g')) || []).length;
+    if (count > maxCount) {
+      maxCount = count;
+      detected = sep;
+    }
+  }
+  return detected;
+}

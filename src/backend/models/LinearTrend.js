@@ -4,6 +4,7 @@ export class LinearTrend extends BaseModel {
   static metadata = {
     id: 'linear-trend',
     displayName: 'Linear Trend',
+    shortName: 'Linear Trend',
     parameters: [],
     get defaultParameters() {
       return {};
@@ -27,9 +28,16 @@ export class LinearTrend extends BaseModel {
       throw new Error('Training data must have at least 2 observations');
     }
 
+    // Set up column mapping if data has metadata
+    if (data && data.length > 0 && data[0]._columnMapping) {
+      this.columnMapping = data[0]._columnMapping;
+    }
+
     const values = data.map(d => {
       if (typeof d === 'object') {
-        return d.sales || d.Sales || d.value || d.amount || d;
+        // Use column mapping if available, otherwise fallback to legacy logic
+        return this.getColumnValue(d, 'Sales', 'Sales') ?? 
+               (d.sales || d.Sales || d.value || d.amount || d);
       }
       return d;
     });
@@ -74,7 +82,9 @@ export class LinearTrend extends BaseModel {
     
     const values = testData.map(d => {
       if (typeof d === 'object') {
-        return d.sales || d.Sales || d.value || d.amount || d;
+        // Use column mapping if available, otherwise fallback to legacy logic
+        return this.getColumnValue(d, 'Sales', 'Sales') ?? 
+               (d.sales || d.Sales || d.value || d.amount || d);
       }
       return d;
     });
@@ -126,3 +136,4 @@ export class LinearTrend extends BaseModel {
     return [this.metadata.defaultParameters];
   }
 }
+

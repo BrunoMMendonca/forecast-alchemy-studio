@@ -27,7 +27,14 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
  */
 export async function getBackendSettings(): Promise<Partial<GlobalSettings>> {
   try {
-    const response = await fetch('/api/settings');
+    const sessionToken = localStorage.getItem('sessionToken');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    
+    if (sessionToken) {
+      headers['Authorization'] = `Bearer ${sessionToken}`;
+    }
+
+    const response = await fetch('/api/settings', { headers });
     if (response.ok) {
       const backendSettings = await response.json();
       
@@ -61,9 +68,16 @@ export async function saveBackendSettings(settings: Partial<GlobalSettings>): Pr
 
     console.debug('[saveBackendSettings] Updating backend with:', backendSettings);
 
+    const sessionToken = localStorage.getItem('sessionToken');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    
+    if (sessionToken) {
+      headers['Authorization'] = `Bearer ${sessionToken}`;
+    }
+
     const response = await fetch('/api/settings', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(backendSettings),
     });
 
@@ -123,4 +137,17 @@ export async function saveSettings(settings: GlobalSettings): Promise<void> {
   };
   
   await saveBackendSettings(syncableSettings);
+} 
+
+export async function fetchModelMetadata() {
+  const sessionToken = localStorage.getItem('sessionToken');
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  
+  if (sessionToken) {
+    headers['Authorization'] = `Bearer ${sessionToken}`;
+  }
+
+  const response = await fetch('/api/models', { headers });
+  if (!response.ok) throw new Error('Failed to fetch model metadata');
+  return response.json();
 } 

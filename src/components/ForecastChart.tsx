@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, Maximize2 } from 'lucide-react';
-import { ForecastResult } from '@/pages/Index';
+import { ForecastResult } from '@/types/forecast';
 import { getBlueTone } from '@/utils/colors';
 
 interface ForecastChartProps {
@@ -31,7 +31,7 @@ const ChartContent: React.FC<{ chartData: any[], selectedSKUResults: ForecastRes
   // Find the best model for highlighting, but handle empty arrays
   const bestModel = selectedSKUResults.length > 0 
     ? selectedSKUResults.reduce((best, current) => 
-        (current.accuracy || 0) > (best.accuracy || 0) ? current : best
+        (current.compositeScore || 0) > (best.compositeScore || 0) ? current : best
       )
     : null;
 
@@ -90,13 +90,13 @@ const ChartContent: React.FC<{ chartData: any[], selectedSKUResults: ForecastRes
           />
           
           {selectedSKUResults.map((result, idx) => {
-            const isBestModel = bestModel && result.model === bestModel.model;
+            const isBestModel = bestModel && result.modelId === bestModel.modelId;
             
             return (
               <Line
-                key={result.model}
+                key={result.modelId}
                 type="monotone"
-                dataKey={result.model}
+                dataKey={result.modelId}
                 stroke={getBlueTone(idx, selectedSKUResults.length)}
                 strokeWidth={isBestModel ? 3 : 2}
                 dot={false}

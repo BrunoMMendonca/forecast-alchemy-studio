@@ -10,23 +10,37 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
-function isDateString(str) {
+function isDateString(str, dateFormat = null) {
   if (!str || typeof str !== 'string') return false;
   const normalizedStr = str.trim();
+  
+  // If a specific date format is provided, use parseDateWithFormat
+  if (dateFormat) {
+    return parseDateWithFormat(normalizedStr, dateFormat) !== null;
+  }
+  
+  // Fallback to existing patterns for auto-detection
   const datePatterns = [
     /^\d{4}-\d{2}-\d{2}$/, /^\d{2}\/\d{2}\/\d{4}$/, /^\d{2}-\d{2}-\d{4}$/,
     /^\d{4}\/\d{2}\/\d{2}$/, /^\d{1,2}\/\d{1,2}\/\d{2,4}$/, /^\d{1,2}-\d{1,2}-\d{2,4}$/,
-    /^\d{8}$/, /^jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i,
+    /^\d{8}$/, /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{4}$/i,
   ];
   return datePatterns.some(pattern => pattern.test(normalizedStr));
 }
 
-function isLikelyDateColumn(header, allHeaders) {
+function isLikelyDateColumn(header, allHeaders, dateFormat = null) {
   const normalizedHeader = header.toLowerCase().trim();
+  
+  // If a specific date format is provided, use parseDateWithFormat
+  if (dateFormat) {
+    return parseDateWithFormat(header, dateFormat) !== null;
+  }
+  
+  // Fallback to existing patterns for auto-detection
   const datePatterns = [
       /^\d{4}-\d{2}-\d{2}$/, /^\d{2}\/\d{2}\/\d{4}$/, /^\d{2}-\d{2}-\d{4}$/,
       /^\d{4}\/\d{2}\/\d{2}$/, /^\d{1,2}\/\d{1,2}\/\d{2,4}$/, /^\d{1,2}-\d{1,2}-\d{2,4}$/,
-      /^jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i, /^q[1-4]|quarter/i,
+      /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{4}$/i, /^q[1-4]|quarter/i,
       /^week|wk/i, /^month|mon/i, /^year|yr/i,
   ];
   if (datePatterns.some(pattern => pattern.test(normalizedHeader))) return true;
@@ -35,7 +49,7 @@ function isLikelyDateColumn(header, allHeaders) {
   return false;
 }
 
-function detectColumnRole(header, index, allHeaders) {
+function detectColumnRole(header, index, allHeaders, dateFormat = null) {
   const normalizedHeader = header.toLowerCase().trim();
   
   // More specific Material Code detection
@@ -55,7 +69,23 @@ function detectColumnRole(header, index, allHeaders) {
       return 'Description';
   }
   
-  // Date detection
+  // Division detection
+  if (/division|business.?unit|bu|region|area|zone|territory|market|segment|group|department|unit/i.test(normalizedHeader)) {
+      return 'Division';
+  }
+  
+  // Cluster detection
+  if (/cluster|location|site|plant|factory|warehouse|distribution.?center|dc|hub|center|centre|facility|outlet|store|branch/i.test(normalizedHeader)) {
+      return 'Cluster';
+  }
+  
+  // Lifecycle Phase detection
+  if (/lifecycle|life.?cycle|phase|stage|status|product.?stage|sales.?status|product.?status|maturity|growth|launch|end.?of.?life|eol|discontinued/i.test(normalizedHeader)) {
+      return 'Lifecycle Phase';
+  }
+  
+  // Date detection - for wide-format CSVs, headers that look like dates should be detected as Date
+  // regardless of the selected date format, since the format is for parsing the header itself
   if (isDateString(header) || isLikelyDateColumn(header, allHeaders)) {
       return 'Date';
   }
@@ -63,14 +93,14 @@ function detectColumnRole(header, index, allHeaders) {
   return header; // Default to header name
 }
 
-function detectColumnRoles(headers) {
+function detectColumnRoles(headers, dateFormat = null) {
   if (!headers || !Array.isArray(headers)) {
     console.warn('detectColumnRoles called with invalid headers:', headers);
     return [];
   }
   return headers.map((header, index) => ({
     originalName: header,
-    role: detectColumnRole(header, index, headers)
+    role: detectColumnRole(header, index, headers, dateFormat)
   }));
 }
 
@@ -256,6 +286,22 @@ function normalizeAndPivotData(data, mappings, dateRange, dateFormat, originalHe
   // 2. Build normalized rows
   const result = [];
   for (const row of data) {
+    // Check if this row has any non-zero sales values across all date columns
+    let hasNonZeroSales = false;
+    for (const dateMap of dateMappings) {
+      const salesValue = row[originalHeaders.indexOf(dateMap.originalName)];
+      const num = Number(salesValue);
+      if (salesValue !== '' && Number.isFinite(num) && num > 0) {
+        hasNonZeroSales = true;
+        break;
+      }
+    }
+    
+    // Skip rows that have no meaningful sales data
+    if (!hasNonZeroSales) {
+      continue;
+    }
+    
     for (const dateMap of dateMappings) {
       const entry = {};
       entry['Material Code'] = row[originalHeaders.indexOf(materialMapping.originalName)];
@@ -271,8 +317,8 @@ function normalizeAndPivotData(data, mappings, dateRange, dateFormat, originalHe
         formattedDate = `${parsedDate.getFullYear()}-${pad(parsedDate.getMonth() + 1)}-${pad(parsedDate.getDate())}`;
       }
       entry['Date'] = formattedDate;
-      // Sales
-      const salesValue = row[dateMap.idx];
+      // Sales - Fix: Use the correct index in the data row
+      const salesValue = row[originalHeaders.indexOf(dateMap.originalName)];
       const num = Number(salesValue);
       entry['Sales'] = (salesValue === '' || !Number.isFinite(num)) ? 0 : num;
 
@@ -343,12 +389,13 @@ function transposeData(data, headers) {
   };
 }
 
-function parseCsvWithHeaders(csvData) {
+function parseCsvWithHeaders(csvData, separator = null) {
   if (!csvData) {
     return { data: [], headers: [], separator: ',' };
   }
 
-  const detectedSeparator = autoDetectSeparator(csvData.split('\\n')[0]);
+  // Use provided separator or auto-detect
+  const detectedSeparator = separator || autoDetectSeparator(csvData.split('\n')[0]);
   
   const parsed = Papa.parse(csvData, {
     skipEmptyLines: true,
@@ -405,48 +452,214 @@ function parseCsvWithHeaders(csvData) {
  */
 function parseDateWithFormat(dateStr, format) {
   if (!dateStr) return null;
-  let day, month, year, parts;
+  let day, month, year, parts, match;
+  let result = null;
+
   switch (format) {
     case 'dd/mm/yyyy':
+      if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) break;
       parts = dateStr.split('/');
-      if (parts.length !== 3) return null;
       day = parseInt(parts[0], 10);
       month = parseInt(parts[1], 10) - 1;
       year = parseInt(parts[2], 10);
+      result = new Date(year, month, day);
       break;
     case 'mm/dd/yyyy':
+      if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) break;
       parts = dateStr.split('/');
-      if (parts.length !== 3) return null;
       month = parseInt(parts[0], 10) - 1;
       day = parseInt(parts[1], 10);
       year = parseInt(parts[2], 10);
+      result = new Date(year, month, day);
       break;
     case 'yyyy-mm-dd':
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) break;
       parts = dateStr.split('-');
-      if (parts.length !== 3) return null;
       year = parseInt(parts[0], 10);
       month = parseInt(parts[1], 10) - 1;
       day = parseInt(parts[2], 10);
+      result = new Date(year, month, day);
       break;
     case 'dd-mm-yyyy':
+      if (!/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) break;
       parts = dateStr.split('-');
-      if (parts.length !== 3) return null;
       day = parseInt(parts[0], 10);
       month = parseInt(parts[1], 10) - 1;
       year = parseInt(parts[2], 10);
+      result = new Date(year, month, day);
       break;
     case 'yyyy/mm/dd':
+      if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateStr)) break;
       parts = dateStr.split('/');
-      if (parts.length !== 3) return null;
       year = parseInt(parts[0], 10);
       month = parseInt(parts[1], 10) - 1;
       day = parseInt(parts[2], 10);
+      result = new Date(year, month, day);
+      break;
+    case 'yyyy':
+      if (!/^\d{4}$/.test(dateStr)) break;
+      year = parseInt(dateStr, 10);
+      result = new Date(year, 0, 1);
+      break;
+    case 'yyyy-ww':
+      match = dateStr.match(/^(\d{4})-W(\d{2})$/);
+      if (!match) break;
+      year = parseInt(match[1], 10);
+      let week = parseInt(match[2], 10);
+      result = getDateOfISOWeek(year, week);
+      break;
+    case 'ww-yyyy':
+      match = dateStr.match(/^W(\d{2})-(\d{4})$/);
+      if (!match) break;
+      week = parseInt(match[1], 10);
+      year = parseInt(match[2], 10);
+      result = getDateOfISOWeek(year, week);
+      break;
+    case 'yyyy/ww':
+      match = dateStr.match(/^(\d{4})\/W(\d{2})$/);
+      if (!match) break;
+      year = parseInt(match[1], 10);
+      week = parseInt(match[2], 10);
+      result = getDateOfISOWeek(year, week);
+      break;
+    case 'ww/yyyy':
+      match = dateStr.match(/^W(\d{2})\/(\d{4})$/);
+      if (!match) break;
+      week = parseInt(match[1], 10);
+      year = parseInt(match[2], 10);
+      result = getDateOfISOWeek(year, week);
+      break;
+    case 'yyyy-wwrange':
+      match = dateStr.match(/^(\d{4})-W(\d{2})-W(\d{2})$/);
+      if (!match) break;
+      year = parseInt(match[1], 10);
+      week = parseInt(match[2], 10);
+      result = getDateOfISOWeek(year, week);
+      break;
+    case 'weekrange':
+      match = dateStr.match(/^W(\d{2})-W(\d{2})$/);
+      if (!match) break;
+      // Use current year for weekrange
+      year = new Date().getFullYear();
+      week = parseInt(match[1], 10);
+      result = getDateOfISOWeek(year, week);
       break;
     default:
-      return null;
+      result = null;
   }
-  if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
-  return new Date(year, month, day);
+
+  // Final validation: if result is an invalid date, return null
+  if (result instanceof Date && isNaN(result.getTime())) result = null;
+
+  // Debug log
+  // Remove or comment out in production
+  console.log(`[parseDateWithFormat] Input: "${dateStr}", Format: "${format}", Result:`, result);
+
+  return result;
+}
+
+// Helper for ISO week to date
+function getDateOfISOWeek(year, week) {
+  // January 4th is always in the first week of the year
+  const jan4 = new Date(year, 0, 4);
+  const jan4Day = jan4.getDay() || 7; // 1 (Mon) - 7 (Sun)
+  const firstMonday = new Date(jan4);
+  firstMonday.setDate(jan4.getDate() - (jan4Day - 1));
+  const targetDate = new Date(firstMonday);
+  targetDate.setDate(firstMonday.getDate() + (week - 1) * 7);
+  return targetDate;
+}
+
+/**
+ * Parses a string as a number using the selected number format.
+ * Handles thousands and decimal separators for formats like 1,234.56, 1.234,56, etc.
+ * Returns NaN if the format doesn't match the expected pattern.
+ */
+function parseNumberWithFormat(value, format) {
+  if (typeof value !== 'string') return NaN;
+  const trimmed = value.trim();
+  let pattern;
+  switch (format) {
+    case '1,234.56': // comma thousands, dot decimal
+      if (trimmed.length >= 4 && !trimmed.includes(',')) {
+        console.log(`[parseNumberWithFormat] REJECT: "${trimmed}" as "${format}" (missing comma for thousands)`);
+        return NaN;
+      }
+      pattern = /^(\d{1,3}(,\d{3})*|\d{1,3})(\.\d+)?$/;
+      if (!pattern.test(trimmed)) {
+        console.log(`[parseNumberWithFormat] REJECT: "${trimmed}" as "${format}" (regex mismatch)`);
+        return NaN;
+      }
+      return parseFloat(trimmed.replace(/,/g, ''));
+    case '1.234,56': // dot thousands, comma decimal
+      if (trimmed.length >= 4 && !trimmed.includes('.')) {
+        console.log(`[parseNumberWithFormat] REJECT: "${trimmed}" as "${format}" (missing dot for thousands)`);
+        return NaN;
+      }
+      pattern = /^(\d{1,3}(\.\d{3})*|\d{1,3})(,\d+)?$/;
+      if (!pattern.test(trimmed)) {
+        console.log(`[parseNumberWithFormat] REJECT: "${trimmed}" as "${format}" (regex mismatch)`);
+        return NaN;
+      }
+      return parseFloat(trimmed.replace(/\./g, '').replace(/,/g, '.'));
+    case '1234.56': // no thousands, dot decimal
+      if (trimmed.includes(',') || trimmed.includes(' ')) {
+        console.log(`[parseNumberWithFormat] REJECT: "${trimmed}" as "${format}" (unexpected thousands separator)`);
+        return NaN;
+      }
+      pattern = /^\d+(\.\d+)?$/;
+      if (!pattern.test(trimmed)) {
+        console.log(`[parseNumberWithFormat] REJECT: "${trimmed}" as "${format}" (regex mismatch)`);
+        return NaN;
+      }
+      return parseFloat(trimmed);
+    case '1234,56': // no thousands, comma decimal
+      if (trimmed.includes('.') || trimmed.includes(' ')) {
+        console.log(`[parseNumberWithFormat] REJECT: "${trimmed}" as "${format}" (unexpected thousands separator)`);
+        return NaN;
+      }
+      pattern = /^\d+(,\d+)?$/;
+      if (!pattern.test(trimmed)) {
+        console.log(`[parseNumberWithFormat] REJECT: "${trimmed}" as "${format}" (regex mismatch)`);
+        return NaN;
+      }
+      return parseFloat(trimmed.replace(/,/g, '.'));
+    case '1 234,56': // space thousands, comma decimal
+      if (trimmed.length >= 4 && !trimmed.includes(' ')) {
+        console.log(`[parseNumberWithFormat] REJECT: "${trimmed}" as "${format}" (missing space for thousands)`);
+        return NaN;
+      }
+      pattern = /^(\d{1,3}( \d{3})*|\d{1,3})(,\d+)?$/;
+      if (!pattern.test(trimmed)) {
+        console.log(`[parseNumberWithFormat] REJECT: "${trimmed}" as "${format}" (regex mismatch)`);
+        return NaN;
+      }
+      return parseFloat(trimmed.replace(/ /g, '').replace(/,/g, '.'));
+    case '1 234.56': // space thousands, dot decimal
+      if (trimmed.length >= 4 && !trimmed.includes(' ')) {
+        console.log(`[parseNumberWithFormat] REJECT: "${trimmed}" as "${format}" (missing space for thousands)`);
+        return NaN;
+      }
+      pattern = /^(\d{1,3}( \d{3})*|\d{1,3})(\.\d+)?$/;
+      if (!pattern.test(trimmed)) {
+        console.log(`[parseNumberWithFormat] REJECT: "${trimmed}" as "${format}" (regex mismatch)`);
+        return NaN;
+      }
+      return parseFloat(trimmed.replace(/ /g, ''));
+    case '1234': // integer
+      if (trimmed.includes(',') || trimmed.includes('.') || trimmed.includes(' ')) {
+        console.log(`[parseNumberWithFormat] REJECT: "${trimmed}" as "${format}" (unexpected separator in integer)`);
+        return NaN;
+      }
+      pattern = /^\d+$/;
+      if (!pattern.test(trimmed)) {
+        console.log(`[parseNumberWithFormat] REJECT: "${trimmed}" as "${format}" (regex mismatch)`);
+        return NaN;
+      }
+      return parseFloat(trimmed);
+    default:
+      return parseFloat(trimmed);
+  }
 }
 
 // Infer frequency from an array of date strings
@@ -497,5 +710,7 @@ export {
   autoDetectSeparator,
   transposeData,
   parseCsvWithHeaders,
-  inferDateFrequency
+  inferDateFrequency,
+  parseDateWithFormat,
+  parseNumberWithFormat
 };

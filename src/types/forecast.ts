@@ -42,7 +42,7 @@ export interface ModelConfig {
   bestMethodScore?: number;
   winnerMethod?: string;
   compositeScore?: number;
-  accuracy?: number;
+  
   gridCompositeScore?: number;
   aiCompositeScore?: number;
   bestCompositeScore?: number;
@@ -71,10 +71,17 @@ export interface ForecastResult {
   sku: string;
   model: string;
   predictions: ForecastPrediction[];
-  accuracy?: number;
+  
   parameters?: Record<string, number>;
   isValid?: boolean;
   method?: string;
+  compositeScore?: number;
+  modelId?: string;
+  displayName?: string;
+  category?: string;
+  description?: string;
+  isSeasonal?: boolean;
+  optimizationId?: string;
 }
 
 export interface SeasonalConfig {
@@ -104,4 +111,17 @@ export interface ForecastState {
   forecastPeriods: number;
   isGenerating: boolean;
   error: string | null;
+}
+
+export interface CsvUploadResult {
+  success: boolean;
+  datasetId?: number;
+  sourceFilePath?: string;   // Optional: actual file path for audit (e.g., uploads/file.csv)
+  summary: {
+    skuCount: number;
+    dateRange: [string, string];
+    totalPeriods: number;
+    frequency?: string;
+  };
+  skuList: string[];
 }

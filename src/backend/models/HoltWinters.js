@@ -4,6 +4,7 @@ export class HoltWinters extends BaseModel {
   static metadata = {
     id: 'holt-winters',
     displayName: 'Holt-Winters',
+    shortName: 'Holt-Winters',
     parameters: [
       { name: 'alpha', type: 'number', default: 0.3, visible: true, label: 'Level Smoothing (alpha)', description: 'Controls the smoothing of the level component.' },
       { name: 'beta', type: 'number', default: 0.1, visible: true, label: 'Trend Smoothing (beta)', description: 'Controls the smoothing of the trend component.' },
@@ -42,9 +43,16 @@ export class HoltWinters extends BaseModel {
       throw new Error(`Training data must have at least 2 seasons (${this.seasonLength * 2} observations)`);
     }
     
+    // Set up column mapping if data has metadata
+    if (data && data.length > 0 && data[0]._columnMapping) {
+      this.columnMapping = data[0]._columnMapping;
+    }
+    
     const values = data.map(d => {
       if (typeof d === 'object') {
-        return d.sales || d.Sales || d.value || d.amount || d;
+        // Use column mapping if available, otherwise fallback to legacy logic
+        return this.getColumnValue(d, 'Sales', 'Sales') ?? 
+               (d.sales || d.Sales || d.value || d.amount || d);
       }
       return d;
     });
@@ -135,7 +143,9 @@ export class HoltWinters extends BaseModel {
 
     const values = testData.map(d => {
       if (typeof d === 'object') {
-        return d.sales || d.Sales || d.value || d.amount || d;
+        // Use column mapping if available, otherwise fallback to legacy logic
+        return this.getColumnValue(d, 'Sales', 'Sales') ?? 
+               (d.sales || d.Sales || d.value || d.amount || d);
       }
       return d;
     });

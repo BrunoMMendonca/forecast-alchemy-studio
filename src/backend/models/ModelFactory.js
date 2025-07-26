@@ -7,7 +7,7 @@ import { SeasonalNaive } from './SeasonalNaive.js';
 import { SeasonalMovingAverage } from './SeasonalMovingAverage.js';
 import { ARIMAModel } from './ARIMA.js';
 import { SARIMAModel } from './SARIMA.js';
-import { db } from '../db.js';
+import { pgPool } from '../db.js';
 
 // Helper function to get seasonal periods from frequency
 function getSeasonalPeriodsFromFrequency(frequency) {
@@ -22,36 +22,37 @@ function getSeasonalPeriodsFromFrequency(frequency) {
 }
 
 // Helper function to get seasonal period from global settings
-function getSeasonalPeriodFromSettings() {
-  return new Promise((resolve) => {
-    db.get("SELECT value FROM settings WHERE key = 'global_seasonalPeriods'", [], (err, row) => {
-      if (!err && row) {
+async function getSeasonalPeriodFromSettings() {
+  try {
+    const result = await pgPool.query("SELECT value FROM settings WHERE key = 'global_seasonalPeriods'", []);
+    if (result.rows.length > 0) {
         try {
-          const seasonalPeriods = JSON.parse(row.value);
-          resolve(seasonalPeriods);
+        const seasonalPeriods = JSON.parse(result.rows[0].value);
+        return seasonalPeriods;
         } catch (e) {
           console.error('Error parsing seasonal periods setting:', e);
-          resolve(12); // default to monthly
+        return 12; // default to monthly
         }
       } else {
         // Fallback: try to get from frequency setting
-        db.get("SELECT value FROM settings WHERE key = 'global_frequency'", [], (err, freqRow) => {
-          if (!err && freqRow) {
+      const freqResult = await pgPool.query("SELECT value FROM settings WHERE key = 'global_frequency'", []);
+      if (freqResult.rows.length > 0) {
             try {
-              const frequency = JSON.parse(freqRow.value);
+          const frequency = JSON.parse(freqResult.rows[0].value);
               const seasonalPeriods = getSeasonalPeriodsFromFrequency(frequency);
-              resolve(seasonalPeriods);
+          return seasonalPeriods;
             } catch (e) {
               console.error('Error parsing frequency setting:', e);
-              resolve(12); // default to monthly
+          return 12; // default to monthly
             }
           } else {
-            resolve(12); // default to monthly
+        return 12; // default to monthly
           }
-        });
-      }
-    });
-  });
+    }
+  } catch (error) {
+    console.error('Error getting seasonal period from settings:', error);
+    return 12; // default to monthly
+  }
 }
 
 // Model factory for creating and managing forecasting models

@@ -1,27 +1,10 @@
 import { saveSettings, getSettings } from '@/services/settingsProvider';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { BusinessContext, DEFAULT_BUSINESS_CONTEXT } from '@/types/businessContext';
+import { GlobalSettings } from '@/types/globalSettings';
 import { useAISettings } from './useAISettings';
 
 const GLOBAL_SETTINGS_KEY = 'global_settings';
-
-export interface GlobalSettings {
-  forecastPeriods: number;
-  businessContext: BusinessContext;
-  aiForecastModelOptimizationEnabled: boolean;
-  aiCsvImportEnabled: boolean;
-  aiFailureThreshold: number;
-  largeFileProcessingEnabled: boolean;
-  largeFileThreshold: number; // in bytes, default 1MB
-  aiReasoningEnabled: boolean;
-  mapeWeight: number; // as percent, e.g. 40
-  rmseWeight: number;
-  maeWeight: number;
-  accuracyWeight: number;
-  frequency?: string;
-  autoDetectFrequency?: boolean;
-  csvSeparator?: string;
-}
 
 const DEFAULT_SETTINGS: GlobalSettings = {
   forecastPeriods: 12,
@@ -36,6 +19,7 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   rmseWeight: 30,
   maeWeight: 20,
   accuracyWeight: 10,
+  
   frequency: 'monthly',
   autoDetectFrequency: true,
   csvSeparator: ',',
@@ -58,6 +42,7 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
   const [rmseWeight, setRmseWeightState] = useState<number>(DEFAULT_SETTINGS.rmseWeight);
   const [maeWeight, setMaeWeightState] = useState<number>(DEFAULT_SETTINGS.maeWeight);
   const [accuracyWeight, setAccuracyWeightState] = useState<number>(DEFAULT_SETTINGS.accuracyWeight);
+  
   const [frequency, setFrequencyState] = useState<string | undefined>(DEFAULT_SETTINGS.frequency);
   const [autoDetectFrequency, setAutoDetectFrequencyState] = useState<boolean | undefined>(DEFAULT_SETTINGS.autoDetectFrequency);
   const [csvSeparator, setCsvSeparatorState] = useState<string>(DEFAULT_SETTINGS.csvSeparator!);
@@ -81,7 +66,7 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
         setMapeWeightState(settings.mapeWeight);
         setRmseWeightState(settings.rmseWeight);
         setMaeWeightState(settings.maeWeight);
-        setAccuracyWeightState(settings.accuracyWeight);
+        
         setFrequencyState(settings.frequency);
         setAutoDetectFrequencyState(settings.autoDetectFrequency);
         setCsvSeparatorState(settings.csvSeparator);
@@ -566,7 +551,7 @@ export const useGlobalSettings = (props?: UseGlobalSettingsProps) => {
     }
   }, [
     forecastPeriods, businessContext, aiForecastModelOptimizationEnabled, aiCsvImportEnabled, aiFailureThreshold,
-    largeFileProcessingEnabled, largeFileThreshold, aiReasoningEnabled, mapeWeight, rmseWeight, maeWeight, accuracyWeight,
+    largeFileProcessingEnabled, largeFileThreshold, aiReasoningEnabled, mapeWeight, rmseWeight, maeWeight,
     frequency, autoDetectFrequency, saveSettings
   ]);
 

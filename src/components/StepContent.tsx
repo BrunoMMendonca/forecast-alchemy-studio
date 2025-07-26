@@ -10,13 +10,17 @@ import { BarChart3, TrendingUp, Upload, Zap, Eye, Database } from 'lucide-react'
 import { Icon } from 'lucide-react';
 import { broom } from '@lucide/lab';
 import type { NormalizedSalesData, ForecastResult, ModelConfig } from '@/types/forecast';
-import { CsvImportWizard, CsvUploadResult } from '@/components/CsvImportWizard';
+import { CsvUploadResult } from '@/components/CsvImportWizard';
+import { CsvImportWizard } from '@/components/CsvImportWizard';
 import { useOutletContext } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useExistingDataDetection } from '@/hooks/useExistingDataDetection';
 import { ForecastEngine } from '@/components/ForecastEngine';
+import { ForecastWizard } from '@/components/ForecastWizard';
 import { useSKUStore } from '@/store/skuStore';
+import { useBestResultsMapping } from '@/hooks/useBestResultsMapping';
+import { applyCleaningMetadata } from '../utils/csvUtils';
 
 interface StepContentProps {
   currentStep: number;
@@ -30,8 +34,8 @@ interface StepContentProps {
   isOptimizing?: boolean;
   onDataUpload?: (result: CsvUploadResult) => void;
   onConfirm: (result: CsvUploadResult, isExistingData?: boolean) => Promise<void>;
-  onDataCleaning: (data: NormalizedSalesData[], changedSKUs?: string[], filePath?: string) => void;
-  onImportDataCleaning: (skus: string[]) => void;
+  onDataCleaning: (data: NormalizedSalesData[], changedSKUs?: string[], datasetId?: number) => void;
+  onImportDataCleaning: (skus: string[], datasetId?: number, data?: NormalizedSalesData[]) => void;
   onForecastGeneration: (results: ForecastResult[], selectedSKU: string) => void;
   onStepChange: (step: number) => void;
   onAIFailure: (errorMessage: string) => void;
@@ -86,91 +90,78 @@ export const StepContent: React.FC<StepContentProps> = ({
   const [pendingUploadResult, setPendingUploadResult] = useState<CsvUploadResult | null>(null);
   const [nameInput, setNameInput] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [bestResults, setBestResults] = useState<any[]>([]);
 
   // Get the setLastLoadedDataset function from the hook
   const { setLastLoadedDataset } = useExistingDataDetection();
 
+  // Use the best results mapping hook (mimic ForecastEngine)
+  const { bestResults: mappedBestResults } = useBestResultsMapping(
+    models,
+    selectedSKUForResults || '',
+    updateModel,
+    processedDataInfo?.datasetId,
+    [],
+    selectedSKUForResults || '',
+    processedDataInfo?.datasetId ? `dataset_${processedDataInfo.datasetId}` : ''
+  );
+
+  useEffect(() => {
+    setBestResults(mappedBestResults);
+  }, [mappedBestResults]);
+
   // Reset cleanedData and salesData only when switching to a new dataset
-  const prevFilePathRef = useRef<string | null>(null);
+  const prevDatasetIdRef = useRef<number | null>(null);
   useEffect(() => {
     if (
-      processedDataInfo?.filePath &&
-      processedDataInfo.filePath !== prevFilePathRef.current
+      processedDataInfo?.datasetId &&
+      processedDataInfo.datasetId !== prevDatasetIdRef.current
     ) {
       setCleanedData([]);
       setSalesData([]);
-      prevFilePathRef.current = processedDataInfo.filePath;
+      prevDatasetIdRef.current = processedDataInfo.datasetId;
     }
-  }, [processedDataInfo?.filePath]);
+  }, [processedDataInfo?.datasetId]);
 
   // Load sales data when we reach Clean & Prepare step and have processedDataInfo
   useEffect(() => {
     const loadSalesData = async () => {
-      if (currentStep === 1 && processedDataInfo?.filePath) {
+      console.log('🔍 [StepContent] loadSalesData called:', {
+        currentStep,
+        processedDataInfo,
+        hasDatasetId: !!processedDataInfo?.datasetId
+      });
+      if (currentStep === 1 && processedDataInfo?.datasetId) {
         setIsLoadingData(true);
         try {
-          // Extract baseName and hash from the filePath
-          const match = processedDataInfo.filePath.match(/Original_CSV_Upload-(\d+)-([a-f0-9]{8})-processed\.json/);
-          let baseName = '';
-          let hash = '';
-          if (match) {
-            baseName = `Original_CSV_Upload-${match[1]}`;
-            hash = match[2];
+          let data;
+          // Load data from database using datasetId
+          const response = await fetch(`/api/load-processed-data?datasetId=${processedDataInfo.datasetId}`);
+          if (response.ok) {
+            data = await response.json();
+            console.log('Loaded data from database:', {
+              datasetId: processedDataInfo.datasetId,
+              dataLength: data.data?.length,
+              sampleData: data.data?.slice(0, 2),
+              columns: data.columns,
+              columnRoles: data.columnRoles
+            });
           } else {
-            // console.error('Could not extract baseName and hash from filePath:', processedDataInfo.filePath);
+            console.error('Failed to load processed data from database with datasetId:', processedDataInfo.datasetId);
             setIsLoadingData(false);
             return;
           }
-          
-          // Load processed data
-          const response = await fetch(`/api/load-processed-data?baseName=${encodeURIComponent(baseName)}&hash=${encodeURIComponent(hash)}`);
-          if (response.ok) {
-            const data = await response.json();
-            // console.log('LOADING DATA: Loaded processed data from backend:', data);
-            // console.log('LOADING DATA: Columns:', data.columns);
-            // console.log('LOADING DATA: ColumnRoles:', data.columnRoles);
-            
-            // Transform to long format if needed
-            let longFormatData: NormalizedSalesData[];
-            if (data.data && data.data.length > 0 && typeof data.data[0].Date !== 'undefined' && typeof data.data[0].Sales !== 'undefined') {
-              // console.log('LOADING DATA: Data is already long-format, using as-is.');
-              longFormatData = data.data;
-            } else {
-              // fallback: transform if needed
-              longFormatData = transformWideToLongFormat(data.data || [], data.columns || [], data.columnRoles || []);
-              // console.log('LOADING DATA: Transformed long-format data:', longFormatData);
-            }
-            
-            setSalesData(longFormatData);
-            
-            // Check if there's existing cleaning data for this dataset
-            try {
-              const cleaningResponse = await fetch(`/api/load-cleaning-data?baseName=${encodeURIComponent(baseName)}&hash=${encodeURIComponent(hash)}`);
-              if (cleaningResponse.ok) {
-                const cleaningData = await cleaningResponse.json();
-                // console.log('LOADING DATA: Found existing cleaning data, using it:', cleaningData);
-                setCleanedData(cleaningData.data || longFormatData);
-              } else {
-                // console.log('LOADING DATA: No existing cleaning data found, using processed data as initial cleaned data');
-                setCleanedData(longFormatData);
-              }
-            } catch (cleaningError) {
-              // console.log('LOADING DATA: Error checking for cleaning data, using processed data as initial cleaned data:', cleaningError);
-              setCleanedData(longFormatData);
-            }
-          } else {
-            // console.error('Failed to load processed data');
-          }
-        } catch (error) {
-          // console.error('Error loading processed data:', error);
+          setSalesData(data.data || []);
+          setCleanedData([]);
+        } catch (err) {
+          console.error('Error loading sales data:', err);
         } finally {
           setIsLoadingData(false);
         }
       }
     };
-
     loadSalesData();
-  }, [currentStep, processedDataInfo?.filePath]);
+  }, [currentStep, processedDataInfo?.datasetId]);
 
   // Transform wide-format data (from backend) to long-format data (for outlier detection)
   const transformWideToLongFormat = (wideData: any[], columns: string[], columnRoles: string[]): NormalizedSalesData[] => {
@@ -204,21 +195,30 @@ export const StepContent: React.FC<StepContentProps> = ({
     return longData;
   };
 
-  const handleDataCleaning = (data: NormalizedSalesData[], changedSKUs?: string[], filePath?: string) => {
+  const handleDataCleaning = (data: NormalizedSalesData[], changedSKUs?: string[], datasetId?: number) => {
     setCleanedData(data);
-    onDataCleaning(data, changedSKUs, filePath);
+    onDataCleaning(data, changedSKUs, datasetId);
   };
 
   // Intercept onConfirm to show name prompt
   const handleConfirmWithNamePrompt = async (result: CsvUploadResult) => {
-    // Suggest a name: "Sales Data (YYYY-MM-DD, startDate to endDate)"
-    const today = new Date();
-    const uploadDate = today.toISOString().slice(0, 10);
-    const dateRange = result.summary?.dateRange || ['N/A', 'N/A'];
-    const suggestedName = `Dataset ${uploadDate} - From ${dateRange[0]} to ${dateRange[1]} (${result.summary?.skuCount || 0} products)`;
-    setNameInput(suggestedName);
-    setPendingUploadResult(result);
-    setShowNamePrompt(true);
+    console.log('🔄 handleConfirmWithNamePrompt called');
+    // For now, just call onConfirm directly to test the reset functionality
+    await onConfirm(result);
+    console.log('🔄 onConfirm completed - CSV import wizard should be reset');
+    
+    // TODO: Re-enable name prompt after confirming reset works
+    // setTimeout(() => {
+    //   console.log('🔄 Showing name prompt dialog');
+    //   // Suggest a name: "Sales Data (YYYY-MM-DD, startDate to endDate)"
+    //   const today = new Date();
+    //   const uploadDate = today.toISOString().slice(0, 10);
+    //   const dateRange = result.summary?.dateRange || ['N/A', 'N/A'];
+    //   const suggestedName = `Dataset ${uploadDate} - From ${dateRange[0]} to ${dateRange[1]} (${result.summary?.skuCount || 0} products)`;
+    //   setNameInput(suggestedName);
+    //   setPendingUploadResult(result);
+    //   setShowNamePrompt(true);
+    // }, 100);
   };
 
   // Save the name and proceed
@@ -226,14 +226,13 @@ export const StepContent: React.FC<StepContentProps> = ({
     if (!pendingUploadResult) return;
     setSavingName(true);
     try {
-      await fetch('/api/save-dataset-name', {
+      await fetch(`/api/datasets/${pendingUploadResult.datasetId}/rename`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath: pendingUploadResult.filePath, name: nameInput })
+        body: JSON.stringify({ name: nameInput })
       });
       setShowNamePrompt(false);
       setSavingName(false);
-      await onConfirm(pendingUploadResult);
       setPendingUploadResult(null);
     } catch (err) {
       setSavingName(false);
@@ -305,9 +304,16 @@ export const StepContent: React.FC<StepContentProps> = ({
                   await onConfirm(result, true);
                   handleStepChange(1);
                 }}
-                currentLoadedFile={processedDataInfo?.filePath}
+                currentLoadedFile={processedDataInfo?.datasetId?.toString()}
                 setLastLoadedDataset={setLastLoadedDataset}
               />
+              {processedDataInfo && (
+                <div className="mt-6 flex justify-end">
+                  <Button onClick={() => handleStepChange(1)}>
+                    Proceed to Data Cleaning
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         );
@@ -335,11 +341,12 @@ export const StepContent: React.FC<StepContentProps> = ({
                 </div>
               ) : (
               <OutlierDetection
-                  data={salesData}
-                  cleanedData={cleanedData}
-                  onDataCleaning={handleDataCleaning}
+                data={salesData}
+                cleanedData={cleanedData}
+                onDataCleaning={handleDataCleaning}
                 onImportDataCleaning={onImportDataCleaning}
                 queueSize={queueSize}
+                canonicalDatasetId={processedDataInfo?.datasetId}
               />
               )}
               {processedDataInfo && salesData.length > 0 && (
@@ -365,7 +372,10 @@ export const StepContent: React.FC<StepContentProps> = ({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <DataVisualization data={cleanedData.length > 0 ? cleanedData : salesData} />
+              <DataVisualization 
+                data={cleanedData.length > 0 ? cleanedData : salesData} 
+                processedDataInfo={processedDataInfo}
+              />
               {processedDataInfo && (
                 <div className="mt-6 flex justify-end">
                   <Button onClick={() => handleStepChange(3)}>
@@ -378,9 +388,8 @@ export const StepContent: React.FC<StepContentProps> = ({
         );
       case 3:
         return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white/80 backdrop-blur-sm shadow-xl border-0 rounded-lg">
-              <ForecastEngine
+          <div className="space-y-6">
+            <ForecastWizard
                 data={cleanedData.length > 0 ? cleanedData : salesData}
                 forecastPeriods={forecastPeriods}
                 onForecastGeneration={onForecastGeneration}
@@ -390,25 +399,9 @@ export const StepContent: React.FC<StepContentProps> = ({
                 models={models}
                 updateModel={updateModel}
                 processedDataInfo={processedDataInfo}
-                filePath={processedDataInfo?.filePath}
+                datasetId={processedDataInfo?.datasetId}
                 setForecastResults={setForecastResults}
               />
-            </div>
-
-            <Card className="bg-white/80 /*backdrop-blur-sm*/ shadow-xl border-0" style={{ overflow: 'visible' }}>
-              <CardHeader>
-                <CardTitle>Forecast Results</CardTitle>
-                <CardDescription>
-                  Compare predictions from different models for {selectedSKU || 'selected product'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ForecastResults 
-                  results={forecastResults} 
-                  selectedSKU={selectedSKU}
-                />
-              </CardContent>
-            </Card>
           </div>
         );
       case 4:

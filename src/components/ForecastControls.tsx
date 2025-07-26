@@ -31,14 +31,14 @@ export const ForecastControls: React.FC = () => {
     if (results.length === 0) return;
 
     // Create CSV content
-    const headers = ['SKU', 'Model', 'Date', 'Predicted Value', 'Accuracy %'];
+    const headers = ['SKU', 'Model', 'Date', 'Predicted Value', 'Performance'];
     const rows = results.flatMap(result => 
       result.predictions.map(prediction => [
         result.sku,
         result.model,
         prediction.date,
         prediction.value,
-        result.accuracy?.toFixed(1) || 'N/A'
+        result.?.toFixed(1) || 'N/A'
       ])
     );
 

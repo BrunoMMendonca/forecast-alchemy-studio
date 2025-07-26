@@ -5,10 +5,10 @@ const db = new sqlite3.Database(dbPath);
 
 console.log('Checking database schema...');
 
-// Check if the jobs table exists and get its schema
-db.all("PRAGMA table_info(jobs)", (err, rows) => {
+// Check if the optimization_jobs table exists and get its schema
+db.all("PRAGMA table_info(optimization_jobs)", (err, rows) => {
     if (err) {
-        console.error('Error checking table schema:', err);
+        console.error('Error checking optimization_jobs table schema:', err);
     } else {
         console.log('Jobs table schema:');
         rows.forEach(row => {
@@ -18,9 +18,9 @@ db.all("PRAGMA table_info(jobs)", (err, rows) => {
         // Check if batchId column exists
         const batchIdColumn = rows.find(row => row.name === 'batchId');
         if (batchIdColumn) {
-            console.log('\n✅ batchId column exists in jobs table');
+            console.log('\n✅ batchId column exists in optimization_jobs table');
         } else {
-            console.log('\n❌ batchId column is missing from jobs table');
+            console.log('\n❌ batchId column is missing from optimization_jobs table');
         }
     }
     

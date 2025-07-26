@@ -47,8 +47,8 @@ const exportAsCSV = (results: ForecastResult[], options: ExportOptions, filename
           result.model,
           prediction.value
         ];
-        if (options.includeAccuracy && result.accuracy) {
-          row.push(result.accuracy.toFixed(2));
+        if (options.includeAccuracy && result.compositeScore) {
+          row.push(result.compositeScore.toFixed(2));
         }
         csvContent += row.join(separator) + '\n';
       });
@@ -76,7 +76,7 @@ const exportAsCSV = (results: ForecastResult[], options: ExportOptions, filename
     Object.entries(skuGroups).forEach(([sku, skuResults]) => {
       // Use the best performing model for this SKU
       const bestResult = skuResults.reduce((best, current) => 
-        (current.accuracy || 0) > (best.accuracy || 0) ? current : best
+        (current.compositeScore || 0) > (best.compositeScore || 0) ? current : best
       );
       
       bestResult.predictions.forEach(prediction => {
@@ -86,8 +86,8 @@ const exportAsCSV = (results: ForecastResult[], options: ExportOptions, filename
           prediction.value,
           bestResult.model
         ];
-        if (options.includeAccuracy && bestResult.accuracy) {
-          row.push(bestResult.accuracy.toFixed(2));
+        if (options.includeAccuracy && bestResult.compositeScore) {
+          row.push(bestResult.compositeScore.toFixed(2));
         }
         csvContent += row.join(separator) + '\n';
       });
@@ -123,13 +123,13 @@ const exportAsJSON = (results: ForecastResult[], options: ExportOptions, filenam
     
     const sopForecasts = Object.entries(skuGroups).map(([sku, skuResults]) => {
       const bestResult = skuResults.reduce((best, current) => 
-        (current.accuracy || 0) > (best.accuracy || 0) ? current : best
+        (current.compositeScore || 0) > (best.compositeScore || 0) ? current : best
       );
       
       return {
         sku,
         model_used: bestResult.model,
-        accuracy: bestResult.accuracy,
+        accuracy: bestResult.compositeScore,
         forecast_periods: bestResult.predictions.length,
         predictions: bestResult.predictions
       };
@@ -169,7 +169,7 @@ export const generateSOPSummary = (results: ForecastResult[]) => {
   
   return Object.entries(skuGroups).map(([sku, skuResults]) => {
     const bestResult = skuResults.reduce((best, current) => 
-      (current.accuracy || 0) > (best.accuracy || 0) ? current : best
+      (current.compositeScore || 0) > (best.compositeScore || 0) ? current : best
     );
     
     const totalForecast = bestResult.predictions.reduce((sum, p) => sum + p.value, 0);
@@ -178,7 +178,7 @@ export const generateSOPSummary = (results: ForecastResult[]) => {
     return {
       sku,
       recommendedModel: bestResult.model,
-      accuracy: bestResult.accuracy || 0,
+      accuracy: bestResult.compositeScore || 0,
       totalForecast,
       avgPeriodForecast: avgForecast,
       forecastPeriods: bestResult.predictions.length

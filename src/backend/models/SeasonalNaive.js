@@ -4,6 +4,7 @@ export class SeasonalNaive extends BaseModel {
   static metadata = {
     id: 'seasonal-naive',
     displayName: 'Seasonal Naive',
+    shortName: 'Seasonal Naive',
     parameters: [
       // No seasonalPeriods parameter
     ],
@@ -35,9 +36,16 @@ export class SeasonalNaive extends BaseModel {
       throw new Error(`Training data must have at least one full season (${this.seasonLength} observations)`);
     }
 
+    // Set up column mapping if data has metadata
+    if (data && data.length > 0 && data[0]._columnMapping) {
+      this.columnMapping = data[0]._columnMapping;
+    }
+
     this.historicalData = data.map(d => {
       if (typeof d === 'object') {
-        return d.sales || d.Sales || d.value || d.amount || d;
+        // Use column mapping if available, otherwise fallback to legacy logic
+        return this.getColumnValue(d, 'Sales', 'Sales') ?? 
+               (d.sales || d.Sales || d.value || d.amount || d);
       }
       return d;
     });
@@ -71,7 +79,9 @@ export class SeasonalNaive extends BaseModel {
 
     const values = testData.map(d => {
       if (typeof d === 'object') {
-        return d.sales || d.Sales || d.value || d.amount || d;
+        // Use column mapping if available, otherwise fallback to legacy logic
+        return this.getColumnValue(d, 'Sales', 'Sales') ?? 
+               (d.sales || d.Sales || d.value || d.amount || d);
       }
       return d;
     });

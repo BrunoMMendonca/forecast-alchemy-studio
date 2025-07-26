@@ -1,4 +1,4 @@
-import { NormalizedSalesData } from '@/pages/Index';
+import { NormalizedSalesData } from '@/types/forecast';
 
 export interface ValidationResult {
   accuracy: number;

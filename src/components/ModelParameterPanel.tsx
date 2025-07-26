@@ -13,6 +13,9 @@ interface ModelParameterPanelProps {
   isOptimizing: boolean;
   optimizingModel: string | null;
   aiForecastModelOptimizationEnabled?: boolean;
+  datasetId: number;
+  uuid: string;
+  onViewChart?: (modelId: string) => void;
 }
 
 export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
@@ -23,8 +26,12 @@ export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
   onResetModel,
   isOptimizing,
   optimizingModel,
-  aiForecastModelOptimizationEnabled
+  aiForecastModelOptimizationEnabled,
+  datasetId,
+  uuid,
+  onViewChart
 }) => {
+  console.log('[ModelParameterPanel] datasetId:', datasetId, 'uuid:', uuid);
   const [requirements, setRequirements] = useState<Record<string, any>>({});
   const [loadingReqs, setLoadingReqs] = useState(true);
   const selectedSKU = useSKUStore(state => state.selectedSKU);
@@ -80,6 +87,7 @@ export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
   return (
     <div className="space-y-4">
       {models.map((model) => {
+        console.log('[ModelParameterPanel] Rendering ModelCard for modelId:', model.id, 'datasetId:', datasetId, 'uuid:', uuid);
         let disableToggle = false;
         let disableReason = '';
         
@@ -101,6 +109,8 @@ export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
           key={model.id}
           model={model}
           selectedSKU={selectedSKU}
+          filePath={`dataset_${datasetId}`}
+          uuid={uuid}
           data={data}
           onToggle={() => onToggleModel(model.id)}
           onUpdateParameter={(parameter, value) => onUpdateParameter(model.id, parameter, typeof value === 'number' ? value : parseFloat(value as string) || 0)}
@@ -108,8 +118,9 @@ export const ModelParameterPanel: React.FC<ModelParameterPanelProps> = ({
           onMethodSelection={handleMethodSelection}
           isOptimizing={isOptimizing && optimizingModel === model.id}
           aiForecastModelOptimizationEnabled={aiForecastModelOptimizationEnabled}
-            disableToggle={disableToggle}
-            disableReason={disableReason}
+          disableToggle={disableToggle}
+          disableReason={disableReason}
+          onViewChart={onViewChart}
         />
         );
       })}

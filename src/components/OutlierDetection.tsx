@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Zap, Clock, Maximize2 } from 'lucide-react';
 import { NormalizedSalesData } from '@/types/forecast';
-import { exportCleaningData, parseCleaningCSV, applyImportChanges, ImportPreview } from '@/utils/csvUtils';
+import { exportCleaningData, parseCleaningCSV, applyImportChanges, ImportPreview, createCleaningMetadata, generateOperationId, CleaningOperation } from '@/utils/csvUtils';
 import { ImportPreviewDialog } from '@/components/ImportPreviewDialog';
 import { OutlierChart } from '@/components/OutlierChart';
 import { OutlierStatistics } from '@/components/OutlierStatistics';
@@ -11,14 +11,17 @@ import { OutlierControls } from '@/components/OutlierControls';
 import { OutlierExportImport } from '@/components/OutlierExportImport';
 import { OutlierDataTable } from '@/components/OutlierDataTable';
 import { DataCleanModal } from './DataCleanModal';
+import { useToast } from '@/hooks/use-toast';
+import { useSKUStore } from '@/store/skuStore';
 
 interface OutlierDetectionProps {
   data: NormalizedSalesData[];
   cleanedData: NormalizedSalesData[];
-  onDataCleaning: (cleanedData: NormalizedSalesData[], changedSKUs?: string[], filePath?: string) => void;
-  onImportDataCleaning?: (importedSKUs: string[], filePath?: string) => void;
+  onDataCleaning: (cleanedData: NormalizedSalesData[], changedSKUs?: string[], datasetId?: number) => void;
+  onImportDataCleaning?: (importedSKUs: string[], datasetId?: number, data?: NormalizedSalesData[]) => void;
   queueSize?: number;
   onFileNameChange?: (fileName: string) => void;
+  canonicalDatasetId?: number;
 }
 
 interface OutlierDataPoint extends NormalizedSalesData {
@@ -37,10 +40,16 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
   onDataCleaning, 
   onImportDataCleaning,
   queueSize = 0,
-  onFileNameChange
+  onFileNameChange,
+  canonicalDatasetId
 }) => {
+  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedSKU, setSelectedSKU] = useState<string>('');
+  
+  // Use Zustand store instead of local state
+  const selectedSKU = useSKUStore(state => state.selectedSKU);
+  const setSelectedSKU = useSKUStore(state => state.setSelectedSKU);
+  
   const [threshold, setThreshold] = useState<number[]>([2.5]);
   const [treatZeroAsOutlier, setTreatZeroAsOutlier] = useState<boolean>(true);
   const [editingOutliers, setEditingOutliers] = useState<Record<string, { value: number; note: string }>>({});
@@ -72,7 +81,6 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
 
   // Reset local state when data changes
   React.useEffect(() => {
-    setSelectedSKU('');
     setThreshold([2.5]);
     setEditingOutliers({});
     setShowImportDialog(false);
@@ -83,12 +91,12 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
     setHighlightedDate(undefined);
   }, [data]);
 
-  // Auto-select first SKU when data changes
+  // Auto-select first SKU when data changes (using Zustand)
   React.useEffect(() => {
     if (skus.length > 0 && (!selectedSKU || !skus.includes(selectedSKU))) {
       setSelectedSKU(skus[0]);
     }
-  }, [skus, selectedSKU]);
+  }, [skus, selectedSKU, setSelectedSKU]);
 
   const outlierData = useMemo((): OutlierDataPoint[] => {
     if (effectiveCleanedData.length === 0 || !selectedSKU) return [];
@@ -234,6 +242,12 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
 
   const handleConfirmImport = async () => {
     try {
+      // Validate canonical datasetId is available
+      if (!canonicalDatasetId) {
+        console.error('[OutlierDetection] No canonical dataset ID available for data cleaning');
+        // Still proceed with data cleaning but log the issue
+      }
+
       // Always apply corrections to the original data, not just cleanedData
       let baseData = cleanedData.length > 0 ? cleanedData : data;
       const updatedData = applyImportChanges(baseData, importPreviews);
@@ -243,20 +257,72 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
         return corrected ? corrected : orig;
       });
       
-      // Save cleaned data to backend and get new filePath
-      let filePath = undefined;
-      try {
-        const columns = allRows.length > 0 ? Object.keys(allRows[0]) : [];
-        const response = await fetch('/api/save-cleaned-data', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: allRows, columns })
+      // Create cleaning operations from import previews
+      const newOperations: CleaningOperation[] = importPreviews
+        .filter(p => p.action === 'modify' || p.action === 'add_note')
+        .map(preview => {
+          const originalItem = data.find(d => 
+            d['Material Code'] === preview.sku && d['Date'] === preview.date
+          );
+          
+          return {
+            id: generateOperationId(),
+            timestamp: new Date().toISOString(),
+            type: preview.action === 'modify' ? 'manual_edit' : 'note_addition',
+            sku: preview.sku,
+            date: preview.date,
+            originalValue: originalItem?.Sales || 0,
+            newValue: preview.action === 'modify' ? preview.newSales : undefined,
+            note: preview.note
+          };
         });
-        if (!response.ok) throw new Error('Failed to save cleaned data');
-        const result = await response.json();
-        filePath = result.filePath;
+
+      // Load existing cleaning metadata to maintain audit trail
+      let existingOperations: CleaningOperation[] = [];
+      if (canonicalDatasetId) {
+        try {
+          const response = await fetch(`/api/load-cleaning-metadata?datasetId=${canonicalDatasetId}`);
+          if (response.ok) {
+            const result = await response.json();
+            if (result.success && result.cleaningMetadata) {
+              existingOperations = result.cleaningMetadata.operations || [];
+            }
+          }
+        } catch (err) {
+          console.warn('[OutlierDetection] Could not load existing cleaning metadata:', err);
+        }
+      }
+
+      // Create cleaning metadata with full audit trail
+      const cleaningMetadata = createCleaningMetadata(data, allRows, newOperations, existingOperations);
+      
+      // Save cleaning metadata to backend
+      try {
+        if (canonicalDatasetId) {
+          console.log('[OutlierDetection] Sending cleaning metadata:', {
+            canonicalDatasetId,
+            canonicalDatasetIdType: typeof canonicalDatasetId,
+            hasCleaningMetadata: !!cleaningMetadata
+          });
+          
+          const response = await fetch('/api/save-cleaned-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              cleaningMetadata,
+              datasetId: canonicalDatasetId
+            })
+          });
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.details || 'Failed to save cleaning metadata');
+          }
+          const result = await response.json();
+          console.log('[OutlierDetection] Saved import cleaning metadata:', result);
+        }
       } catch (err) {
-        console.error('Failed to save cleaned data:', err);
+        console.error('Failed to save cleaning metadata:', err);
+        // Continue with data cleaning even if save fails
       }
       
       // Extract SKUs that were modified during import
@@ -267,9 +333,9 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
       ));
       
       onDataCleaning(allRows);
-      // Notify parent about imported SKUs for optimization with filePath
+      // Notify parent about imported SKUs for optimization with canonical datasetId
       if (onImportDataCleaning && modifiedSKUs.length > 0) {
-        onImportDataCleaning(modifiedSKUs, filePath);
+        onImportDataCleaning(modifiedSKUs, canonicalDatasetId, Array.isArray(allRows) ? allRows : []);
       }
       const modifications = importPreviews.filter(p => p.action === 'modify');
       const noteAdditions = importPreviews.filter(p => p.action === 'add_note');
@@ -278,8 +344,23 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
       setImportErrors([]);
       setImportMetadata({});
       setImportFileName('');
+      
+      // Show success message
+      toast({
+        title: "Import Successful",
+        description: `Imported ${modifications.length} modifications and ${noteAdditions.length} note additions`,
+        variant: "default",
+      });
+      
+      console.log(`[OutlierDetection] Import completed: ${modifications.length} modifications, ${noteAdditions.length} note additions`);
     } catch (error) {
-      console.error("Import Error:", error instanceof Error ? error.message : "Failed to apply changes");
+      console.error('Error during import confirmation:', error);
+      toast({
+        title: "Import Failed",
+        description: error instanceof Error ? error.message : "Unknown error during import",
+        variant: "destructive",
+      });
+      setImportErrors([`Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`]);
     }
   };
 
@@ -343,62 +424,123 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
   };
 
   const handleSaveEdit = async (key: string) => {
-    const editData = editingOutliers[key];
-    if (!editData) return;
+    const editingItem = editingOutliers[key];
+    if (!editingItem) return;
 
-    const parts = key.split('_');
-    if (parts.length < 3) {
-      console.error('Invalid key format for save:', key);
-      return;
-    }
+    const { value, note } = editingItem;
+    const dataPoint = outlierData.find(d => d.key === key);
+    if (!dataPoint) return;
+
+    // Find the original data point
+    const originalItem = data.find(d => 
+      d['Material Code'] === dataPoint['Material Code'] && 
+      d['Date'] === dataPoint['Date']
+    );
     
-    const date = parts[parts.length - 2];
-    const sku = parts.slice(0, -2).join('_');
+    if (!originalItem) return;
 
-    console.log('🧹 EDIT: Saving changes for SKU:', sku, 'Date:', date, 'New value:', editData.value);
+    // Create cleaning operation
+    const newOperation: CleaningOperation = {
+      id: generateOperationId(),
+      timestamp: new Date().toISOString(),
+      type: value !== originalItem.Sales ? 'manual_edit' : 'note_addition',
+      sku: dataPoint['Material Code'],
+      date: dataPoint['Date'],
+      originalValue: originalItem.Sales,
+      newValue: value,
+      note: note || undefined
+    };
 
-    const updatedData = cleanedData.map(item => {
-      if (item['Material Code'] === sku && item['Date'] === date) {
-        return { 
-          ...item, 
-          Sales: editData.value,
-          note: editData.note || undefined
-        };
+    // Load existing cleaning metadata to maintain audit trail
+    let existingOperations: CleaningOperation[] = [];
+    if (canonicalDatasetId) {
+      try {
+        const response = await fetch(`/api/load-cleaning-metadata?datasetId=${canonicalDatasetId}`);
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.cleaningMetadata) {
+            existingOperations = result.cleaningMetadata.operations || [];
+          }
+        }
+      } catch (err) {
+        console.warn('[OutlierDetection] Could not load existing cleaning metadata:', err);
       }
-      return item;
-    });
-    
-    // Save cleaned data to backend and get new filePath
-    let filePath = undefined;
+    }
+
+    // Create cleaning metadata with full audit trail
+    const cleaningMetadata = createCleaningMetadata(data, cleanedData, [newOperation], existingOperations);
+
+    // Save to backend using metadata approach
     try {
-      const columns = cleanedData.length > 0 ? Object.keys(cleanedData[0]) : [];
+      if (!canonicalDatasetId) {
+        console.error('[OutlierDetection] No canonical dataset ID available for data cleaning');
+        // Fall back to local state update only
+        const updatedCleanedData = cleanedData.map(item => {
+          if (item['Material Code'] === dataPoint['Material Code'] && item['Date'] === dataPoint['Date']) {
+            return { ...item, Sales: value, note: note || undefined };
+          }
+          return item;
+        });
+        onDataCleaning(updatedCleanedData, [dataPoint['Material Code']]);
+        return;
+      }
+
+      console.log('[OutlierDetection] Sending cleaning metadata (handleSaveEdit):', {
+        canonicalDatasetId,
+        canonicalDatasetIdType: typeof canonicalDatasetId,
+        hasCleaningMetadata: !!cleaningMetadata
+      });
+
       const response = await fetch('/api/save-cleaned-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: updatedData, columns })
+        body: JSON.stringify({ 
+          cleaningMetadata,
+          datasetId: canonicalDatasetId
+        })
       });
-      if (!response.ok) throw new Error('Failed to save cleaned data');
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || 'Failed to save cleaning metadata');
+      }
+
       const result = await response.json();
-      filePath = result.filePath;
-    } catch (err) {
-      console.error('Failed to save cleaned data:', err);
-    }
+      console.log('[OutlierDetection] Saved cleaning metadata:', result);
 
-    // Notify parent with the changed SKU and new filePath
-    if (filePath) {
-      onDataCleaning(updatedData, [sku], filePath);
-    } else {
-    onDataCleaning(updatedData, [sku]);
-    }
-    
-    setEditingOutliers(prev => {
-      const updated = { ...prev };
-      delete updated[key];
-      return updated;
-    });
+      // Update local state
+      const updatedCleanedData = cleanedData.map(item => {
+        if (item['Material Code'] === dataPoint['Material Code'] && item['Date'] === dataPoint['Date']) {
+          return { ...item, Sales: value, note: note || undefined };
+        }
+        return item;
+      });
 
-    const noteText = editData.note ? ` (Note: ${editData.note})` : '';
-    setHighlightedDate(undefined);
+      // Notify parent about the change
+      onDataCleaning(updatedCleanedData, [dataPoint['Material Code']], canonicalDatasetId);
+
+      // Clear editing state
+      setEditingOutliers(prev => {
+        const updated = { ...prev };
+        delete updated[key];
+        return updated;
+      });
+
+      // Show success message
+      toast({
+        title: "Data Updated",
+        description: `Successfully updated ${dataPoint['Material Code']} for ${dataPoint['Date']}`,
+        variant: "default",
+      });
+
+    } catch (error) {
+      console.error('Failed to save cleaning metadata:', error);
+      toast({
+        title: "Save Failed",
+        description: error instanceof Error ? error.message : "Failed to save changes",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleCancelEdit = (key: string) => {
@@ -410,54 +552,102 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
     setHighlightedDate(undefined);
   };
 
-  const handlePrevSKU = () => {
-    const currentIndex = skus.indexOf(selectedSKU);
-    if (currentIndex > 0) {
-      setSelectedSKU(skus[currentIndex - 1]);
-    }
-  };
-
-  const handleNextSKU = () => {
-    const currentIndex = skus.indexOf(selectedSKU);
-    if (currentIndex < skus.length - 1) {
-      setSelectedSKU(skus[currentIndex + 1]);
-    }
-  };
-
   // Modal save handler
-  const handleModalSave = (date: string, value: number, note: string) => {
+  const handleModalSave = async (date: string, value: number, note: string) => {
     // Find the SKU for the highlighted date
     const dataPoint = outlierData.find(d => d['Date'] === date);
     if (!dataPoint) return;
     const sku = dataPoint['Material Code'];
-    const updatedData = cleanedData.map(item => {
-      if (item['Material Code'] === sku && item['Date'] === date) {
-        return { ...item, Sales: value, note: note || undefined };
-      }
-      return item;
-    });
-    // Save cleaned data to backend and get new filePath
-    let filePath = undefined;
-    (async () => {
+    
+    // Find the original data point
+    const originalItem = data.find(d => 
+      d['Material Code'] === sku && d['Date'] === date
+    );
+    
+    if (!originalItem) return;
+
+    // Create cleaning operation
+    const newOperation: CleaningOperation = {
+      id: generateOperationId(),
+      timestamp: new Date().toISOString(),
+      type: value !== originalItem.Sales ? 'manual_edit' : 'note_addition',
+      sku: sku,
+      date: date,
+      originalValue: originalItem.Sales,
+      newValue: value,
+      note: note || undefined
+    };
+
+    // Load existing cleaning metadata to maintain audit trail
+    let existingOperations: CleaningOperation[] = [];
+    if (canonicalDatasetId) {
       try {
-        const columns = cleanedData.length > 0 ? Object.keys(cleanedData[0]) : [];
-        const response = await fetch('/api/save-cleaned-data', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: updatedData, columns })
-        });
-        if (!response.ok) throw new Error('Failed to save cleaned data');
-        const result = await response.json();
-        filePath = result.filePath;
+        const response = await fetch(`/api/load-cleaning-metadata?datasetId=${canonicalDatasetId}`);
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.cleaningMetadata) {
+            existingOperations = result.cleaningMetadata.operations || [];
+          }
+        }
       } catch (err) {
-        console.error('Failed to save cleaned data:', err);
+        console.warn('[OutlierDetection] Could not load existing cleaning metadata:', err);
       }
-      if (filePath) {
-        onDataCleaning(updatedData, [sku], filePath);
-      } else {
+    }
+
+    // Create cleaning metadata with full audit trail
+    const cleaningMetadata = createCleaningMetadata(data, cleanedData, [newOperation], existingOperations);
+
+    // Save to backend using metadata approach
+    try {
+      if (!canonicalDatasetId) {
+        console.error('[OutlierDetection] No canonical dataset ID available for data cleaning');
+        // Fall back to local state update only
+        const updatedData = cleanedData.map(item => {
+          if (item['Material Code'] === sku && item['Date'] === date) {
+            return { ...item, Sales: value, note: note || undefined };
+          }
+          return item;
+        });
         onDataCleaning(updatedData, [sku]);
+        return;
       }
-    })();
+
+      const response = await fetch('/api/save-cleaned-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          cleaningMetadata,
+          datasetId: canonicalDatasetId
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || 'Failed to save cleaning metadata');
+      }
+
+      const result = await response.json();
+      console.log('[OutlierDetection] Modal saved cleaning metadata:', result);
+
+      // Update local state
+      const updatedData = cleanedData.map(item => {
+        if (item['Material Code'] === sku && item['Date'] === date) {
+          return { ...item, Sales: value, note: note || undefined };
+        }
+        return item;
+      });
+
+      // Notify parent about the change
+      onDataCleaning(updatedData, [sku], canonicalDatasetId);
+
+    } catch (error) {
+      console.error('Failed to save cleaning metadata from modal:', error);
+      toast({
+        title: "Save Failed",
+        description: error instanceof Error ? error.message : "Failed to save changes",
+        variant: "destructive",
+      });
+    }
   };
 
   if (data.length === 0) {
@@ -490,8 +680,6 @@ export const OutlierDetection: React.FC<OutlierDetectionProps> = ({
         skus={Array.from(new Set(skus.filter(Boolean)))}
         threshold={threshold}
         onThresholdChange={setThreshold}
-        onPrevSKU={handlePrevSKU}
-        onNextSKU={handleNextSKU}
         treatZeroAsOutlier={treatZeroAsOutlier}
         setTreatZeroAsOutlier={setTreatZeroAsOutlier}
         descriptions={descriptions}

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Holiday Button Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .button:hover {
+            background-color: #2563eb;
+        }
+        .form {
+            margin-top: 16px;
+            padding: 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background-color: #f9fafb;
+        }
+        .form.hidden {
+            display: none;
+        }
+        .input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            margin-top: 4px;
+        }
+        .label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+        .debug-info {
+            background-color: #fef3c7;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Holiday Button Test</h2>
+        
+        <div class="debug-info">
+            <strong>Debug Info:</strong><br>
+            Click count: <span id="clickCount">0</span><br>
+            Form visible: <span id="formVisible">No</span>
+        </div>
+
+        <button 
+            class="button" 
+            onclick="toggleForm()"
+            id="addHolidayBtn"
+        >
+            ➕ Add Holiday
+        </button>
+
+        <div class="form hidden" id="holidayForm">
+            <h3>Add Holiday</h3>
+            
+            <div style="margin-bottom: 12px;">
+                <label class="label">Holiday Name:</label>
+                <input 
+                    type="text" 
+                    class="input" 
+                    placeholder="e.g., New Year's Day"
+                    id="holidayName"
+                >
+            </div>
+
+            <div style="margin-bottom: 12px;">
+                <label class="label">Start Date:</label>
+                <input 
+                    type="date" 
+                    class="input" 
+                    id="startDate"
+                >
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label>
+                    <input type="checkbox" id="isRange"> Date range (multiple days)
+                </label>
+            </div>
+
+            <div id="endDateContainer" style="display: none; margin-bottom: 16px;">
+                <label class="label">End Date:</label>
+                <input 
+                    type="date" 
+                    class="input" 
+                    id="endDate"
+                >
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+                <button class="button" onclick="addHoliday()">Add Holiday</button>
+                <button class="button" style="background-color: #6b7280;" onclick="toggleForm()">Cancel</button>
+            </div>
+        </div>
+
+        <div id="holidaysList" style="margin-top: 20px;">
+            <h3>Added Holidays:</h3>
+            <div id="holidaysContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        let clickCount = 0;
+        let formVisible = false;
+        let holidays = [];
+
+        function toggleForm() {
+            console.log('Button clicked!');
+            clickCount++;
+            formVisible = !formVisible;
+            
+            updateDebugInfo();
+            
+            const form = document.getElementById('holidayForm');
+            if (formVisible) {
+                form.classList.remove('hidden');
+            } else {
+                form.classList.add('hidden');
+            }
+        }
+
+        function updateDebugInfo() {
+            document.getElementById('clickCount').textContent = clickCount;
+            document.getElementById('formVisible').textContent = formVisible ? 'Yes' : 'No';
+        }
+
+        function addHoliday() {
+            const name = document.getElementById('holidayName').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const isRange = document.getElementById('isRange').checked;
+
+            if (!name || !startDate) {
+                alert('Please fill in the holiday name and start date');
+                return;
+            }
+
+            const holiday = {
+                id: Date.now(),
+                name: name,
+                startDate: startDate,
+                endDate: endDate,
+                isRange: isRange && endDate
+            };
+
+            holidays.push(holiday);
+            updateHolidaysList();
+            toggleForm();
+            
+            // Clear form
+            document.getElementById('holidayName').value = '';
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            document.getElementById('isRange').checked = false;
+            document.getElementById('endDateContainer').style.display = 'none';
+        }
+
+        function updateHolidaysList() {
+            const container = document.getElementById('holidaysContainer');
+            container.innerHTML = '';
+
+            if (holidays.length === 0) {
+                container.innerHTML = '<p style="color: #6b7280;">No holidays added yet</p>';
+                return;
+            }
+
+            holidays.forEach(holiday => {
+                const div = document.createElement('div');
+                div.style.cssText = 'padding: 8px; margin: 4px 0; background: #f3f4f6; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;';
+                
+                const info = document.createElement('div');
+                info.innerHTML = `
+                    <strong>${holiday.name}</strong><br>
+                    <small>${holiday.startDate}${holiday.isRange ? ' - ' + holiday.endDate : ''}</small>
+                `;
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = '❌';
+                deleteBtn.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 16px;';
+                deleteBtn.onclick = () => removeHoliday(holiday.id);
+                
+                div.appendChild(info);
+                div.appendChild(deleteBtn);
+                container.appendChild(div);
+            });
+        }
+
+        function removeHoliday(id) {
+            holidays = holidays.filter(h => h.id !== id);
+            updateHolidaysList();
+        }
+
+        // Toggle end date field when checkbox changes
+        document.getElementById('isRange').addEventListener('change', function() {
+            const endDateContainer = document.getElementById('endDateContainer');
+            endDateContainer.style.display = this.checked ? 'block' : 'none';
+        });
+
+        // Initialize
+        updateHolidaysList();
+    </script>
+</body>
+</html> 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
