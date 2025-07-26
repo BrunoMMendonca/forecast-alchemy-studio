@@ -8,6 +8,8 @@ import { useSetupWizardStoreRefactored } from '../store/setupWizardStoreRefactor
 import { setupWizardConfigManager } from '../config/SetupWizardConfig';
 import { importStrategyManager } from '../strategies/ImportStrategy';
 import { commandManager } from '../commands/SetupWizardCommands';
+import { verifyRefactoredArchitecture, logVerificationResult } from '../utils/architecture-verification';
+import { measurePerformance, logPerformanceMetrics } from '../utils/performance-optimization';
 
 export const SetupWizardTestPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('wizard');
@@ -37,6 +39,15 @@ export const SetupWizardTestPage: React.FC = () => {
     setShowWizard(false);
     console.log('Setup Wizard cancelled!');
   };
+
+  // Verify architecture and measure performance on component mount
+  React.useEffect(() => {
+    const result = verifyRefactoredArchitecture();
+    logVerificationResult(result);
+    
+    const metrics = measurePerformance();
+    logPerformanceMetrics(metrics);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">

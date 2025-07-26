@@ -11,7 +11,7 @@ import { Calendar, Clock, Building2, Settings, Loader2, Plus, X, CalendarDays, I
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
 import { Calendar as CalendarComponent } from '../../ui/calendar';
 import { format, addDays, isSameDay, parseISO } from 'date-fns';
-import { useSetupWizardStore } from '../../../store/setupWizardStore';
+import { useSetupWizardStoreRefactored } from '../../../store/setupWizardStoreRefactored';
 import { toast } from 'sonner';
 
 interface SopCyclesStepProps {
@@ -89,7 +89,7 @@ export const SopCyclesStep: React.FC<SopCyclesStepProps> = ({
     loadSopCycleConfigs,
     sopCycleConfig,
     setSopCycleConfig
-  } = useSetupWizardStore();
+  } = useSetupWizardStoreRefactored();
 
   // Default configuration
   const defaultConfig: SopCycleConfig = {
