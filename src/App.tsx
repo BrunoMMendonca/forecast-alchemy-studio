@@ -12,8 +12,7 @@ import NotFound from '@/pages/NotFound';
 import { MainLayout } from '@/components/MainLayout';
 import { OptimizationStatusProvider } from '@/contexts/OptimizationStatusContext';
 import AuthFlow from '@/components/AuthFlow';
-import { SetupWizardRefactored } from '@/components/SetupWizard/SetupWizardRefactored';
-import { SetupWizardTestPage } from '@/pages/SetupWizardTestPage';
+import SetupWizard from '@/components/SetupWizard/SetupWizard';
 import { create } from 'zustand';
 
 // TypeScript interface for setup state
@@ -251,7 +250,7 @@ const App = () => {
                       console.log('🔍 [Setup Route] setupRequired:', setupRequired);
                       if (setupWizardAccessible) {
                         console.log('🔍 [Setup Route] Rendering SetupWizard');
-                        return <SetupWizardRefactored onComplete={() => window.location.href = '/forecast'} onCancel={() => window.location.href = '/forecast'} />;
+                        return <SetupWizard />;
                       } else {
                         console.log('🔍 [Setup Route] setupWizardAccessible is false - redirecting to /forecast');
                         return <Navigate to="/forecast" replace />;
@@ -259,11 +258,6 @@ const App = () => {
                     })()}
                   </AdminGuard>
                 </AuthGuard>
-              } />
-              
-              {/* Test page for refactored architecture - development only */}
-              <Route path="/test-setup" element={
-                process.env.NODE_ENV === 'development' ? <SetupWizardTestPage /> : <Navigate to="/" replace />
               } />
               
               {/* Protected routes - require authentication */}

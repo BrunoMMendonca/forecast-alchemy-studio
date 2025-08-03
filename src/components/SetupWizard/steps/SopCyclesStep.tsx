@@ -11,8 +11,9 @@ import { Calendar, Clock, Building2, Settings, Loader2, Plus, X, CalendarDays, I
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
 import { Calendar as CalendarComponent } from '../../ui/calendar';
 import { format, addDays, isSameDay, parseISO } from 'date-fns';
-import { useSetupWizardStoreRefactored } from '../../../store/setupWizardStoreRefactored';
+import { useSetupWizardStore } from '../../../store/setupWizardStoreRefactored';
 import { toast } from 'sonner';
+import { DivisionCards } from '../components/DivisionCards';
 
 interface SopCyclesStepProps {
   pendingDivisions: any[];
@@ -89,7 +90,7 @@ export const SopCyclesStep: React.FC<SopCyclesStepProps> = ({
     loadSopCycleConfigs,
     sopCycleConfig,
     setSopCycleConfig
-  } = useSetupWizardStoreRefactored();
+  } = useSetupWizardStore();
 
   // Default configuration
   const defaultConfig: SopCycleConfig = {
@@ -139,6 +140,43 @@ export const SopCyclesStep: React.FC<SopCyclesStepProps> = ({
   const [selectedHolidayYear, setSelectedHolidayYear] = useState(new Date().getFullYear());
   const [showWorkingDaysConfig, setShowWorkingDaysConfig] = useState(false);
   const [enableCutOffPeriod, setEnableCutOffPeriod] = useState(true);
+  
+  // Division selection state for S&OP configuration
+  const [selectedDivisionForSop, setSelectedDivisionForSop] = useState<string | null>(null);
+  
+  // Track whether division-specific mode is selected (separate from divisionId)
+  const [isDivisionSpecificMode, setIsDivisionSpecificMode] = useState(false);
+
+  // Division selection handlers
+  const handleDivisionSelect = (division: any) => {
+    setSelectedDivisionForSop(division.name);
+    // Update the selected config with the division ID
+    const divisionId = division.id || divisions.find(d => d.name === division.name)?.id;
+    if (divisionId) {
+      setSelectedConfig(prev => prev ? { ...prev, divisionId } : { ...defaultConfig, divisionId });
+    }
+    console.log('Selected division for S&OP configuration:', division.name, 'ID:', divisionId);
+  };
+
+  const handleClearDivisionSelection = () => {
+    setSelectedDivisionForSop(null);
+    // Clear division from selected config (make it company-wide)
+    setSelectedConfig(prev => prev ? { ...prev, divisionId: undefined } : { ...defaultConfig, divisionId: undefined });
+    console.log('Cleared division selection for S&OP configuration');
+  };
+
+  // Sync selectedDivisionForSop with selectedConfig.divisionId
+  useEffect(() => {
+    if (selectedConfig?.divisionId) {
+      const division = divisions.find(d => d.id === selectedConfig.divisionId);
+      if (division) {
+        setSelectedDivisionForSop(division.name);
+        setIsDivisionSpecificMode(true);
+      }
+    } else if (!isDivisionSpecificMode) {
+      setSelectedDivisionForSop(null);
+    }
+  }, [selectedConfig?.divisionId, divisions, isDivisionSpecificMode]);
 
   // Load S&OP configs from store
   useEffect(() => {
@@ -952,8 +990,12 @@ export const SopCyclesStep: React.FC<SopCyclesStepProps> = ({
                         id="scope-company"
                         name="scope"
                         value="company"
-                        checked={!selectedConfig?.divisionId}
-                        onChange={() => setSelectedConfig(prev => prev ? { ...prev, divisionId: undefined } : defaultConfig)}
+                        checked={!isDivisionSpecificMode}
+                        onChange={() => {
+                          setIsDivisionSpecificMode(false);
+                          setSelectedConfig(prev => prev ? { ...prev, divisionId: undefined } : defaultConfig);
+                          setSelectedDivisionForSop(null);
+                        }}
                         className="text-blue-600"
                       />
                       <Label htmlFor="scope-company" className="text-sm">
@@ -966,8 +1008,14 @@ export const SopCyclesStep: React.FC<SopCyclesStepProps> = ({
                         id="scope-division"
                         name="scope"
                         value="division"
-                        checked={!!selectedConfig?.divisionId}
-                        onChange={() => setSelectedConfig(prev => prev ? { ...prev, divisionId: 1 } : { ...defaultConfig, divisionId: 1 })}
+                        checked={isDivisionSpecificMode}
+                        onChange={() => {
+                          setIsDivisionSpecificMode(true);
+                          // When switching to division-specific, don't set a specific division ID
+                          // Let the user select from the cards
+                          setSelectedConfig(prev => prev ? { ...prev, divisionId: undefined } : { ...defaultConfig, divisionId: undefined });
+                          setSelectedDivisionForSop(null);
+                        }}
                         className="text-blue-600"
                       />
                       <Label htmlFor="scope-division" className="text-sm">
@@ -978,24 +1026,37 @@ export const SopCyclesStep: React.FC<SopCyclesStepProps> = ({
               </div>
 
                 {/* Division Selection (if division-specific) */}
-                {selectedConfig?.divisionId && (
-              <div>
-                    <Label htmlFor="division-select">Division</Label>
-                    <Select 
-                      value={selectedConfig.divisionId?.toString()} 
-                      onValueChange={(value) => setSelectedConfig(prev => prev ? { ...prev, divisionId: parseInt(value) } : { ...defaultConfig, divisionId: parseInt(value) })}
-                    >
-                  <SelectTrigger>
-                        <SelectValue placeholder="Select division" />
-                  </SelectTrigger>
-                  <SelectContent>
-                        {divisions.map((division) => (
-                          <SelectItem key={division.id} value={division.id.toString()}>
-                              {division.name}
-                            </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                {isDivisionSpecificMode && (
+                  <div>
+                    <Label htmlFor="division-select" className="text-sm font-medium mb-2">
+                      Select Division for S&OP Configuration
+                    </Label>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Choose a division to configure division-specific S&OP cycles. Each division can have its own cycle configuration.
+                    </p>
+                    <DivisionCards
+                      store={useSetupWizardStore.getState()}
+                      selectedDivisionForMapping={selectedDivisionForSop}
+                      onDivisionSelect={handleDivisionSelect}
+                      onClearDivisionSelection={handleClearDivisionSelection}
+                      isWithoutDivisionColumn={false}
+                      showClearButton={true}
+                    />
+                    
+                    {/* Show selected division status */}
+                    {selectedDivisionForSop && (
+                      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <span className="font-medium text-blue-900">
+                            Configuring S&OP cycles for: <strong>{selectedDivisionForSop}</strong>
+                          </span>
+                        </div>
+                        <p className="text-sm text-blue-700 mt-1">
+                          All configuration below will be applied to this division's S&OP cycles.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1272,6 +1333,62 @@ export const SopCyclesStep: React.FC<SopCyclesStepProps> = ({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Create Configuration Button */}
+          <div className="flex justify-end pt-6 border-t border-gray-200">
+            <Button
+              onClick={async () => {
+                // Validate division selection for division-specific config
+                if (isDivisionSpecificMode && !selectedDivisionForSop) {
+                  toast.error('Please select a division for division-specific S&OP configuration');
+                  return;
+                }
+                
+                // Validate required fields
+                if (!selectedConfig?.frequency || !selectedConfig?.startDay) {
+                  toast.error('Please fill in all required fields');
+                  return;
+                }
+                
+                try {
+                  setIsCreatingConfig(true);
+                  // Prepare config with all required properties
+                  const configToCreate = {
+                    ...selectedConfig,
+                    dayType: 'regular' as const,
+                    autoGenerate: true,
+                    generateFromDate: new Date().toISOString().split('T')[0],
+                    generateCount: 12
+                  };
+                  await createSopCycleConfig(configToCreate);
+                  toast.success('S&OP cycle configuration created successfully');
+                  
+                  // Reset form
+                  setSelectedConfig(defaultConfig);
+                  setSelectedDivisionForSop(null);
+                } catch (error) {
+                  console.error('Error creating S&OP configuration:', error);
+                  toast.error('Failed to create S&OP configuration');
+                } finally {
+                  setIsCreatingConfig(false);
+                }
+              }}
+              disabled={isCreatingConfig || !selectedConfig}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isCreatingConfig ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating Configuration...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create S&OP Configuration
+                </>
+              )}
+            </Button>
           </div>
 
           {/* Working Days Configuration Popup */}

@@ -13,7 +13,8 @@ export type SetupWizardState =
   | 'product-lifecycle'
   | 'sop-cycles'
   | 'setup-complete'
-  | 'error';
+  | 'error'
+  | '*';
 
 export type SetupWizardEvent = 
   | 'INITIALIZE'
@@ -63,6 +64,20 @@ export class SetupWizardStateMachine {
   private previousState: SetupWizardState | null = null;
   private context: SetupWizardContext;
   private transitions: StateTransition[];
+  
+  // Cache for validation results to prevent infinite loops
+  private validationCache: {
+    businessConfig: { isValid: boolean; errors: string[]; timestamp: number } | null;
+    divisions: { isValid: boolean; errors: string[]; timestamp: number } | null;
+    clusters: { isValid: boolean; errors: string[]; timestamp: number } | null;
+  } = {
+    businessConfig: null,
+    divisions: null,
+    clusters: null
+  };
+  
+  // Cache timeout (5 seconds)
+  private readonly CACHE_TIMEOUT = 5000;
 
   constructor() {
     this.context = this.createInitialContext();
@@ -146,8 +161,7 @@ export class SetupWizardStateMachine {
         to: 'divisions',
         event: 'SKIP_STEP',
         condition: (context) => {
-          const config = setupWizardConfigManager.getConfig();
-          const importLevel = config.getImportLevel(context.importLevel);
+          const importLevel = setupWizardConfigManager.getImportLevel(context.importLevel);
           return importLevel?.requiresDivisionMapping || false;
         },
         action: (context) => {
@@ -161,8 +175,7 @@ export class SetupWizardStateMachine {
         to: 'clusters',
         event: 'SKIP_STEP',
         condition: (context) => {
-          const config = setupWizardConfigManager.getConfig();
-          const importLevel = config.getImportLevel(context.importLevel);
+          const importLevel = setupWizardConfigManager.getImportLevel(context.importLevel);
           return !importLevel?.requiresDivisionMapping;
         },
         action: (context) => {
@@ -177,8 +190,7 @@ export class SetupWizardStateMachine {
         to: 'divisions',
         event: 'CSV_MAPPING_COMPLETE',
         condition: (context) => {
-          const config = setupWizardConfigManager.getConfig();
-          const importLevel = config.getImportLevel(context.importLevel);
+          const importLevel = setupWizardConfigManager.getImportLevel(context.importLevel);
           return importLevel?.requiresDivisionMapping || false;
         },
         action: (context) => {
@@ -193,8 +205,7 @@ export class SetupWizardStateMachine {
         to: 'clusters',
         event: 'CSV_MAPPING_COMPLETE',
         condition: (context) => {
-          const config = setupWizardConfigManager.getConfig();
-          const importLevel = config.getImportLevel(context.importLevel);
+          const importLevel = setupWizardConfigManager.getImportLevel(context.importLevel);
           return !importLevel?.requiresDivisionMapping;
         },
         action: (context) => {
@@ -321,8 +332,7 @@ export class SetupWizardStateMachine {
         to: 'divisions',
         event: 'PREVIOUS_STEP',
         condition: (context) => {
-          const config = setupWizardConfigManager.getConfig();
-          const importLevel = config.getImportLevel(context.importLevel);
+          const importLevel = setupWizardConfigManager.getImportLevel(context.importLevel);
           return importLevel?.requiresDivisionMapping || false;
         },
         action: (context) => {
@@ -336,8 +346,7 @@ export class SetupWizardStateMachine {
         to: 'csv-import',
         event: 'PREVIOUS_STEP',
         condition: (context) => {
-          const config = setupWizardConfigManager.getConfig();
-          const importLevel = config.getImportLevel(context.importLevel);
+          const importLevel = setupWizardConfigManager.getImportLevel(context.importLevel);
           return !importLevel?.requiresDivisionMapping;
         },
         action: (context) => {
@@ -417,7 +426,24 @@ export class SetupWizardStateMachine {
   }
 
   updateContext(updates: Partial<SetupWizardContext>): void {
+    // Clear validation cache when context changes
+    this.clearValidationCache();
+    
     this.context = { ...this.context, ...updates };
+    
+    // If currentState is being updated, also update the internal currentState
+    if (updates.currentState) {
+      this.currentState = updates.currentState;
+    }
+  }
+  
+  // Clear validation cache when context changes
+  private clearValidationCache(): void {
+    this.validationCache = {
+      businessConfig: null,
+      divisions: null,
+      clusters: null
+    };
   }
 
   canTransition(event: SetupWizardEvent): boolean {
@@ -449,7 +475,6 @@ export class SetupWizardStateMachine {
         transition.action(this.context);
       }
 
-      console.log(`[StateMachine] Transitioned from ${this.previousState} to ${this.currentState} via ${event}`);
       return true;
     }
 
@@ -476,29 +501,71 @@ export class SetupWizardStateMachine {
     if (context.csvImportData) {
       // Process extracted divisions and clusters
       // This would integrate with the existing CSV processing logic
-      console.log('[StateMachine] Processing CSV data');
     }
   }
 
   // Validation helpers
   validateCurrentStep(): boolean {
     const config = setupWizardConfigManager.getConfig();
+    const now = Date.now();
     
     switch (this.currentState) {
       case 'business-configuration':
+        // Check cache first
+        if (this.validationCache.businessConfig && 
+            (now - this.validationCache.businessConfig.timestamp) < this.CACHE_TIMEOUT) {
+          return this.validationCache.businessConfig.isValid;
+        }
+        
+        // Perform validation and cache result
         const businessValidation = config.validateBusinessConfiguration({
           hasMultipleDivisions: this.context.hasMultipleDivisions,
           hasMultipleClusters: this.context.hasMultipleClusters,
           importLevel: this.context.importLevel
         });
+        
+        this.validationCache.businessConfig = {
+          isValid: businessValidation.isValid,
+          errors: businessValidation.errors,
+          timestamp: now
+        };
+        
         return businessValidation.isValid;
 
       case 'divisions':
+        // Check cache first
+        if (this.validationCache.divisions && 
+            (now - this.validationCache.divisions.timestamp) < this.CACHE_TIMEOUT) {
+          return this.validationCache.divisions.isValid;
+        }
+        
+        // Perform validation and cache result
         const divisionValidation = config.validateDivisions(this.context.pendingDivisions);
+        
+        this.validationCache.divisions = {
+          isValid: divisionValidation.isValid,
+          errors: divisionValidation.errors,
+          timestamp: now
+        };
+        
         return divisionValidation.isValid;
 
       case 'clusters':
+        // Check cache first
+        if (this.validationCache.clusters && 
+            (now - this.validationCache.clusters.timestamp) < this.CACHE_TIMEOUT) {
+          return this.validationCache.clusters.isValid;
+        }
+        
+        // Perform validation and cache result
         const clusterValidation = config.validateClusters(this.context.pendingClusters, this.context.pendingDivisions);
+        
+        this.validationCache.clusters = {
+          isValid: clusterValidation.isValid,
+          errors: clusterValidation.errors,
+          timestamp: now
+        };
+        
         return clusterValidation.isValid;
 
       default:
@@ -563,11 +630,21 @@ export class SetupWizardStateMachine {
   }
 
   canProceedToNextStep(): boolean {
-    return this.validateCurrentStep() && this.canTransition('NEXT_STEP');
+
+    const validationResult = this.validateCurrentStep();
+    
+    const canTransition = this.canTransition('NEXT_STEP');
+    
+    const result = validationResult && canTransition;
+    
+    return result;
   }
 
   canGoToPreviousStep(): boolean {
-    return this.canTransition('PREVIOUS_STEP');
+    
+    const canTransition = this.canTransition('PREVIOUS_STEP');
+    
+    return canTransition;
   }
 }
 

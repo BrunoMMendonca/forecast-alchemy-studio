@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useSetupWizardStore } from '../store/setupWizardStore';
+import { useSetupWizardStore } from '../store/setupWizardStoreRefactored';
 
 /**
  * Optimized hook for loading setup wizard data with caching and parallel loading

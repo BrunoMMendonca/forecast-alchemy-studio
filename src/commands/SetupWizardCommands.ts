@@ -53,13 +53,16 @@ export class UpdateBusinessConfigurationCommand extends BaseCommand {
       enableLifecycleTracking: context.enableLifecycleTracking
     };
 
-    // Update context
-    this.stateMachine.updateContext({
-      hasMultipleDivisions: this.newConfig.hasMultipleDivisions,
-      hasMultipleClusters: this.newConfig.hasMultipleClusters,
-      importLevel: this.newConfig.importLevel,
-      enableLifecycleTracking: this.newConfig.enableLifecycleTracking
-    });
+    // Update context with merged configuration
+    const updatedConfig = {
+      hasMultipleDivisions: context.hasMultipleDivisions,
+      hasMultipleClusters: context.hasMultipleClusters,
+      importLevel: context.importLevel,
+      enableLifecycleTracking: context.enableLifecycleTracking,
+      ...this.newConfig // Override with new values
+    };
+
+    this.stateMachine.updateContext(updatedConfig);
 
     this.log(`Updated business configuration: ${JSON.stringify(this.newConfig)}`);
   }
@@ -72,7 +75,17 @@ export class UpdateBusinessConfigurationCommand extends BaseCommand {
   }
 
   canExecute(): boolean {
-    const validation = this.configManager.validateBusinessConfiguration(this.newConfig);
+    // For partial updates, we need to merge with existing config before validation
+    const context = this.stateMachine.getContext();
+    const fullConfig = {
+      hasMultipleDivisions: context.hasMultipleDivisions,
+      hasMultipleClusters: context.hasMultipleClusters,
+      importLevel: context.importLevel,
+      enableLifecycleTracking: context.enableLifecycleTracking,
+      ...this.newConfig // Override with new values
+    };
+    
+    const validation = this.configManager.validateBusinessConfiguration(fullConfig);
     return validation.isValid;
   }
 

@@ -57,7 +57,14 @@ export const useExistingDataDetection = (): UseExistingDataDetectionReturn => {
       setIsLoading(true);
       setError(null);
       
-      const response = await fetch('/api/detect-existing-data');
+      const sessionToken = localStorage.getItem('sessionToken');
+      const headers: Record<string, string> = {};
+      
+      if (sessionToken) {
+        headers['Authorization'] = `Bearer ${sessionToken}`;
+      }
+      
+      const response = await fetch('/api/detect-existing-data', { headers });
       if (!response.ok) {
         throw new Error('Failed to detect existing data');
       }
@@ -76,7 +83,14 @@ export const useExistingDataDetection = (): UseExistingDataDetectionReturn => {
   const loadLatestCleanedData = useCallback(async (dataset: Dataset): Promise<CsvUploadResult | null> => {
     try {
       // Load the processed data using the dataset ID from the database
-      const response = await fetch(`/api/load-processed-data?datasetId=${dataset.id}`);
+      const sessionToken = localStorage.getItem('sessionToken');
+      const headers: Record<string, string> = {};
+      
+      if (sessionToken) {
+        headers['Authorization'] = `Bearer ${sessionToken}`;
+      }
+      
+      const response = await fetch(`/api/load-processed-data?datasetId=${dataset.id}`, { headers });
       if (!response.ok) {
         throw new Error('Failed to load cleaned data');
       }

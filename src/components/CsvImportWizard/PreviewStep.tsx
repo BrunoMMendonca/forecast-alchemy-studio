@@ -227,7 +227,7 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
 
   // Check for format validation errors in the preview data
   const hasFormatErrors = () => {
-    if (!data.length || !header.length) return false;
+    if (!data || !data.length || !header || !header.length) return false;
     
     // Check for invalid format markers in the data
     for (let i = 0; i < Math.min(10, data.length); i++) {
@@ -252,7 +252,7 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
 
   // Check if CSV has too few columns (likely separator mismatch)
   const hasInsufficientColumns = () => {
-    return header.length < 4;
+    return !header || header.length < 4;
   };
 
   // Check for any validation issues that should block progression
@@ -262,6 +262,11 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
 
   // Find the first numeric-looking value in the data for preview
   const getSampleNumericValue = () => {
+    // Safety check: if header or data is empty/undefined, return null
+    if (!header || header.length === 0 || !data || data.length === 0) {
+      return null;
+    }
+    
     for (let i = 0; i < header.length; i++) {
       for (let j = 0; j < Math.min(10, data.length); j++) {
         const val = data[j][header[i]];
@@ -367,7 +372,7 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
             />
           </div>
         </div>
-        {data.length > 0 ? (
+        {data && data.length > 0 ? (
           <>
             <div className="mb-2 text-sm text-slate-600 text-center">
               📊 Showing sample of {data.length} rows from your dataset
@@ -377,7 +382,7 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
               <table className="min-w-full text-xs">
                 <thead>
                   <tr>
-                    {header.map((h, i) => {
+                    {header && header.map((h, i) => {
                       const hasError = typeof h === 'string' && h.includes('❌ Invalid');
                       return (
                         <th 
@@ -393,9 +398,9 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {data.map((row, i) => (
+                  {data && data.map((row, i) => (
                     <tr key={i} className="bg-white border-b hover:bg-gray-50">
-                      {header.map((displayHeader, j) => {
+                      {header && header.map((displayHeader, j) => {
                         // Use original header for data access, display header for display
                         const originalHeader = originalHeaders[j] || displayHeader;
                         const cellValue = row[originalHeader];
@@ -433,7 +438,7 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
                   {hasInsufficientColumns() && hasFormatErrors()
                     ? 'Your CSV has both column count and format issues that need to be resolved.'
                     : hasInsufficientColumns()
-                    ? `Your CSV appears to have too few columns (${header.length} detected).`
+                    ? `Your CSV appears to have too few columns (${header ? header.length : 0} detected).`
                     : 'Some dates or numbers don\'t match the selected formats.'
                   }
                 </div>

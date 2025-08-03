@@ -36,7 +36,6 @@ export const EntityDeleteDialog: React.FC<EntityDeleteDialogProps> = ({
   onSuccess
 }) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [forceHardDelete, setForceHardDelete] = useState(false);
   const [usage, setUsage] = useState<EntityUsage | null>(usageData || null);
 
   // Fetch usage data if not provided
@@ -66,10 +65,10 @@ export const EntityDeleteDialog: React.FC<EntityDeleteDialogProps> = ({
   const handleConfirm = async () => {
     setIsLoading(true);
     try {
-      const result = await onConfirm(forceHardDelete);
+      const result = await onConfirm(false); // Always use soft delete
       
       if (result.success) {
-        toast.success(`${entityType.charAt(0).toUpperCase() + entityType.slice(1)} deleted successfully (${result.method} delete)`);
+        toast.success(`${entityType.charAt(0).toUpperCase() + entityType.slice(1)} deleted successfully (soft delete)`);
         onSuccess?.();
         onClose();
       } else {
@@ -99,8 +98,6 @@ export const EntityDeleteDialog: React.FC<EntityDeleteDialogProps> = ({
     
     return items.join(', ');
   };
-
-  const canHardDelete = usage?.hasData && !forceHardDelete;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -148,18 +145,18 @@ export const EntityDeleteDialog: React.FC<EntityDeleteDialogProps> = ({
           {/* Delete Options */}
           {usage?.hasData && (
             <div className="space-y-3">
-              <div className="flex items-start space-x-3 p-3 border rounded-lg">
+              <div className="flex items-start space-x-3 p-3 border rounded-lg bg-blue-50 border-blue-200">
                 <input
                   type="radio"
                   id="soft-delete"
                   name="delete-type"
-                  checked={!forceHardDelete}
-                  onChange={() => setForceHardDelete(false)}
+                  checked={true}
+                  disabled={true}
                   className="mt-1"
                 />
                 <div className="flex-1">
                   <label htmlFor="soft-delete" className="font-medium text-gray-900">
-                    Soft Delete (Recommended)
+                    Soft Delete
                   </label>
                   <p className="text-sm text-gray-600 mt-1">
                     Keep the {entityType} and its data for historical purposes. 
@@ -167,44 +164,7 @@ export const EntityDeleteDialog: React.FC<EntityDeleteDialogProps> = ({
                   </p>
                 </div>
               </div>
-
-              <div className="flex items-start space-x-3 p-3 border rounded-lg">
-                <input
-                  type="radio"
-                  id="hard-delete"
-                  name="delete-type"
-                  checked={forceHardDelete}
-                  onChange={() => setForceHardDelete(true)}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <label htmlFor="hard-delete" className="font-medium text-red-900">
-                    Hard Delete (Permanent)
-                  </label>
-                  <p className="text-sm text-red-600 mt-1">
-                    Permanently delete the {entityType} and all associated data. 
-                    This action cannot be undone.
-                  </p>
-                  <div className="flex items-center gap-1 mt-2">
-                    <Database className="h-3 w-3 text-red-500" />
-                    <span className="text-xs text-red-500">
-                      {usage.totalCount} records will be permanently deleted
-                    </span>
-                  </div>
-                </div>
-              </div>
             </div>
-          )}
-
-          {/* Warning for hard delete */}
-          {forceHardDelete && (
-            <Alert className="border-red-200 bg-red-50">
-              <AlertTriangle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-800">
-                <strong>Warning:</strong> This will permanently delete all associated data. 
-                This action cannot be undone.
-              </AlertDescription>
-            </Alert>
           )}
         </div>
 
@@ -217,22 +177,18 @@ export const EntityDeleteDialog: React.FC<EntityDeleteDialogProps> = ({
             Cancel
           </Button>
           <Button
-            variant={forceHardDelete ? "destructive" : "default"}
+            variant="default"
             onClick={handleConfirm}
             disabled={isLoading}
             className="gap-2"
           >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
-            ) : forceHardDelete ? (
-              <Trash2 className="h-4 w-4" />
             ) : (
               <Archive className="h-4 w-4" />
             )}
             {isLoading 
               ? 'Deleting...' 
-              : forceHardDelete 
-                ? 'Delete Permanently' 
                 : 'Soft Delete'
             }
           </Button>

@@ -3,12 +3,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle, AlertCircle, Upload, FileText, Calendar, Hash } from 'lucide-react';
-import { useSetupWizardStore } from '@/store/setupWizardStore';
+import { useSetupWizardStore } from '@/store/setupWizardStoreRefactored';
 import { InteractiveMappingTable } from '@/components/CsvImportWizard/InteractiveMappingTable';
 import { parseNumberWithFormat } from '@/utils/csvUtils';
 import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
+import MarkdownRenderer from '@/components/ui/MarkdownRenderer';
 import {
   Tooltip,
   TooltipContent,
@@ -98,10 +98,22 @@ const CsvMappingStep: React.FC<CsvMappingStepProps> = ({ onNext, onBack }) => {
   const dropdownOptions = React.useMemo(() => {
     const baseRoles = ['Material Code', 'Description', 'Date', 'Ignore'];
     
+    console.log('🔍 [CSV MAPPING STEP] Current orgStructure:', {
+      hasMultipleDivisions: orgStructure.hasMultipleDivisions,
+      importLevel: orgStructure.importLevel,
+      divisionCsvType: orgStructure.divisionCsvType
+    });
+    
     if (orgStructure.hasMultipleDivisions && 
         (orgStructure.importLevel === 'company' || 
          (orgStructure.importLevel === 'division' && orgStructure.divisionCsvType === 'withDivisionColumn'))) {
-      baseRoles.push('Division');
+      // Don't add Division role in "without division column" scenario
+      if (!(orgStructure.importLevel === 'division' && orgStructure.divisionCsvType === 'withoutDivisionColumn')) {
+        baseRoles.push('Division');
+        console.log('✅ [CSV MAPPING STEP] Added Division to available roles');
+      } else {
+        console.log('❌ [CSV MAPPING STEP] Excluded Division from available roles for "without division column" scenario');
+      }
     }
     
     if (orgStructure.hasMultipleClusters) {
@@ -223,20 +235,21 @@ const CsvMappingStep: React.FC<CsvMappingStepProps> = ({ onNext, onBack }) => {
 
   // Save mapping configuration
   const handleSaveMapping = () => {
-    const mappingConfig = {
-      mappings: columnRoles.map((role, index) => ({
-        csvColumn: headers[index],
-        role: role
-      })),
-      dateFormat,
-      numberFormat,
-      separator,
-      transposed,
-      sampleFile: file?.name || 'sample.csv'
-    };
+    // Find columns by role
+    const divisionColumn = headers[columnRoles.findIndex(role => role === 'Division')] || null;
+    const clusterColumn = headers[columnRoles.findIndex(role => role === 'Cluster')] || null;
+    const materialNameColumn = headers[columnRoles.findIndex(role => role === 'Material Code')] || null;
+    const descriptionColumn = headers[columnRoles.findIndex(role => role === 'Description')] || null;
+    const lifecycleColumn = headers[columnRoles.findIndex(role => role === 'Lifecycle Phase')] || null;
 
     useSetupWizardStore.getState().setOrgStructure({
-      columnMappingConfig: mappingConfig
+      csvMapping: {
+        divisionColumn,
+        clusterColumn,
+        materialNameColumn,
+        descriptionColumn,
+        lifecycleColumn
+      }
     });
 
     onNext();

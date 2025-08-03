@@ -6,17 +6,14 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 // import { db } from './src/backend/db.js'; // No longer needed, removed SQLite
-import apiRoutes from './src/backend/routes.js';
-import authRoutes from './src/backend/authRoutes.js';
+import apiRoutes from './src/backend/api/index.js';
 import fieldMappingRoutes from './src/backend/fieldMappingRoutes.js';
 import fieldDefinitionRoutes from './src/backend/fieldDefinitionRoutes.js';
-import divisionRoutes from './src/backend/divisionRoutes.js';
-import clusterRoutes from './src/backend/clusterRoutes.js';
 import fs from 'fs';
 import multer from 'multer';
 // import { runWorker } from './src/backend/worker.js'; // This is incorrect for the worker model
 import { authenticateToken } from './src/backend/auth.js';
-import { pgPool } from './src/backend/db.js';
+import { Pool } from 'pg';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,8 +27,25 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-const upload = multer({ dest: path.join(__dirname, 'uploads') });
-const csvUpload = multer({ storage: multer.memoryStorage() });
+// Serve static files from the React app
+app.use(express.static(path.join(__dirname, 'src')));
+
+// Database configuration
+const pgPool = new Pool({
+  host: process.env.PGHOST,
+  port: process.env.PGPORT,
+  database: process.env.PGDATABASE,
+  user: process.env.PGUSER,
+  password: process.env.PGPASSWORD
+});
+
+// File upload configuration
+const upload = multer({
+  dest: 'uploads/',
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+  },
+});
 
 // Helper to discard old files with the same hash
 function discardOldFilesWithHash(csvHash, skipFileNames = []) {
@@ -101,7 +115,7 @@ app.post('/api/save-processed-data', (req, res) => {
 // This endpoint was removed to avoid conflicts with the new database-based approach
 
 // Setup CSV upload and mapping routes
-app.post('/api/setup/csv/upload', authenticateToken, csvUpload.single('csv'), (req, res) => {
+app.post('/api/setup/csv/upload', authenticateToken, (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No CSV file uploaded' });
@@ -112,14 +126,22 @@ app.post('/api/setup/csv/upload', authenticateToken, csvUpload.single('csv'), (r
     
     // Parse CSV data
     const Papa = require('papaparse');
-    const result = Papa.parse(csvData, { header: true });
+    const result = Papa.parse(csvData, { header: true, skipEmptyLines: true });
     
     if (result.errors.length > 0) {
       return res.status(400).json({ error: 'Invalid CSV format' });
     }
 
     const headers = Object.keys(result.data[0] || {});
-    const data = result.data.filter(row => Object.values(row).some(val => val !== ''));
+    const data = result.data.filter(row => {
+      // Filter out rows that are essentially blank
+      return Object.values(row).some(value => 
+        value !== null && 
+        value !== undefined && 
+        value !== '' && 
+        String(value).trim() !== ''
+      );
+    });
 
     res.json({
       success: true,
@@ -219,7 +241,7 @@ app.post('/api/setup/csv/extract', authenticateToken, (req, res) => {
 
 if (mode === 'api') {
   // Mount the authentication routes
-  app.use('/api/auth', authRoutes);
+  // app.use('/api/auth', authRoutes); // This line is removed as per the new_code
   
   // Mount the API routes
   app.use('/api', apiRoutes);
@@ -231,10 +253,10 @@ if (mode === 'api') {
   app.use('/api/field-definitions', fieldDefinitionRoutes);
 
   // Mount the division routes
-  app.use('/api/divisions', divisionRoutes);
+  // app.use('/api/divisions', divisionRoutes); // This line is removed as per the new_code
 
   // Mount the cluster routes
-  app.use('/api/clusters', clusterRoutes);
+  // app.use('/api/clusters', clusterRoutes); // This line is removed as per the new_code
 
   app.listen(PORT, () => {
     console.log(`Backend server running in API mode on http://localhost:${PORT}`);

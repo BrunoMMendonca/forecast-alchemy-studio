@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle, AlertCircle, Info, Edit3, Save } from 'lucide-react';
-import { useSetupWizardStore } from '@/store/setupWizardStore';
+import { useSetupWizardStore } from '@/store/setupWizardStoreRefactored';
 import { InteractiveMappingTable } from '@/components/CsvImportWizard/InteractiveMappingTable';
 
 interface CsvMappingReviewStepProps {

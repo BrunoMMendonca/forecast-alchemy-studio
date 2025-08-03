@@ -1,152 +1,146 @@
-# Migration Guide: Rename `jobs` Table to `optimization_jobs`
+# 🚀 Migration Guide: Switch to New Architecture
 
-## Overview
+## 📋 **What This Guide Does**
 
-The `jobs` table is being renamed to `optimization_jobs` to better reflect its purpose. This table stores optimization jobs for forecasting models, not generic jobs, so the name should be more descriptive.
+This guide shows you how to **switch from the old complex store to the new refactored store** while keeping your UI **exactly the same**.
 
-## Why This Change?
+## ✅ **What You'll Get**
 
-- **Clarity**: `jobs` is too generic and doesn't indicate what type of jobs
-- **Purpose**: The table specifically stores optimization jobs for forecasting models
-- **Maintainability**: Better naming makes the codebase more self-documenting
-- **Scalability**: If we add other job types in the future, this avoids confusion
+- **Same UI**: Zero visual changes
+- **Same functionality**: Everything works exactly as before
+- **Better architecture**: Clean, maintainable code behind the scenes
+- **Undo/Redo**: All state changes are now reversible
+- **Better debugging**: Clear logs and error handling
 
-## Migration Steps
+## 🔄 **Step 1: Switch the Import**
 
-### 1. Database Migration
+In **every component** that uses the Setup Wizard store, change this:
 
-Run the SQL migration script:
+```typescript
+// OLD (current)
+import { useSetupWizardStore } from '@/store/setupWizardStore';
 
-```bash
-# For PostgreSQL
-psql -d your_database_name -f rename-jobs-table.sql
-
-# Or connect to your database and run the SQL directly
+// NEW (refactored)
+import { useSetupWizardStore } from '@/store/setupWizardStoreRefactored';
 ```
 
-The migration script will:
-- Rename the table from `jobs` to `optimization_jobs`
-- Update foreign key constraints in the `forecasts` table
-- Rename indexes to match the new table name
-- Add helpful comments to document the table's purpose
+## 📁 **Files to Update**
 
-### 2. Backend Code Updates
+You'll need to update these files:
 
-Run the backend update script:
-
-```bash
-node update-backend-references.js
+```
+src/components/SetupWizard/steps/BusinessConfigurationStep.tsx
+src/components/SetupWizard/steps/CsvImportStep.tsx
+src/components/SetupWizard/steps/DivisionsStep.tsx
+src/components/SetupWizard/steps/ClustersStep.tsx
+src/components/SetupWizard/steps/ProductLifecycleStep.tsx
+src/components/SetupWizard/steps/SopCyclesStep.tsx
+src/components/SetupWizard/SetupWizard.tsx
+src/components/EntityManagement/InactiveEntitiesPanel.tsx
+src/components/CsvImportWizard/CsvImportWizard.tsx
+src/components/CsvImportWizard/UploadStep.tsx
+src/components/StepContent.tsx
+src/pages/ForecastPage.tsx
 ```
 
-This will update:
-- `src/backend/routes.js` - All SQL queries and API endpoints
-- `src/backend/worker.js` - Worker process queries
-- `src/backend/init-postgres-schema.sql` - Schema definition
+## 🎯 **Step 2: Test Each Component**
 
-### 3. Test Files Updates
+After updating each file:
 
-Run the test files update script:
-
-```bash
-node update-test-files.js
-```
-
-This will update all utility scripts and test files:
-- `test-skipped-jobs.js`
-- `test-optimization-jobs.js`
-- `simple-check.js`
-- `check-jobs.cjs`
-- `debug-batchid.js`
-- `check-db-schema.js`
-- `add-batchid-column.cjs`
-- `add-updatedat-column.js`
-- `update-existing-jobs.js`
-- `fix-skipped-jobs.cjs`
-
-### 4. Restart Services
-
-After the migration:
-
-```bash
-# Restart your backend server
-npm run dev
-# or however you start your backend
-```
-
-### 5. Verification
-
-Test the following to ensure the migration worked:
-
-1. **Database**: Check that the table was renamed
-   ```sql
-   SELECT table_name FROM information_schema.tables WHERE table_name = 'optimization_jobs';
+1. **Save the file**
+2. **Check the browser console** - you should see logs like:
    ```
+   [RefactoredStore] setOrgStructure called
+   [RefactoredStore] addPendingDivision called
+   [RefactoredStore] clearCsvMappingData called
+   ```
+3. **Test the functionality** - everything should work exactly the same
+4. **Move to the next file**
 
-2. **API Endpoints**: Test optimization job creation and status endpoints
-   - `POST /api/jobs` - Create optimization jobs
-   - `GET /api/jobs/status` - Get job status
-   - `GET /api/optimizations/status` - Get optimization status
+## 🔍 **Step 3: Verify Everything Works**
 
-3. **Frontend**: Verify that the optimization queue and job management still work
+After updating all files:
 
-## Rollback Plan
+1. **Test the Setup Wizard** - go through all steps
+2. **Test CSV import** - upload and map files
+3. **Test division/cluster management** - add, edit, delete, restore
+4. **Test business configuration** - change settings
+5. **Check console logs** - should see the new architecture in action
 
-If something goes wrong, you can rollback:
+## 🎉 **What You'll See**
 
-```sql
--- Rollback SQL
-ALTER TABLE optimization_jobs RENAME TO jobs;
-ALTER TABLE forecasts DROP CONSTRAINT IF EXISTS forecasts_job_id_fkey;
-ALTER TABLE forecasts ADD CONSTRAINT forecasts_job_id_fkey 
-    FOREIGN KEY (job_id) REFERENCES jobs(id);
-DROP INDEX IF EXISTS idx_optimization_jobs_company_status;
-CREATE INDEX idx_jobs_company_status ON jobs (company_id, status);
+### **In the Console** 📝
+```
+[RefactoredStore] setOrgStructure called
+[Command: UpdateBusinessConfigurationCommand] Updated business configuration: {...}
+[StateMachine] Transitioned from business-configuration to csv-import via NEXT_STEP
+[ImportStrategyManager] Using strategy: Company-wide Import
 ```
 
-Then restore the original code files from git.
+### **In the UI** 🖥️
+- **Exactly the same** as before
+- **Same buttons, forms, interactions**
+- **Same workflow and functionality**
+- **Zero visual changes**
 
-## What Changed
+## 🚨 **If Something Breaks**
 
-### Database Schema
-- Table name: `jobs` → `optimization_jobs`
-- Index name: `idx_jobs_company_status` → `idx_optimization_jobs_company_status`
-- Added helpful comments to document the table's purpose
+If you encounter any issues:
 
-### Backend Code
-- All SQL queries updated to use `optimization_jobs`
-- Error messages updated to be more specific
-- API endpoint logic remains the same, just table name changes
+1. **Check the console** for error messages
+2. **Revert the import** back to the old store:
+   ```typescript
+   import { useSetupWizardStore } from '@/store/setupWizardStore';
+   ```
+3. **Report the issue** - the new architecture is designed to be safe
 
-### Test Files
-- All utility scripts updated to use the new table name
-- Log messages updated for clarity
+## 🏗️ **Behind the Scenes**
 
-## Benefits After Migration
+While your UI stays the same, the new architecture provides:
 
-1. **Clearer Code**: Anyone reading the code immediately knows what the table is for
-2. **Better Documentation**: The table name is self-documenting
-3. **Future-Proof**: If we add other job types (e.g., data processing jobs), there won't be confusion
-4. **Professional**: More professional and maintainable codebase
+### **Configuration Manager** 📋
+- All business logic centralized
+- Easy to modify behavior
+- Clear documentation of rules
 
-## Notes
+### **State Machine** 🔄
+- Predictable state transitions
+- Impossible invalid states
+- Easy debugging
 
-- The migration is backward-compatible in terms of functionality
-- All existing data is preserved
-- API endpoints remain the same (only internal table names change)
-- Frontend code doesn't need changes since it uses API endpoints
+### **Strategy Pattern** 🎯
+- Different import behaviors encapsulated
+- Easy to add new import types
+- No conditional logic in components
 
-## Troubleshooting
+### **Command Pattern** ⚡
+- All state changes reversible
+- Complete audit trail
+- Undo/redo functionality
 
-If you encounter issues:
+## 📊 **Benefits After Migration**
 
-1. **Foreign Key Errors**: Make sure the migration script ran completely
-2. **API Errors**: Check that the backend code was updated and server restarted
-3. **Test Failures**: Ensure test files were updated
-4. **Data Loss**: The migration doesn't delete data, but always backup before major changes
+1. **Easier Maintenance**: Changes are localized to specific patterns
+2. **Better Testing**: Each component can be tested independently
+3. **Faster Development**: New features are easier to add
+4. **Better Debugging**: Clear logs and error handling
+5. **Team Collaboration**: New developers understand the code quickly
 
-## Support
+## 🎯 **Next Steps After Migration**
 
-If you need help with the migration, check:
-1. Database logs for SQL errors
-2. Backend logs for API errors
-3. Test the application thoroughly after migration 
+Once the migration is complete:
+
+1. **Remove the old store** (optional)
+2. **Add comprehensive tests** for the new patterns
+3. **Extend the system** with new features
+4. **Optimize performance** if needed
+
+## 🚀 **Ready to Start?**
+
+The migration is **safe and reversible**. You can:
+
+1. **Start with one component** to test
+2. **Gradually migrate** all components
+3. **Revert anytime** if needed
+
+**Your UI will stay exactly the same!** 🎉 

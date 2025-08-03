@@ -117,7 +117,7 @@ export const CompanyStep: React.FC<CompanyStepProps> = ({
   return (
     <div className="max-w-4xl mx-auto">
       <Card className="border-0 shadow-lg">
-        <CardHeader>
+        {/*<CardHeader>
           <CardTitle className="flex items-center gap-3">
             <Building2 className="h-6 w-6 text-blue-600" />
             Edit Company Details
@@ -125,7 +125,7 @@ export const CompanyStep: React.FC<CompanyStepProps> = ({
           <p className="text-gray-600 dark:text-gray-400">
             Update your company information and settings
           </p>
-        </CardHeader>
+        </CardHeader>*/}
         <CardContent className="space-y-6">
           <div className="space-y-4">
             <div>

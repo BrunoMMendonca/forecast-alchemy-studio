@@ -2,7 +2,7 @@
 export interface BusinessContext {
   costOfError: 'low' | 'medium' | 'high';
   planningPurpose: 'operational' | 'tactical' | 'strategic';
-  updateFrequency: 'daily' | 'weekly' | 'monthly';
+  updateFrequency: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
   interpretabilityNeeds: 'low' | 'medium' | 'high';
 }
 
@@ -27,7 +27,9 @@ export const BUSINESS_CONTEXT_OPTIONS = {
   updateFrequency: [
     { value: 'daily' as const, label: 'Daily', description: 'Model updated daily' },
     { value: 'weekly' as const, label: 'Weekly', description: 'Model updated weekly' },
-    { value: 'monthly' as const, label: 'Monthly', description: 'Model updated monthly' }
+    { value: 'monthly' as const, label: 'Monthly', description: 'Model updated monthly' },
+    { value: 'quarterly' as const, label: 'Quarterly', description: 'Model updated quarterly' },
+    { value: 'yearly' as const, label: 'Yearly', description: 'Model updated yearly' }
   ],
   interpretabilityNeeds: [
     { value: 'low' as const, label: 'Low', description: 'Focus on accuracy over explainability' },

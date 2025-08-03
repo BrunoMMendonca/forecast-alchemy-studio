@@ -11,11 +11,33 @@ const getRoleIcon = (role: string, context: string, orgStructure?: any) => {
     case 'Date':
       return '📅';
     case 'Division':
-      // Only show special icon if Division is enabled in organizational structure
+      // Only show special icon if Division is enabled AND available in current context
+      console.log('🔍 [GET ROLE ICON] Division role check:', {
+        context,
+        hasMultipleDivisions: orgStructure?.hasMultipleDivisions,
+        importLevel: orgStructure?.importLevel,
+        divisionCsvType: orgStructure?.divisionCsvType
+      });
+      
       if (context === 'setup' && orgStructure?.hasMultipleDivisions) {
-        return '🏢';
+        // Check if Division role is actually available (same logic as getAvailableColumnRoles)
+        const { importLevel, divisionCsvType } = orgStructure;
+        const isDivisionAvailable = importLevel === 'company' || 
+                                  (importLevel === 'division' && divisionCsvType === 'withDivisionColumn');
+        
+        console.log('🔍 [GET ROLE ICON] Division availability check:', {
+          importLevel,
+          divisionCsvType,
+          isDivisionAvailable
+        });
+        
+        if (isDivisionAvailable) {
+          console.log('✅ [GET ROLE ICON] Returning building icon for Division');
+          return '🏢';
+        }
       }
-      return 'Σ'; // Show aggregatable field icon when disabled
+      console.log('❌ [GET ROLE ICON] Returning sigma symbol for Division');
+      return 'Σ'; // Show aggregatable field icon when disabled or unavailable
     case 'Cluster':
       // Only show special icon if Cluster is enabled in organizational structure
       if (context === 'setup' && orgStructure?.hasMultipleClusters) {

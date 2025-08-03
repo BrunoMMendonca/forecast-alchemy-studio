@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 import { parseDateWithFormat } from '@/utils/dateUtils';
-import { useSetupWizardStore } from '@/store/setupWizardStore';
+import { useSetupWizardStore } from '@/store/setupWizardStoreRefactored';
 
 // Helper function to get icon for column role
 const getRoleIcon = (role: string, context: string, orgStructure?: any) => {
@@ -14,11 +14,18 @@ const getRoleIcon = (role: string, context: string, orgStructure?: any) => {
     case 'Date':
       return '📅';
     case 'Division':
-      // Only show special icon if Division is enabled in organizational structure
+      // Only show special icon if Division is enabled AND available in current context
       if (context === 'setup' && orgStructure?.hasMultipleDivisions) {
-        return '🏢';
+        // Check if Division role is actually available (same logic as getAvailableColumnRoles)
+        const { importLevel, divisionCsvType } = orgStructure;
+        const isDivisionAvailable = importLevel === 'company' || 
+                                  (importLevel === 'division' && divisionCsvType === 'withDivisionColumn');
+        
+        if (isDivisionAvailable) {
+          return '🏢';
+        }
       }
-      return 'Σ'; // Show aggregatable field icon when disabled
+      return 'Σ'; // Show aggregatable field icon when disabled or unavailable
     case 'Cluster':
       // Only show special icon if Cluster is enabled in organizational structure
       if (context === 'setup' && orgStructure?.hasMultipleClusters) {

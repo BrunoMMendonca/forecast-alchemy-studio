@@ -33,7 +33,9 @@ function isLikelyDateColumn(header, allHeaders, dateFormat = null) {
   
   // If a specific date format is provided, use parseDateWithFormat
   if (dateFormat) {
-    return parseDateWithFormat(header, dateFormat) !== null;
+    const isDate = parseDateWithFormat(header, dateFormat) !== null;
+    console.log(`[DEBUG] Checking if "${header}" is date with format "${dateFormat}": ${isDate}`);
+    return isDate;
   }
   
   // Fallback to existing patterns for auto-detection
@@ -53,7 +55,7 @@ function detectColumnRole(header, index, allHeaders, dateFormat = null) {
   const normalizedHeader = header.toLowerCase().trim();
   
   // More specific Material Code detection
-  if (/material|sku|product.?code|item.?code|part.?number|product.?id|item.?id|part.?id/i.test(normalizedHeader)) {
+  if (/material|sku|product.?code|item.?code|part.?number|product.?id|item.?id|part.?id|produto|producto/i.test(normalizedHeader)) {
       return 'Material Code';
   }
   
@@ -65,31 +67,33 @@ function detectColumnRole(header, index, allHeaders, dateFormat = null) {
   }
   
   // Description detection
-  if (/description|name|product.?name|item.?name|title|product.?title/i.test(normalizedHeader) || /^desc/i.test(normalizedHeader)) {
+  if (/description|name|material.?name|product.?name|item.?name|title|product.?title|nome|designacao|designação|descricao|descrição|nombre|designacion|designación|descripción|descripcion/i.test(normalizedHeader) || /^desc/i.test(normalizedHeader)) {
       return 'Description';
   }
   
   // Division detection
-  if (/division|business.?unit|bu|region|area|zone|territory|market|segment|group|department|unit/i.test(normalizedHeader)) {
+  if (/division|business.?unit|bu|region|area|zone|territory|market|segment|group|department|unit|divisao|divisão|división/i.test(normalizedHeader)) {
       return 'Division';
   }
   
   // Cluster detection
-  if (/cluster|location|site|plant|factory|warehouse|distribution.?center|dc|hub|center|centre|facility|outlet|store|branch/i.test(normalizedHeader)) {
+  if (/cluster|location|site|plant|factory|warehouse|distribution.?center|dc|hub|center|centre|facility|outlet|store|branch|grupo/i.test(normalizedHeader)) {
       return 'Cluster';
   }
   
   // Lifecycle Phase detection
-  if (/lifecycle|life.?cycle|phase|stage|status|product.?stage|sales.?status|product.?status|maturity|growth|launch|end.?of.?life|eol|discontinued/i.test(normalizedHeader)) {
+  if (/lifecycle|life.?cycle|phase|stage|status|product.?stage|sales.?status|product.?status|maturity|growth|launch|end.?of.?life|eol|estado/i.test(normalizedHeader)) {
       return 'Lifecycle Phase';
   }
   
   // Date detection - for wide-format CSVs, headers that look like dates should be detected as Date
   // regardless of the selected date format, since the format is for parsing the header itself
   if (isDateString(header) || isLikelyDateColumn(header, allHeaders)) {
+      console.log(`[DEBUG] Column "${header}" detected as Date`);
       return 'Date';
   }
   
+  console.log(`[DEBUG] Column "${header}" detected as aggregatable field (header name)`);
   return header; // Default to header name
 }
 
@@ -116,6 +120,16 @@ async function applyTransformations(csvData, config) {
       return {};
     }
     
+    // Additional filtering for essentially blank rows
+    data = data.filter(row => {
+      return Object.values(row).some(value => 
+        value !== null && 
+        value !== undefined && 
+        value !== '' && 
+        String(value).trim() !== ''
+      );
+    });
+    
     // Phase 2: Apply transformations from config if they exist
     if (config.operations) {
       data = await applyOperations(data, config.operations);
@@ -126,6 +140,17 @@ async function applyTransformations(csvData, config) {
       const { mappings, dateRange, dateFormat, transpose } = config;
 
       let rawData = Papa.parse(csvData, { skipEmptyLines: true }).data;
+      
+      // Additional filtering for essentially blank rows
+      rawData = rawData.filter(row => {
+        return row.some(value => 
+          value !== null && 
+          value !== undefined && 
+          value !== '' && 
+          String(value).trim() !== ''
+        );
+      });
+      
       if (transpose) {
         rawData = rawData[0].map((_, colIndex) => rawData.map(row => row[colIndex]));
       }
@@ -441,7 +466,16 @@ function parseCsvWithHeaders(csvData, separator = null) {
       }
     });
     return newRow;
-  }).filter(row => Object.keys(row).length > 0);
+  }).filter(row => {
+    // Filter out rows that are essentially blank
+    const hasContent = Object.values(row).some(value => 
+      value !== null && 
+      value !== undefined && 
+      value !== '' && 
+      String(value).trim() !== ''
+    );
+    return hasContent;
+  });
 
   return { data, headers: finalHeaders, separator: detectedSeparator };
 }

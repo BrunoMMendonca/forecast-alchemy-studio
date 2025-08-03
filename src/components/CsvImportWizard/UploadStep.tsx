@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Switch } from '../ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
-import { useSetupWizardStore } from '@/store/setupWizardStore';
+import { useSetupWizardStore } from '@/store/setupWizardStoreRefactored';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 interface UploadStepProps {
@@ -23,10 +23,6 @@ interface UploadStepProps {
   onLoadDataset?: (dataset: any) => void;
   loadedDatasetFile?: string;
   context?: 'forecast' | 'setup';
-  multipleCsvProgress?: {
-    importedCount: number;
-    remainingDivisions: string[];
-  };
   onProceedToNextStep?: () => Promise<void>;
   // New prop for organizational structure information
   orgStructure?: {
@@ -65,8 +61,6 @@ interface UploadStepProps {
     division_id: number;
     fieldMapping: string | null;
   }>;
-  // New callback for division selection
-  onDivisionSelect?: (divisionName: string | null) => void;
   // New prop to disable import functionality
   disableImport?: boolean;
 }
@@ -84,20 +78,18 @@ export const UploadStep: React.FC<UploadStepProps> = ({
   onLoadDataset,
   loadedDatasetFile,
   context = 'forecast',
-  multipleCsvProgress,
   onProceedToNextStep,
   orgStructure,
   divisions = [],
   pendingDivisions = [],
   importedCsvs = [],
   clusters = [],
-  onDivisionSelect,
   disableImport = false,
 }) => {
   // Move the hook to the top level of the component
   const setupWizardStore = useSetupWizardStore();
   
-  const [selectedDivision, setSelectedDivision] = useState<string | null>(null);
+  // Division selection is now handled by the parent component (CSV import step)
   const [editingDataset, setEditingDataset] = useState<any>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -528,448 +520,9 @@ export const UploadStep: React.FC<UploadStepProps> = ({
         )}
 
       {/* Multiple CSV Import Progress Banner - only show in setup context */}
-      {multipleCsvProgress && context === 'setup' && (() => {
-        // Check if this is the division-level without division column workflow
-        const isDivisionLevelWithoutColumn = orgStructure?.importLevel === 'division' && 
-                                           orgStructure?.divisionCsvType === 'withoutDivisionColumn' &&
-                                           orgStructure?.hasMultipleClusters;
-        
-        // Hide the banner for division-level without division column workflow
-        if (isDivisionLevelWithoutColumn) {
-          return null;
-        }
-        
-        return (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="text-blue-700 text-sm mb-3">
-            <p className="font-medium mb-1">Multiple CSV Import Strategy</p>
-              <p>
-                {(() => {
-                  // Check if this is the division-level without division column workflow
-                  const isDivisionLevelWithoutColumn = orgStructure?.importLevel === 'division' && 
-                                                     orgStructure?.divisionCsvType === 'withoutDivisionColumn' &&
-                                                     orgStructure?.hasMultipleClusters;
-                  
-                  if (isDivisionLevelWithoutColumn) {
-                    return 'Select a division and upload a CSV file to add clusters for that division. Each division will have one CSV import to capture their clusters.';
-                  } else {
-                    return 'Upload CSV files for each division to build a comprehensive organizational dataset. You can import as many files as needed to cover all your divisions and clusters.';
-                  }
-                })()}
-              </p>
-          </div>
-          <div className="flex items-center justify-between border-t border-blue-200 pt-3">
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-blue-600 font-semibold text-sm">
-                    {multipleCsvProgress.importedCount}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <div className="text-blue-900 font-medium">
-                  {multipleCsvProgress.importedCount} CSV{multipleCsvProgress.importedCount !== 1 ? 's' : ''} imported
-                </div>
-                <div className="text-blue-700 text-sm">
-                  {multipleCsvProgress.importedCount === 0 ? (
-                      (() => {
-                        const isDivisionLevelWithoutColumn = orgStructure?.importLevel === 'division' && 
-                                                           orgStructure?.divisionCsvType === 'withoutDivisionColumn' &&
-                                                           orgStructure?.hasMultipleClusters;
-                        
-                        if (isDivisionLevelWithoutColumn) {
-                          return <>Ready to import cluster data for divisions</>;
-                        } else {
-                          return <>Ready to import organizational data</>;
-                        }
-                      })()
-                  ) : multipleCsvProgress.remainingDivisions.length > 0 ? (
-                      (() => {
-                        const isDivisionLevelWithoutColumn = orgStructure?.importLevel === 'division' && 
-                                                           orgStructure?.divisionCsvType === 'withoutDivisionColumn' &&
-                                                           orgStructure?.hasMultipleClusters;
-                        
-                        if (isDivisionLevelWithoutColumn) {
-                          return <>Remaining divisions for cluster import: {multipleCsvProgress.remainingDivisions.join(', ')}</>;
-                        } else {
-                          return <>Remaining divisions: {multipleCsvProgress.remainingDivisions.join(', ')}</>;
-                        }
-                      })()
-                    ) : (
-                      (() => {
-                        const isDivisionLevelWithoutColumn = orgStructure?.importLevel === 'division' && 
-                                                           orgStructure?.divisionCsvType === 'withoutDivisionColumn' &&
-                                                           orgStructure?.hasMultipleClusters;
-                        
-                        if (isDivisionLevelWithoutColumn) {
-                          return <>All divisions have cluster data imported successfully!</>;
-                        } else {
-                          return <>All divisions imported successfully!</>;
-                        }
-                      })()
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              {multipleCsvProgress.importedCount > 0 && onProceedToNextStep && (
-                <div className="flex flex-col items-end gap-1">
-                  <Button 
-                    onClick={onProceedToNextStep}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                    size="sm"
-                  >
-                    Proceed to Next Step
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        );
-      })()}
+      {/* REMOVED: This banner is now shown on the main CsvImportStep screen instead */}
 
-      {/* Imported CSVs List - show for all CSV imports in setup context */}
-      {context === 'setup' && importedCsvs && importedCsvs.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6 mb-6">
-          <div className="text-lg font-semibold text-slate-800 flex items-center gap-2 mb-4">
-            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-              <span className="text-green-600 font-semibold text-sm">📁</span>
-            </div>
-            Imported CSV Files
-          </div>
-          <div className="text-slate-500 text-sm mb-4">
-            These CSV files have been imported and are ready for processing. You can remove any file if needed.
-          </div>
-          
-          <div className="space-y-3">
-            {importedCsvs.map((csv, index) => (
-              <div key={index} className="flex items-center justify-between p-3 border border-slate-200 rounded-lg bg-slate-50">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <span className="text-green-600 text-sm">✓</span>
-                  </div>
-                  <div>
-                    <div className="font-medium text-slate-800">{csv.fileName}</div>
-                    <div className="text-sm text-slate-600">
-                      {csv.divisions.length > 0 && (
-                        <span>Divisions: {csv.divisions.join(', ')}</span>
-                      )}
-                      {csv.clusters.length > 0 && (
-                        <span className="ml-2">Clusters: {csv.clusters.join(', ')}</span>
-                      )}
-                      {csv.divisionName && (
-                        <span className="ml-2">Division: {csv.divisionName}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Remove CSV File</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Are you sure you want to remove "{csv.fileName}" from the import list? This will:
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <div className="px-6">
-                      <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                        <li>Remove the file from the import tracking</li>
-                        <li>Clear all CSV mapping data and column mappings</li>
-                        <li>Clear extracted divisions and clusters data</li>
-                        <li>Clear pending divisions and clusters to be created</li>
-                        <li>Reset the import form to allow uploading a new file</li>
-                        <li>Allow you to upload it again if needed</li>
-                      </ul>
-                    </div>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => {
-                          // Remove from tracking system
-                          setupWizardStore.removeImportedCsv(csv.fileName);
-                          
-                          // Clear CSV mapping data and arrays (original trash can behavior)
-                          setupWizardStore.clearCsvMappingData();
-                          
-                          // Clear organizational structure data
-                          setupWizardStore.setOrgStructure({
-                            uploadedCsvData: null,
-                            csvHeaders: null,
-                            csvMapping: null,
-                            extractedDivisions: [],
-                            extractedClusters: [],
-                            divisionClusterMap: {},
-                          });
-                          
-                          toast({
-                            title: "CSV Removed",
-                            description: `"${csv.fileName}" has been removed and all associated data has been cleared.`,
-                            variant: "default",
-                          });
-                        }}
-                        className="bg-red-600 hover:bg-red-700"
-                      >
-                        Remove CSV
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Division Selection Cards - only show for division-level import workflows */}
-      {(() => {
-        // Only show division cards for division-level import workflows
-        const shouldShowDivisionCards = (context as string) === 'setup' && 
-          orgStructure?.importLevel === 'division' && 
-          orgStructure?.divisionCsvType === 'withoutDivisionColumn';
-        
-        // Debug logging
-        console.log('🔍 Division cards debug:', {
-          orgStructure,
-          importLevel: orgStructure?.importLevel,
-          divisionCsvType: orgStructure?.divisionCsvType,
-          hasMultipleClusters: orgStructure?.hasMultipleClusters,
-          shouldShowDivisionCards,
-          context,
-          divisionsCount: divisions?.length,
-          pendingDivisionsCount: pendingDivisions?.length
-        });
-        
-        if (!shouldShowDivisionCards) {
-          {/*console.log('❌ Division cards hidden because:', {
-            context: context,
-            importLevel: orgStructure?.importLevel,
-            divisionCsvType: orgStructure?.divisionCsvType,
-            condition: 'not division-level withoutDivisionColumn workflow'
-          });*/}
-          return null;
-        }
-
-        // Combine database divisions and pending divisions
-        const allDivisions = [
-          // Always show database divisions first, UNLESS there's a rename in progress
-          ...(() => {
-            // Check if there's a rename in progress
-            const isSingleDivisionRenameScenario = divisions.length === 1 && pendingDivisions.length === 1;
-            const hasRenameInProgress = isSingleDivisionRenameScenario && 
-              divisions[0].name.toLowerCase() !== pendingDivisions[0].name.toLowerCase();
-            
-            if (hasRenameInProgress) {
-              console.log(`[DEBUG] Rename in progress - excluding database division "${divisions[0].name}" to show pending "${pendingDivisions[0].name}"`);
-              return []; // Don't show database divisions during rename
-            }
-            
-            // Normal case - show database divisions
-            return divisions.map((div: any) => {
-              // Calculate cluster count for database divisions
-              const clusterCount = clusters.filter((cluster: any) => cluster.division_id === div.id).length;
-              return { 
-                name: div.name, 
-                description: div.description || '',
-                id: div.id,
-                source: 'database',
-                clusterCount
-              };
-            });
-          })(),
-          // Only show pending divisions that don't have ANY database equivalent
-          ...pendingDivisions
-            .filter((pendingDiv: any) => {
-              console.log(`[DEBUG] Checking pending division "${pendingDiv.name}" with fieldMapping "${pendingDiv.fieldMapping}"`);
-              
-              // Check if this pending division has the same name as ANY database division
-              const hasSameNameAsDatabase = divisions.some((dbDiv: any) => {
-                const nameMatch = dbDiv.name.toLowerCase() === pendingDiv.name.toLowerCase();
-                
-                if (nameMatch) {
-                  console.log(`[DEBUG] Name match found for "${pendingDiv.name}":`, {
-                    dbName: dbDiv.name,
-                    dbFieldMapping: dbDiv.fieldMapping,
-                    pendingName: pendingDiv.name,
-                    pendingFieldMapping: pendingDiv.fieldMapping
-                  });
-                }
-                
-                return nameMatch;
-              });
-              
-              // Also check for field mapping matches (for renamed divisions)
-              const hasFieldMappingMatch = divisions.some((dbDiv: any) => {
-                const fieldMappingMatch = dbDiv.fieldMapping && 
-                  dbDiv.fieldMapping.toLowerCase() === pendingDiv.fieldMapping.toLowerCase();
-                
-                if (fieldMappingMatch) {
-                  console.log(`[DEBUG] Field mapping match found for "${pendingDiv.name}":`, {
-                    dbName: dbDiv.name,
-                    dbFieldMapping: dbDiv.fieldMapping,
-                    pendingName: pendingDiv.name,
-                    pendingFieldMapping: pendingDiv.fieldMapping
-                  });
-                }
-                
-                return fieldMappingMatch;
-              });
-              
-              // NEW: Special case for single division scenarios
-              // If there's only one database division and one pending division with different names,
-              // the pending division likely represents a rename in progress
-              const isSingleDivisionRenameScenario = divisions.length === 1 && pendingDivisions.length === 1;
-              const representsRenameInProgress = isSingleDivisionRenameScenario && 
-                divisions[0].name.toLowerCase() !== pendingDiv.name.toLowerCase();
-              
-              if (representsRenameInProgress) {
-                console.log(`[DEBUG] Rename in progress detected:`, {
-                  dbName: divisions[0].name,
-                  pendingName: pendingDiv.name,
-                  explanation: `Single division scenario - pending "${pendingDiv.name}" likely represents rename of "${divisions[0].name}"`
-                });
-              }
-              
-              // For rename scenarios, we want to show the pending division (user's intent)
-              // For other scenarios, exclude if there's a match
-              const shouldExclude = !representsRenameInProgress && (hasSameNameAsDatabase || hasFieldMappingMatch);
-              console.log(`[DEBUG] Pending division "${pendingDiv.name}" - shouldExclude: ${shouldExclude} (hasSameNameAsDatabase: ${hasSameNameAsDatabase}, hasFieldMappingMatch: ${hasFieldMappingMatch}, representsRenameInProgress: ${representsRenameInProgress})`);
-              
-              if (shouldExclude) {
-                console.log(`[DEBUG] EXCLUDING pending division "${pendingDiv.name}" because it has a database equivalent`);
-              } else if (representsRenameInProgress) {
-                console.log(`[DEBUG] INCLUDING pending division "${pendingDiv.name}" because it represents a rename in progress`);
-              }
-              
-              return !shouldExclude;
-            })
-            .map((div: any, index: number) => {
-              // For pending divisions, count clusters from imported CSVs
-              const importedCsvForDivision = importedCsvs.find((csv: any) => 
-                csv.divisionName && csv.divisionName.toLowerCase() === div.name.toLowerCase()
-              );
-              const clusterCount = importedCsvForDivision ? importedCsvForDivision.clusters.length : 0;
-              
-              return { 
-                name: div.name, 
-                description: div.description || '',
-                id: null,
-                source: 'pending',
-                pendingIndex: index,
-                clusterCount
-              };
-            })
-        ];
-
-        console.log('🔍 All divisions data:', {
-          divisions: divisions.map(d => ({ name: d.name, fieldMapping: d.fieldMapping, id: d.id })),
-          pendingDivisions: pendingDivisions.map(d => ({ name: d.name, fieldMapping: d.fieldMapping })),
-          allDivisions: allDivisions.map(d => ({ name: d.name, source: d.source, id: d.id })),
-          clusters: clusters
-        });
-
-        console.log('🔍 Detailed debug - Database divisions:', divisions);
-        console.log('🔍 Detailed debug - Pending divisions:', pendingDivisions);
-
-        // Debug: Show clear button if there are pending divisions that might be causing issues
-        const hasOrphanedPendingDivisions = pendingDivisions.some(pendingDiv => {
-          return !divisions.some(dbDiv => 
-            dbDiv.fieldMapping && dbDiv.fieldMapping.toLowerCase() === pendingDiv.fieldMapping.toLowerCase()
-          );
-        });
-
-        if (hasOrphanedPendingDivisions && process.env.NODE_ENV === 'development') {
-          console.log('[DEBUG] Found orphaned pending divisions, showing clear button');
-        }
-
-        // Check which divisions have been imported
-        const importedDivisionNames = importedCsvs.map((csv: any) => csv.divisionName).filter(Boolean);
-
-        return (
-          <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6 mb-6">
-            <div className="text-lg font-semibold text-slate-800 flex items-center gap-2 mb-4">
-              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                <span className="text-blue-600 font-semibold text-sm">🏢</span>
-              </div>
-              Select Division for CSV Import
-            </div>
-            <div className="text-slate-500 text-sm mb-4">
-              Choose a division to upload cluster data. Each division will have one CSV import.
-            </div>
-            
-            {allDivisions.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">
-                <div className="text-lg mb-2">No divisions available</div>
-                <div className="text-sm">Please create divisions first in the Divisions step.</div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {allDivisions.map((division: any, index: number) => {
-                  const isImported = importedDivisionNames.includes(division.name);
-                  const isSelected = selectedDivision === division.name;
-                  
-                  return (
-                    <div
-                      key={`${division.source}-${division.id || division.pendingIndex || index}`}
-                      className={`border-2 rounded-lg p-4 cursor-pointer transition-all duration-200 ${
-                        isImported 
-                          ? 'border-green-200 bg-green-50' 
-                          : isSelected 
-                            ? 'border-blue-500 bg-blue-50' 
-                            : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100'
-                      }`}
-                      onClick={() => {
-                        if (!isImported) {
-                          setSelectedDivision(division.name);
-                          console.log('Selected division:', division.name);
-                          // Notify parent component about division selection
-                          if (onDivisionSelect) {
-                            onDivisionSelect(division.name);
-                          }
-                        }
-                      }}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="font-semibold text-slate-800">{division.name}</h3>
-                        {isImported && (
-                          <div className="flex-shrink-0">
-                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                              <span className="text-green-600 text-xs">✓</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      {division.description && (
-                        <p className="text-sm text-slate-600 mb-3">{division.description}</p>
-                      )}
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-500">
-                          {division.clusterCount} cluster{division.clusterCount !== 1 ? 's' : ''}
-                        </span>
-                        {isImported ? (
-                          <span className="text-xs text-green-600 font-medium">CSV Imported</span>
-                        ) : (
-                          <span className="text-xs text-blue-600 font-medium">Ready for Import</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })()}
+      {/* Division selection is now handled by the parent component (CSV import step) */}
 
 
 
@@ -980,48 +533,20 @@ export const UploadStep: React.FC<UploadStepProps> = ({
           {context === 'setup' ? 'Upload Organizational Structure Data' : 'Upload Historical Sales Data'}
         </div>
         
-        {/* Division Selection Required Message - only for division-level import workflows */}
-        {(() => {
-          // Only show division selection for division-level import workflows
-          const shouldShowDivisionSelection = (context as string) === 'setup' && 
-            orgStructure?.importLevel === 'division' && 
-            orgStructure?.divisionCsvType === 'withoutDivisionColumn';
-          
-          if (!shouldShowDivisionSelection) {
-            return (
         <div className="text-slate-500 text-sm mb-4">
           {context === 'setup' 
             ? 'Upload a CSV file containing your organizational structure data (divisions and/or clusters)'
             : 'Upload a CSV file containing your historical sales data with columns: Date, SKU, Sales'
           }
         </div>
-            );
-          }
-
-          // For division-level import workflow - show simple message without banner
-          return (
-            <div className="text-slate-500 text-sm mb-4">
-              {!selectedDivision 
-                ? 'Please select a division from the cards above before uploading your CSV file.'
-                : `Ready to upload cluster data for ${selectedDivision}.`
-              }
-            </div>
-          );
-        })()}
 
         <div
           className={`border-2 border-dashed rounded-lg p-8 text-center transition-all duration-300 ${
             (() => {
-              // Disable upload for division-level import workflows
-              const shouldDisableDivisionUpload = (context as string) === 'setup' && 
-                orgStructure?.importLevel === 'division' && 
-                orgStructure?.divisionCsvType === 'withoutDivisionColumn' &&
-                !selectedDivision;
-              
               // Disable upload for company-wide import when file already imported
               const shouldDisableCompanyUpload = disableImport;
               
-              if (shouldDisableDivisionUpload || shouldDisableCompanyUpload) {
+          if (shouldDisableCompanyUpload) {
                 return 'border-slate-200 bg-slate-100 cursor-not-allowed opacity-50';
               }
               
@@ -1033,24 +558,8 @@ export const UploadStep: React.FC<UploadStepProps> = ({
             })()
           }`}
           onDrop={(e) => {
-            // Block upload for division-level import workflows
-            const shouldBlockDivisionUpload = (context as string) === 'setup' && 
-              orgStructure?.importLevel === 'division' && 
-              orgStructure?.divisionCsvType === 'withoutDivisionColumn' &&
-              !selectedDivision;
-            
             // Block upload for company-wide import when file already imported
             const shouldBlockCompanyUpload = disableImport;
-            
-            if (shouldBlockDivisionUpload) {
-              e.preventDefault();
-              toast({
-                title: "Division Selection Required",
-                description: "Please select a division before uploading your CSV file.",
-                variant: "destructive",
-              });
-              return;
-            }
             
             if (shouldBlockCompanyUpload) {
               e.preventDefault();
@@ -1064,16 +573,10 @@ export const UploadStep: React.FC<UploadStepProps> = ({
             onDrop(e);
           }}
           onDragOver={(e) => {
-            // Block upload for division-level import workflows
-            const shouldBlockDivisionUpload = (context as string) === 'setup' && 
-              orgStructure?.importLevel === 'division' && 
-              orgStructure?.divisionCsvType === 'withoutDivisionColumn' &&
-              !selectedDivision;
-            
             // Block upload for company-wide import when file already imported
             const shouldBlockCompanyUpload = disableImport;
             
-            if (shouldBlockDivisionUpload || shouldBlockCompanyUpload) {
+            if (shouldBlockCompanyUpload) {
               e.preventDefault();
               return;
             }
@@ -1081,23 +584,8 @@ export const UploadStep: React.FC<UploadStepProps> = ({
           }}
         onDragLeave={onDragLeave}
           onClick={() => {
-            // Block upload for division-level import workflows
-            const shouldBlockDivisionUpload = (context as string) === 'setup' && 
-              orgStructure?.importLevel === 'division' && 
-              orgStructure?.divisionCsvType === 'withoutDivisionColumn' &&
-              !selectedDivision;
-            
             // Block upload for company-wide import when file already imported
             const shouldBlockCompanyUpload = disableImport;
-            
-            if (shouldBlockDivisionUpload) {
-              toast({
-                title: "Division Selection Required",
-                description: "Please select a division before uploading your CSV file.",
-                variant: "destructive",
-              });
-              return;
-            }
             
             if (shouldBlockCompanyUpload) {
               toast({
@@ -1112,16 +600,10 @@ export const UploadStep: React.FC<UploadStepProps> = ({
         >
           <Upload className={`h-12 w-12 mx-auto transition-colors ${
             (() => {
-              // Show disabled state for division-level import workflows
-              const shouldShowDivisionDisabledState = (context as string) === 'setup' && 
-                orgStructure?.importLevel === 'division' && 
-                orgStructure?.divisionCsvType === 'withoutDivisionColumn' &&
-                !selectedDivision;
-              
               // Show disabled state for company-wide import when file already imported
               const shouldShowCompanyDisabledState = disableImport;
               
-              if (shouldShowDivisionDisabledState || shouldShowCompanyDisabledState) {
+              if (shouldShowCompanyDisabledState) {
                 return 'text-slate-300';
               }
               
@@ -1134,23 +616,8 @@ export const UploadStep: React.FC<UploadStepProps> = ({
           }`} />
         <div>
             {(() => {
-              // Show division selection text for division-level import workflows
-              const shouldShowDivisionText = (context as string) === 'setup' && 
-                orgStructure?.importLevel === 'division' && 
-                orgStructure?.divisionCsvType === 'withoutDivisionColumn' &&
-                !selectedDivision;
-              
               // Show company-wide disabled text when file already imported
               const shouldShowCompanyDisabledText = disableImport;
-              
-              if (shouldShowDivisionText) {
-                return (
-                  <>
-                    <h3 className="text-lg font-semibold text-slate-400">Select a division first</h3>
-                    <p className="text-slate-400">Choose a division above to enable file upload</p>
-                  </>
-                );
-              }
               
               if (shouldShowCompanyDisabledText) {
                 return (
